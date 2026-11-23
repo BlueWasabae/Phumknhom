@@ -12,6 +12,7 @@ import { RemotePlayerEntity } from '../entities/RemotePlayerEntity';
 import { areaIdToChannel, channelToAreaId, roomClient } from '../network/RoomClient';
 import { soundManager } from '../systems/SoundManager';
 import { SeasonAtmosphereOverlay } from '../systems/SeasonClock';
+import { travelManager, type TravelRequestPayload } from '../systems/TravelAndPylons';
 
 // Cozy 16x16 Stardew-scale village world (60 x 42 tiles) rendered at 2.5x - 2.9x camera zoom
 const MAP_W = 960;
@@ -188,6 +189,9 @@ export class OverworldScene extends Phaser.Scene {
       }),
       EventBus.on('dungeon:enterRequest', ({ bossId, difficulty, partyMode, partyId }) => {
         this.enterDungeon(bossId, difficulty, partyMode ?? 'solo', partyId);
+      }),
+      EventBus.on('travel:execute', (req) => {
+        this.handleTravelRequest(req);
       }),
       EventBus.on('input:interact', () => {
         this.tryInteractNearest();
@@ -692,6 +696,173 @@ export class OverworldScene extends Phaser.Scene {
       isDungeonPortal: false,
       onInteract: () => EventBus.emit('ui:openModal', { modal: 'fishing' }),
     });
+
+    // ==================== EXPANSION LANDMARKS: BUS STOP, ATM, CLUB, BLACKSMITH & PYLON SHRINE ====================
+
+    // 10. VILLAGE EXPRESS BUS STOP (West Plaza Road)
+    const busStop = this.addBuildingOrProp({
+      texture: 'bus_stop_sign',
+      x: 342,
+      y: 404,
+      scale: 0.9,
+      shadowW: 36,
+      shadowH: 10,
+      label: 'EXPRESS BUS STOP',
+      joinArrowY: 356,
+    });
+    busStop.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+      EventBus.emit('ui:openModal', { modal: 'worldMap' });
+    });
+    this.landmarks.push({
+      x: 342,
+      y: 404,
+      radius: 44,
+      label: 'Press [E] or Click → Board Village Express Bus & Open World Map [M]',
+      isDungeonPortal: false,
+      onInteract: () => EventBus.emit('ui:openModal', { modal: 'worldMap' }),
+    });
+
+    // 11. VILLAGE ATM BANK VAULT (North-West Plaza Corner)
+    const atmImg = this.addBuildingOrProp({
+      texture: 'atm_kiosk',
+      x: 374,
+      y: 304,
+      scale: 0.92,
+      shadowW: 34,
+      shadowH: 10,
+      bodyW: 24,
+      bodyH: 16,
+      label: 'ATM BANK VAULT',
+    });
+    atmImg.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+      EventBus.emit('ui:openModal', { modal: 'reforge', reforgeTab: 'bank' });
+    });
+    this.landmarks.push({
+      x: 374,
+      y: 308,
+      radius: 42,
+      label: 'Press [E] or Click → ATM Bank Vault (Safe Coin Storage)',
+      isDungeonPortal: false,
+      onInteract: () => EventBus.emit('ui:openModal', { modal: 'reforge', reforgeTab: 'bank' }),
+    });
+
+    // 12. VILLAGE BLACKSMITH FORGE (North-East Plaza Lane)
+    const forgeImg = this.addBuildingOrProp({
+      texture: 'blacksmith_anvil',
+      x: 604,
+      y: 286,
+      scale: 0.95,
+      shadowW: 44,
+      shadowH: 12,
+      bodyW: 34,
+      bodyH: 18,
+      label: 'BLACKSMITH REFORGE',
+      joinArrowY: 236,
+    });
+    forgeImg.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+      EventBus.emit('ui:openModal', { modal: 'reforge', reforgeTab: 'reforge' });
+    });
+    this.landmarks.push({
+      x: 604,
+      y: 292,
+      radius: 46,
+      label: 'Press [E] or Click → Blacksmith Prefix Reforging & Apsara Shimmer',
+      isDungeonPortal: false,
+      onInteract: () => EventBus.emit('ui:openModal', { modal: 'reforge', reforgeTab: 'reforge' }),
+    });
+
+    // 13. PHUM NIGHT CLUB (East Plaza — Tien Len & Ouk Chaktrang!)
+    const clubImg = this.addBuildingOrProp({
+      texture: 'club_building',
+      x: 822,
+      y: 364,
+      scale: 0.85,
+      shadowW: 78,
+      shadowH: 20,
+      bodyW: 58,
+      bodyH: 26,
+      label: 'PHUM CLUB · TIEN LEN',
+      joinArrowY: 286,
+    });
+    clubImg.setInteractive({ useHandCursor: true }).on('pointerdown', () => this.enterClub());
+    this.landmarks.push({
+      x: 822,
+      y: 370,
+      radius: 52,
+      label: 'Press [E] or Tap JOIN → Enter Phum Club (Tien Len & Ouk Chaktrang)',
+      isDungeonPortal: true,
+      onInteract: () => this.enterClub(),
+    });
+
+    // 14. GREEN PARK & BIOME PYLON SHRINE (South-Center Park)
+    const parkGfx = this.add.graphics().setDepth(3);
+    parkGfx.fillStyle(0x15803d, 0.45);
+    parkGfx.fillEllipse(480, 512, 136, 72);
+    parkGfx.lineStyle(1.5, 0x86efac, 0.7);
+    parkGfx.strokeEllipse(480, 512, 128, 64);
+
+    const pylonGlow = this.add
+      .image(480, 488, 'torch_glow')
+      .setTint(0x38bdf8)
+      .setScale(0.7)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(2140)
+      .setAlpha(0.5);
+    this.glowLights.push(pylonGlow);
+
+    const pylonImg = this.addBuildingOrProp({
+      texture: 'pylon_shrine',
+      x: 480,
+      y: 512,
+      scale: 0.95,
+      shadowW: 44,
+      shadowH: 14,
+      bodyW: 26,
+      bodyH: 16,
+      label: 'GREEN PARK · PYLON SHRINE',
+      joinArrowY: 448,
+    });
+    pylonImg.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+      EventBus.emit('ui:openModal', { modal: 'worldMap' });
+    });
+    this.landmarks.push({
+      x: 480,
+      y: 516,
+      radius: 50,
+      label: 'Press [E] or Click → Biome Pylon Network & World Map [M]',
+      isDungeonPortal: false,
+      onInteract: () => EventBus.emit('ui:openModal', { modal: 'worldMap' }),
+    });
+
+    // Active Dungeon Return Portal beside Pylon Shrine (when player recalled via Return Portal!)
+    const activeReturn = travelManager.getReturnPortal();
+    if (activeReturn) {
+      const rpGlow = this.add
+        .image(534, 496, 'portal_vortex')
+        .setTint(0x38bdf8)
+        .setScale(0.9)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(515)
+        .setInteractive({ useHandCursor: true });
+      this.tweens.add({ targets: rpGlow, scale: 1.08, alpha: 0.55, duration: 750, yoyo: true, repeat: -1 });
+      rpGlow.on('pointerdown', () => {
+        travelManager.setReturnPortal(null);
+        this.enterDungeon(activeReturn.bossId, activeReturn.difficulty, activeReturn.partyMode);
+      });
+      this.add
+        .text(534, 522, 'RETURN PORTAL', {
+          fontFamily: 'Fredoka, sans-serif',
+          fontSize: '10px',
+          fontStyle: 'bold',
+          color: '#7dd3fc',
+          backgroundColor: 'rgba(15,23,42,0.86)',
+          padding: { x: 5, y: 2 },
+        })
+        .setResolution(2)
+        .setScale(0.42)
+        .setOrigin(0.5, 0)
+        .setDepth(520);
+    }
   }
 
   private buildFencesAndTrees(): void {
@@ -737,6 +908,64 @@ export class OverworldScene extends Phaser.Scene {
         ease: 'Sine.easeInOut',
       });
     });
+  }
+
+  private enterClub(): void {
+    if (this.transitioning) return;
+    this.transitioning = true;
+    this.cameras.main.fadeOut(220, 14, 8, 22);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      this.scene.start('ClubScene', {
+        playerState: {
+          ...this.player.state,
+          zone: 'club',
+          weapon: { ...this.player.state.weapon },
+          loadout: { ...this.player.state.loadout },
+          currencies: { ...this.player.state.currencies },
+          lifeStats: { ...this.player.state.lifeStats },
+        },
+      });
+    });
+  }
+
+  private handleTravelRequest(req: TravelRequestPayload): void {
+    if (this.transitioning) return;
+    const executeDestination = () => {
+      if (req.targetZone === 'farm') {
+        this.enterFarm();
+      } else if (req.targetZone === 'club') {
+        this.enterClub();
+      } else if (req.targetZone === 'dungeon') {
+        this.enterDungeon(req.bossId ?? 'sdech_kongkaeb', req.difficulty ?? 'normal', 'solo');
+      } else {
+        this.player.sprite.setPosition(480, 405);
+        this.cameras.main.flash(260, 125, 211, 252);
+        soundManager.playSfx('magic');
+      }
+    };
+
+    if (req.method === 'bus') {
+      // Animated Khmer Express Bus gliding across the village road before arrival!
+      soundManager.playSfx('click');
+      const bus = this.add.image(110, 372, 'village_bus').setScale(0.95).setDepth(2400);
+      EventBus.emit('ui:toast', { text: `🚌 Village Express Bus departing for ${req.destinationLabel}...` });
+      this.tweens.add({
+        targets: bus,
+        x: 860,
+        duration: 1050,
+        ease: 'Cubic.easeInOut',
+        onComplete: () => {
+          bus.destroy();
+          executeDestination();
+        },
+      });
+      return;
+    }
+
+    // Instant Pylon / Magic Mirror / Return Portal crystal flash warp!
+    soundManager.playSfx('magic');
+    this.cameras.main.flash(240, 56, 189, 248);
+    this.time.delayedCall(220, executeDestination);
   }
 
   private enterFarm(): void {

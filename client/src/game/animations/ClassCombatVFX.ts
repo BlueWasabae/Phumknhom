@@ -6,7 +6,8 @@ export interface SpawnedProjectile {
   vy: number;
   damageScale: number;
   colorHex: number;
-  kind: 'arrow' | 'mystic_orb';
+  kind: 'arrow' | 'mystic_orb' | 'riel_coin';
+  ricochetsLeft?: number;
   expiresAt: number;
 }
 
@@ -317,6 +318,148 @@ export class ClassCombatVFX {
       alpha: 0,
       duration: 400,
       onComplete: () => decoy.destroy(),
+    });
+  }
+
+  // ==================== CALAMITY ARSENAL VFX ====================
+
+  /**
+   * 8-Biome Preah Khan elemental crescent wave tinted by active World Map Biome
+   */
+  public playPreahKhanBiomeSlash(x: number, y: number, dir: number, biomeColorHex: number): void {
+    const slash = this.scene.add
+      .sprite(x + dir * 56, y - 6, 'fx_slash', 0)
+      .setScale(3.4)
+      .setTint(biomeColorHex)
+      .setFlipX(dir < 0)
+      .setDepth(64);
+    slash.play('slash_curved');
+    slash.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => slash.destroy());
+
+    const aura = this.scene.add
+      .arc(x + dir * 56, y - 4, 42, -55, 55, false, biomeColorHex, 0.35)
+      .setStrokeStyle(3, 0xffffff, 0.9)
+      .setScale(dir, 1)
+      .setDepth(63);
+    this.scene.tweens.add({
+      targets: aura,
+      x: x + dir * 92,
+      scaleX: dir * 1.45,
+      scaleY: 1.45,
+      alpha: 0,
+      duration: 240,
+      onComplete: () => aura.destroy(),
+    });
+  }
+
+  /**
+   * Golden Riel Coin-Shot: spinning golden coin that ricochets off bosses for escalating crit damage!
+   */
+  public spawnGoldenRielCoin(
+    x: number,
+    y: number,
+    dir: number,
+    damageScale = 1,
+    ricochetsLeft = 2
+  ): SpawnedProjectile {
+    const container = this.scene.add.container(x + dir * 24, y - 6).setDepth(63);
+    const outer = this.scene.add.circle(0, 0, 9, 0xfacc15, 1).setStrokeStyle(2, 0x92400e);
+    const inner = this.scene.add.rectangle(0, 0, 5, 5, 0xfef9c3, 1);
+    container.add([outer, inner]);
+    this.scene.tweens.add({
+      targets: outer,
+      scaleX: 0.35,
+      duration: 90,
+      yoyo: true,
+      repeat: -1,
+    });
+
+    return {
+      node: container,
+      vx: dir * 680,
+      vy: -35,
+      damageScale,
+      colorHex: 0xfacc15,
+      kind: 'riel_coin',
+      ricochetsLeft,
+      expiresAt: this.scene.time.now + 1500,
+    };
+  }
+
+  /**
+   * Parry Reality-Rip: diagonal cyan & magenta dimensional tear cutting across the boss!
+   */
+  public playParryRealityRip(cx: number, cy: number): void {
+    const tearOuter = this.scene.add
+      .rectangle(cx, cy, 460, 26, 0xc026d3, 0.75)
+      .setAngle(-24)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(72);
+    const tearCore = this.scene.add
+      .rectangle(cx, cy, 480, 9, 0x67e8f9, 0.98)
+      .setAngle(-24)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(73);
+    const flash = this.scene.add
+      .circle(cx, cy, 34, 0xffffff, 0.7)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(74);
+
+    this.scene.cameras.main.shake(150, 0.008);
+    this.scene.tweens.add({
+      targets: [tearOuter, tearCore],
+      scaleX: 1.45,
+      scaleY: 0.1,
+      alpha: 0,
+      duration: 360,
+      ease: 'Cubic.easeOut',
+      onComplete: () => {
+        tearOuter.destroy();
+        tearCore.destroy();
+      },
+    });
+    this.scene.tweens.add({
+      targets: flash,
+      scale: 3.2,
+      alpha: 0,
+      duration: 280,
+      onComplete: () => flash.destroy(),
+    });
+  }
+
+  /**
+   * Off-Screen Yant Beams: 3 converging sacred golden Khmer Yant pillars descending from above!
+   */
+  public playOffscreenYantBeams(targetX: number, floorY: number): void {
+    const offsets = [-115, 0, 115];
+    const angles = [14, 0, -14];
+    this.scene.cameras.main.shake(170, 0.007);
+
+    offsets.forEach((ox, idx) => {
+      const bx = targetX + ox;
+      const beam = this.scene.add
+        .rectangle(bx, floorY - 320, 44, 720, 0xfacc15, 0.68)
+        .setAngle(angles[idx])
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(70);
+      const core = this.scene.add
+        .rectangle(bx, floorY - 320, 14, 720, 0xffffff, 0.95)
+        .setAngle(angles[idx])
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(71);
+
+      this.scene.tweens.add({
+        targets: [beam, core],
+        scaleX: 0.12,
+        alpha: 0,
+        delay: idx * 70,
+        duration: 420,
+        ease: 'Quad.easeOut',
+        onComplete: () => {
+          beam.destroy();
+          core.destroy();
+        },
+      });
     });
   }
 }

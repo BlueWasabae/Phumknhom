@@ -11,6 +11,7 @@ import {
   type BossHazard,
   type TelegraphColor,
 } from '../animations/TelegraphRenderer';
+import { WormBossEntity } from './WormBossEntity';
 
 export type BossStage = 'idle' | 'windup' | 'active' | 'recovery' | 'phase_roar' | 'defeated';
 
@@ -72,8 +73,7 @@ export class BossController {
   private lastOrbDropAt = 0;
 
   // MultiSegmentWormRig (Neak Reach — Shadow Naga) 10-segment sinusoidal serpent body
-  private wormSegments: Phaser.GameObjects.Image[] = [];
-  private wormTrail: Array<{ x: number; y: number }> = [];
+  private wormEntity?: WormBossEntity;
   private wormVx = -180;
   private wormVy = 0;
   private wormTargetX = 900;
@@ -134,21 +134,12 @@ export class BossController {
       .setAlpha(isAirborne ? 0.5 : 1)
       .setDepth(40);
 
-    // Build 9 trailing body segments behind the head for MultiSegmentWormRig (10 segments total!)
+    // Build 9 trailing body segments behind the head via modular WormBossEntity (10 segments total!)
     if (this.def.rig === 'MultiSegmentWormRig') {
-      for (let i = 0; i < 160; i++) {
-        this.wormTrail.push({ x: spawnX + i * 3.5, y: this.y + Math.sin(i * 0.15) * 18 });
-      }
-      for (let s = 1; s <= 9; s++) {
-        const isTail = s === 9;
-        const segScale = this.baseScale * (isTail ? 0.85 : Math.max(0.74, 1.04 - s * 0.032));
-        const seg = scene.add
-          .image(spawnX + s * 34, this.y, isTail ? 'boss_neak_reach_tail' : 'boss_neak_reach_seg')
-          .setOrigin(0.5, 0.5)
-          .setScale(segScale)
-          .setDepth(41 - s * 0.05);
-        this.wormSegments.push(seg);
-      }
+      this.wormEntity = new WormBossEntity(scene, spawnX, this.y, {
+        segmentCount: 9,
+        baseScale: this.baseScale,
+      });
     }
 
     this.sprite = scene.add
@@ -214,10 +205,8 @@ export class BossController {
     if (Phaser.Geom.Intersects.RectangleToRectangle(rect, this.sprite.getBounds())) {
       return true;
     }
-    for (const seg of this.wormSegments) {
-      if (seg.active && Phaser.Geom.Intersects.RectangleToRectangle(rect, seg.getBounds())) {
-        return true;
-      }
+    if (this.wormEntity?.intersectsRect(rect)) {
+      return true;
     }
     return false;
   }
@@ -251,7 +240,7 @@ export class BossController {
 
     // Stage 3: White flash + knock shudder
     this.sprite.setTintFill(0xffffff);
-    this.wormSegments.forEach((seg) => seg.setTintFill(0xffffff));
+    this.wormEntity?.setTintFill(0xffffff);
 
     const baseX = this.x;
     this.scene.tweens.add({
@@ -264,7 +253,7 @@ export class BossController {
     this.scene.time.delayedCall(85, () => {
       if (this.alive) {
         this.sprite.clearTint();
-        this.wormSegments.forEach((seg) => seg.clearTint());
+        this.wormEntity?.clearTint();
       }
     });
 
@@ -354,7 +343,11 @@ export class BossController {
     if (this.playerLanternGlow) this.playerLanternGlow.setVisible(false);
 
     this.telegraphs.playImpactJuice(this.x, this.y - 30, 'yellow', true);
-    const fadeTargets: Phaser.GameObjects.GameObject[] = [this.sprite, this.shadow, ...this.wormSegments];
+    const fadeTargets: Phaser.GameObjects.GameObject[] = [
+      this.sprite,
+      this.shadow,
+      ...(this.wormEntity?.segments ?? []),
+    ];
     this.scene.tweens.add({
       targets: fadeTargets,
       alpha: 0,
@@ -365,7 +358,7 @@ export class BossController {
       onComplete: () => {
         this.sprite.setVisible(false);
         this.shadow.setVisible(false);
-        this.wormSegments.forEach((s) => s.setVisible(false));
+        this.wormEntity?.segments.forEach((s) => s.setVisible(false));
       },
     });
     this.callbacks.onDefeated();
@@ -915,44 +908,7 @@ export class BossController {
   }
 
   private updateWormTrailAndSegments(time: number): void {
-    const first = this.wormTrail[0];
-    if (!first || Phaser.Math.Distance.Between(this.x, this.y, first.x, first.y) >= 3) {
-      this.wormTrail.unshift({ x: this.x, y: this.y });
-      if (this.wormTrail.length > 260) {
-        this.wormTrail.pop();
-      }
-    }
-
-    const spacing = 36;
-    let trailIdx = 0;
-    let prevX = this.x;
-    let prevY = this.y;
-
-    for (let s = 0; s < this.wormSegments.length; s++) {
-      let accumulated = 0;
-      let targetPt = this.wormTrail[Math.min(trailIdx, this.wormTrail.length - 1)] ?? { x: prevX, y: prevY };
-
-      while (trailIdx < this.wormTrail.length - 1) {
-        const a = this.wormTrail[trailIdx];
-        const b = this.wormTrail[trailIdx + 1];
-        const d = Phaser.Math.Distance.Between(a.x, a.y, b.x, b.y);
-        accumulated += d;
-        trailIdx += 1;
-        if (accumulated >= spacing) {
-          targetPt = b;
-          break;
-        }
-      }
-
-      const wave = Math.sin(time * 0.0085 - s * 0.65) * 9;
-      const sx = targetPt.x;
-      const sy = targetPt.y + wave;
-      const seg = this.wormSegments[s];
-      seg.setPosition(sx, sy);
-      seg.setRotation(Math.atan2(prevY - sy, prevX - sx));
-      prevX = sx;
-      prevY = sy;
-    }
+    this.wormEntity?.update(time, this.x, this.y);
   }
 
   public update(
@@ -1211,7 +1167,7 @@ export class BossController {
     this.arpSpotlight?.destroy();
     this.arpOuterGlow?.destroy();
     this.playerLanternGlow?.destroy();
-    this.wormSegments.forEach((s) => s.destroy());
-    this.wormSegments = [];
+    this.wormEntity?.destroy();
+    this.wormEntity = undefined;
   }
 }

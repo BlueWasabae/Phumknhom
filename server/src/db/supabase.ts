@@ -35,6 +35,14 @@ export interface SavedPlayerProfile {
   ownedMounts?: string[];
   activeMount?: string | null;
   dailyFreeCoinSpinDate?: string | null;
+  cityServer?: string;
+  activeBiome?: string;
+  discoveredBiomes?: string[];
+  unlockedPylons?: string[];
+  bankCoins?: number;
+  weaponPrefix?: string | null;
+  armorPrefix?: string | null;
+  shimmerBlessings?: string[];
   activeClass?: string;
   weapon?: Record<string, unknown>;
   defense?: number;
@@ -349,6 +357,18 @@ function rowToSavedProfile(row: {
     activeMount: typeof meta.activeMount === 'string' ? meta.activeMount : null,
     dailyFreeCoinSpinDate:
       typeof meta.dailyFreeCoinSpinDate === 'string' ? meta.dailyFreeCoinSpinDate : null,
+    cityServer: typeof meta.cityServer === 'string' ? meta.cityServer : 'phnom_penh',
+    activeBiome: typeof meta.activeBiome === 'string' ? meta.activeBiome : 'phum_plaza',
+    discoveredBiomes: Array.isArray(meta.discoveredBiomes)
+      ? (meta.discoveredBiomes as string[])
+      : ['phum_plaza', 'emerald_rice_valley'],
+    unlockedPylons: Array.isArray(meta.unlockedPylons)
+      ? (meta.unlockedPylons as string[])
+      : ['phum_plaza', 'emerald_rice_valley'],
+    bankCoins: typeof meta.bankCoins === 'number' ? meta.bankCoins : 500,
+    weaponPrefix: typeof meta.weaponPrefix === 'string' ? meta.weaponPrefix : 'keen',
+    armorPrefix: typeof meta.armorPrefix === 'string' ? meta.armorPrefix : 'armored',
+    shimmerBlessings: Array.isArray(meta.shimmerBlessings) ? (meta.shimmerBlessings as string[]) : [],
     activeClass: typeof meta.activeClass === 'string' ? meta.activeClass : undefined,
     weapon: typeof meta.weapon === 'object' && meta.weapon ? (meta.weapon as Record<string, unknown>) : undefined,
     defense: typeof meta.defense === 'number' ? meta.defense : undefined,
@@ -398,6 +418,14 @@ export async function registerPlayer(
     ownedMounts: starterProfile?.ownedMounts ?? [],
     activeMount: starterProfile?.activeMount ?? null,
     dailyFreeCoinSpinDate: starterProfile?.dailyFreeCoinSpinDate ?? null,
+    cityServer: starterProfile?.cityServer ?? 'phnom_penh',
+    activeBiome: starterProfile?.activeBiome ?? 'phum_plaza',
+    discoveredBiomes: starterProfile?.discoveredBiomes ?? ['phum_plaza', 'emerald_rice_valley'],
+    unlockedPylons: starterProfile?.unlockedPylons ?? ['phum_plaza', 'emerald_rice_valley'],
+    bankCoins: starterProfile?.bankCoins ?? 500,
+    weaponPrefix: starterProfile?.weaponPrefix ?? 'keen',
+    armorPrefix: starterProfile?.armorPrefix ?? 'armored',
+    shimmerBlessings: starterProfile?.shimmerBlessings ?? [],
     activeClass: starterProfile?.activeClass,
     weapon: starterProfile?.weapon,
     defense: starterProfile?.defense,
@@ -612,6 +640,14 @@ export async function savePlayerProfile(
     ownedMounts: profile.ownedMounts ?? [],
     activeMount: profile.activeMount ?? null,
     dailyFreeCoinSpinDate: profile.dailyFreeCoinSpinDate ?? null,
+    cityServer: profile.cityServer ?? 'phnom_penh',
+    activeBiome: profile.activeBiome ?? 'phum_plaza',
+    discoveredBiomes: profile.discoveredBiomes ?? ['phum_plaza', 'emerald_rice_valley'],
+    unlockedPylons: profile.unlockedPylons ?? ['phum_plaza', 'emerald_rice_valley'],
+    bankCoins: profile.bankCoins ?? 500,
+    weaponPrefix: profile.weaponPrefix ?? 'keen',
+    armorPrefix: profile.armorPrefix ?? 'armored',
+    shimmerBlessings: profile.shimmerBlessings ?? [],
     activeClass: profile.activeClass,
     weapon: profile.weapon,
     defense: profile.defense,

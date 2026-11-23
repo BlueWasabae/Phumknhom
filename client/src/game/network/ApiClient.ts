@@ -63,6 +63,14 @@ export interface SavedProfilePayload {
   ownedMounts?: string[];
   activeMount?: string | null;
   dailyFreeCoinSpinDate?: string | null;
+  cityServer?: 'phnom_penh' | 'siem_reap' | 'kampot';
+  activeBiome?: string;
+  discoveredBiomes?: string[];
+  unlockedPylons?: string[];
+  bankCoins?: number;
+  weaponPrefix?: string | null;
+  armorPrefix?: string | null;
+  shimmerBlessings?: string[];
   activeClass: PlayerState['activeClass'];
   weapon: PlayerState['weapon'];
   defense: number;
@@ -103,6 +111,14 @@ export function serializePlayerStateForSave(state: PlayerState): SavedProfilePay
     ownedMounts: [...(state.ownedMounts ?? [])],
     activeMount: state.activeMount ?? null,
     dailyFreeCoinSpinDate: state.dailyFreeCoinSpinDate ?? null,
+    cityServer: state.cityServer ?? 'phnom_penh',
+    activeBiome: state.activeBiome ?? 'phum_plaza',
+    discoveredBiomes: [...(state.discoveredBiomes ?? ['phum_plaza', 'emerald_rice_valley'])],
+    unlockedPylons: [...(state.unlockedPylons ?? ['phum_plaza', 'emerald_rice_valley'])],
+    bankCoins: state.bankCoins ?? 500,
+    weaponPrefix: state.weaponPrefix ?? 'keen',
+    armorPrefix: state.armorPrefix ?? 'armored',
+    shimmerBlessings: [...(state.shimmerBlessings ?? [])],
     activeClass: state.activeClass,
     weapon: { ...state.weapon },
     defense: state.defense,
@@ -216,6 +232,21 @@ export function hydratePlayerStateFromSave(
     activeMount: typeof saved?.activeMount === 'string' ? saved.activeMount : null,
     dailyFreeCoinSpinDate:
       typeof saved?.dailyFreeCoinSpinDate === 'string' ? saved.dailyFreeCoinSpinDate : null,
+    cityServer:
+      saved?.cityServer === 'siem_reap' || saved?.cityServer === 'kampot'
+        ? saved.cityServer
+        : 'phnom_penh',
+    activeBiome: typeof saved?.activeBiome === 'string' ? saved.activeBiome : 'phum_plaza',
+    discoveredBiomes: Array.isArray(saved?.discoveredBiomes)
+      ? saved.discoveredBiomes
+      : ['phum_plaza', 'emerald_rice_valley'],
+    unlockedPylons: Array.isArray(saved?.unlockedPylons)
+      ? saved.unlockedPylons
+      : ['phum_plaza', 'emerald_rice_valley'],
+    bankCoins: typeof saved?.bankCoins === 'number' ? saved.bankCoins : 500,
+    weaponPrefix: typeof saved?.weaponPrefix === 'string' ? saved.weaponPrefix : 'keen',
+    armorPrefix: typeof saved?.armorPrefix === 'string' ? saved.armorPrefix : 'armored',
+    shimmerBlessings: Array.isArray(saved?.shimmerBlessings) ? saved.shimmerBlessings : [],
   };
 
   const bridge = computeVillageToDungeonBridge(provisional);
@@ -464,4 +495,61 @@ export async function sandboxTopUpApi(
     villagePassUntil: res.data.villagePassUntil,
     label: res.data.label,
   };
+}
+
+export async function reforgeItemApi(
+  session: AuthSession | null,
+  payload: {
+    category: 'weapon' | 'armor';
+    currentPrefix?: string | null;
+    walletCoins: number;
+    playerName: string;
+  }
+): Promise<
+  | {
+      ok: true;
+      costCoins: number;
+      modifier: { id: string; name: string; khmerName: string; tier: string; summary: string };
+    }
+  | { ok: false; error: string }
+> {
+  const res = await postJson<{
+    costCoins: number;
+    modifier: { id: string; name: string; khmerName: string; tier: string; summary: string };
+  }>('/reforge', payload, session?.token);
+  if (!res.ok) return res;
+  return { ok: true, costCoins: res.data.costCoins, modifier: res.data.modifier };
+}
+
+export async function bankActionApi(
+  session: AuthSession | null,
+  action: 'deposit' | 'withdraw',
+  payload: { amount: number; walletCoins: number; bankCoins: number }
+): Promise<
+  | { ok: true; walletCoins: number; bankCoins: number; message: string }
+  | { ok: false; error: string }
+> {
+  const res = await postJson<{ walletCoins: number; bankCoins: number; message: string }>(
+    `/bank/${action}`,
+    payload,
+    session?.token
+  );
+  if (!res.ok) return res;
+  return {
+    ok: true,
+    walletCoins: res.data.walletCoins,
+    bankCoins: res.data.bankCoins,
+    message: res.data.message,
+  };
+}
+
+export async function fetchTickerEventsApi(): Promise<Array<{ id: string; text: string }>> {
+  try {
+    const res = await fetch(`${getApiBase()}/ticker`);
+    if (!res.ok) return [];
+    const json = (await res.json()) as { events?: Array<{ id: string; text: string }> };
+    return Array.isArray(json.events) ? json.events : [];
+  } catch {
+    return [];
+  }
 }

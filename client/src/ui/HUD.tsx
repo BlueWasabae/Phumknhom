@@ -25,9 +25,12 @@ import {
   FastForward,
   Gamepad2,
   Gem,
+  Globe2,
+  Hammer,
   Heart,
   LogIn,
   Mail,
+  Map as MapIcon,
   Menu,
   MessageCircle,
   Smile,
@@ -88,6 +91,10 @@ interface HUDProps {
   onOpenMarket: () => void;
   onOpenBestiary: () => void;
   onOpenDiamondStore: () => void;
+  onOpenWorldMap: () => void;
+  onOpenServerCity: () => void;
+  onOpenReforge: () => void;
+  onOpenClubGames: () => void;
   onFastForwardFarm: () => void;
 }
 
@@ -124,6 +131,10 @@ export const HUD: React.FC<HUDProps> = ({
   onOpenMarket,
   onOpenBestiary,
   onOpenDiamondStore,
+  onOpenWorldMap,
+  onOpenServerCity,
+  onOpenReforge,
+  onOpenClubGames,
   onFastForwardFarm,
 }) => {
   const [menuDropdownOpen, setMenuDropdownOpen] = useState(false);
@@ -214,8 +225,24 @@ export const HUD: React.FC<HUDProps> = ({
       ? 'Crocodile Pierce'
       : 'Lion Strike';
 
+  const cityLabel =
+    player.cityServer === 'siem_reap'
+      ? 'Siem Reap'
+      : player.cityServer === 'kampot'
+      ? 'Kampot'
+      : 'Phnom Penh';
+
   const zonePill = (
     <div className="pointer-events-auto stardew-panel px-2.5 sm:px-3.5 py-1 rounded-2xl flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs max-w-full">
+      <button
+        type="button"
+        onClick={onOpenServerCity}
+        title="Switch Cambodian City Server (Phnom Penh / Siem Reap / Kampot)"
+        className="font-display font-bold px-2 py-0.5 rounded-lg text-[10px] whitespace-nowrap border bg-amber-800 hover:bg-amber-700 text-amber-50 border-amber-950 transition cursor-pointer"
+      >
+        🌏 {cityLabel}
+      </button>
+
       {zone === 'overworld' ? (
         <button
           type="button"
@@ -230,11 +257,15 @@ export const HUD: React.FC<HUDProps> = ({
           className={`font-display font-bold px-2 py-0.5 rounded-lg text-[11px] whitespace-nowrap border ${
             zone === 'farm'
               ? 'bg-amber-700 text-amber-50 border-amber-950'
+              : zone === 'club'
+              ? 'bg-pink-800 text-amber-50 border-pink-950'
               : 'bg-purple-800 text-amber-100 border-purple-950'
           }`}
         >
           {zone === 'farm'
             ? `My Homestead • Farm Lv.${player.lifeStats.farmLevel}`
+            : zone === 'club'
+            ? 'Phum Night Club • Lounge'
             : 'Ancient Cavern • Dungeon'}
         </span>
       )}
@@ -339,6 +370,16 @@ export const HUD: React.FC<HUDProps> = ({
             >
               <Menu className="w-4 h-4 shrink-0" />
               <span>MENU</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onOpenWorldMap}
+              aria-label="World Map (M)"
+              title="World Map, Bus Routes & Biome Pylons (M)"
+              className="stardew-btn p-2 rounded-xl shrink-0"
+            >
+              <MapIcon className="w-4 h-4 text-emerald-900" />
             </button>
 
             <button
@@ -482,6 +523,50 @@ export const HUD: React.FC<HUDProps> = ({
                       {saveStatus === 'saving' ? 'Saving...' : '☁ Saved'}
                     </span>
                   )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    soundManager.playSfx('click');
+                    setMenuDropdownOpen(false);
+                    onOpenWorldMap();
+                  }}
+                  className="px-3 py-2 rounded-xl hover:bg-amber-200/80 text-left flex items-center gap-2 text-amber-950"
+                >
+                  <MapIcon className="w-4 h-4 text-emerald-800" /> World Map &amp; Pylons (M)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    soundManager.playSfx('click');
+                    setMenuDropdownOpen(false);
+                    onOpenServerCity();
+                  }}
+                  className="px-3 py-2 rounded-xl hover:bg-amber-200/80 text-left flex items-center gap-2 text-amber-950"
+                >
+                  <Globe2 className="w-4 h-4 text-amber-800" /> City Server ({cityLabel})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    soundManager.playSfx('click');
+                    setMenuDropdownOpen(false);
+                    onOpenReforge();
+                  }}
+                  className="px-3 py-2 rounded-xl hover:bg-amber-200/80 text-left flex items-center gap-2 text-amber-950"
+                >
+                  <Hammer className="w-4 h-4 text-orange-700" /> Reforge, Shimmer &amp; ATM
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    soundManager.playSfx('click');
+                    setMenuDropdownOpen(false);
+                    onOpenClubGames();
+                  }}
+                  className="px-3 py-2 rounded-xl hover:bg-amber-200/80 text-left flex items-center gap-2 text-amber-950"
+                >
+                  <Sparkles className="w-4 h-4 text-fuchsia-700" /> Club: Tien Len &amp; Ouk Chess
                 </button>
                 <button
                   type="button"

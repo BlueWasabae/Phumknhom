@@ -17,8 +17,15 @@ import {
   hasTalent,
 } from '@shared/skillTrees';
 import { KHMER_BOSSES, rollBossLoot, type RolledBossLoot } from '@shared/khmerBosses';
+import { getReforgeModifier } from '@shared/reforgeModifiers';
+import {
+  CALAMITY_WEAPONS,
+  getEvolvingRelicMultiplier,
+  getPreahKhanBiomeBonus,
+} from '../../data/calamityWeapons';
 import { awardSkillXp } from '../systems/SkillManager';
 import { soundManager } from '../systems/SoundManager';
+import { travelManager } from '../systems/TravelAndPylons';
 import { EventBus, type JoystickVector } from '../EventBus';
 import { Player } from '../entities/Player';
 import { PaperDoll, type PaperDollPose } from '../entities/PaperDoll';
@@ -102,9 +109,15 @@ export class DungeonBossScene extends Phaser.Scene {
   private elevatedPlatforms!: Phaser.Physics.Arcade.StaticGroup;
   private dustMotes: DustMote[] = [];
 
-  // Cracked Secret Wall & Boss Treasure Bag Drop
+  // Cracked Secret Wall, Boss Treasure Bag Drop, Arena Buff Stations & Shimmer Spring
   private secretWall!: SecretWallState;
   private lootBag: LootBagDrop | null = null;
+  private arenaStations = {
+    heartLantern: true,
+    sacredCampfire: true,
+    bastStatue: false,
+  };
+  private lastStationHealAt = 0;
 
   // 5-Class Combat & Calamity Gauges
   private projectiles: SpawnedProjectile[] = [];
@@ -207,6 +220,7 @@ export class DungeonBossScene extends Phaser.Scene {
     this.buildArenaPlatforms();
     this.buildExitPortal();
     this.buildCrackedSecretWall();
+    this.buildArenaBuffStationsAndShimmerSpring();
 
     this.player = new Player(this, 280, FLOOR_Y - 46, this.initialState, 'dungeon');
     // Ensure HP starts clamped cleanly to effectiveMaxHp (or full if coming from defeat)
@@ -309,6 +323,11 @@ export class DungeonBossScene extends Phaser.Scene {
       EventBus.on('input:fury', () => this.activateFuryBurst()),
       EventBus.on('input:rematch', () => this.restartCurrentBoss()),
       EventBus.on('input:exitDungeon', () => this.returnToOverworld()),
+      EventBus.on('travel:execute', (req) => {
+        if (req.method === 'mirror' || req.targetZone === 'overworld') {
+          this.returnToOverworld();
+        }
+      }),
       EventBus.on('input:interact', () => {
         if (this.lootBag && !this.lootBag.claimed) {
           this.claimBossLootBag();
@@ -656,6 +675,115 @@ export class DungeonBossScene extends Phaser.Scene {
     EventBus.emit('ui:toast', { text: '✨ Cracked Secret Wall shattered! Walk over or click the Relic Chest!' });
   }
 
+  /**
+   * Placeable Arena Buff Stations (Heart Lantern, Sacred Campfire, Angkor Bast Statue)
+   * + Iridescent Apsara Shimmer Spring & Return Portal activator!
+   */
+  private buildArenaBuffStationsAndShimmerSpring(): void {
+    const stations: Array<{
+      key: 'heartLantern' | 'sacredCampfire' | 'bastStatue';
+      x: number;
+      y: number;
+      label: string;
+      color: number;
+    }> = [
+      { key: 'heartLantern', x: 460, y: 472, label: '❤️ HEART LANTERN (+3 HP/s)', color: 0xf43f5e },
+      { key: 'sacredCampfire', x: 780, y: FLOOR_Y - 14, label: '🔥 CAMPFIRE (+2 HP/s)', color: 0xf97316 },
+      { key: 'bastStatue', x: 1120, y: 458, label: '🗿 ANGKOR WARD (+6 DEF)', color: 0x38bdf8 },
+    ];
+
+    stations.forEach((st) => {
+      const aura = this.add
+        .circle(st.x, st.y, 26, st.color, this.arenaStations[st.key] ? 0.34 : 0.08)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(17);
+      const post = this.add
+        .rectangle(st.x, st.y, 18, 26, st.color, this.arenaStations[st.key] ? 0.95 : 0.45)
+        .setStrokeStyle(2, 0xfef08a)
+        .setDepth(18)
+        .setInteractive({ useHandCursor: true });
+      const txt = this.add
+        .text(st.x, st.y - 22, this.arenaStations[st.key] ? st.label : `Place ${st.label.split(' (')[0]}`, {
+          fontFamily: 'Fredoka, sans-serif',
+          fontSize: '10px',
+          fontStyle: 'bold',
+          color: this.arenaStations[st.key] ? '#fef08a' : '#94a3b8',
+          backgroundColor: 'rgba(15, 23, 42, 0.82)',
+          padding: { x: 5, y: 2 },
+        })
+        .setOrigin(0.5, 1)
+        .setDepth(21);
+
+      post.on('pointerdown', () => {
+        this.arenaStations[st.key] = !this.arenaStations[st.key];
+        const on = this.arenaStations[st.key];
+        aura.setAlpha(on ? 0.36 : 0.08);
+        post.setAlpha(on ? 0.95 : 0.45);
+        txt.setText(on ? st.label : `Place ${st.label.split(' (')[0]}`).setColor(on ? '#fef08a' : '#94a3b8');
+        soundManager.playSfx('magic');
+        EventBus.emit('ui:toast', {
+          text: on ? `✨ Placed Arena Buff Station: ${st.label}` : `Packed away ${st.label.split(' (')[0]}.`,
+        });
+      });
+    });
+
+    // Apsara Shimmer Spring (Left Cavern Shelf) + Return Portal Drop
+    const sx = 246;
+    const sy = FLOOR_Y - 6;
+    const pool = this.add
+      .ellipse(sx, sy, 92, 18, 0xa855f7, 0.78)
+      .setStrokeStyle(2.5, 0x67e8f9, 0.95)
+      .setDepth(17)
+      .setInteractive({ useHandCursor: true });
+    const glow = this.add
+      .circle(sx, sy - 10, 38, 0xc084fc, 0.25)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(16);
+    this.tweens.add({ targets: [pool, glow], alpha: 0.48, duration: 900, yoyo: true, repeat: -1 });
+    pool.on('pointerdown', () => {
+      soundManager.playSfx('magic');
+      EventBus.emit('ui:openModal', { modal: 'reforge', reforgeTab: 'shimmer' });
+    });
+    this.add
+      .text(sx, sy - 24, '✨ APSARA SHIMMER SPRING (Click)', {
+        fontFamily: 'Fredoka, sans-serif',
+        fontSize: '10px',
+        fontStyle: 'bold',
+        color: '#e879f9',
+        backgroundColor: 'rgba(15, 23, 42, 0.85)',
+        padding: { x: 6, y: 2 },
+      })
+      .setOrigin(0.5, 1)
+      .setDepth(22);
+
+    // Quick Return Portal Bookmark Button beside Exit Portal
+    const rpBtn = this.add
+      .text(EXIT_PORTAL_X + 128, FLOOR_Y - 12, '🌀 DROP RETURN PORTAL', {
+        fontFamily: 'Fredoka, sans-serif',
+        fontSize: '10px',
+        fontStyle: 'bold',
+        color: '#7dd3fc',
+        backgroundColor: 'rgba(14, 116, 144, 0.85)',
+        padding: { x: 7, y: 3 },
+      })
+      .setOrigin(0.5, 1)
+      .setDepth(24)
+      .setInteractive({ useHandCursor: true });
+    rpBtn.on('pointerdown', () => {
+      travelManager.setReturnPortal({
+        bossId: this.bossId,
+        difficulty: this.difficulty,
+        partyMode: this.partyMode,
+        createdAt: Date.now(),
+      });
+      soundManager.playSfx('magic');
+      EventBus.emit('ui:toast', {
+        text: '🌀 Return Portal linked! Warping to Phum Plaza — click the blue portal by the Pylon Shrine to jump right back!',
+      });
+      this.returnToOverworld();
+    });
+  }
+
   private claimSecretRelicChest(): void {
     if (!this.secretWall.broken || this.secretWall.chestClaimed) return;
     this.secretWall.chestClaimed = true;
@@ -916,10 +1044,14 @@ export class DungeonBossScene extends Phaser.Scene {
       this.spawnFloatingText(this.player.x, this.player.y - 44, '🥥 ANTI-VENOM IMMUNE!', '#67e8f9', '15px');
       return;
     }
+    const armorReforge = getReforgeModifier('armor', this.player.state.armorPrefix);
+    const shimmerDef = (this.player.state.shimmerBlessings ?? []).includes('blessing_sandstone_ward') ? 5 : 0;
+    const bastDef = this.arenaStations.bastStatue ? 6 : 0;
+    const totalDefense = this.player.state.defense + (armorReforge?.defenseFlat ?? 0) + shimmerDef + bastDef;
     const effectiveDefense =
       now < this.defenseCrackedUntil
-        ? Math.max(0, Math.round(this.player.state.defense * 0.75))
-        : this.player.state.defense;
+        ? Math.max(0, Math.round(totalDefense * 0.75))
+        : totalDefense;
 
     const dmg = calculateDamageTaken({
       bossAttack: rawBossAttack,
@@ -1069,8 +1201,13 @@ export class DungeonBossScene extends Phaser.Scene {
     }
 
     if (cls === 'archer') {
-      soundManager.playSfx('arrow');
-      this.projectiles.push(this.vfx.spawnArcherArrow(this.player.x, this.player.y, dir, 1));
+      if (weapon.id === 'weapon_golden_riel_shot') {
+        soundManager.playSfx('coin');
+        this.projectiles.push(this.vfx.spawnGoldenRielCoin(this.player.x, this.player.y, dir, 1.05, 2));
+      } else {
+        soundManager.playSfx('arrow');
+        this.projectiles.push(this.vfx.spawnArcherArrow(this.player.x, this.player.y, dir, 1));
+      }
       return;
     }
 
@@ -1112,31 +1249,47 @@ export class DungeonBossScene extends Phaser.Scene {
       this.broadcastClassMeter();
 
       soundManager.playSfx('swing');
-      this.vfx.playShadowTwinSlash(this.player.x, this.player.y, dir, isShadowStrike);
+      if (isShadowStrike && weapon.id === 'weapon_reality_rip_blade') {
+        this.vfx.playParryRealityRip(this.player.x + dir * 80, this.player.y - 12);
+      } else {
+        this.vfx.playShadowTwinSlash(this.player.x, this.player.y, dir, isShadowStrike);
+      }
       const slashBox = new Phaser.Geom.Rectangle(this.player.x + dir * 46 - 52, this.player.y - 46, 104, 92);
       this.checkMeleeBoxHits(slashBox, dir, {
-        bonusMult: isShadowStrike ? 1.55 : 1,
+        bonusMult: isShadowStrike ? (weapon.id === 'weapon_reality_rip_blade' ? 1.9 : 1.55) : 1,
         guaranteedCrit: isShadowStrike,
-        tag: isShadowStrike ? 'SHADOW STRIKE!' : undefined,
+        tag: isShadowStrike
+          ? weapon.id === 'weapon_reality_rip_blade'
+            ? 'REALITY RIP!'
+            : 'SHADOW STRIKE!'
+          : undefined,
       });
       return;
     }
 
-    // Lbokator Warrior 3-Hit Animal-Stance Combo (also used by Golden Frying Pan & Stone Club!)
+    // Lbokator Warrior 3-Hit Animal-Stance Combo (also supports 8-Biome Preah Khan & Golden Frying Pan!)
     const stance = this.lbokatorStance;
     soundManager.playSfx('swing');
-    this.vfx.playLbokatorSlash(this.player.x, this.player.y, dir, stance);
+    const isPreahKhan = weapon.id === 'weapon_preah_khan';
+    const preahBonus = isPreahKhan ? getPreahKhanBiomeBonus(this.player.state.activeBiome) : null;
+    if (isPreahKhan && preahBonus) {
+      this.vfx.playPreahKhanBiomeSlash(this.player.x, this.player.y, dir, preahBonus.colorHex);
+    } else {
+      this.vfx.playLbokatorSlash(this.player.x, this.player.y, dir, stance);
+    }
     const swingBox = new Phaser.Geom.Rectangle(this.player.x + dir * 50 - 54, this.player.y - 48, 108, 96);
     const isGoldenPan = weapon.id === 'weapon_golden_pan';
     const stanceLabel = isGoldenPan
       ? 'BONK!'
+      : isPreahKhan && preahBonus
+      ? `${preahBonus.elementName.toUpperCase()}!`
       : stance === 3
       ? 'HANUMAN SLAM!'
       : stance === 2
       ? 'CROCODILE PIERCE'
       : undefined;
     this.checkMeleeBoxHits(swingBox, dir, {
-      bonusMult: stance === 3 ? 1.35 : 1,
+      bonusMult: (stance === 3 ? 1.35 : 1) * (1 + (preahBonus?.bonusDmgPct ?? 0)),
       extraArmorPen: stance === 2 ? 6 : 0,
       tag: stanceLabel,
     });
@@ -1198,18 +1351,32 @@ export class DungeonBossScene extends Phaser.Scene {
     const bridge = computeVillageToDungeonBridge(this.player.state, Date.now(), this.consecutiveMeleeHits);
     const focusActive = now < this.focusActiveUntil;
     const furyActive = now < this.furyActiveUntil;
+    const wReforge = getReforgeModifier('weapon', this.player.state.weaponPrefix);
+    const aReforge = getReforgeModifier('armor', this.player.state.armorPrefix);
+    const shimmerCrit = (this.player.state.shimmerBlessings ?? []).includes('blessing_lotus_luck') ? 0.05 : 0;
+    const evolvingMult =
+      CALAMITY_WEAPONS[weapon.id]?.specialKind === 'evolving_angkor_relic'
+        ? getEvolvingRelicMultiplier(this.player.state)
+        : 1;
 
     const hit = calculatePlayerDamage({
-      weaponBase: weapon.baseDamage * (opts.bonusMult ?? 1),
+      weaponBase: weapon.baseDamage * (opts.bonusMult ?? 1) * evolvingMult,
       upgradeLevel: weapon.upgradeLevel,
       flatBonuses: bridge.flatDamageBonus,
-      skillPct: bridge.classSkillDamagePct,
+      skillPct: bridge.classSkillDamagePct + (wReforge?.damagePct ?? 0) + (aReforge?.damagePct ?? 0),
       armorPct: armorDamagePct,
       snackBuffPct: bridge.snackAttackPct,
       enemyDefense: this.bossCtrl.def.defense,
       armorPen: weapon.armorPen + (opts.extraArmorPen ?? 0),
       bossDR: this.bossCtrl.def.bossDR,
-      critChance: Math.min(0.95, bridge.effectiveCritChance + (furyActive ? 0.25 : 0)),
+      critChance: Math.min(
+        0.95,
+        bridge.effectiveCritChance +
+          (furyActive ? 0.25 : 0) +
+          (wReforge?.critBonus ?? 0) +
+          (aReforge?.critBonus ?? 0) +
+          shimmerCrit
+      ),
       critMultiplier: bridge.critMultiplier,
       isCritOverride: opts.guaranteedCrit ? true : undefined,
       focusActive,
@@ -1303,8 +1470,13 @@ export class DungeonBossScene extends Phaser.Scene {
 
     if (this.yantSigils.length >= 3) {
       this.clearYantSigils();
-      this.vfx.playYantDetonationBeam(this.bossCtrl.x, FLOOR_Y);
-      this.damageBoss(dir, { bonusMult: 2.2, guaranteedCrit: true, tag: 'YANT DETONATION!' });
+      if (this.player.state.weapon.id === 'weapon_celestial_yant_tome') {
+        this.vfx.playOffscreenYantBeams(this.bossCtrl.x, FLOOR_Y);
+        this.damageBoss(dir, { bonusMult: 2.6, guaranteedCrit: true, tag: 'CELESTIAL YANT BEAMS!' });
+      } else {
+        this.vfx.playYantDetonationBeam(this.bossCtrl.x, FLOOR_Y);
+        this.damageBoss(dir, { bonusMult: 2.2, guaranteedCrit: true, tag: 'YANT DETONATION!' });
+      }
     }
     this.broadcastClassMeter();
   }
@@ -1744,13 +1916,31 @@ export class DungeonBossScene extends Phaser.Scene {
       if (!hitSomething && this.bossCtrl.alive && this.bossCtrl.intersectsHitbox(pBox)) {
         const hitDir = p.vx >= 0 ? 1 : -1;
         this.vfx.playImpactSparks(p.node.x, p.node.y, p.colorHex);
-        if (p.kind === 'arrow') {
+        if (p.kind === 'riel_coin') {
+          this.damageBoss(hitDir, {
+            bonusMult: p.damageScale,
+            guaranteedCrit: (p.ricochetsLeft ?? 0) < 2,
+            tag: (p.ricochetsLeft ?? 0) < 2 ? 'COIN RICOCHET!' : 'GOLDEN RIEL!',
+          });
+          if ((p.ricochetsLeft ?? 0) > 0) {
+            soundManager.playSfx('coin');
+            p.ricochetsLeft = (p.ricochetsLeft ?? 1) - 1;
+            p.damageScale *= 1.3;
+            p.vx = -p.vx * 0.85;
+            p.vy = -210;
+            p.node.x += Math.sign(p.vx) * 28;
+            p.expiresAt = time + 950;
+          } else {
+            hitSomething = true;
+          }
+        } else if (p.kind === 'arrow') {
           this.damageBoss(hitDir, { bonusMult: p.damageScale });
+          hitSomething = true;
         } else {
           this.damageBoss(hitDir, { bonusMult: p.damageScale });
           this.addMysticYantStack(hitDir);
+          hitSomething = true;
         }
-        hitSomething = true;
       }
 
       if (hitSomething || time >= p.expiresAt || p.node.x < 0 || p.node.x > ARENA_W) {
@@ -1764,6 +1954,18 @@ export class DungeonBossScene extends Phaser.Scene {
       m.sprite.x += m.speedX * dt;
       m.sprite.y = m.baseY + Math.sin(time / 700 + m.phase) * 14;
       if (m.sprite.x > ARENA_W + 10) m.sprite.x = -10;
+    }
+
+    // Passive Arena Buff Station Regen (Heart Lantern +3 HP/s, Sacred Campfire +2 HP/s)
+    if (!this.playerDefeated && time - this.lastStationHealAt >= 1000) {
+      this.lastStationHealAt = time;
+      const regen = (this.arenaStations.heartLantern ? 3 : 0) + (this.arenaStations.sacredCampfire ? 2 : 0);
+      const shimmerHp = (this.player.state.shimmerBlessings ?? []).includes('blessing_vital_crystal') ? 25 : 0;
+      const capHp = bridge.effectiveMaxHp + shimmerHp;
+      if (regen > 0 && this.player.state.hp < capHp) {
+        this.player.state.hp = Math.min(capHp, this.player.state.hp + regen);
+        this.emitPlayerState();
+      }
     }
 
     // Periodic Boss HUD & Calamity Gauge refresh

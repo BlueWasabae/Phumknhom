@@ -643,6 +643,126 @@ export class BootScene extends Phaser.Scene {
         tex.refresh();
       }
     }
+
+    // ==================== EXPANSION PIXEL-ART LANDMARK SPRITES (ZERO 404s!) ====================
+    if (!this.textures.exists('bus_stop_sign')) {
+      const tex = this.textures.createCanvas('bus_stop_sign', 36, 48);
+      if (tex) {
+        const ctx = tex.getContext();
+        ctx.imageSmoothingEnabled = false;
+        ctx.fillStyle = '#475569';
+        ctx.fillRect(16, 16, 4, 30);
+        ctx.fillStyle = '#0284c7';
+        ctx.fillRect(6, 4, 24, 16);
+        ctx.fillStyle = '#facc15';
+        ctx.fillRect(10, 8, 16, 8);
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(12, 10, 4, 4);
+        ctx.fillRect(20, 10, 4, 4);
+        tex.refresh();
+      }
+    }
+
+    if (!this.textures.exists('village_bus')) {
+      const tex = this.textures.createCanvas('village_bus', 76, 38);
+      if (tex) {
+        const ctx = tex.getContext();
+        ctx.imageSmoothingEnabled = false;
+        ctx.fillStyle = '#0284c7';
+        ctx.fillRect(4, 6, 68, 24);
+        ctx.fillStyle = '#facc15';
+        ctx.fillRect(4, 18, 68, 6);
+        ctx.fillStyle = '#bae6fd';
+        for (let wx = 10; wx <= 54; wx += 14) {
+          ctx.fillRect(wx, 9, 10, 8);
+        }
+        ctx.fillStyle = '#fef08a';
+        ctx.fillRect(68, 22, 4, 4);
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(14, 28, 10, 8);
+        ctx.fillRect(52, 28, 10, 8);
+        tex.refresh();
+      }
+    }
+
+    if (!this.textures.exists('atm_kiosk')) {
+      const tex = this.textures.createCanvas('atm_kiosk', 34, 44);
+      if (tex) {
+        const ctx = tex.getContext();
+        ctx.imageSmoothingEnabled = false;
+        ctx.fillStyle = '#1e3a8a';
+        ctx.fillRect(5, 6, 24, 36);
+        ctx.fillStyle = '#38bdf8';
+        ctx.fillRect(9, 12, 16, 11);
+        ctx.fillStyle = '#facc15';
+        ctx.fillRect(9, 27, 16, 4);
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillRect(11, 34, 12, 5);
+        tex.refresh();
+      }
+    }
+
+    if (!this.textures.exists('blacksmith_anvil')) {
+      const tex = this.textures.createCanvas('blacksmith_anvil', 44, 36);
+      if (tex) {
+        const ctx = tex.getContext();
+        ctx.imageSmoothingEnabled = false;
+        ctx.fillStyle = '#78350f';
+        ctx.fillRect(10, 22, 24, 12);
+        ctx.fillStyle = '#334155';
+        ctx.fillRect(6, 12, 32, 10);
+        ctx.fillStyle = '#64748b';
+        ctx.fillRect(8, 10, 26, 4);
+        ctx.fillStyle = '#f97316';
+        ctx.fillRect(16, 6, 12, 4);
+        ctx.fillStyle = '#facc15';
+        ctx.fillRect(19, 4, 6, 3);
+        tex.refresh();
+      }
+    }
+
+    if (!this.textures.exists('club_building')) {
+      const tex = this.textures.createCanvas('club_building', 84, 72);
+      if (tex) {
+        const ctx = tex.getContext();
+        ctx.imageSmoothingEnabled = false;
+        ctx.fillStyle = '#3b0764';
+        ctx.fillRect(8, 22, 68, 46);
+        ctx.fillStyle = '#ec4899';
+        ctx.fillRect(6, 14, 72, 10);
+        ctx.fillStyle = '#facc15';
+        ctx.fillRect(16, 17, 52, 4);
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(32, 44, 20, 24);
+        ctx.fillStyle = '#38bdf8';
+        ctx.fillRect(14, 32, 14, 12);
+        ctx.fillRect(56, 32, 14, 12);
+        ctx.strokeStyle = '#f0abfc';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(8, 22, 68, 46);
+        tex.refresh();
+      }
+    }
+
+    if (!this.textures.exists('pylon_shrine')) {
+      const tex = this.textures.createCanvas('pylon_shrine', 44, 56);
+      if (tex) {
+        const ctx = tex.getContext();
+        ctx.imageSmoothingEnabled = false;
+        ctx.fillStyle = '#78716c';
+        ctx.fillRect(8, 42, 28, 12);
+        ctx.fillStyle = '#a8a29e';
+        ctx.fillRect(12, 36, 20, 6);
+        // Floating Angkor Pylon Crystal
+        ctx.fillStyle = '#0284c7';
+        ctx.fillRect(16, 10, 12, 20);
+        ctx.fillStyle = '#38bdf8';
+        ctx.fillRect(18, 6, 8, 26);
+        ctx.fillStyle = '#e0f2fe';
+        ctx.fillRect(20, 12, 4, 12);
+        tex.refresh();
+      }
+    }
   }
 
   private registerAnimations(): void {

@@ -30,3 +30,6 @@ Check off each phase only after testing on **both Desktop and Mobile browsers** 
   - Replace placeholders with cohesive chibi pixel art, 4 seasonal palettes, 8 biomes, sound effects, and rolling out Bosses #2–#28 + Boss Rush.
 - [x] **Phase 10 — Live Launch on `www.bluexacedamy.space`**
   - Deploy client to Vercel (`www.bluexacedamy.space`), server to Railway/Fly.io, connect Stripe / ABA PayWay KHQR for Diamond Store & Village Pass, and run closed alpha with friends.
+- [x] **Phase 11 — World Map, City Servers, Village Club, Pylons & Calamity Arsenal Expansion**
+  - Fullscreen clickable 8-Biome Fog-of-War World Map (`[M]`), Phnom Penh / Siem Reap / Kampot City Servers, Animated Express Bus, Biome Pylons, Magic Mirror & Return Portal.
+  - Phum Night Club (`ClubScene` & Colyseus `ClubRoom`) with Tien Len & Ouk Chaktrang mini-games, Global Event Ticker, ATM Bank Vault, Server-Validated Blacksmith Reforging, Apsara Shimmer Spring, Placeable Dungeon Arena Buff Stations, and 5 Calamity Arsenal weapons (*Preah Khan*, *Golden Riel Coin-Shot*, *Parry Reality-Rip*, *Celestial Yant Beams*, *Evolving Angkor Relic*).

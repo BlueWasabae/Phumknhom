@@ -9,6 +9,7 @@ import type {
   SkillId,
   ZoneType,
 } from '@shared/types';
+import type { TravelRequestPayload } from './systems/TravelAndPylons';
 
 export interface JoystickVector {
   x: number; // -1..1
@@ -175,6 +176,8 @@ export interface EventMap {
     partyId?: string;
   };
   'dungeon:outcome': DungeonOutcomePayload | null;
+  'travel:execute': TravelRequestPayload;
+  'ticker:push': { text: string; category?: 'boss' | 'reforge' | 'weather' | 'club' | 'market' };
   'mobile:joystick': JoystickVector;
   'input:interact': void;
   'input:jump': void;
@@ -203,10 +206,16 @@ export interface EventMap {
       | 'pagoda'
       | 'market'
       | 'bestiary'
-      | 'diamondStore';
+      | 'diamondStore'
+      | 'worldMap'
+      | 'serverCity'
+      | 'reforge'
+      | 'clubGames';
     farmTab?: 'seeds' | 'livestock' | 'artisan';
     shopTab?: 'primary' | 'secondary';
     friendsTab?: 'friends' | 'inbox';
+    reforgeTab?: 'reforge' | 'shimmer' | 'bank';
+    clubGame?: 'tien_len' | 'ouk_chaktrang';
   };
   'ui:toast': { text: string };
 }

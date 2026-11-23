@@ -1,4 +1,4 @@
-export type ZoneType = 'overworld' | 'dungeon' | 'farm';
+export type ZoneType = 'overworld' | 'dungeon' | 'farm' | 'club';
 
 export type DifficultyMode = 'normal' | 'expert' | 'calamity' | 'death';
 
@@ -202,6 +202,14 @@ export interface PlayerState {
   ownedMounts?: string[];
   activeMount?: string | null;
   dailyFreeCoinSpinDate?: string | null;
+  cityServer?: 'phnom_penh' | 'siem_reap' | 'kampot';
+  activeBiome?: string;
+  discoveredBiomes?: string[];
+  unlockedPylons?: string[];
+  bankCoins?: number;
+  weaponPrefix?: string | null;
+  armorPrefix?: string | null;
+  shimmerBlessings?: string[];
   skillDamagePct: number;
   armorDamagePct: number;
   snackBuffPct: number;
@@ -426,6 +434,14 @@ export const INITIAL_PLAYER_STATE: PlayerState = {
   ownedMounts: [],
   activeMount: null,
   dailyFreeCoinSpinDate: null,
+  cityServer: 'phnom_penh',
+  activeBiome: 'phum_plaza',
+  discoveredBiomes: ['phum_plaza', 'emerald_rice_valley'],
+  unlockedPylons: ['phum_plaza', 'emerald_rice_valley'],
+  bankCoins: 500,
+  weaponPrefix: 'keen',
+  armorPrefix: 'armored',
+  shimmerBlessings: [],
   skillDamagePct: 0.025,
   armorDamagePct: 0.04,
   snackBuffPct: 0,

@@ -6,12 +6,14 @@ import { Server, matchMaker } from 'colyseus';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { ALLOWED_AREAS, PlazaRoom } from './rooms/PlazaRoom';
 import { DungeonRoom } from './rooms/DungeonRoom';
+import { ClubRoom } from './rooms/ClubRoom';
 import {
   buyMarketListing,
   cancelMarketListing,
   createMarketListing,
   listMarketListings,
 } from './economy/marketService';
+import { createReforgeAndBankRouter } from './economy/reforgeService';
 import { createPaymentRouter } from './economy/paymentWebhook';
 import { presenceRegistry } from './presence';
 import {
@@ -399,8 +401,9 @@ app.post('/api/market/cancel', async (req, res) => {
   }
 });
 
-// ==================== PHASE 10 PAYMENTS & DIAMOND STORE WEBHOOKS ====================
+// ==================== PHASE 10 PAYMENTS & EXPANSION REFORGE / BANK / TICKER ====================
 app.use('/api/payments', createPaymentRouter());
+app.use('/api', createReforgeAndBankRouter());
 
 const httpServer = http.createServer(app);
 const gameServer = new Server({
@@ -411,6 +414,7 @@ const gameServer = new Server({
 
 gameServer.define('plaza', PlazaRoom).filterBy(['areaId']);
 gameServer.define('dungeon', DungeonRoom).filterBy(['partyId']);
+gameServer.define('club', ClubRoom).filterBy(['cityServer']);
 
 httpServer.listen(PORT, HOST, () => {
   console.log(`[ភូមិខ្ញុំ Colyseus] Village Plaza + Co-op Dungeon Server listening on ws://${HOST}:${PORT}`);

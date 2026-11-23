@@ -15,6 +15,12 @@ import {
 import { KHMER_CLASSES } from '@shared/khmerClasses';
 import { computeVillageToDungeonBridge } from '@shared/skillTrees';
 import {
+  REFORGE_COST_COINS,
+  rollReforgeModifier,
+  type ReforgeCategory,
+} from '@shared/reforgeModifiers';
+import type { BiomeId, CityServerId } from '@shared/worldMapData';
+import {
   ITEM_CATALOG,
   buildWeaponStatsFromItem,
   buyFashionItem,
@@ -48,13 +54,21 @@ import {
   purchaseDiamondShopItem,
   togglePlazaMount,
 } from './data/diamondStore';
+import { applyShimmerTransmute } from './data/calamityWeapons';
+import {
+  payBusFare,
+  unlockBiomeAndPylon,
+  type TravelRequestPayload,
+} from './game/systems/TravelAndPylons';
 import {
   acceptFriendRequestApi,
+  bankActionApi,
   buyMarketListingApi,
   cancelMarketListingApi,
   createMarketListingApi,
   declineFriendRequestApi,
   fetchFriends,
+  reforgeItemApi,
   sandboxTopUpApi,
   saveAccountProfile,
   sendFriendRequestApi,
@@ -100,6 +114,11 @@ import { PagodaBundleModal } from './ui/PagodaBundleModal';
 import { MarketModal } from './ui/MarketModal';
 import { BestiaryModal } from './ui/BestiaryModal';
 import { DiamondStoreModal } from './ui/DiamondStoreModal';
+import { WorldMapModal } from './ui/WorldMapModal';
+import { ServerCityModal } from './ui/ServerCityModal';
+import { ServerTickerBanner } from './ui/ServerTickerBanner';
+import { ReforgeModal, type ReforgeTab } from './ui/ReforgeModal';
+import { ClubGamesModal, type ClubGameTab } from './ui/ClubGamesModal';
 import { soundManager } from './game/systems/SoundManager';
 
 type ActiveModalType =
@@ -119,7 +138,11 @@ type ActiveModalType =
   | 'pagoda'
   | 'market'
   | 'bestiary'
-  | 'diamondStore';
+  | 'diamondStore'
+  | 'worldMap'
+  | 'serverCity'
+  | 'reforge'
+  | 'clubGames';
 
 interface FloatingXpBanner extends SkillXpToastPayload {
   uid: number;
@@ -164,6 +187,8 @@ export const App: React.FC = () => {
   const [inspectedPlayer, setInspectedPlayer] = useState<InspectedRemotePlayer | null>(null);
   const [farmModalTab, setFarmModalTab] = useState<FarmModalTab>('seeds');
   const [shopTab, setShopTab] = useState<'primary' | 'secondary'>('primary');
+  const [reforgeTab, setReforgeTab] = useState<ReforgeTab>('reforge');
+  const [clubGameTab, setClubGameTab] = useState<ClubGameTab>('tien_len');
   const [preselectedBossId, setPreselectedBossId] = useState<BossId>('sdech_kongkaeb');
   const [selectedCropId, setSelectedCropId] = useState('trakuon');
   const [farmToolMode, setFarmToolMode] = useState<FarmToolMode>('smart');
@@ -573,6 +598,116 @@ export const App: React.FC = () => {
     [runStateAction]
   );
 
+  const handleReforge = useCallback(
+    async (category: ReforgeCategory) => {
+      const cur = playerRef.current;
+      const cost = REFORGE_COST_COINS[category];
+      const currentPrefix = category === 'weapon' ? cur.weaponPrefix : cur.armorPrefix;
+      const apiRes = await reforgeItemApi(authSessionRef.current, {
+        category,
+        currentPrefix,
+        walletCoins: cur.currencies.coins,
+        playerName: cur.name,
+      });
+
+      const mod = apiRes.ok ? apiRes.modifier : rollReforgeModifier(category, currentPrefix);
+      const charged = apiRes.ok ? apiRes.costCoins : cost;
+      if (!apiRes.ok && cur.currencies.coins < cost) {
+        EventBus.emit('ui:toast', { text: apiRes.error });
+        return;
+      }
+
+      soundManager.playSfx(mod.tier === 'mythic' ? 'level_up' : 'coin');
+      if (mod.tier === 'mythic') {
+        EventBus.emit('ticker:push', {
+          text: `🔨 ${cur.name} reforged a ${mod.name.toUpperCase()} (${mod.khmerName}) ${category}!`,
+          category: 'reforge',
+        });
+      }
+      runStateAction((prev) => {
+        if (prev.currencies.coins < charged) {
+          return { state: prev, ok: false, message: `Need ${charged} Coins to reforge.` };
+        }
+        const nextCoins = prev.currencies.coins - charged;
+        return {
+          state: {
+            ...prev,
+            coins: nextCoins,
+            currencies: { ...prev.currencies, coins: nextCoins },
+            ...(category === 'weapon' ? { weaponPrefix: mod.id } : { armorPrefix: mod.id }),
+          },
+          ok: true,
+          message: `🔨 Reforged ${category} → ${mod.name} (${mod.summary}) [-${charged}c]!`,
+        };
+      });
+    },
+    [runStateAction]
+  );
+
+  const handleBankAction = useCallback(
+    async (action: 'deposit' | 'withdraw', amount: number) => {
+      const cur = playerRef.current;
+      const apiRes = await bankActionApi(authSessionRef.current, action, {
+        amount,
+        walletCoins: cur.currencies.coins,
+        bankCoins: cur.bankCoins ?? 0,
+      });
+      if (apiRes.ok) {
+        soundManager.playSfx('coin');
+        runStateAction((prev) => ({
+          state: {
+            ...prev,
+            coins: apiRes.walletCoins,
+            currencies: { ...prev.currencies, coins: apiRes.walletCoins },
+            bankCoins: apiRes.bankCoins,
+          },
+          ok: true,
+          message: apiRes.message,
+        }));
+        return;
+      }
+      // Offline graceful fallback
+      runStateAction((prev) => {
+        const bank = prev.bankCoins ?? 0;
+        if (action === 'deposit') {
+          if (amount > prev.currencies.coins) return { state: prev, ok: false, message: 'Not enough wallet Coins.' };
+          const w = prev.currencies.coins - amount;
+          soundManager.playSfx('coin');
+          return {
+            state: { ...prev, coins: w, currencies: { ...prev.currencies, coins: w }, bankCoins: bank + amount },
+            ok: true,
+            message: `🏧 Deposited ${amount.toLocaleString()}c into ATM Vault!`,
+          };
+        }
+        if (amount > bank) return { state: prev, ok: false, message: 'Not enough ATM Vault Coins.' };
+        const w = prev.currencies.coins + amount;
+        soundManager.playSfx('coin');
+        return {
+          state: { ...prev, coins: w, currencies: { ...prev.currencies, coins: w }, bankCoins: bank - amount },
+          ok: true,
+          message: `💸 Withdrew ${amount.toLocaleString()}c from ATM Vault!`,
+        };
+      });
+    },
+    [runStateAction]
+  );
+
+  const handleTravel = useCallback(
+    (req: TravelRequestPayload, busFareCoins: number) => {
+      if (req.method === 'bus' && busFareCoins > 0) {
+        let paid = false;
+        runStateAction((prev) => {
+          const res = payBusFare(prev, busFareCoins, req.biomeId);
+          paid = res.ok;
+          return res;
+        });
+        if (!paid) return;
+      }
+      EventBus.emit('travel:execute', req);
+    },
+    [runStateAction]
+  );
+
   const handleBuyMarketListing = useCallback(
     async (listing: MarketListingClient): Promise<boolean> => {
       if (playerRef.current.currencies.coins < listing.priceCoins) {
@@ -701,6 +836,8 @@ export const App: React.FC = () => {
         setActiveModal((cur) => (cur === 'profile' ? null : 'profile'));
       } else if (k === 'k') {
         setActiveModal((cur) => (cur === 'skills' ? null : 'skills'));
+      } else if (k === 'm') {
+        setActiveModal((cur) => (cur === 'worldMap' ? null : 'worldMap'));
       } else if (k === '1') {
         handleEatQuickSlot(0);
       } else if (k === '2') {
@@ -831,19 +968,24 @@ export const App: React.FC = () => {
           setXpBanners((prev) => prev.filter((b) => b.uid !== uid));
         }, payload.leveledUp ? 3600 : 1900);
       }),
-      EventBus.on('ui:openModal', ({ modal, farmTab, shopTab: requestedShopTab, friendsTab: reqFriendsTab }) => {
-        if (modal === 'farm' && farmTab) setFarmModalTab(farmTab);
-        if (modal === 'friends' && reqFriendsTab) setFriendsTab(reqFriendsTab);
-        if (modal === 'wardrobe') {
-          setShopTab('secondary');
-          setActiveModal('fashionShop');
-          return;
+      EventBus.on(
+        'ui:openModal',
+        ({ modal, farmTab, shopTab: requestedShopTab, friendsTab: reqFriendsTab, reforgeTab: reqReforgeTab, clubGame }) => {
+          if (modal === 'farm' && farmTab) setFarmModalTab(farmTab);
+          if (modal === 'friends' && reqFriendsTab) setFriendsTab(reqFriendsTab);
+          if (modal === 'reforge' && reqReforgeTab) setReforgeTab(reqReforgeTab);
+          if (modal === 'clubGames' && clubGame) setClubGameTab(clubGame);
+          if (modal === 'wardrobe') {
+            setShopTab('secondary');
+            setActiveModal('fashionShop');
+            return;
+          }
+          if ((modal === 'snackShop' || modal === 'fashionShop') && requestedShopTab) {
+            setShopTab(requestedShopTab);
+          }
+          setActiveModal(modal);
         }
-        if ((modal === 'snackShop' || modal === 'fashionShop') && requestedShopTab) {
-          setShopTab(requestedShopTab);
-        }
-        setActiveModal(modal);
-      }),
+      ),
       EventBus.on('ui:toast', ({ text }) => {
         setToast(text);
         if (toastTimer) window.clearTimeout(toastTimer);
@@ -907,8 +1049,20 @@ export const App: React.FC = () => {
         onOpenMarket={() => setActiveModal('market')}
         onOpenBestiary={() => setActiveModal('bestiary')}
         onOpenDiamondStore={() => setActiveModal('diamondStore')}
+        onOpenWorldMap={() => setActiveModal('worldMap')}
+        onOpenServerCity={() => setActiveModal('serverCity')}
+        onOpenReforge={() => {
+          setReforgeTab('reforge');
+          setActiveModal('reforge');
+        }}
+        onOpenClubGames={() => {
+          setClubGameTab('tien_len');
+          setActiveModal('clubGames');
+        }}
         onFastForwardFarm={() => runFarmAction((s) => fastForwardFarmTimers(s, 60))}
       />
+
+      <ServerTickerBanner />
 
       {/* Floating +XP & LEVEL UP! Skill Notifications */}
       {xpBanners.length > 0 && (
@@ -1000,6 +1154,92 @@ export const App: React.FC = () => {
         }
         onEquipItem={handleEquipItem}
         onSandboxTopUp={handleSandboxTopUp}
+      />
+
+      <WorldMapModal
+        open={activeModal === 'worldMap'}
+        player={player}
+        onClose={() => setActiveModal(null)}
+        onUnlockBiomePylon={(biomeId: BiomeId) =>
+          runStateAction((s) => {
+            const res = unlockBiomeAndPylon(s, biomeId);
+            if (res.ok) soundManager.playSfx('level_up');
+            return res;
+          })
+        }
+        onTravel={handleTravel}
+        onAttuneBiome={(biomeId: BiomeId) =>
+          runStateAction((s) => ({
+            state: { ...s, activeBiome: biomeId },
+            ok: true,
+            message: `⚔️ Preah Khan attuned to ${biomeId.replace(/_/g, ' ')}!`,
+          }))
+        }
+      />
+
+      <ServerCityModal
+        open={activeModal === 'serverCity'}
+        currentCity={player.cityServer ?? 'phnom_penh'}
+        online={networkStatus.online}
+        playerCount={networkStatus.playerCount}
+        onClose={() => setActiveModal(null)}
+        onSelectCity={(city: CityServerId) => {
+          soundManager.playSfx('magic');
+          runStateAction((s) => ({
+            state: { ...s, cityServer: city },
+            ok: true,
+            message: `🌏 Connected to ${city.replace('_', ' ').toUpperCase()} City Server!`,
+          }));
+          EventBus.emit('ticker:push', {
+            text: `🌏 Switched City Server hub to ${city.replace('_', ' ').toUpperCase()}!`,
+            category: 'weather',
+          });
+        }}
+      />
+
+      <ReforgeModal
+        open={activeModal === 'reforge'}
+        initialTab={reforgeTab}
+        player={player}
+        onClose={() => setActiveModal(null)}
+        onReforge={handleReforge}
+        onShimmerTransmute={(recipeId) =>
+          runStateAction((s) => {
+            const res = applyShimmerTransmute(s, recipeId);
+            if (res.ok) soundManager.playSfx('level_up');
+            return res;
+          })
+        }
+        onBankAction={handleBankAction}
+      />
+
+      <ClubGamesModal
+        open={activeModal === 'clubGames'}
+        initialGame={clubGameTab}
+        player={player}
+        onClose={() => setActiveModal(null)}
+        onWinClubReward={(coins, happyGain, label) => {
+          runStateAction((s) => {
+            const nextCoins = s.currencies.coins + coins;
+            return {
+              state: {
+                ...s,
+                coins: nextCoins,
+                currencies: { ...s.currencies, coins: nextCoins },
+                lifeStats: {
+                  ...s.lifeStats,
+                  happy: Math.min(100, s.lifeStats.happy + happyGain),
+                },
+              },
+              ok: true,
+              message: `🃏 ${label}: +${coins} Coins & +${happyGain} Happy!`,
+            };
+          });
+          EventBus.emit('ticker:push', {
+            text: `🃏 ${playerRef.current.name} won ${label} at the Phum Night Club!`,
+            category: 'club',
+          });
+        }}
       />
 
       <AreaSwitcherModal
