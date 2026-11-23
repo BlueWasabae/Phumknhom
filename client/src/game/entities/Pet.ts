@@ -61,6 +61,55 @@ export function drawPetToCanvas(
     ctx.stroke();
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(-2, -6, 4, 4);
+  } else if (def.styleVariant === 'baby_elephant') {
+    // Adorable Baby Angkor Elephant with crimson-gold ceremonial cloth
+    ctx.fillStyle = def.primaryColor;
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 1.5;
+    // Big floppy ears
+    ctx.beginPath();
+    ctx.ellipse(-9, -6, 5, 7, -0.2, 0, Math.PI * 2);
+    ctx.ellipse(9, -6, 5, 7, 0.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    // Round head & body
+    ctx.beginPath();
+    ctx.roundRect(-8, -11, 16, 15, 7);
+    ctx.fill();
+    ctx.stroke();
+    // Cute curved trunk
+    ctx.beginPath();
+    ctx.roundRect(-2, -3, 4, 9, 2);
+    ctx.fill();
+    ctx.stroke();
+    // Crimson ceremonial crown cloth
+    ctx.fillStyle = def.accentColor;
+    ctx.fillRect(-5, -12, 10, 4);
+    ctx.fillStyle = '#facc15';
+    ctx.fillRect(-2, -12, 4, 4);
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(-5, -7, 2.5, 2.5);
+    ctx.fillRect(2.5, -7, 2.5, 2.5);
+  } else if (def.styleVariant === 'golden_frog') {
+    // Cheerful Golden Lucky Frog
+    ctx.fillStyle = def.primaryColor;
+    ctx.strokeStyle = '#854d0e';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.ellipse(0, -3, 10, 8, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    // Bulging frog eyes
+    ctx.beginPath();
+    ctx.arc(-5, -10, 3.8, 0, Math.PI * 2);
+    ctx.arc(5, -10, 3.8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(-6, -11, 2.5, 2.5);
+    ctx.fillRect(4, -11, 2.5, 2.5);
+    ctx.fillStyle = def.accentColor;
+    ctx.fillRect(-5, -1, 10, 2);
   } else {
     // Lucky White Kitten wearing tiny red Krama scarf
     ctx.fillStyle = def.primaryColor;
@@ -196,10 +245,12 @@ export class Pet {
     targetX: number,
     targetY: number,
     onImpact: () => void,
-    forced = false
+    forced = false,
+    speedMultiplier = 1
   ): boolean {
     if (!this.petId) return false;
-    const cooldown = forced ? 320 : 1250;
+    const baseCooldown = forced ? 320 : 1250;
+    const cooldown = Math.round(baseCooldown / Math.max(0.5, speedMultiplier));
     if (time - this.lastAttackAt < cooldown) return false;
     if (Phaser.Math.Distance.Between(this.curX, this.curY, targetX, targetY) > 540) return false;
 

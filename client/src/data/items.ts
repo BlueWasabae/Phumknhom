@@ -4,6 +4,7 @@ import type {
   HairStyleId,
   ItemRarity,
   KhmerClassId,
+  PlayerState,
   WeaponStats,
 } from '@shared/types';
 
@@ -30,6 +31,10 @@ export interface CatalogItem {
   styleVariant: string;
   classId?: KhmerClassId;
   hairStyleOverride?: HairStyleId;
+  shopPrice?: {
+    coins?: number;
+    gold?: number;
+  };
   stats: ItemStats;
 }
 
@@ -451,7 +456,228 @@ export const ITEM_CATALOG: Record<string, CatalogItem> = {
     styleVariant: 'lucky_kitten',
     stats: { maxHp: 15 },
   },
+
+  // ==================== PHASE 4 FASHION BOUTIQUE EXCLUSIVES ====================
+  hat_krama_bandana: {
+    id: 'hat_krama_bandana',
+    name: 'Red Krama Headband',
+    khmerName: 'ក្រមាចងក្បាល',
+    slot: 'hat',
+    rarity: 'uncommon',
+    stylishScore: 28,
+    description: 'Crisp checkered crimson Krama tied martial-arts style across the forehead.',
+    primaryColor: '#dc2626',
+    accentColor: '#ffffff',
+    styleVariant: 'krama_bandana',
+    shopPrice: { coins: 180 },
+    stats: { defense: 1, critChance: 0.02 },
+  },
+  hat_sun_straw: {
+    id: 'hat_sun_straw',
+    name: 'Mekong Sun Hat',
+    khmerName: 'មួកស្លឹកមេគង្គ',
+    slot: 'hat',
+    rarity: 'uncommon',
+    stylishScore: 30,
+    description: 'Wide-brimmed river-festival straw hat trimmed with a lotus ribbon.',
+    primaryColor: '#fde047',
+    accentColor: '#ec4899',
+    styleVariant: 'sun_straw',
+    shopPrice: { coins: 220 },
+    stats: { maxHp: 12 },
+  },
+  hat_apsara_crown: {
+    id: 'hat_apsara_crown',
+    name: 'Apsara Lotus Tiara',
+    khmerName: 'មកុដអប្សរាផ្កាឈូក',
+    slot: 'hat',
+    rarity: 'epic',
+    stylishScore: 76,
+    description: 'Delicate golden Apsara celestial spire studded with pink lotus gems.',
+    primaryColor: '#facc15',
+    accentColor: '#ec4899',
+    styleVariant: 'apsara_crown',
+    shopPrice: { coins: 480 },
+    stats: { defense: 2, critChance: 0.05 },
+  },
+  shirt_water_fest: {
+    id: 'shirt_water_fest',
+    name: 'Boat Captain Vest',
+    khmerName: 'អាវប្រធានទូកង',
+    slot: 'shirt',
+    rarity: 'rare',
+    stylishScore: 44,
+    description: 'Vibrant Water Festival racing jersey with golden wave embroidery.',
+    primaryColor: '#0284c7',
+    accentColor: '#facc15',
+    styleVariant: 'tunic',
+    shopPrice: { coins: 360 },
+    stats: { defense: 2, maxHp: 18 },
+  },
+  shirt_lotus_dress: {
+    id: 'shirt_lotus_dress',
+    name: 'Pink Lotus Tunic',
+    khmerName: 'អាវសូត្រផ្កាឈូក',
+    slot: 'shirt',
+    rarity: 'rare',
+    stylishScore: 52,
+    description: 'Silky lotus-blossom tunic beloved across Central Plaza hangouts.',
+    primaryColor: '#ec4899',
+    accentColor: '#fef08a',
+    styleVariant: 'achar_robe',
+    shopPrice: { coins: 420 },
+    stats: { maxHp: 15, critChance: 0.03 },
+  },
+  shirt_royal_silk: {
+    id: 'shirt_royal_silk',
+    name: 'Khmer New Year Royal Silk',
+    khmerName: 'ឈុតសូត្រចូលឆ្នាំខ្មែរ',
+    slot: 'shirt',
+    rarity: 'legendary',
+    stylishScore: 88,
+    description: 'Opulent woven gold-and-emerald royal brocade crafted for festival champions.',
+    primaryColor: '#047857',
+    accentColor: '#fde047',
+    styleVariant: 'achar_robe',
+    shopPrice: { coins: 680 },
+    stats: { attack: 4, defense: 4, maxHp: 20 },
+  },
+  pants_royal_sampot: {
+    id: 'pants_royal_sampot',
+    name: 'Indigo Silk Sampot',
+    khmerName: 'សំពត់ហូលពណ៌ស្វាយ',
+    slot: 'pants',
+    rarity: 'rare',
+    stylishScore: 40,
+    description: 'Deep indigo silk Sampot woven with shimmering silver borders.',
+    primaryColor: '#312e81',
+    accentColor: '#e2e8f0',
+    styleVariant: 'sampot',
+    shopPrice: { coins: 320 },
+    stats: { defense: 3, maxHp: 14 },
+  },
+  wings_lotus_aura: {
+    id: 'wings_lotus_aura',
+    name: 'Sacred Lotus Aura',
+    khmerName: 'រស្មីផ្កាឈូកទេព',
+    slot: 'wings',
+    rarity: 'epic',
+    stylishScore: 86,
+    description: 'Orbiting glowing pink lotus petals drifting serenely behind your shoulders.',
+    primaryColor: '#ec4899',
+    accentColor: '#fef08a',
+    styleVariant: 'lotus_aura',
+    shopPrice: { coins: 850 },
+    stats: { maxHp: 20, critChance: 0.03 },
+  },
+  wings_dragon_cape: {
+    id: 'wings_dragon_cape',
+    name: 'Royal Naga Wings',
+    khmerName: 'ស្លាបនាគរាជមរកត',
+    slot: 'wings',
+    rarity: 'epic',
+    stylishScore: 98,
+    description: 'Iridescent emerald-and-gold Naga spirit wings shimmering with Mekong mist.',
+    primaryColor: '#10b981',
+    accentColor: '#facc15',
+    styleVariant: 'garuda_wings',
+    shopPrice: { coins: 1100 },
+    stats: { attack: 4, defense: 3 },
+  },
+  wings_angel_feather: {
+    id: 'wings_angel_feather',
+    name: 'Celestial Apsara Wings',
+    khmerName: 'ស្លាបទេពអប្សរាស',
+    slot: 'wings',
+    rarity: 'legendary',
+    stylishScore: 135,
+    description: 'Pure pearl-white feathered wings tipped in radiant Angkor gold.',
+    primaryColor: '#f8fafc',
+    accentColor: '#facc15',
+    styleVariant: 'garuda_wings',
+    shopPrice: { gold: 3 },
+    stats: { maxHp: 25, critChance: 0.05 },
+  },
+  pet_golden_frog: {
+    id: 'pet_golden_frog',
+    name: 'Golden Lucky Frog',
+    khmerName: 'កង្កែបមាសនាំលាភ',
+    slot: 'pet',
+    rarity: 'rare',
+    stylishScore: 62,
+    description: 'Cheerful golden rice-field frog that hops beside you bringing Plaza fortune.',
+    primaryColor: '#facc15',
+    accentColor: '#16a34a',
+    styleVariant: 'golden_frog',
+    shopPrice: { coins: 750 },
+    stats: { critChance: 0.03, maxHp: 10 },
+  },
+  pet_baby_elephant: {
+    id: 'pet_baby_elephant',
+    name: 'Baby Angkor Elephant',
+    khmerName: 'កូនដំរីអង្គរ',
+    slot: 'pet',
+    rarity: 'legendary',
+    stylishScore: 110,
+    description: 'Adorable royal baby elephant dressed in a crimson-and-gold temple saddle.',
+    primaryColor: '#94a3b8',
+    accentColor: '#dc2626',
+    styleVariant: 'baby_elephant',
+    shopPrice: { gold: 4 },
+    stats: { defense: 3, maxHp: 25 },
+  },
 };
+
+export const FASHION_SHOP_ITEMS: CatalogItem[] = Object.values(ITEM_CATALOG).filter(
+  (item) => Boolean(item.shopPrice)
+);
+
+export function buyFashionItem(
+  state: PlayerState,
+  itemId: string
+): { state: PlayerState; ok: boolean; message: string } {
+  const def = ITEM_CATALOG[itemId];
+  if (!def || !def.shopPrice) {
+    return { state, ok: false, message: 'Item is not available in the Fashion Boutique.' };
+  }
+
+  const alreadyOwned = state.inventory.some((i) => i.itemId === itemId && i.quantity > 0);
+  if (alreadyOwned) {
+    return { state, ok: false, message: `You already own ${def.name}!` };
+  }
+
+  const coinCost = def.shopPrice.coins ?? 0;
+  const goldCost = def.shopPrice.gold ?? 0;
+
+  if (coinCost > 0 && state.currencies.coins < coinCost) {
+    return { state, ok: false, message: `Need ${coinCost.toLocaleString()} Coins to buy ${def.name}.` };
+  }
+  if (goldCost > 0 && state.currencies.gold < goldCost) {
+    return { state, ok: false, message: `Need ${goldCost} Gold to buy ${def.name}.` };
+  }
+
+  const nextCoins = state.currencies.coins - coinCost;
+  const nextGold = state.currencies.gold - goldCost;
+  const nextInv = [...state.inventory, { itemId: def.id, quantity: 1, itemLevel: 1 }];
+
+  const costText =
+    goldCost > 0 ? `${goldCost} Gold` : `${coinCost.toLocaleString()} Coins`;
+
+  return {
+    state: {
+      ...state,
+      coins: nextCoins,
+      currencies: {
+        ...state.currencies,
+        coins: nextCoins,
+        gold: nextGold,
+      },
+      inventory: nextInv,
+    },
+    ok: true,
+    message: `Purchased ${def.name} (-${costText})! Added to Container.`,
+  };
+}
 
 export function computeStylishScore(loadout: EquippedLoadout): number {
   const slots: EquipSlot[] = ['hat', 'hair', 'shirt', 'pants', 'wings', 'pet', 'weapon', 'armor'];

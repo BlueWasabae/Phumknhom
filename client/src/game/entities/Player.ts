@@ -144,9 +144,42 @@ export class Player {
       loadout: { ...loadout },
       currencies: { ...nextState.currencies },
       lifeStats: { ...nextState.lifeStats },
+      activeBuffs: [...nextState.activeBuffs],
+      quickSnackSlots: [...nextState.quickSnackSlots],
     };
     this.paperDoll.setLoadout(loadout);
     this.pet.setPet(loadout.pet);
+  }
+
+  public syncPlayerState(nextState: PlayerState): void {
+    const loadoutChanged =
+      this.state.loadout.hat !== nextState.loadout.hat ||
+      this.state.loadout.shirt !== nextState.loadout.shirt ||
+      this.state.loadout.pants !== nextState.loadout.pants ||
+      this.state.loadout.wings !== nextState.loadout.wings ||
+      this.state.loadout.pet !== nextState.loadout.pet ||
+      this.state.loadout.weapon !== nextState.loadout.weapon ||
+      this.state.loadout.armor !== nextState.loadout.armor ||
+      this.state.loadout.hairStyle !== nextState.loadout.hairStyle ||
+      this.state.loadout.hairColor !== nextState.loadout.hairColor ||
+      this.state.loadout.skinColor !== nextState.loadout.skinColor ||
+      this.state.loadout.eyeStyle !== nextState.loadout.eyeStyle;
+
+    this.state = {
+      ...nextState,
+      zone: this.zone,
+      weapon: { ...nextState.weapon },
+      loadout: { ...nextState.loadout },
+      currencies: { ...nextState.currencies },
+      lifeStats: { ...nextState.lifeStats },
+      activeBuffs: [...nextState.activeBuffs],
+      quickSnackSlots: [...nextState.quickSnackSlots],
+    };
+
+    if (loadoutChanged) {
+      this.paperDoll.setLoadout(this.state.loadout);
+      this.pet.setPet(this.state.loadout.pet);
+    }
   }
 
   public showSpeechBubble(text: string, durationMs = 4500): void {

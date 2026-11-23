@@ -3,6 +3,7 @@ import type { EquipSlot, ItemRarity, PlayerState, QualityTier } from '@shared/ty
 import { KHMER_CLASSES } from '@shared/khmerClasses';
 import { ITEM_CATALOG } from '../data/items';
 import { FARM_ITEMS } from '../data/cropsAndArtisan';
+import { STREET_SNACKS } from '../data/recipes';
 import { NativeDialog } from './NativeDialog';
 import { PaperDollPreview } from './PaperDollPreview';
 
@@ -13,6 +14,7 @@ interface InventoryModalProps {
   onEquip: (itemId: string) => void;
   onUnequip: (slot: EquipSlot) => void;
   onSellFarmItem: (itemId: string, quality: QualityTier, qty?: number) => void;
+  onEatSnack?: (snackId: string) => void;
 }
 
 const WEARING_SLOTS: Array<{ slot: EquipSlot; label: string }> = [
@@ -34,7 +36,7 @@ const RARITY_BADGE: Record<ItemRarity, { border: string; pill: string }> = {
   legendary: { border: 'border-amber-500', pill: 'bg-amber-600 text-white' },
 };
 
-type ContainerFilter = EquipSlot | 'all' | 'farm_goods';
+type ContainerFilter = EquipSlot | 'all' | 'farm_goods' | 'snacks';
 
 export const InventoryModal: React.FC<InventoryModalProps> = ({
   open,
@@ -43,6 +45,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
   onEquip,
   onUnequip,
   onSellFarmItem,
+  onEatSnack,
 }) => {
   const [tab, setTab] = useState<'wearing' | 'container'>('container');
   const [filterSlot, setFilterSlot] = useState<ContainerFilter>('all');
@@ -57,9 +60,11 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
   const filteredItems = player.inventory.filter((entry) => {
     const eq = ITEM_CATALOG[entry.itemId];
     const fm = FARM_ITEMS[entry.itemId];
-    if (!eq && !fm) return false;
+    const sn = STREET_SNACKS[entry.itemId];
+    if (!eq && !fm && !sn) return false;
     if (filterSlot === 'all') return true;
     if (filterSlot === 'farm_goods') return Boolean(fm);
+    if (filterSlot === 'snacks') return Boolean(sn);
     return eq?.slot === filterSlot;
   });
 
@@ -67,6 +72,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
   const selQuality: QualityTier = selQualityRaw === 'gold_star' ? 'gold_star' : 'normal';
   const selectedEquipDef = ITEM_CATALOG[selId];
   const selectedFarmDef = FARM_ITEMS[selId];
+  const selectedSnackDef = STREET_SNACKS[selId];
   const selectedEntry = player.inventory.find(
     (i) => i.itemId === selId && (i.quality ?? 'normal') === selQuality
   );
@@ -174,6 +180,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
               [
                 ['all', 'All'],
                 ['weapon', '5 Weapons'],
+                ['snacks', 'Snacks'],
                 ['farm_goods', 'Farm & Artisan'],
                 ['hat', 'Hats'],
                 ['shirt', 'Outfits'],
@@ -201,12 +208,13 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
               {filteredItems.map((entry) => {
                 const eq = ITEM_CATALOG[entry.itemId];
                 const fm = FARM_ITEMS[entry.itemId];
+                const sn = STREET_SNACKS[entry.itemId];
                 const qual: QualityTier = entry.quality ?? 'normal';
                 const rowKey = `${entry.itemId}::${qual}`;
-                const rarity = eq?.rarity ?? fm?.rarity ?? 'common';
-                const color = eq?.primaryColor ?? fm?.primaryColor ?? '#d97706';
-                const name = eq?.name ?? fm?.name ?? entry.itemId;
-                const khmerName = eq?.khmerName ?? fm?.khmerName ?? '';
+                const rarity = eq?.rarity ?? fm?.rarity ?? sn?.rarity ?? 'common';
+                const color = eq?.primaryColor ?? fm?.primaryColor ?? sn?.primaryColor ?? '#d97706';
+                const name = eq?.name ?? fm?.name ?? sn?.name ?? entry.itemId;
+                const khmerName = eq?.khmerName ?? fm?.khmerName ?? sn?.khmerName ?? '';
                 const equipped = eq ? isEquipped(eq.id) : false;
                 const selected = selectedKey === rowKey;
                 const rStyle = RARITY_BADGE[rarity];
@@ -327,6 +335,28 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                         : selectedFarmDef.sellCoins
                       ).toLocaleString()}
                       c)
+                    </button>
+                  )}
+                </>
+              ) : selectedSnackDef && selectedEntry ? (
+                <>
+                  <div>
+                    <div className="font-display font-bold text-sm text-amber-950">
+                      {selectedSnackDef.icon} {selQuality === 'gold_star' ? '★ ' : ''}
+                      {selectedSnackDef.name} (×{selectedEntry.quantity})
+                    </div>
+                    <div className="text-[11px] font-semibold text-amber-800">{selectedSnackDef.khmerName}</div>
+                    <p className="text-[11px] text-amber-900/90 mt-1 leading-snug">
+                      Village: {selectedSnackDef.villageSummary} · Dungeon: {selectedSnackDef.dungeonSummary}
+                    </p>
+                  </div>
+                  {onEatSnack && (
+                    <button
+                      type="button"
+                      onClick={() => onEatSnack(selectedSnackDef.id)}
+                      className="w-full py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-display font-bold text-xs"
+                    >
+                      Eat 1 {selectedSnackDef.icon} Now
                     </button>
                   )}
                 </>

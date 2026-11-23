@@ -11,6 +11,7 @@ export interface PlayerDamageInput {
   armorPen?: number;
   bossDR?: number;       // 0..0.95
   critChance?: number;   // 0..1
+  critMultiplier?: number; // Default 1.75 (boosted by talents like Amplified Precision)
   isCritOverride?: boolean;
   focusActive?: boolean; // Calamity Focus burst = 2.20x
   rng?: () => number;    // Injectable deterministic RNG for testing
@@ -74,7 +75,7 @@ export function calculatePlayerDamage(input: PlayerDamageInput): CombatHitResult
   const afterDefense = Math.max(1, rawDamage - defenseMitigation);
 
   const isCrit = input.isCritOverride ?? rng() < critChance;
-  const critMult = isCrit ? 1.75 : 1.0;
+  const critMult = isCrit ? (input.critMultiplier ?? 1.75) : 1.0;
   const isFocusBurst = Boolean(input.focusActive);
   const focusMult = isFocusBurst ? 2.2 : 1.0;
 

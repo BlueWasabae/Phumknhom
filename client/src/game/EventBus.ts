@@ -4,6 +4,7 @@ import type {
   EquippedLoadout,
   KhmerClassId,
   PlayerState,
+  SkillId,
   ZoneType,
 } from '@shared/types';
 
@@ -27,9 +28,20 @@ export interface ClassMeterPayload {
 
 export type FarmToolMode = 'smart' | 'fertilize';
 
+export interface SkillXpToastPayload {
+  skillId: SkillId;
+  skillName: string;
+  icon: string;
+  xp: number;
+  level: number;
+  leveledUp: boolean;
+  talentPointGained: boolean;
+}
+
 export interface EventMap {
   'scene:ready': { zone: ZoneType };
   'player:state': PlayerState;
+  'player:stateSync': PlayerState;
   'player:loadoutChanged': {
     loadout: EquippedLoadout;
     activeClass: KhmerClassId;
@@ -37,6 +49,7 @@ export interface EventMap {
   };
   'farm:stateUpdated': PlayerState;
   'farm:selectSeed': { cropId: string; toolMode: FarmToolMode };
+  'skill:xpGained': SkillXpToastPayload;
   'player:chat': { text: string };
   'player:emote': { emoji: EmoteSymbol };
   'portal:proximity': PortalProximityPayload;
@@ -49,7 +62,11 @@ export interface EventMap {
   'input:dash': void;
   'input:exitDungeon': void;
   'input:exitFarm': void;
-  'ui:openModal': { modal: 'profile' | 'inventory' | 'wardrobe' | 'farm'; farmTab?: 'seeds' | 'livestock' | 'artisan' };
+  'ui:openModal': {
+    modal: 'profile' | 'inventory' | 'wardrobe' | 'farm' | 'snackShop' | 'fashionShop' | 'skills';
+    farmTab?: 'seeds' | 'livestock' | 'artisan';
+    shopTab?: 'primary' | 'secondary';
+  };
   'ui:toast': { text: string };
 }
 

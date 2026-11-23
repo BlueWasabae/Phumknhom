@@ -189,8 +189,13 @@ export class FarmScene extends Phaser.Scene {
       EventBus.on('player:loadoutChanged', ({ loadout, playerState }) => {
         this.player.applyLoadoutUpdate(loadout, playerState);
       }),
+      EventBus.on('player:stateSync', (nextState) => {
+        this.player.syncPlayerState(nextState);
+        this.redrawAllPlots();
+        this.redrawDynamicZones();
+      }),
       EventBus.on('farm:stateUpdated', (nextState) => {
-        this.player.state = { ...nextState, zone: 'farm' };
+        this.player.syncPlayerState(nextState);
         this.redrawAllPlots();
         this.redrawDynamicZones();
       }),

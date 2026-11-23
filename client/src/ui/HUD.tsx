@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import type { CombatHitResult, DifficultyMode, EmoteSymbol, PlayerState, ZoneType } from '@shared/types';
 import {
   calculateCoopBossHp,
@@ -7,8 +7,16 @@ import {
   calculatePlayerDamage,
 } from '@shared/balanceFormulas';
 import { KHMER_CLASSES } from '@shared/khmerClasses';
-import { ROW_CROP_LIST } from '../data/cropsAndArtisan';
 import {
+  ALL_SKILL_IDS,
+  SKILL_DEFINITIONS,
+  computeVillageToDungeonBridge,
+  getAvailableTalentPoints,
+} from '@shared/skillTrees';
+import { ROW_CROP_LIST } from '../data/cropsAndArtisan';
+import { STREET_SNACKS, countInventoryAnyQuality } from '../data/recipes';
+import {
+  Award,
   Backpack,
   Coins,
   FastForward,
@@ -38,10 +46,12 @@ interface HUDProps {
   selectedCropId: string;
   farmToolMode: FarmToolMode;
   onSelectFarmSeed: (cropId: string, toolMode: FarmToolMode) => void;
+  onEatQuickSlot: (slotIndex: 0 | 1 | 2) => void;
   onOpenProfile: () => void;
   onOpenInventory: () => void;
   onOpenWardrobe: () => void;
   onOpenFarmModal: () => void;
+  onOpenSkills: () => void;
   onFastForwardFarm: () => void;
 }
 
@@ -60,10 +70,12 @@ export const HUD: React.FC<HUDProps> = ({
   selectedCropId,
   farmToolMode,
   onSelectFarmSeed,
+  onEatQuickSlot,
   onOpenProfile,
   onOpenInventory,
   onOpenWardrobe,
   onOpenFarmModal,
+  onOpenSkills,
   onFastForwardFarm,
 }) => {
   const [menuDropdownOpen, setMenuDropdownOpen] = useState(false);
@@ -72,42 +84,66 @@ export const HUD: React.FC<HUDProps> = ({
   const [unreadMail, setUnreadMail] = useState(true);
   const [previewDiff, setPreviewDiff] = useState<DifficultyMode>('normal');
   const [previewParty, setPreviewParty] = useState(2);
+  const [now, setNow] = useState(() => Date.now());
 
-  const hpPct = Math.max(0, Math.min(100, (player.hp / Math.max(1, player.maxHp)) * 100));
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const bridge = computeVillageToDungeonBridge(player, now);
+  const activeBuffs = player.activeBuffs.filter((b) => b.expiresAt > now);
+  const unspentSkillPoints = ALL_SKILL_IDS.reduce(
+    (sum, id) => sum + getAvailableTalentPoints(player.skills.skills[id]),
+    0
+  );
+  const effectiveMaxHp = bridge.effectiveMaxHp;
+  const hpPct = Math.max(0, Math.min(100, (player.hp / Math.max(1, effectiveMaxHp)) * 100));
   const activeClassDef = KHMER_CLASSES[player.activeClass];
 
   const countItem = (itemId: string) =>
     player.inventory.filter((i) => i.itemId === itemId).reduce((acc, i) => acc + i.quantity, 0);
 
+  const formatCountdown = (ms: number) => {
+    const sec = Math.max(0, Math.ceil(ms / 1000));
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
   const sampleHit = calculatePlayerDamage({
     weaponBase: player.weapon.baseDamage,
     upgradeLevel: player.weapon.upgradeLevel,
-    flatBonuses: player.level * 2,
-    skillPct: player.skillDamagePct,
+    flatBonuses: bridge.flatDamageBonus,
+    skillPct: bridge.classSkillDamagePct,
     armorPct: player.armorDamagePct,
-    snackBuffPct: player.snackBuffPct,
+    snackBuffPct: bridge.snackAttackPct,
     enemyDefense: 8,
     armorPen: player.weapon.armorPen,
+    critChance: bridge.effectiveCritChance,
+    critMultiplier: bridge.critMultiplier,
     isCritOverride: false,
     rng: () => 0.5,
   });
   const sampleCrit = calculatePlayerDamage({
     weaponBase: player.weapon.baseDamage,
     upgradeLevel: player.weapon.upgradeLevel,
-    flatBonuses: player.level * 2,
-    skillPct: player.skillDamagePct,
+    flatBonuses: bridge.flatDamageBonus,
+    skillPct: bridge.classSkillDamagePct,
     armorPct: player.armorDamagePct,
-    snackBuffPct: player.snackBuffPct,
+    snackBuffPct: bridge.snackAttackPct,
     enemyDefense: 8,
     armorPen: player.weapon.armorPen,
+    critChance: bridge.effectiveCritChance,
+    critMultiplier: bridge.critMultiplier,
     isCritOverride: true,
     rng: () => 0.5,
   });
-  const sampleEffectiveDr = Math.round(calculateEffectiveDR(0.25) * 1000) / 10;
+  const sampleEffectiveDr = Math.round(calculateEffectiveDR(0.25 + bridge.rawDRBonus) * 1000) / 10;
   const sampleDamageTaken = calculateDamageTaken({
     bossAttack: 24,
     currentDefense: player.defense,
-    rawDR: 0.25,
+    rawDR: 0.25 + bridge.rawDRBonus,
     difficulty: previewDiff,
   });
   const sampleCoopBossHp = calculateCoopBossHp(4500, previewParty, previewDiff);
@@ -147,7 +183,7 @@ export const HUD: React.FC<HUDProps> = ({
             />
           </div>
           <span className="font-bold text-amber-950 text-[11px] whitespace-nowrap">
-            {player.hp}/{player.maxHp}
+            {Math.min(player.hp, effectiveMaxHp)}/{effectiveMaxHp}
           </span>
         </div>
 
@@ -233,6 +269,23 @@ export const HUD: React.FC<HUDProps> = ({
                   className="px-3 py-2 rounded-xl hover:bg-amber-200/80 text-left flex items-center gap-2 text-amber-950"
                 >
                   <Backpack className="w-4 h-4 text-emerald-800" /> Inventory (I / B)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuDropdownOpen(false);
+                    onOpenSkills();
+                  }}
+                  className="px-3 py-2 rounded-xl hover:bg-amber-200/80 text-left flex items-center justify-between gap-2 text-amber-950"
+                >
+                  <span className="flex items-center gap-2">
+                    <Award className="w-4 h-4 text-orange-700" /> Skills (K)
+                  </span>
+                  {unspentSkillPoints > 0 && (
+                    <span className="px-1.5 py-0.5 rounded-full bg-emerald-700 text-white text-[9px] font-bold">
+                      {unspentSkillPoints} PT
+                    </span>
+                  )}
                 </button>
                 <button
                   type="button"
@@ -428,6 +481,78 @@ export const HUD: React.FC<HUDProps> = ({
         )}
       </div>
 
+      {/* 3-SLOT QUICK-SNACK BAR & LIVE TIMED BUFF TIMERS */}
+      <div
+        className={`pointer-events-none fixed left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-1.5 max-w-[96vw] ${
+          touchUiEnabled ? 'bottom-36 sm:bottom-5' : 'bottom-3'
+        }`}
+      >
+        {/* Active Timed Buff Pills with Live Countdown */}
+        {activeBuffs.length > 0 && (
+          <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-1">
+            {activeBuffs.map((buff) => {
+              const tags: string[] = [];
+              if (buff.moveSpeedPct) tags.push(`+${Math.round(buff.moveSpeedPct * 100)}% SPD`);
+              if (buff.attackPct) tags.push(`+${Math.round(buff.attackPct * 100)}% ATK`);
+              if (buff.maxHpPct) tags.push(`+${Math.round(buff.maxHpPct * 100)}% HP`);
+              if (buff.critChanceBonus) tags.push(`+${Math.round(buff.critChanceBonus * 100)}% CRIT`);
+              if (buff.mpRegenPct) tags.push(`+${Math.round(buff.mpRegenPct * 100)}% MP`);
+              if (buff.poisonImmune) tags.push('No Poison');
+              return (
+                <div
+                  key={buff.id}
+                  className="stardew-panel px-2 py-0.5 rounded-full flex items-center gap-1 text-[10px] font-display font-bold text-amber-950 shadow"
+                >
+                  <span>{buff.icon}</span>
+                  <span className="text-purple-900">{tags.join(' ')}</span>
+                  <span className="px-1 rounded bg-amber-900/15 text-amber-950 font-mono text-[9px]">
+                    {formatCountdown(buff.expiresAt - now)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* 3-Slot Quick-Snack Bar ([1], [2], [3] on PC or Tap on Mobile) */}
+        <div className="pointer-events-auto stardew-panel px-2 py-1 rounded-2xl flex items-center gap-1.5 shadow-lg">
+          {([0, 1, 2] as const).map((slotIdx) => {
+            const snackId = player.quickSnackSlots[slotIdx];
+            const snack = snackId ? STREET_SNACKS[snackId] : null;
+            const qty = snackId ? countInventoryAnyQuality(player.inventory, snackId) : 0;
+            return (
+              <button
+                key={slotIdx}
+                type="button"
+                onClick={() => onEatQuickSlot(slotIdx)}
+                title={
+                  snack
+                    ? `[${slotIdx + 1}] ${snack.name} — ${snack.villageSummary} | ${snack.dungeonSummary}`
+                    : `Quick-Snack Slot [${slotIdx + 1}] (Assign at Num Pang Cart)`
+                }
+                className={`relative px-2 py-1 rounded-xl border-2 flex items-center gap-1.5 text-left transition active:scale-95 ${
+                  snack && qty > 0
+                    ? 'bg-amber-50 hover:bg-amber-100 border-amber-900/50 text-amber-950'
+                    : 'bg-amber-950/10 border-amber-900/25 text-amber-900/55'
+                }`}
+              >
+                <span className="absolute -top-1.5 -left-1.5 w-4 h-4 rounded-md bg-amber-900 text-amber-50 font-mono text-[9px] font-bold flex items-center justify-center border border-amber-200">
+                  {slotIdx + 1}
+                </span>
+                <span className="text-base leading-none">{snack ? snack.icon : '🍽️'}</span>
+                <div className="leading-tight hidden sm:block">
+                  <div className="font-display font-bold text-[10px] max-w-[74px] truncate">
+                    {snack ? snack.name.split(' ')[0] : 'Empty'}
+                  </div>
+                  <div className="text-[9px] font-bold opacity-80">×{qty}</div>
+                </div>
+                <span className="sm:hidden font-display font-bold text-[10px]">×{qty}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Balance Formula Tester Modal */}
       <NativeDialog
         open={balanceModalOpen}
@@ -467,6 +592,22 @@ export const HUD: React.FC<HUDProps> = ({
                 {p}
               </button>
             ))}
+          </div>
+
+          <div className="p-2 rounded-lg bg-emerald-50 border border-emerald-700/30 text-[10px] text-emerald-950 space-y-0.5">
+            <div className="font-display font-bold uppercase text-emerald-900">
+              Live Village → Dungeon Stat Bridge
+            </div>
+            <div>
+              Healthy ({player.lifeStats.healthy}) → <strong>+{Math.round(bridge.healthyHpBonusPct * 100)}% Max HP</strong> (Effective {effectiveMaxHp} HP) · Happy ({player.lifeStats.happy}) → <strong>+{Math.round(bridge.happyCritBonus * 100)}% Crit</strong>
+            </div>
+            <div>
+              {SKILL_DEFINITIONS[bridge.activeClassSkillId].name} Lv.{bridge.activeClassSkillLevel} →{' '}
+              <strong>+{Math.round(bridge.classSkillDamagePct * 1000) / 10}% Dmg</strong> · Snack ATK:{' '}
+              <strong>+{Math.round(bridge.snackAttackPct * 100)}%</strong> · Speed:{' '}
+              <strong>+{Math.round(bridge.moveSpeedBonusPct * 100)}%</strong> · Crit:{' '}
+              <strong>{Math.round(bridge.effectiveCritChance * 100)}%</strong> ({bridge.critMultiplier}×)
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-2 text-[11px]">

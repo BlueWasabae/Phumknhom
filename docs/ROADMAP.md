@@ -14,7 +14,7 @@ Check off each phase only after testing on **both Desktop and Mobile browsers** 
 - [x] **Phase 3 — Stardew Farming, Timers & Artisan Loop**
   - Personal `FARM` gate, tilling, watering (-20% time), Fertilizer (Gold-Star chance), and real-timestamp crop growth.
   - Starter crops (`Trakuon` → `Kampot Pepper`), perennial fruit trees, livestock, and first Artisan machines.
-- [ ] **Phase 4 — Shops, Street Snack Cart & 12-Skill Foundation**
+- [x] **Phase 4 — Shops, Street Snack Cart & 12-Skill Foundation**
   - Clothing Boutique, Street Snack Cart (`Num Pang`, `Kafé`, `Skewers`, `Coconut Water`), and Village-to-Dungeon stat bridge.
   - Implement `/shared/src/balanceFormulas.ts` and the 12-Skill XP/Talent framework.
 - [ ] **Phase 5 — Terraria/Calamity Combat & First Bosses**

@@ -98,6 +98,18 @@ export function drawSinglePaperDollLayer(
           ctx.stroke();
         }
         ctx.restore();
+      } else if (def.styleVariant === 'lotus_aura') {
+        ctx.save();
+        for (let i = 0; i < 6; i++) {
+          const a = timeMs / 700 + (i / 6) * Math.PI * 2;
+          const px = Math.cos(a) * 18;
+          const py = -8 + Math.sin(a) * 12;
+          ctx.fillStyle = i % 2 === 0 ? def.primaryColor : def.accentColor;
+          ctx.beginPath();
+          ctx.ellipse(px, py, 4.5, 2.6, a, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
       } else {
         // Ember Wings or Radiant Garuda Wings
         ctx.fillStyle = def.primaryColor;
@@ -331,7 +343,7 @@ export function drawSinglePaperDollLayer(
         ctx.fillRect(6, -10, 2, 3);
         ctx.fillStyle = hat.accentColor;
         ctx.fillRect(-3, -12, 6, 4);
-      } else if (hat.styleVariant === 'royal_crown') {
+      } else if (hat.styleVariant === 'royal_crown' || hat.styleVariant === 'apsara_crown') {
         ctx.fillStyle = hat.primaryColor;
         ctx.strokeStyle = '#92400e';
         ctx.lineWidth = 1.4;
@@ -339,7 +351,7 @@ export function drawSinglePaperDollLayer(
         ctx.moveTo(-10, 1);
         ctx.lineTo(-10, -8);
         ctx.lineTo(-4, -3);
-        ctx.lineTo(0, -14);
+        ctx.lineTo(0, hat.styleVariant === 'apsara_crown' ? -17 : -14);
         ctx.lineTo(4, -3);
         ctx.lineTo(10, -8);
         ctx.lineTo(10, 1);
@@ -348,6 +360,30 @@ export function drawSinglePaperDollLayer(
         ctx.stroke();
         ctx.fillStyle = hat.accentColor;
         ctx.fillRect(-2, -6, 4, 4);
+      } else if (hat.styleVariant === 'krama_bandana') {
+        ctx.fillStyle = hat.accentColor;
+        ctx.fillRect(-13, 0, 26, 5);
+        ctx.fillStyle = hat.primaryColor;
+        for (let bx = -13; bx < 13; bx += 5) {
+          ctx.fillRect(bx, 0, 3, 5);
+        }
+        ctx.strokeStyle = outline;
+        ctx.lineWidth = 1.2;
+        ctx.strokeRect(-13, 0, 26, 5);
+      } else if (hat.styleVariant === 'sun_straw') {
+        ctx.fillStyle = hat.primaryColor;
+        ctx.strokeStyle = '#854d0e';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.ellipse(0, 1, 19, 4.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.roundRect(-10, -8, 20, 9, 4);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = hat.accentColor;
+        ctx.fillRect(-10, -2, 20, 2.5);
       }
       ctx.restore();
     }

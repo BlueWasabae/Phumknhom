@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { INITIAL_PLAYER_STATE, type PlayerState } from '@shared/types';
 import { calculatePlayerDamage, getXpForNextLevel } from '@shared/balanceFormulas';
+import { CLASS_TO_COMBAT_SKILL, computeVillageToDungeonBridge } from '@shared/skillTrees';
+import { awardSkillXp } from '../systems/SkillManager';
 import { EventBus, type JoystickVector } from '../EventBus';
 import { Player } from '../entities/Player';
 import { ClassCombatVFX, type SpawnedProjectile } from '../animations/ClassCombatVFX';
@@ -45,13 +47,14 @@ export class DungeonBossScene extends Phaser.Scene {
   private projectiles: SpawnedProjectile[] = [];
   private yantSigils: Phaser.GameObjects.Container[] = [];
   private lbokatorStance = 1; // 1=Lion, 2=Crocodile, 3=Hanuman
+  private consecutiveMeleeHits = 0;
   private stealthPct = 0;     // 0..100 for Shadow Hunter
   private lastAttackAt = 0;
   private lastMeterBroadcast = 0;
 
   // Platformer & Controls
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
-  private keys!: Record<'A' | 'D' | 'W' | 'E' | 'J' | 'K' | 'SHIFT' | 'SPACE', Phaser.Input.Keyboard.Key>;
+  private keys!: Record<'A' | 'D' | 'W' | 'E' | 'J' | 'L' | 'SHIFT' | 'SPACE', Phaser.Input.Keyboard.Key>;
   private joystick: JoystickVector = { x: 0, y: 0 };
   private jumpsUsed = 0;
   private dashActiveUntil = 0;
@@ -88,6 +91,7 @@ export class DungeonBossScene extends Phaser.Scene {
     this.projectiles = [];
     this.yantSigils = [];
     this.lbokatorStance = 1;
+    this.consecutiveMeleeHits = 0;
     this.stealthPct = 0;
   }
 
@@ -135,8 +139,8 @@ export class DungeonBossScene extends Phaser.Scene {
     this.cameras.main.fadeIn(240, 8, 10, 20);
 
     this.cursors = this.input.keyboard!.createCursorKeys();
-    this.keys = this.input.keyboard!.addKeys('A,D,W,E,J,K,SHIFT,SPACE') as Record<
-      'A' | 'D' | 'W' | 'E' | 'J' | 'K' | 'SHIFT' | 'SPACE',
+    this.keys = this.input.keyboard!.addKeys('A,D,W,E,J,L,SHIFT,SPACE') as Record<
+      'A' | 'D' | 'W' | 'E' | 'J' | 'L' | 'SHIFT' | 'SPACE',
       Phaser.Input.Keyboard.Key
     >;
 
@@ -159,9 +163,13 @@ export class DungeonBossScene extends Phaser.Scene {
       EventBus.on('player:loadoutChanged', ({ loadout, playerState }) => {
         this.player.applyLoadoutUpdate(loadout, playerState);
         this.stealthPct = 0;
+        this.consecutiveMeleeHits = 0;
         this.clearYantSigils();
         this.player.paperDoll.setStealthTint(false);
         this.broadcastClassMeter();
+      }),
+      EventBus.on('player:stateSync', (nextState) => {
+        this.player.syncPlayerState(nextState);
       }),
       EventBus.on('input:jump', () => this.performJump()),
       EventBus.on('input:attack', () => this.performClassAttack()),
@@ -273,7 +281,7 @@ export class DungeonBossScene extends Phaser.Scene {
       })
       .setDepth(12);
     this.add
-      .text(420, 156, 'Press [I] to Swap Class Weapon  ·  Space/W Jump  ·  Shift/K Class Dash  ·  J/Click Attack', {
+      .text(420, 156, '[I] Swap Class · [K] Skills · [1/2/3] Eat Snack · Space/W Jump · Shift/L Dash · J/Click Attack', {
         fontFamily: 'Kantumruy Pro, sans-serif',
         fontSize: '12px',
         color: '#cbd5e1',
@@ -405,13 +413,15 @@ export class DungeonBossScene extends Phaser.Scene {
 
   private performJump(): void {
     if (this.transitioning) return;
+    const bridge = computeVillageToDungeonBridge(this.player.state, Date.now(), this.consecutiveMeleeHits);
+    const jumpMult = 1 + bridge.jumpPowerBonusPct;
     const onGround = this.player.body.blocked.down || this.player.body.touching.down;
     if (onGround) {
       this.jumpsUsed = 1;
-      this.player.body.setVelocityY(-495);
+      this.player.body.setVelocityY(-495 * jumpMult);
     } else if (this.jumpsUsed < 2) {
       this.jumpsUsed = 2;
-      this.player.body.setVelocityY(-460);
+      this.player.body.setVelocityY(-460 * jumpMult);
       this.spawnFloatingText(this.player.x, this.player.y - 26, 'Double Jump!', '#38bdf8', '13px');
     }
   }
@@ -423,9 +433,10 @@ export class DungeonBossScene extends Phaser.Scene {
     const now = this.time.now;
     if (now < this.dashCooldownUntil || this.transitioning) return;
 
+    const bridge = computeVillageToDungeonBridge(this.player.state, Date.now(), this.consecutiveMeleeHits);
     const cls = this.player.state.activeClass;
     const dir = this.player.facingRight ? 1 : -1;
-    this.dashCooldownUntil = now + 920;
+    this.dashCooldownUntil = now + Math.round(920 * bridge.dashCooldownMult);
     this.dashActiveUntil = now + 200;
     this.invulnerableUntil = now + 380;
 
@@ -476,7 +487,9 @@ export class DungeonBossScene extends Phaser.Scene {
 
     const weapon = this.player.state.weapon;
     const cls = this.player.state.activeClass;
-    this.attackCooldownUntil = now + weapon.attackCooldownMs;
+    const bridge = computeVillageToDungeonBridge(this.player.state, Date.now(), this.consecutiveMeleeHits);
+    const cooldownMs = Math.round(weapon.attackCooldownMs / Math.max(0.5, bridge.castSpeedMult));
+    this.attackCooldownUntil = now + cooldownMs;
     this.attackAnimUntil = now + 185;
     this.lastAttackAt = now;
 
@@ -506,10 +519,14 @@ export class DungeonBossScene extends Phaser.Scene {
           this.boss.y - 90,
           () => {
             if (this.bossAlive) {
-              this.damageYeakThmor(dir, { bonusMult: 0.72, tag: 'Spirit Bolt' });
+              this.damageYeakThmor(dir, {
+                bonusMult: 0.72 * (1 + bridge.petDamageBonusPct),
+                tag: 'Spirit Bolt',
+              });
             }
           },
-          true
+          true,
+          bridge.petAttackSpeedMult
         );
       }
       return;
@@ -553,23 +570,69 @@ export class DungeonBossScene extends Phaser.Scene {
     knockDir: number,
     opts: { bonusMult?: number; guaranteedCrit?: boolean; extraArmorPen?: number; tag?: string } = {}
   ): void {
-    const { weapon, skillDamagePct, armorDamagePct, snackBuffPct } = this.player.state;
+    if (this.player.state.activeClass === 'lbokator') {
+      this.consecutiveMeleeHits = Math.min(10, this.consecutiveMeleeHits + 1);
+    }
+
+    const { weapon, armorDamagePct } = this.player.state;
+    const bridge = computeVillageToDungeonBridge(this.player.state, Date.now(), this.consecutiveMeleeHits);
 
     const hit = calculatePlayerDamage({
       weaponBase: weapon.baseDamage * (opts.bonusMult ?? 1),
       upgradeLevel: weapon.upgradeLevel,
-      flatBonuses: this.player.state.level * 2,
-      skillPct: skillDamagePct,
+      flatBonuses: bridge.flatDamageBonus,
+      skillPct: bridge.classSkillDamagePct,
       armorPct: armorDamagePct,
-      snackBuffPct: snackBuffPct,
+      snackBuffPct: bridge.snackAttackPct,
       enemyDefense: 8,
       armorPen: weapon.armorPen + (opts.extraArmorPen ?? 0),
       bossDR: 0.05,
-      critChance: weapon.critChance,
+      critChance: bridge.effectiveCritChance,
+      critMultiplier: bridge.critMultiplier,
       isCritOverride: opts.guaranteedCrit ? true : undefined,
     });
 
-    this.bossHp = Math.max(0, this.bossHp - hit.finalDamage);
+    let totalDamage = hit.finalDamage;
+
+    // Cross-world Farming -> Dungeon Synergy: Botanical Venom poison proc!
+    if (bridge.botanicalVenomChance > 0 && Math.random() < bridge.botanicalVenomChance) {
+      const venomDmg = Math.max(4, Math.round(hit.finalDamage * bridge.botanicalVenomPowerPct));
+      totalDamage += venomDmg;
+      this.spawnFloatingText(
+        this.boss.x + (Math.random() - 0.5) * 44,
+        this.boss.y - 168,
+        `☠ VENOM +${venomDmg}`,
+        '#4ade80',
+        '14px'
+      );
+    }
+
+    // Melee Synergy: Seething Blade lifesteal
+    if (bridge.seethingLifestealChance > 0 && Math.random() < bridge.seethingLifestealChance) {
+      const heal = Math.max(3, Math.round(bridge.effectiveMaxHp * 0.03));
+      this.player.state.hp = Math.min(bridge.effectiveMaxHp, this.player.state.hp + heal);
+      this.spawnFloatingText(this.player.x, this.player.y - 44, `+${heal} HP`, '#34d399', '13px');
+    }
+
+    // Award live combat XP to equipped Khmer class skill (melee/ranged/magic/summoning/rogue)
+    const combatSkillId = CLASS_TO_COMBAT_SKILL[this.player.state.activeClass];
+    const hitSkillXp = hit.isCrit ? 14 : 9;
+    const skillRes = awardSkillXp(this.player.state, combatSkillId, hitSkillXp, true);
+    this.player.state = skillRes.state;
+    if (skillRes.leveledUp) {
+      this.spawnFloatingText(
+        this.player.x,
+        this.player.y - 62,
+        `${combatSkillId.toUpperCase()} Lv.${skillRes.newLevel}!`,
+        '#fde047',
+        '15px'
+      );
+      if (this.cache.audio.exists('sfx_levelup')) {
+        this.sound.play('sfx_levelup', { volume: 0.28 });
+      }
+    }
+
+    this.bossHp = Math.max(0, this.bossHp - totalDamage);
 
     this.boss.setTintFill(0xffffff);
     this.tweens.add({
@@ -607,6 +670,15 @@ export class DungeonBossScene extends Phaser.Scene {
       }, 40);
     }
 
+    EventBus.emit('player:state', {
+      ...this.player.state,
+      weapon: { ...this.player.state.weapon },
+      loadout: { ...this.player.state.loadout },
+      currencies: { ...this.player.state.currencies },
+      lifeStats: { ...this.player.state.lifeStats },
+      activeBuffs: [...this.player.state.activeBuffs],
+      quickSnackSlots: [...this.player.state.quickSnackSlots],
+    });
     EventBus.emit('combat:hit', { hit, dummyHp: this.bossHp, dummyMaxHp: BOSS_MAX_HP });
 
     if (this.bossHp <= 0) {
@@ -640,12 +712,18 @@ export class DungeonBossScene extends Phaser.Scene {
     this.player.state.coins += 75;
     this.player.state.currencies.coins = this.player.state.coins;
     this.player.state.xp += 60;
-    let leveledUp = false;
+
+    // Award Vitality XP on defeating enemy / boss!
+    const vitRes = awardSkillXp(this.player.state, 'vitality', 45, true);
+    this.player.state = vitRes.state;
+
+    let leveledUp = vitRes.leveledUp;
     while (this.player.state.xp >= getXpForNextLevel(this.player.state.level)) {
       this.player.state.xp -= getXpForNextLevel(this.player.state.level);
       this.player.state.level += 1;
       this.player.state.maxHp += 15;
-      this.player.state.hp = this.player.state.maxHp;
+      const nextBridge = computeVillageToDungeonBridge(this.player.state);
+      this.player.state.hp = nextBridge.effectiveMaxHp;
       leveledUp = true;
       this.spawnFloatingText(this.player.x, this.player.y - 54, `LEVEL UP! Lv.${this.player.state.level}`, '#fde047', '18px');
     }
@@ -658,8 +736,10 @@ export class DungeonBossScene extends Phaser.Scene {
       loadout: { ...this.player.state.loadout },
       currencies: { ...this.player.state.currencies },
       lifeStats: { ...this.player.state.lifeStats },
+      activeBuffs: [...this.player.state.activeBuffs],
+      quickSnackSlots: [...this.player.state.quickSnackSlots],
     });
-    this.spawnFloatingText(BOSS_SPAWN_X, BOSS_SPAWN_Y - 54, '+75 Coins · +60 XP', '#4ade80', '16px');
+    this.spawnFloatingText(BOSS_SPAWN_X, BOSS_SPAWN_Y - 54, '+75 Coins · +60 XP · +45 Vitality XP', '#4ade80', '15px');
 
     this.time.delayedCall(3000, () => {
       if (!this.scene.isActive('DungeonBossScene')) return;
@@ -728,10 +808,12 @@ export class DungeonBossScene extends Phaser.Scene {
     const onGround = this.player.body.blocked.down || this.player.body.touching.down;
     if (onGround) this.jumpsUsed = 0;
 
+    const bridge = computeVillageToDungeonBridge(this.player.state, Date.now(), this.consecutiveMeleeHits);
+
     // Shadow Hunter passive Stealth Meter recharge (turns 45% purple mist at 100%)
     const isShadow = this.player.state.activeClass === 'shadow';
     if (isShadow && time - this.lastAttackAt > 450 && this.stealthPct < 100) {
-      this.stealthPct = Math.min(100, this.stealthPct + dt * 32);
+      this.stealthPct = Math.min(100, this.stealthPct + dt * 32 * (1 + bridge.stealthRateBonusPct));
       if (time - this.lastMeterBroadcast > 120) {
         this.lastMeterBroadcast = time;
         this.broadcastClassMeter();
@@ -748,11 +830,21 @@ export class DungeonBossScene extends Phaser.Scene {
 
     // Barami Spirit Tamer passive companion auto-attack in Dungeon
     if (this.player.state.activeClass === 'tamer' && this.bossAlive) {
-      this.player.pet.trySpiritAutoAttack(time, this.boss.x, this.boss.y - 90, () => {
-        if (this.bossAlive) {
-          this.damageYeakThmor(this.player.facingRight ? 1 : -1, { bonusMult: 0.6, tag: 'Pet Spirit' });
-        }
-      });
+      this.player.pet.trySpiritAutoAttack(
+        time,
+        this.boss.x,
+        this.boss.y - 90,
+        () => {
+          if (this.bossAlive) {
+            this.damageYeakThmor(this.player.facingRight ? 1 : -1, {
+              bonusMult: 0.6 * (1 + bridge.petDamageBonusPct),
+              tag: 'Pet Spirit',
+            });
+          }
+        },
+        false,
+        bridge.petAttackSpeedMult
+      );
     }
 
     if (time > this.dashActiveUntil && !this.transitioning) {
@@ -768,7 +860,7 @@ export class DungeonBossScene extends Phaser.Scene {
         ) {
           this.performJump();
         }
-        if (Phaser.Input.Keyboard.JustDown(this.keys.SHIFT) || Phaser.Input.Keyboard.JustDown(this.keys.K)) {
+        if (Phaser.Input.Keyboard.JustDown(this.keys.SHIFT) || Phaser.Input.Keyboard.JustDown(this.keys.L)) {
           this.performClassDash();
         }
         if (Phaser.Input.Keyboard.JustDown(this.keys.J)) {
@@ -782,7 +874,7 @@ export class DungeonBossScene extends Phaser.Scene {
       if (Math.abs(moveX) > 0.12) {
         const dir = moveX < 0 ? -1 : 1;
         this.player.facing = dir > 0 ? 'right' : 'left';
-        this.player.body.setVelocityX(dir * 270);
+        this.player.body.setVelocityX(dir * 270 * (1 + bridge.moveSpeedBonusPct));
       } else {
         this.player.body.setVelocityX(0);
       }

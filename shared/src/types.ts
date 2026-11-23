@@ -6,6 +6,48 @@ export type EmoteSymbol = '👋' | '😄' | '❤️' | '🔥';
 
 export type KhmerClassId = 'lbokator' | 'archer' | 'mystic' | 'tamer' | 'shadow';
 
+export type SkillId =
+  | 'farming'
+  | 'mining'
+  | 'fishing'
+  | 'foraging'
+  | 'cooking'
+  | 'crafting'
+  | 'melee'
+  | 'ranged'
+  | 'magic'
+  | 'summoning'
+  | 'rogue'
+  | 'vitality';
+
+export interface SkillEntry {
+  level: number;
+  xp: number;
+  unlockedTalents: string[];
+}
+
+export interface SkillProfile {
+  skills: Record<SkillId, SkillEntry>;
+}
+
+export interface ActiveSnackBuff {
+  id: string;
+  snackId: string;
+  name: string;
+  khmerName: string;
+  icon: string;
+  color: string;
+  startedAt: number;
+  expiresAt: number;
+  moveSpeedPct?: number;
+  jumpPowerPct?: number;
+  attackPct?: number;
+  maxHpPct?: number;
+  critChanceBonus?: number;
+  mpRegenPct?: number;
+  poisonImmune?: boolean;
+}
+
 export type EquipSlot =
   | 'hat'
   | 'hair'
@@ -138,6 +180,9 @@ export interface PlayerState {
   loadout: EquippedLoadout;
   inventory: InventoryItem[];
   farm: FarmState;
+  skills: SkillProfile;
+  activeBuffs: ActiveSnackBuff[];
+  quickSnackSlots: [string | null, string | null, string | null];
   skillDamagePct: number;
   armorDamagePct: number;
   snackBuffPct: number;
@@ -248,6 +293,26 @@ export function createInitialFarmState(now = Date.now()): FarmState {
   };
 }
 
+export function createInitialSkillProfile(): SkillProfile {
+  const mk = (level = 1, xp = 0): SkillEntry => ({ level, xp, unlockedTalents: [] });
+  return {
+    skills: {
+      farming: mk(5, 30),
+      mining: mk(1, 0),
+      fishing: mk(1, 0),
+      foraging: mk(1, 0),
+      cooking: mk(5, 10),
+      crafting: mk(1, 0),
+      melee: mk(5, 20),
+      ranged: mk(1, 0),
+      magic: mk(1, 0),
+      summoning: mk(1, 0),
+      rogue: mk(1, 0),
+      vitality: mk(1, 0),
+    },
+  };
+}
+
 export const INITIAL_PLAYER_STATE: PlayerState = {
   name: 'PhumHero',
   level: 1,
@@ -261,8 +326,8 @@ export const INITIAL_PLAYER_STATE: PlayerState = {
     diamonds: 50,
   },
   lifeStats: {
-    farmLevel: 1,
-    farmXp: 25,
+    farmLevel: 5,
+    farmXp: 30,
     stylish: 168,
     friendly: 40,
     happy: 82,
@@ -312,16 +377,28 @@ export const INITIAL_PLAYER_STATE: PlayerState = {
     { itemId: 'pet_mini_naga', quantity: 1, itemLevel: 5 },
     { itemId: 'pet_firefly_lantern', quantity: 1, itemLevel: 3 },
     { itemId: 'pet_lucky_kitten', quantity: 1, itemLevel: 4 },
-    // Phase 3 Starter Seeds, Fertilizer & Sample Crop for Artisan testing
+    // Phase 3 Starter Seeds, Fertilizer & Sample Crops/Ingredients for Artisan & Cooking
     { itemId: 'seed_trakuon', quantity: 8, itemLevel: 1 },
     { itemId: 'seed_slek_krey', quantity: 4, itemLevel: 1 },
     { itemId: 'seed_phka_rumduol', quantity: 3, itemLevel: 1 },
     { itemId: 'fertilizer', quantity: 6, itemLevel: 1 },
-    { itemId: 'crop_phka_rumduol', quantity: 2, itemLevel: 1, quality: 'normal' },
+    { itemId: 'crop_phka_rumduol', quantity: 3, itemLevel: 1, quality: 'normal' },
     { itemId: 'crop_trakuon', quantity: 2, itemLevel: 1, quality: 'normal' },
+    { itemId: 'crop_slek_krey', quantity: 2, itemLevel: 1, quality: 'normal' },
+    { itemId: 'drop_fresh_egg', quantity: 2, itemLevel: 1, quality: 'normal' },
+    { itemId: 'fruit_coconut', quantity: 2, itemLevel: 1, quality: 'normal' },
+    { itemId: 'artisan_palm_sugar', quantity: 2, itemLevel: 1, quality: 'normal' },
+    { itemId: 'drop_fresh_milk', quantity: 2, itemLevel: 1, quality: 'normal' },
+    // Phase 4 Starter Street Snacks slotted in Quick-Bar
+    { itemId: 'snack_num_pang', quantity: 2, itemLevel: 1, quality: 'normal' },
+    { itemId: 'snack_kafe', quantity: 1, itemLevel: 1, quality: 'normal' },
+    { itemId: 'snack_pepper_skewer', quantity: 1, itemLevel: 1, quality: 'normal' },
   ],
   farm: createInitialFarmState(),
-  skillDamagePct: 0.05,
+  skills: createInitialSkillProfile(),
+  activeBuffs: [],
+  quickSnackSlots: ['snack_num_pang', 'snack_kafe', 'snack_pepper_skewer'],
+  skillDamagePct: 0.025,
   armorDamagePct: 0.04,
-  snackBuffPct: 0.1,
+  snackBuffPct: 0,
 };

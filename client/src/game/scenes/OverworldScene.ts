@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { INITIAL_PLAYER_STATE, type PlayerState } from '@shared/types';
+import { computeVillageToDungeonBridge } from '@shared/skillTrees';
 import { EventBus, type JoystickVector } from '../EventBus';
 import { Player } from '../entities/Player';
 
@@ -110,6 +111,9 @@ export class OverworldScene extends Phaser.Scene {
       }),
       EventBus.on('player:loadoutChanged', ({ loadout, playerState }) => {
         this.player.applyLoadoutUpdate(loadout, playerState);
+      }),
+      EventBus.on('player:stateSync', (nextState) => {
+        this.player.syncPlayerState(nextState);
       }),
       EventBus.on('input:interact', () => {
         this.tryInteractNearest();
@@ -352,9 +356,9 @@ export class OverworldScene extends Phaser.Scene {
       x: 255,
       y: 372,
       radius: 48,
-      label: 'Khmer Street Snack Cart — Num Pang & Iced Coffee (Phase 4)',
+      label: 'Press [E] or Tap Interact → Street Snack Cart & Farm Kitchen',
       isDungeonPortal: false,
-      onInteract: () => EventBus.emit('ui:toast', { text: 'NUM PANG CART — Street snack combat buffs arrive in Phase 4!' }),
+      onInteract: () => EventBus.emit('ui:openModal', { modal: 'snackShop', shopTab: 'primary' }),
     });
 
     // 4. FASHION SHOP — Blue-Roof Boutique + Flower Boxes (Center-Right)
@@ -375,9 +379,9 @@ export class OverworldScene extends Phaser.Scene {
       x: 705,
       y: 368,
       radius: 52,
-      label: 'Press [E] or Tap Interact → Fashion Mirror & Hair Salon',
+      label: 'Press [E] or Tap Interact → Fashion Boutique & Wardrobe Mirror',
       isDungeonPortal: false,
-      onInteract: () => EventBus.emit('ui:openModal', { modal: 'wardrobe' }),
+      onInteract: () => EventBus.emit('ui:openModal', { modal: 'fashionShop', shopTab: 'primary' }),
     });
 
     // 5. ANGKOR DUNGEON PORTAL (Top-Right, Custom Angkor Wat Portal + Glow + Bouncing JOIN Arrow)
@@ -531,7 +535,8 @@ export class OverworldScene extends Phaser.Scene {
 
     const len = Math.hypot(vx, vy);
     if (len > 0.1) {
-      const speed = 115; // Crisp Stardew walk speed tuned for 16x16 zoomed world
+      const bridge = computeVillageToDungeonBridge(this.player.state);
+      const speed = 115 * (1 + Math.min(0.45, bridge.moveSpeedBonusPct));
       const nx = vx / Math.max(1, len);
       const ny = vy / Math.max(1, len);
       this.player.body.setVelocity(nx * speed, ny * speed);

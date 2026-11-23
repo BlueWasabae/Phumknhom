@@ -6,8 +6,11 @@ import type {
   LivestockPenState,
   PlayerState,
   QualityTier,
+  SkillId,
 } from '@shared/types';
 import { getXpForNextLevel } from '@shared/balanceFormulas';
+import { hasTalent } from '@shared/skillTrees';
+import { awardSkillXp } from './SkillManager';
 import {
   ARTISAN_MACHINES,
   ARTISAN_RECIPES,
@@ -43,19 +46,19 @@ export function formatRemainingTime(ms: number): string {
   return `${s}s`;
 }
 
-function addFarmXpAndPlayerXp(state: PlayerState, farmXpGain: number, charXpGain = 0): PlayerState {
-  let farmLevel = state.lifeStats.farmLevel;
-  let farmXp = state.lifeStats.farmXp + farmXpGain;
-  const farmThreshold = (lvl: number) => Math.floor(80 * Math.pow(lvl, 1.35));
-  while (farmXp >= farmThreshold(farmLevel)) {
-    farmXp -= farmThreshold(farmLevel);
-    farmLevel += 1;
-  }
+function addFarmXpAndPlayerXp(
+  state: PlayerState,
+  skillXpGain: number,
+  charXpGain = 0,
+  skillId: SkillId = 'farming'
+): PlayerState {
+  const skillRes = awardSkillXp(state, skillId, skillXpGain, true);
+  let nextState = skillRes.state;
 
-  let level = state.level;
-  let xp = state.xp + charXpGain;
-  let maxHp = state.maxHp;
-  let hp = state.hp;
+  let level = nextState.level;
+  let xp = nextState.xp + charXpGain;
+  let maxHp = nextState.maxHp;
+  let hp = nextState.hp;
   while (xp >= getXpForNextLevel(level)) {
     xp -= getXpForNextLevel(level);
     level += 1;
@@ -64,16 +67,11 @@ function addFarmXpAndPlayerXp(state: PlayerState, farmXpGain: number, charXpGain
   }
 
   return {
-    ...state,
+    ...nextState,
     level,
     xp,
     maxHp,
     hp,
-    lifeStats: {
-      ...state.lifeStats,
-      farmLevel,
-      farmXp,
-    },
   };
 }
 
@@ -325,8 +323,10 @@ export function harvestPlot(state: PlayerState, index: number, now = Date.now())
   const crop = ROW_CROPS[plot.cropId];
   if (!crop) return { state, ok: false, message: 'Unknown crop.' };
 
-  // 20% chance for Gold-Star quality when fertilized
-  const isGoldStar = plot.fertilized && Math.random() < 0.2;
+  // 20% chance for Gold-Star quality when fertilized (+15% with Farming -> Golden Thumb!)
+  const goldenThumbBonus = hasTalent(state.skills, 'farming', 'farm_golden_thumb') ? 0.15 : 0;
+  const goldChance = (plot.fertilized ? 0.2 : 0) + goldenThumbBonus;
+  const isGoldStar = goldChance > 0 && Math.random() < goldChance;
   const quality: QualityTier = isGoldStar ? 'gold_star' : 'normal';
 
   const plots = state.farm.plots.map((p) =>
@@ -429,11 +429,19 @@ export function harvestFruitTree(state: PlayerState, slotIndex: number, now = Da
   const trees = state.farm.trees.map((t, idx) =>
     idx === slotIndex ? { ...t, mature: true, lastHarvestAt: now } : t
   );
-  const nextInv = addInventory(state.inventory, def.outputItemId, def.outputQuantity, 'normal');
+  const doubleGather = hasTalent(state.skills, 'foraging', 'forage_double') && Math.random() < 0.2;
+  const qty = def.outputQuantity * (doubleGather ? 2 : 1);
+  const nextInv = addInventory(state.inventory, def.outputItemId, qty, 'normal');
+  const withForage = awardSkillXp(
+    { ...state, inventory: nextInv, farm: { ...state.farm, trees } },
+    'foraging',
+    Math.round(def.farmXp * 0.6),
+    true
+  ).state;
   return {
-    state: addFarmXpAndPlayerXp({ ...state, inventory: nextInv, farm: { ...state.farm, trees } }, def.farmXp, 20),
+    state: addFarmXpAndPlayerXp(withForage, def.farmXp, 20, 'farming'),
     ok: true,
-    message: `Harvested ${def.outputQuantity}× ${FARM_ITEMS[def.outputItemId]?.name ?? def.outputItemId}!`,
+    message: `Harvested ${qty}× ${FARM_ITEMS[def.outputItemId]?.name ?? def.outputItemId}${doubleGather ? ' (Double Gather!)' : ''}!`,
   };
 }
 
@@ -564,7 +572,9 @@ export function collectArtisanOutput(state: PlayerState, slotIndex: number, now 
   }
   const recipe = ARTISAN_RECIPES.find((r) => r.id === machine.recipeId);
   const outName = FARM_ITEMS[machine.outputItemId]?.name ?? machine.outputItemId;
-  const nextInv = addInventory(state.inventory, machine.outputItemId, 1, machine.quality);
+  const bonusOut = hasTalent(state.skills, 'crafting', 'craft_alchemist_luck') && Math.random() < 0.2 ? 1 : 0;
+  const qty = 1 + bonusOut;
+  const nextInv = addInventory(state.inventory, machine.outputItemId, qty, machine.quality);
 
   const machines = state.farm.machines.map((m, idx) =>
     idx === slotIndex
@@ -584,11 +594,12 @@ export function collectArtisanOutput(state: PlayerState, slotIndex: number, now 
     state: addFarmXpAndPlayerXp(
       { ...state, inventory: nextInv, farm: { ...state.farm, machines } },
       recipe?.farmXp ?? 30,
-      20
+      20,
+      'crafting'
     ),
     ok: true,
     goldStar: machine.quality === 'gold_star',
-    message: `Collected ${machine.quality === 'gold_star' ? '★ ' : ''}${outName}!`,
+    message: `Collected ${qty}× ${machine.quality === 'gold_star' ? '★ ' : ''}${outName}${bonusOut ? ' (Alchemist Luck!)' : ''}! (+${recipe?.farmXp ?? 30} Crafting XP)`,
   };
 }
 
