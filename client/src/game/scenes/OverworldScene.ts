@@ -330,9 +330,9 @@ export class OverworldScene extends Phaser.Scene {
       x: 205,
       y: 250,
       radius: 54,
-      label: 'My Khmer Stilt Home & Farm Gate (Stardew Farming in Phase 3)',
-      isDungeonPortal: false,
-      onInteract: () => EventBus.emit('ui:toast', { text: 'Khmer Stilt Home & FARM — Crop planting & timers arrive in Phase 3!' }),
+      label: 'Press [E] or Tap JOIN → Enter Personal Homestead Farm',
+      isDungeonPortal: true,
+      onInteract: () => this.enterFarm(),
     });
 
     // 3. KHMER NUM PANG STREET SNACK CART (Center-Left, Custom Khmer Pixel Art)
@@ -454,6 +454,24 @@ export class OverworldScene extends Phaser.Scene {
         bodyH: 12,
       });
     }
+  }
+
+  private enterFarm(): void {
+    if (this.transitioning) return;
+    this.transitioning = true;
+    this.cameras.main.fadeOut(220, 8, 16, 12);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      this.scene.start('FarmScene', {
+        playerState: {
+          ...this.player.state,
+          zone: 'farm',
+          weapon: { ...this.player.state.weapon },
+          loadout: { ...this.player.state.loadout },
+          currencies: { ...this.player.state.currencies },
+          lifeStats: { ...this.player.state.lifeStats },
+        },
+      });
+    });
   }
 
   private enterDungeon(): void {

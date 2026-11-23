@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { BootScene } from './scenes/BootScene';
 import { OverworldScene } from './scenes/OverworldScene';
+import { FarmScene } from './scenes/FarmScene';
 import { DungeonBossScene } from './scenes/DungeonBossScene';
 
 export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameConfig {
@@ -26,7 +27,7 @@ export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameCon
         debug: false,
       },
     },
-    scene: [BootScene, OverworldScene, DungeonBossScene],
+    scene: [BootScene, OverworldScene, FarmScene, DungeonBossScene],
   };
 }
 

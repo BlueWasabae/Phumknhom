@@ -7,9 +7,11 @@ import {
   calculatePlayerDamage,
 } from '@shared/balanceFormulas';
 import { KHMER_CLASSES } from '@shared/khmerClasses';
+import { ROW_CROP_LIST } from '../data/cropsAndArtisan';
 import {
   Backpack,
   Coins,
+  FastForward,
   Gamepad2,
   Heart,
   Mail,
@@ -17,10 +19,11 @@ import {
   MessageCircle,
   Smile,
   Sparkles,
+  Sprout,
   Swords,
   User,
 } from 'lucide-react';
-import { EventBus, type ClassMeterPayload } from '../game/EventBus';
+import { EventBus, type ClassMeterPayload, type FarmToolMode } from '../game/EventBus';
 import { NativeDialog } from './NativeDialog';
 
 interface HUDProps {
@@ -32,9 +35,14 @@ interface HUDProps {
   onToggleTouchUi: () => void;
   lastHit: CombatHitResult | null;
   classMeter: ClassMeterPayload;
+  selectedCropId: string;
+  farmToolMode: FarmToolMode;
+  onSelectFarmSeed: (cropId: string, toolMode: FarmToolMode) => void;
   onOpenProfile: () => void;
   onOpenInventory: () => void;
   onOpenWardrobe: () => void;
+  onOpenFarmModal: () => void;
+  onFastForwardFarm: () => void;
 }
 
 const EMOTES: EmoteSymbol[] = ['👋', '😄', '❤️', '🔥'];
@@ -49,9 +57,14 @@ export const HUD: React.FC<HUDProps> = ({
   onToggleTouchUi,
   lastHit,
   classMeter,
+  selectedCropId,
+  farmToolMode,
+  onSelectFarmSeed,
   onOpenProfile,
   onOpenInventory,
   onOpenWardrobe,
+  onOpenFarmModal,
+  onFastForwardFarm,
 }) => {
   const [menuDropdownOpen, setMenuDropdownOpen] = useState(false);
   const [balanceModalOpen, setBalanceModalOpen] = useState(false);
@@ -62,6 +75,9 @@ export const HUD: React.FC<HUDProps> = ({
 
   const hpPct = Math.max(0, Math.min(100, (player.hp / Math.max(1, player.maxHp)) * 100));
   const activeClassDef = KHMER_CLASSES[player.activeClass];
+
+  const countItem = (itemId: string) =>
+    player.inventory.filter((i) => i.itemId === itemId).reduce((acc, i) => acc + i.quantity, 0);
 
   const sampleHit = calculatePlayerDamage({
     weaponBase: player.weapon.baseDamage,
@@ -109,11 +125,15 @@ export const HUD: React.FC<HUDProps> = ({
         className={`font-display font-bold px-2 py-0.5 rounded-lg text-[11px] whitespace-nowrap border ${
           zone === 'overworld'
             ? 'bg-emerald-700 text-amber-50 border-emerald-950'
+            : zone === 'farm'
+            ? 'bg-amber-700 text-amber-50 border-amber-950'
             : 'bg-purple-800 text-amber-100 border-purple-950'
         }`}
       >
         {zone === 'overworld'
           ? `Phum Village • AREA ${player.areaChannel}`
+          : zone === 'farm'
+          ? `My Homestead • Farm Lv.${player.lifeStats.farmLevel}`
           : 'Ancient Cavern • Dungeon'}
       </span>
 
@@ -133,7 +153,7 @@ export const HUD: React.FC<HUDProps> = ({
 
         <span className="inline-flex items-center gap-1 font-display font-bold text-amber-900 whitespace-nowrap">
           <Coins className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-          {player.coins.toLocaleString()}
+          {player.currencies.coins.toLocaleString()}
         </span>
       </div>
     </div>
@@ -143,7 +163,7 @@ export const HUD: React.FC<HUDProps> = ({
     <>
       <div className="pointer-events-none fixed inset-x-0 top-0 z-20 w-full max-w-full box-border px-3 pt-2 flex flex-col gap-1.5">
         <div className="w-full flex items-center justify-between gap-2 min-w-0">
-          {/* TOP-LEFT: MENU dropdown, Quick Bag (I), Mail (!), Chat */}
+          {/* TOP-LEFT */}
           <div className="pointer-events-auto flex items-center gap-1.5 shrink-0 relative">
             <button
               type="button"
@@ -169,7 +189,7 @@ export const HUD: React.FC<HUDProps> = ({
               onClick={() => {
                 setUnreadMail(false);
                 EventBus.emit('ui:toast', {
-                  text: 'Mail: All 5 Khmer Class Weapons & Cosmetics are ready in your Container (press I)!',
+                  text: 'Mail: Visit MY KHMER HOME • FARM (top-left) to plant crops, raise livestock & craft Artisan goods!',
                 });
               }}
               aria-label="Mail Inbox"
@@ -193,7 +213,7 @@ export const HUD: React.FC<HUDProps> = ({
             </button>
 
             {menuDropdownOpen && (
-              <div className="absolute left-0 top-12 w-52 stardew-panel rounded-2xl p-1.5 z-30 flex flex-col gap-1 text-xs font-display font-bold">
+              <div className="absolute left-0 top-12 w-56 stardew-panel rounded-2xl p-1.5 z-30 flex flex-col gap-1 text-xs font-display font-bold">
                 <button
                   type="button"
                   onClick={() => {
@@ -213,6 +233,16 @@ export const HUD: React.FC<HUDProps> = ({
                   className="px-3 py-2 rounded-xl hover:bg-amber-200/80 text-left flex items-center gap-2 text-amber-950"
                 >
                   <Backpack className="w-4 h-4 text-emerald-800" /> Inventory (I / B)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuDropdownOpen(false);
+                    onOpenFarmModal();
+                  }}
+                  className="px-3 py-2 rounded-xl hover:bg-amber-200/80 text-left flex items-center gap-2 text-amber-950"
+                >
+                  <Sprout className="w-4 h-4 text-lime-700" /> Farm & Artisan Manager
                 </button>
                 <button
                   type="button"
@@ -239,11 +269,9 @@ export const HUD: React.FC<HUDProps> = ({
           </div>
 
           {/* TOP-CENTER */}
-          <div className="hidden lg:flex justify-center min-w-0 flex-1 px-2">
-            {zonePill}
-          </div>
+          <div className="hidden lg:flex justify-center min-w-0 flex-1 px-2">{zonePill}</div>
 
-          {/* TOP-RIGHT: Emote Picker + Touch UI Toggle */}
+          {/* TOP-RIGHT */}
           <div className="pointer-events-auto flex items-center gap-1.5 shrink-0 relative">
             <button
               type="button"
@@ -288,7 +316,66 @@ export const HUD: React.FC<HUDProps> = ({
 
         <div className="flex lg:hidden justify-center w-full">{zonePill}</div>
 
-        {/* DUNGEON CLASS & SPECIAL MECHANIC METER (Stealth / Yant Sigils / Animal Stance) */}
+        {/* FARM QUICK SEED, FERTILIZER & FAST-FORWARD BAR */}
+        {zone === 'farm' && (
+          <div className="flex justify-center w-full">
+            <div className="pointer-events-auto stardew-panel px-2.5 py-1.5 rounded-2xl flex flex-wrap items-center justify-center gap-1.5 text-[11px] font-display font-bold max-w-full">
+              {ROW_CROP_LIST.map((crop) => {
+                const qty = countItem(crop.seedItemId);
+                const active = farmToolMode === 'smart' && selectedCropId === crop.id;
+                return (
+                  <button
+                    key={crop.id}
+                    type="button"
+                    onClick={() => onSelectFarmSeed(crop.id, 'smart')}
+                    className={`px-2 py-0.5 rounded-lg border flex items-center gap-1 transition ${
+                      active
+                        ? 'bg-emerald-700 text-white border-emerald-950'
+                        : 'bg-amber-50 text-amber-950 border-amber-900/35 hover:bg-amber-100'
+                    }`}
+                  >
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: crop.stageColors[3] }} />
+                    <span>{crop.name.split(' ')[0]}</span>
+                    <span className="opacity-80">×{qty}</span>
+                  </button>
+                );
+              })}
+
+              <button
+                type="button"
+                onClick={() =>
+                  onSelectFarmSeed(selectedCropId, farmToolMode === 'fertilize' ? 'smart' : 'fertilize')
+                }
+                className={`px-2 py-0.5 rounded-lg border transition ${
+                  farmToolMode === 'fertilize'
+                    ? 'bg-amber-500 text-amber-950 border-amber-950 ring-2 ring-yellow-300'
+                    : 'bg-amber-50 text-amber-950 border-amber-900/35'
+                }`}
+              >
+                ★ Fert ×{countItem('fertilizer')}
+              </button>
+
+              <button
+                type="button"
+                onClick={onOpenFarmModal}
+                className="px-2.5 py-0.5 rounded-lg bg-amber-800 hover:bg-amber-700 text-amber-50 border border-amber-950 flex items-center gap-1"
+              >
+                <Sprout className="w-3 h-3" /> Stall / Artisan
+              </button>
+
+              <button
+                type="button"
+                onClick={onFastForwardFarm}
+                className="px-2 py-0.5 rounded-lg bg-sky-700 hover:bg-sky-600 text-white border border-sky-950 flex items-center gap-1"
+                title="Dev Boost: Fast-forward all farm & artisan timers by 60s"
+              >
+                <FastForward className="w-3 h-3" /> +60s
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* DUNGEON CLASS & SPECIAL MECHANIC METER */}
         {zone === 'dungeon' && (
           <div className="flex justify-center w-full">
             <div className="pointer-events-auto stardew-panel px-3 py-1 rounded-full flex items-center gap-2.5 text-[11px] font-display font-bold">

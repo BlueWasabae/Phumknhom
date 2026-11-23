@@ -1,4 +1,4 @@
-export type ZoneType = 'overworld' | 'dungeon';
+export type ZoneType = 'overworld' | 'dungeon' | 'farm';
 
 export type DifficultyMode = 'normal' | 'expert' | 'calamity' | 'death';
 
@@ -21,6 +21,8 @@ export type ItemRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 export type HairStyleId = 'hair_short' | 'hair_bob' | 'hair_spiky' | 'hair_long';
 
 export type EyeStyleId = 'cheerful' | 'classic' | 'cool' | 'starry';
+
+export type QualityTier = 'normal' | 'gold_star';
 
 export interface Currencies {
   coins: number;
@@ -57,6 +59,52 @@ export interface InventoryItem {
   quantity: number;
   itemLevel: number;
   durability?: number;
+  quality?: QualityTier;
+}
+
+export interface FarmPlotState {
+  index: number;
+  unlocked: boolean;
+  tilled: boolean;
+  cropId: string | null;
+  plantedAt: number | null;     // epoch ms
+  effectiveGrowMs: number;      // starts at crop.growSeconds * 1000, cut by 20% remaining when watered
+  watered: boolean;
+  fertilized: boolean;
+}
+
+export interface FruitTreeState {
+  slotIndex: number;
+  treeId: string;
+  plantedAt: number;
+  lastHarvestAt: number | null;
+  mature: boolean;
+}
+
+export interface LivestockPenState {
+  slotIndex: number;
+  animalId: string;
+  acquiredAt: number;
+  lastCollectedAt: number;
+  fed: boolean;
+}
+
+export interface ArtisanMachineState {
+  slotIndex: number;
+  machineId: string;
+  recipeId: string | null;
+  inputItemId: string | null;
+  outputItemId: string | null;
+  startedAt: number | null;
+  durationMs: number;
+  quality: QualityTier;
+}
+
+export interface FarmState {
+  plots: FarmPlotState[];
+  trees: FruitTreeState[];
+  livestock: LivestockPenState[];
+  machines: ArtisanMachineState[];
 }
 
 export interface WeaponStats {
@@ -78,7 +126,7 @@ export interface PlayerState {
   xp: number;
   hp: number;
   maxHp: number;
-  coins: number; // Mirrored with currencies.coins for backward compatibility
+  coins: number; // Mirrored with currencies.coins
   currencies: Currencies;
   lifeStats: LifeStats;
   defense: number;
@@ -89,6 +137,7 @@ export interface PlayerState {
   weapon: WeaponStats;
   loadout: EquippedLoadout;
   inventory: InventoryItem[];
+  farm: FarmState;
   skillDamagePct: number;
   armorDamagePct: number;
   snackBuffPct: number;
@@ -138,15 +187,76 @@ export const DEFAULT_LOADOUT: EquippedLoadout = {
   armor: 'armor_rattan_guard',
 };
 
+export function createInitialFarmState(now = Date.now()): FarmState {
+  // Starter 6x4 Farm Plot grid (18 unlocked + bottom row of 6 unlockable with Coins)
+  const plots: FarmPlotState[] = Array.from({ length: 24 }, (_, index) => {
+    const starterPlanted = index === 0 || index === 1;
+    return {
+      index,
+      unlocked: index < 18,
+      tilled: index < 6,
+      cropId: starterPlanted ? 'trakuon' : null,
+      plantedAt: starterPlanted ? now - 95_000 : null,
+      effectiveGrowMs: starterPlanted ? 120_000 : 0,
+      watered: starterPlanted,
+      fertilized: index === 0,
+    };
+  });
+
+  return {
+    plots,
+    trees: [
+      {
+        slotIndex: 0,
+        treeId: 'coconut_palm',
+        plantedAt: now - 7_200_000,
+        lastHarvestAt: now - 3_540_000, // Ready in 60s (or 1 Fast-Forward click!)
+        mature: true,
+      },
+    ],
+    livestock: [
+      {
+        slotIndex: 0,
+        animalId: 'village_chicken',
+        acquiredAt: now - 1_200_000,
+        lastCollectedAt: now - 1_140_000, // Ready in 60s
+        fed: true,
+      },
+    ],
+    machines: [
+      {
+        slotIndex: 0,
+        machineId: 'rice_mill',
+        recipeId: null,
+        inputItemId: null,
+        outputItemId: null,
+        startedAt: null,
+        durationMs: 0,
+        quality: 'normal',
+      },
+      {
+        slotIndex: 1,
+        machineId: 'ferment_jar',
+        recipeId: null,
+        inputItemId: null,
+        outputItemId: null,
+        startedAt: null,
+        durationMs: 0,
+        quality: 'normal',
+      },
+    ],
+  };
+}
+
 export const INITIAL_PLAYER_STATE: PlayerState = {
   name: 'PhumHero',
   level: 1,
   xp: 0,
   hp: 150,
   maxHp: 150,
-  coins: 1250,
+  coins: 2500,
   currencies: {
-    coins: 1250,
+    coins: 2500,
     gold: 10,
     diamonds: 50,
   },
@@ -166,7 +276,7 @@ export const INITIAL_PLAYER_STATE: PlayerState = {
   weapon: { ...DEFAULT_STARTER_WEAPON },
   loadout: { ...DEFAULT_LOADOUT },
   inventory: [
-    // All 5 Khmer starter class weapons for immediate testing
+    // All 5 Khmer starter class weapons
     { itemId: 'weapon_phkak', quantity: 1, itemLevel: 1 },
     { itemId: 'weapon_thnu', quantity: 1, itemLevel: 1 },
     { itemId: 'weapon_sastra', quantity: 1, itemLevel: 1 },
@@ -202,7 +312,15 @@ export const INITIAL_PLAYER_STATE: PlayerState = {
     { itemId: 'pet_mini_naga', quantity: 1, itemLevel: 5 },
     { itemId: 'pet_firefly_lantern', quantity: 1, itemLevel: 3 },
     { itemId: 'pet_lucky_kitten', quantity: 1, itemLevel: 4 },
+    // Phase 3 Starter Seeds, Fertilizer & Sample Crop for Artisan testing
+    { itemId: 'seed_trakuon', quantity: 8, itemLevel: 1 },
+    { itemId: 'seed_slek_krey', quantity: 4, itemLevel: 1 },
+    { itemId: 'seed_phka_rumduol', quantity: 3, itemLevel: 1 },
+    { itemId: 'fertilizer', quantity: 6, itemLevel: 1 },
+    { itemId: 'crop_phka_rumduol', quantity: 2, itemLevel: 1, quality: 'normal' },
+    { itemId: 'crop_trakuon', quantity: 2, itemLevel: 1, quality: 'normal' },
   ],
+  farm: createInitialFarmState(),
   skillDamagePct: 0.05,
   armorDamagePct: 0.04,
   snackBuffPct: 0.1,

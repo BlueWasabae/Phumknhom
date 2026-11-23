@@ -11,7 +11,7 @@ Check off each phase only after testing on **both Desktop and Mobile browsers** 
   - Top-left `MENU` / Mail / Chat and top-right Action / Emote HUD.
   - Modular paper-doll sprite renderer (`Wings -> Body -> Face -> Pants -> Shirt -> Hair -> Hat -> Weapon -> Pet`).
   - Profile Card (`Farm Level`, `Stylish`, `Friendly`, `Happy`, `Healthy`) & `Wearing`/`Container` inventory tabs.
-- [ ] **Phase 3 — Stardew Farming, Timers & Artisan Loop**
+- [x] **Phase 3 — Stardew Farming, Timers & Artisan Loop**
   - Personal `FARM` gate, tilling, watering (-20% time), Fertilizer (Gold-Star chance), and real-timestamp crop growth.
   - Starter crops (`Trakuon` → `Kampot Pepper`), perennial fruit trees, livestock, and first Artisan machines.
 - [ ] **Phase 4 — Shops, Street Snack Cart & 12-Skill Foundation**

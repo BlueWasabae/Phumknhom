@@ -47,7 +47,6 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
 
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-4 z-20 px-4 flex items-end justify-between box-border max-w-full">
-      {/* Bottom-Left Warm-Wood Virtual Thumbstick */}
       <div
         ref={padRef}
         onPointerDown={(e) => {
@@ -70,19 +69,8 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
         />
       </div>
 
-      {/* Bottom-Right Context-Sensitive Action Buttons */}
       <div className="pointer-events-auto flex items-end gap-2">
-        {zone === 'overworld' ? (
-          <button
-            type="button"
-            onPointerDown={() => EventBus.emit('input:interact')}
-            className={`w-24 h-24 rounded-full stardew-btn font-display font-bold text-xs leading-tight whitespace-pre-line ${
-              nearPortal ? 'ring-4 ring-yellow-300 animate-pulse' : ''
-            }`}
-          >
-            {nearPortal ? 'JOIN\nPORTAL' : 'JOIN /\nINTERACT'}
-          </button>
-        ) : (
+        {zone === 'dungeon' ? (
           <div className="flex flex-col items-end gap-2">
             {nearPortal && (
               <button
@@ -117,6 +105,35 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
               </button>
             </div>
           </div>
+        ) : zone === 'farm' ? (
+          <div className="flex flex-col items-end gap-2">
+            {nearPortal && (
+              <button
+                type="button"
+                onPointerDown={() => EventBus.emit('input:exitFarm')}
+                className="px-4 py-2 rounded-full bg-emerald-500 border-[3px] border-emerald-950 text-emerald-950 font-display font-bold text-xs shadow-xl animate-pulse active:scale-95"
+              >
+                EXIT VILLAGE
+              </button>
+            )}
+            <button
+              type="button"
+              onPointerDown={() => EventBus.emit('input:interact')}
+              className="w-24 h-24 rounded-full stardew-btn font-display font-bold text-xs leading-tight whitespace-pre-line"
+            >
+              {'FARM /\nINTERACT'}
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onPointerDown={() => EventBus.emit('input:interact')}
+            className={`w-24 h-24 rounded-full stardew-btn font-display font-bold text-xs leading-tight whitespace-pre-line ${
+              nearPortal ? 'ring-4 ring-yellow-300 animate-pulse' : ''
+            }`}
+          >
+            {nearPortal ? 'JOIN\nPORTAL' : 'JOIN /\nINTERACT'}
+          </button>
         )}
       </div>
     </div>

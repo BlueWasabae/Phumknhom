@@ -25,6 +25,8 @@ export interface ClassMeterPayload {
   lbokatorStance: number;   // 1=Lion, 2=Crocodile, 3=Hanuman
 }
 
+export type FarmToolMode = 'smart' | 'fertilize';
+
 export interface EventMap {
   'scene:ready': { zone: ZoneType };
   'player:state': PlayerState;
@@ -33,6 +35,8 @@ export interface EventMap {
     activeClass: KhmerClassId;
     playerState: PlayerState;
   };
+  'farm:stateUpdated': PlayerState;
+  'farm:selectSeed': { cropId: string; toolMode: FarmToolMode };
   'player:chat': { text: string };
   'player:emote': { emoji: EmoteSymbol };
   'portal:proximity': PortalProximityPayload;
@@ -44,7 +48,8 @@ export interface EventMap {
   'input:attack': void;
   'input:dash': void;
   'input:exitDungeon': void;
-  'ui:openModal': { modal: 'profile' | 'inventory' | 'wardrobe' };
+  'input:exitFarm': void;
+  'ui:openModal': { modal: 'profile' | 'inventory' | 'wardrobe' | 'farm'; farmTab?: 'seeds' | 'livestock' | 'artisan' };
   'ui:toast': { text: string };
 }
 

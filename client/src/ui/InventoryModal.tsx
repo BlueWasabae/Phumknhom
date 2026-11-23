@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import type { EquipSlot, ItemRarity, PlayerState } from '@shared/types';
+import type { EquipSlot, ItemRarity, PlayerState, QualityTier } from '@shared/types';
 import { KHMER_CLASSES } from '@shared/khmerClasses';
 import { ITEM_CATALOG } from '../data/items';
+import { FARM_ITEMS } from '../data/cropsAndArtisan';
 import { NativeDialog } from './NativeDialog';
 import { PaperDollPreview } from './PaperDollPreview';
 
@@ -11,6 +12,7 @@ interface InventoryModalProps {
   onClose: () => void;
   onEquip: (itemId: string) => void;
   onUnequip: (slot: EquipSlot) => void;
+  onSellFarmItem: (itemId: string, quality: QualityTier, qty?: number) => void;
 }
 
 const WEARING_SLOTS: Array<{ slot: EquipSlot; label: string }> = [
@@ -32,16 +34,19 @@ const RARITY_BADGE: Record<ItemRarity, { border: string; pill: string }> = {
   legendary: { border: 'border-amber-500', pill: 'bg-amber-600 text-white' },
 };
 
+type ContainerFilter = EquipSlot | 'all' | 'farm_goods';
+
 export const InventoryModal: React.FC<InventoryModalProps> = ({
   open,
   player,
   onClose,
   onEquip,
   onUnequip,
+  onSellFarmItem,
 }) => {
   const [tab, setTab] = useState<'wearing' | 'container'>('container');
-  const [filterSlot, setFilterSlot] = useState<EquipSlot | 'all'>('all');
-  const [selectedId, setSelectedId] = useState<string | null>(player.loadout.weapon);
+  const [filterSlot, setFilterSlot] = useState<ContainerFilter>('all');
+  const [selectedKey, setSelectedKey] = useState<string>(player.loadout.weapon ?? 'weapon_phkak');
 
   const isEquipped = (itemId: string): boolean => {
     const def = ITEM_CATALOG[itemId];
@@ -50,12 +55,21 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
   };
 
   const filteredItems = player.inventory.filter((entry) => {
-    const def = ITEM_CATALOG[entry.itemId];
-    if (!def) return false;
-    return filterSlot === 'all' || def.slot === filterSlot;
+    const eq = ITEM_CATALOG[entry.itemId];
+    const fm = FARM_ITEMS[entry.itemId];
+    if (!eq && !fm) return false;
+    if (filterSlot === 'all') return true;
+    if (filterSlot === 'farm_goods') return Boolean(fm);
+    return eq?.slot === filterSlot;
   });
 
-  const selectedDef = selectedId ? ITEM_CATALOG[selectedId] : null;
+  const [selId, selQualityRaw] = selectedKey.split('::');
+  const selQuality: QualityTier = selQualityRaw === 'gold_star' ? 'gold_star' : 'normal';
+  const selectedEquipDef = ITEM_CATALOG[selId];
+  const selectedFarmDef = FARM_ITEMS[selId];
+  const selectedEntry = player.inventory.find(
+    (i) => i.itemId === selId && (i.quality ?? 'normal') === selQuality
+  );
   const activeClassDef = KHMER_CLASSES[player.activeClass];
 
   return (
@@ -66,7 +80,6 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
       subtitle={`Active Class: ${activeClassDef.khmerName} (${activeClassDef.englishName}) · Stylish ${player.lifeStats.stylish}`}
       maxWidthClass="w-[min(95vw,760px)]"
     >
-      {/* Top Tab Switcher */}
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
         <div className="flex gap-2">
           <button
@@ -89,12 +102,12 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                 : 'bg-amber-50 text-amber-950 border-amber-900/35'
             }`}
           >
-            Container ({player.inventory.length} Items)
+            Container ({player.inventory.length} Stacks)
           </button>
         </div>
 
         <span className="text-[11px] font-semibold text-amber-900">
-          Tip: Equip any of the 5 Khmer Weapons to swap combat classes live!
+          Equip Khmer Weapons to swap classes, or sell Farm & Artisan goods!
         </span>
       </div>
 
@@ -156,18 +169,16 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
       {/* CONTAINER TAB */}
       {tab === 'container' && (
         <div className="space-y-3">
-          {/* Slot Filter Chips */}
           <div className="flex flex-wrap gap-1">
             {(
               [
                 ['all', 'All'],
                 ['weapon', '5 Weapons'],
+                ['farm_goods', 'Farm & Artisan'],
                 ['hat', 'Hats'],
                 ['shirt', 'Outfits'],
                 ['wings', 'Wings'],
                 ['pet', 'Pets'],
-                ['pants', 'Pants'],
-                ['armor', 'Armor'],
               ] as const
             ).map(([slotKey, label]) => (
               <button
@@ -186,97 +197,99 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
           </div>
 
           <div className="grid md:grid-cols-[1fr_220px] gap-3 items-start">
-            {/* Bag Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[46dvh] overflow-y-auto pr-1">
               {filteredItems.map((entry) => {
-                const def = ITEM_CATALOG[entry.itemId];
-                if (!def) return null;
-                const equipped = isEquipped(def.id);
-                const selected = selectedId === def.id;
-                const rStyle = RARITY_BADGE[def.rarity];
+                const eq = ITEM_CATALOG[entry.itemId];
+                const fm = FARM_ITEMS[entry.itemId];
+                const qual: QualityTier = entry.quality ?? 'normal';
+                const rowKey = `${entry.itemId}::${qual}`;
+                const rarity = eq?.rarity ?? fm?.rarity ?? 'common';
+                const color = eq?.primaryColor ?? fm?.primaryColor ?? '#d97706';
+                const name = eq?.name ?? fm?.name ?? entry.itemId;
+                const khmerName = eq?.khmerName ?? fm?.khmerName ?? '';
+                const equipped = eq ? isEquipped(eq.id) : false;
+                const selected = selectedKey === rowKey;
+                const rStyle = RARITY_BADGE[rarity];
 
                 return (
                   <button
-                    key={def.id}
+                    key={rowKey}
                     type="button"
-                    onClick={() => setSelectedId(def.id)}
+                    onClick={() => setSelectedKey(rowKey)}
                     className={`text-left p-2 rounded-xl bg-amber-50/95 border-2 ${rStyle.border} transition flex flex-col gap-1.5 ${
                       selected ? 'ring-2 ring-amber-600 scale-[1.01]' : 'hover:bg-white'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-1">
                       <span
-                        className="w-7 h-7 rounded-lg border-2 border-amber-950/35 shrink-0"
-                        style={{ backgroundColor: def.primaryColor }}
-                      />
+                        className="w-7 h-7 rounded-lg border-2 border-amber-950/35 shrink-0 flex items-center justify-center text-[10px] font-bold text-slate-950"
+                        style={{ backgroundColor: color }}
+                      >
+                        {entry.quantity > 1 ? `×${entry.quantity}` : ''}
+                      </span>
                       {equipped ? (
                         <span className="px-1.5 py-0.5 rounded bg-emerald-700 text-white text-[9px] font-bold uppercase">
                           Wearing
                         </span>
+                      ) : qual === 'gold_star' ? (
+                        <span className="px-1.5 py-0.5 rounded bg-amber-500 text-amber-950 text-[9px] font-bold">
+                          ★ GOLD
+                        </span>
                       ) : (
                         <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${rStyle.pill}`}>
-                          {def.rarity}
+                          {rarity}
                         </span>
                       )}
                     </div>
                     <div className="font-display font-bold text-xs text-amber-950 leading-tight line-clamp-1">
-                      {def.name}
+                      {qual === 'gold_star' ? '★ ' : ''}
+                      {name}
                     </div>
-                    <div className="text-[10px] text-amber-800 truncate">{def.khmerName}</div>
+                    <div className="text-[10px] text-amber-800 truncate">{khmerName}</div>
                   </button>
                 );
               })}
             </div>
 
-            {/* Item Tooltip / Action Card */}
+            {/* Detail & Action Card */}
             <div className="p-3 rounded-xl bg-amber-50/95 border-2 border-amber-900/40 space-y-2.5">
               <div className="flex justify-center">
                 <PaperDollPreview loadout={player.loadout} width={116} height={116} includePet />
               </div>
 
-              {selectedDef ? (
+              {selectedEquipDef ? (
                 <>
                   <div>
-                    <div className="font-display font-bold text-sm text-amber-950">{selectedDef.name}</div>
-                    <div className="text-[11px] font-semibold text-amber-800">{selectedDef.khmerName}</div>
-                    <p className="text-[11px] text-amber-900/90 mt-1 leading-snug">{selectedDef.description}</p>
+                    <div className="font-display font-bold text-sm text-amber-950">{selectedEquipDef.name}</div>
+                    <div className="text-[11px] font-semibold text-amber-800">{selectedEquipDef.khmerName}</div>
+                    <p className="text-[11px] text-amber-900/90 mt-1 leading-snug">{selectedEquipDef.description}</p>
                   </div>
 
                   <div className="flex flex-wrap gap-1 text-[10px] font-bold">
                     <span className="px-2 py-0.5 rounded bg-pink-100 text-pink-900 border border-pink-400/50">
-                      Stylish +{selectedDef.stylishScore}
+                      Stylish +{selectedEquipDef.stylishScore}
                     </span>
-                    {selectedDef.stats.attack && (
+                    {selectedEquipDef.stats.attack && (
                       <span className="px-2 py-0.5 rounded bg-orange-100 text-orange-900 border border-orange-400/50">
-                        ATK +{selectedDef.stats.attack}
+                        ATK +{selectedEquipDef.stats.attack}
                       </span>
                     )}
-                    {selectedDef.stats.defense && (
+                    {selectedEquipDef.stats.defense && (
                       <span className="px-2 py-0.5 rounded bg-sky-100 text-sky-900 border border-sky-400/50">
-                        DEF +{selectedDef.stats.defense}
-                      </span>
-                    )}
-                    {selectedDef.stats.maxHp && (
-                      <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-400/50">
-                        HP +{selectedDef.stats.maxHp}
-                      </span>
-                    )}
-                    {selectedDef.stats.critChance && (
-                      <span className="px-2 py-0.5 rounded bg-amber-200 text-amber-950 border border-amber-500/50">
-                        Crit +{Math.round(selectedDef.stats.critChance * 100)}%
+                        DEF +{selectedEquipDef.stats.defense}
                       </span>
                     )}
                   </div>
 
-                  {isEquipped(selectedDef.id) ? (
-                    selectedDef.slot === 'weapon' ? (
+                  {isEquipped(selectedEquipDef.id) ? (
+                    selectedEquipDef.slot === 'weapon' ? (
                       <div className="text-center py-1.5 rounded-xl bg-emerald-700 text-white font-display font-bold text-xs">
                         Active Class Weapon
                       </div>
                     ) : (
                       <button
                         type="button"
-                        onClick={() => onUnequip(selectedDef.slot)}
+                        onClick={() => onUnequip(selectedEquipDef.slot)}
                         className="w-full py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-display font-bold text-xs"
                       >
                         Unequip
@@ -285,15 +298,40 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                   ) : (
                     <button
                       type="button"
-                      onClick={() => onEquip(selectedDef.id)}
+                      onClick={() => onEquip(selectedEquipDef.id)}
                       className="w-full stardew-btn py-2 rounded-xl font-display font-bold text-xs"
                     >
-                      Equip {selectedDef.classId ? `(${KHMER_CLASSES[selectedDef.classId].englishName})` : ''}
+                      Equip {selectedEquipDef.classId ? `(${KHMER_CLASSES[selectedEquipDef.classId].englishName})` : ''}
+                    </button>
+                  )}
+                </>
+              ) : selectedFarmDef && selectedEntry ? (
+                <>
+                  <div>
+                    <div className="font-display font-bold text-sm text-amber-950">
+                      {selQuality === 'gold_star' ? '★ Gold-Star ' : ''}
+                      {selectedFarmDef.name} (×{selectedEntry.quantity})
+                    </div>
+                    <div className="text-[11px] font-semibold text-amber-800">{selectedFarmDef.khmerName}</div>
+                    <p className="text-[11px] text-amber-900/90 mt-1 leading-snug">{selectedFarmDef.description}</p>
+                  </div>
+                  {selectedFarmDef.sellCoins && (
+                    <button
+                      type="button"
+                      onClick={() => onSellFarmItem(selectedFarmDef.id, selQuality, 1)}
+                      className="w-full py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-display font-bold text-xs"
+                    >
+                      Sell 1 (+
+                      {(selQuality === 'gold_star'
+                        ? Math.round(selectedFarmDef.sellCoins * 1.5)
+                        : selectedFarmDef.sellCoins
+                      ).toLocaleString()}
+                      c)
                     </button>
                   )}
                 </>
               ) : (
-                <p className="text-xs text-amber-800 text-center">Select an item to inspect or equip.</p>
+                <p className="text-xs text-amber-800 text-center">Select an item to inspect, equip, or sell.</p>
               )}
             </div>
           </div>

@@ -6,6 +6,7 @@ import {
   type EquipSlot,
   type EquippedLoadout,
   type PlayerState,
+  type QualityTier,
   type ZoneType,
 } from '@shared/types';
 import { KHMER_CLASSES } from '@shared/khmerClasses';
@@ -15,16 +16,30 @@ import {
   computeLoadoutDefenseAndHp,
   computeStylishScore,
 } from './data/items';
+import {
+  buyArtisanMachine,
+  buyFarmSupply,
+  buyFruitTree,
+  buyLivestock,
+  collectArtisanOutput,
+  collectLivestock,
+  fastForwardFarmTimers,
+  harvestFruitTree,
+  sellFarmProduce,
+  startArtisanProcess,
+  type ActionResult,
+} from './game/systems/FarmingEngine';
 import { launchPhaserGame } from './game/config';
-import { EventBus, type ClassMeterPayload } from './game/EventBus';
+import { EventBus, type ClassMeterPayload, type FarmToolMode } from './game/EventBus';
 import { HUD } from './ui/HUD';
 import { ChatOverlay } from './ui/ChatOverlay';
 import { MobileControls } from './ui/MobileControls';
 import { ProfileModal } from './ui/ProfileModal';
 import { InventoryModal } from './ui/InventoryModal';
 import { WardrobeModal } from './ui/WardrobeModal';
+import { FarmModal, type FarmModalTab } from './ui/FarmModal';
 
-type ActiveModalType = null | 'profile' | 'inventory' | 'wardrobe';
+type ActiveModalType = null | 'profile' | 'inventory' | 'wardrobe' | 'farm';
 
 export const App: React.FC = () => {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -45,6 +60,9 @@ export const App: React.FC = () => {
   const [chatOpen, setChatOpen] = useState(false);
   const [touchUiEnabled, setTouchUiEnabled] = useState(false);
   const [activeModal, setActiveModal] = useState<ActiveModalType>(null);
+  const [farmModalTab, setFarmModalTab] = useState<FarmModalTab>('seeds');
+  const [selectedCropId, setSelectedCropId] = useState('trakuon');
+  const [farmToolMode, setFarmToolMode] = useState<FarmToolMode>('smart');
   const [lastHit, setLastHit] = useState<CombatHitResult | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [classMeter, setClassMeter] = useState<ClassMeterPayload>({
@@ -57,10 +75,22 @@ export const App: React.FC = () => {
     {
       id: 'sys-welcome',
       sender: 'Phum Guide',
-      text: 'Phase 2 live! Press [I] to equip all 5 Khmer Class Weapons, Wings & Pets — or visit FASHION SHOP!',
+      text: 'Phase 3 live! Walk to MY KHMER HOME · FARM (top-left) and press E to plant crops, trees, livestock & Artisan machines!',
       timestamp: Date.now(),
     },
   ]);
+
+  const runFarmAction = useCallback((fn: (prev: PlayerState) => ActionResult) => {
+    setPlayer((prev) => {
+      const res = fn(prev);
+      EventBus.emit('ui:toast', { text: res.message });
+      if (res.ok) {
+        EventBus.emit('farm:stateUpdated', res.state);
+        return res.state;
+      }
+      return prev;
+    });
+  }, []);
 
   const applyLoadoutPatch = useCallback((patch: Partial<EquippedLoadout>, toastMsg?: string) => {
     setPlayer((prev) => {
@@ -123,12 +153,17 @@ export const App: React.FC = () => {
     [applyLoadoutPatch]
   );
 
+  const handleSelectFarmSeed = useCallback((cropId: string, toolMode: FarmToolMode) => {
+    setSelectedCropId(cropId);
+    setFarmToolMode(toolMode);
+    EventBus.emit('farm:selectSeed', { cropId, toolMode });
+  }, []);
+
   useEffect(() => {
     const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     if (isTouch) setTouchUiEnabled(true);
   }, []);
 
-  // Global keyboard shortcuts: I / B for Inventory, P for Profile
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName;
@@ -166,7 +201,8 @@ export const App: React.FC = () => {
       EventBus.on('combat:classMeter', (meter) => {
         setClassMeter(meter);
       }),
-      EventBus.on('ui:openModal', ({ modal }) => {
+      EventBus.on('ui:openModal', ({ modal, farmTab }) => {
+        if (modal === 'farm' && farmTab) setFarmModalTab(farmTab);
         setActiveModal(modal);
       }),
       EventBus.on('ui:toast', ({ text }) => {
@@ -196,9 +232,17 @@ export const App: React.FC = () => {
         onToggleTouchUi={() => setTouchUiEnabled((v) => !v)}
         lastHit={lastHit}
         classMeter={classMeter}
+        selectedCropId={selectedCropId}
+        farmToolMode={farmToolMode}
+        onSelectFarmSeed={handleSelectFarmSeed}
         onOpenProfile={() => setActiveModal('profile')}
         onOpenInventory={() => setActiveModal('inventory')}
         onOpenWardrobe={() => setActiveModal('wardrobe')}
+        onOpenFarmModal={() => {
+          setFarmModalTab('seeds');
+          setActiveModal('farm');
+        }}
+        onFastForwardFarm={() => runFarmAction((s) => fastForwardFarmTimers(s, 60))}
       />
 
       <ChatOverlay
@@ -214,7 +258,6 @@ export const App: React.FC = () => {
         nearPortal={nearPortal}
       />
 
-      {/* Phase 2 Avatar World Modals */}
       <ProfileModal
         open={activeModal === 'profile'}
         player={player}
@@ -228,6 +271,9 @@ export const App: React.FC = () => {
         onClose={() => setActiveModal(null)}
         onEquip={handleEquipItem}
         onUnequip={handleUnequipSlot}
+        onSellFarmItem={(itemId, quality, qty = 1) =>
+          runFarmAction((s) => sellFarmProduce(s, itemId, quality, qty))
+        }
       />
 
       <WardrobeModal
@@ -235,6 +281,27 @@ export const App: React.FC = () => {
         loadout={player.loadout}
         onClose={() => setActiveModal(null)}
         onCustomize={(patch) => applyLoadoutPatch(patch)}
+      />
+
+      <FarmModal
+        open={activeModal === 'farm'}
+        initialTab={farmModalTab}
+        player={player}
+        onClose={() => setActiveModal(null)}
+        onBuySupply={(itemId, qty = 1) => runFarmAction((s) => buyFarmSupply(s, itemId, qty))}
+        onSellProduce={(itemId, quality: QualityTier, qty = 1) =>
+          runFarmAction((s) => sellFarmProduce(s, itemId, quality, qty))
+        }
+        onBuyTree={(treeId) => runFarmAction((s) => buyFruitTree(s, treeId))}
+        onHarvestTree={(slotIndex) => runFarmAction((s) => harvestFruitTree(s, slotIndex))}
+        onBuyLivestock={(animalId) => runFarmAction((s) => buyLivestock(s, animalId))}
+        onCollectLivestock={(slotIndex) => runFarmAction((s) => collectLivestock(s, slotIndex))}
+        onBuyMachine={(machineId) => runFarmAction((s) => buyArtisanMachine(s, machineId))}
+        onStartMachine={(slotIndex, recipeId) =>
+          runFarmAction((s) => startArtisanProcess(s, slotIndex, recipeId))
+        }
+        onCollectMachine={(slotIndex) => runFarmAction((s) => collectArtisanOutput(s, slotIndex))}
+        onFastForward={(seconds = 60) => runFarmAction((s) => fastForwardFarmTimers(s, seconds))}
       />
 
       {toast && (
