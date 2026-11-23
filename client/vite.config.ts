@@ -6,8 +6,9 @@ import react from '@vitejs/plugin-react';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
+  base: '/',
   plugins: [react()],
-  cacheDir: 'E:/temp/vite-phum-cache',
+  cacheDir: process.platform === 'win32' && !process.env.CI ? 'E:/temp/vite-phum-cache' : undefined,
   resolve: {
     alias: {
       '@shared': path.resolve(__dirname, '../shared/src'),
