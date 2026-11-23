@@ -20,8 +20,15 @@ import { KHMER_BOSSES, rollBossLoot, type RolledBossLoot } from '@shared/khmerBo
 import { awardSkillXp } from '../systems/SkillManager';
 import { EventBus, type JoystickVector } from '../EventBus';
 import { Player } from '../entities/Player';
+import { PaperDoll, type PaperDollPose } from '../entities/PaperDoll';
+import { Pet } from '../entities/Pet';
 import { BossController } from '../entities/BossController';
 import { ClassCombatVFX, type SpawnedProjectile } from '../animations/ClassCombatVFX';
+import {
+  parseAppearance,
+  roomClient,
+  type RemoteDungeonPlayerSnapshot,
+} from '../network/RoomClient';
 
 const ARENA_W = 1800;
 const ARENA_H = 720;
@@ -60,10 +67,30 @@ interface LootBagDrop {
   claimed: boolean;
 }
 
+interface RemoteDungeonTeammate {
+  sessionId: string;
+  x: number;
+  y: number;
+  targetX: number;
+  targetY: number;
+  facing: 'left' | 'right';
+  pose: PaperDollPose;
+  appearanceJson: string;
+  paperDoll: PaperDoll;
+  pet: Pet;
+  nameTag: Phaser.GameObjects.Text;
+  hpBg: Phaser.GameObjects.Rectangle;
+  hpFill: Phaser.GameObjects.Rectangle;
+}
+
 export class DungeonBossScene extends Phaser.Scene {
   private initialState: PlayerState = { ...INITIAL_PLAYER_STATE };
   private bossId: BossId = 'sdech_kongkaeb';
   private difficulty: DifficultyMode = 'normal';
+  private partyMode: 'solo' | 'coop' = 'solo';
+  private partyId = '';
+  private partySize = 1;
+  private teammates = new Map<string, RemoteDungeonTeammate>();
 
   private player!: Player;
   private bossCtrl!: BossController;
@@ -119,9 +146,19 @@ export class DungeonBossScene extends Phaser.Scene {
     super('DungeonBossScene');
   }
 
-  init(data?: { playerState?: PlayerState; bossId?: BossId; difficulty?: DifficultyMode }): void {
+  init(data?: {
+    playerState?: PlayerState;
+    bossId?: BossId;
+    difficulty?: DifficultyMode;
+    partyMode?: 'solo' | 'coop';
+    partyId?: string;
+  }): void {
     this.bossId = data?.bossId ?? 'sdech_kongkaeb';
     this.difficulty = data?.difficulty ?? data?.playerState?.difficulty ?? 'normal';
+    this.partyMode = data?.partyMode ?? 'solo';
+    this.partyId = data?.partyId ?? `coop_${this.bossId}_${this.difficulty}`;
+    this.partySize = 1;
+    this.teammates.clear();
     this.initialState = data?.playerState
       ? {
           ...data.playerState,
@@ -287,10 +324,17 @@ export class DungeonBossScene extends Phaser.Scene {
     this.broadcastClassMeter();
     this.broadcastBossHud();
 
+    // Connect to Co-op DungeonRoom if partyMode === 'coop'
+    if (this.partyMode === 'coop') {
+      void this.connectCoopDungeon();
+    }
+
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.unsubs.forEach((u) => u());
       this.unsubs = [];
       this.clearYantSigils();
+      this.clearTeammates();
+      void roomClient.leaveDungeon();
       this.bossCtrl.destroy();
       this.player.destroy();
       EventBus.emit('boss:hudUpdate', {
@@ -653,6 +697,141 @@ export class DungeonBossScene extends Phaser.Scene {
     });
   }
 
+  private clearTeammates(): void {
+    this.teammates.forEach((t) => {
+      t.paperDoll.destroy();
+      t.pet.destroy();
+      t.nameTag.destroy();
+      t.hpBg.destroy();
+      t.hpFill.destroy();
+    });
+    this.teammates.clear();
+  }
+
+  private async connectCoopDungeon(): Promise<void> {
+    const bridge = computeVillageToDungeonBridge(this.player.state);
+    const connected = await roomClient.joinDungeon(
+      {
+        partyId: this.partyId,
+        bossId: this.bossId,
+        difficulty: this.difficulty,
+        name: this.player.state.name,
+        loadout: this.player.state.loadout,
+        activeClass: this.player.state.activeClass,
+        hp: this.player.state.hp,
+        maxHp: bridge.effectiveMaxHp,
+      },
+      {
+        onPartySizeChange: (size, maxHp, hp, phase) => {
+          if (!this.scene.isActive('DungeonBossScene')) return;
+          this.partySize = size;
+          this.bossCtrl.applyCoopBossSync(hp, maxHp, phase);
+          this.broadcastBossHud();
+        },
+        onTeammateAdd: (snap) => this.upsertTeammate(snap),
+        onTeammateChange: (snap) => this.upsertTeammate(snap),
+        onTeammateRemove: (sessionId) => {
+          const t = this.teammates.get(sessionId);
+          if (t) {
+            t.paperDoll.destroy();
+            t.pet.destroy();
+            t.nameTag.destroy();
+            t.hpBg.destroy();
+            t.hpFill.destroy();
+            this.teammates.delete(sessionId);
+          }
+        },
+        onTeammateAttack: ({ classId, x, y, dir }) => {
+          if (!this.scene.isActive('DungeonBossScene')) return;
+          if (classId === 'tamer') this.vfx.playKramaWhipSnap(x, y, dir);
+          else if (classId === 'shadow') this.vfx.playShadowTwinSlash(x, y, dir, false);
+          else if (classId === 'archer') this.vfx.playImpactSparks(x + dir * 40, y, 0x4ade80);
+          else if (classId === 'mystic') this.vfx.playImpactSparks(x + dir * 40, y, 0xfacc15);
+          else this.vfx.playLbokatorSlash(x, y, dir, 1);
+        },
+        onBossHitRemote: ({ amount, isCrit, hp, maxHp, phase }) => {
+          if (!this.scene.isActive('DungeonBossScene')) return;
+          this.spawnFloatingText(
+            this.bossCtrl.x + (Math.random() - 0.5) * 60,
+            this.bossCtrl.y - 120,
+            `Ally ${amount}${isCrit ? '!' : ''}`,
+            '#93c5fd',
+            '15px'
+          );
+          this.bossCtrl.applyCoopBossSync(hp, maxHp, phase);
+          this.broadcastBossHud();
+        },
+        onBossDefeatedRemote: () => {
+          if (!this.scene.isActive('DungeonBossScene')) return;
+          if (this.bossCtrl.alive) {
+            this.bossCtrl.applyCoopBossSync(0, this.bossCtrl.maxHp, 2);
+          }
+        },
+      }
+    );
+
+    if (connected) {
+      EventBus.emit('ui:toast', {
+        text: `🤝 Joined Co-op Raid (${this.partyId})! Boss HP scales +65% per extra ally.`,
+      });
+    }
+  }
+
+  private upsertTeammate(snap: RemoteDungeonPlayerSnapshot): void {
+    if (!this.scene.isActive('DungeonBossScene')) return;
+    const existing = this.teammates.get(snap.sessionId);
+    if (existing) {
+      existing.targetX = snap.x;
+      existing.targetY = snap.y;
+      existing.facing = snap.facing;
+      existing.pose = snap.pose;
+      const hpPct = Math.max(0, Math.min(1, snap.hp / Math.max(1, snap.maxHp)));
+      existing.hpFill.width = Math.round(38 * hpPct);
+      if (snap.appearanceJson !== existing.appearanceJson) {
+        existing.appearanceJson = snap.appearanceJson;
+        const parsed = parseAppearance(snap.appearanceJson);
+        existing.paperDoll.setLoadout(parsed);
+        existing.pet.setPet(parsed.pet);
+      }
+      return;
+    }
+
+    const loadout = parseAppearance(snap.appearanceJson);
+    const safePrefix = `coop_${snap.sessionId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 10)}`;
+    const paperDoll = new PaperDoll(this, snap.x, snap.y + 20, loadout, `${safePrefix}_pd`);
+    paperDoll.setScale(0.92).setDepth(49);
+    const pet = new Pet(this, snap.x - 32, snap.y, loadout.pet, 'dungeon', `${safePrefix}_pet`);
+    const nameTag = this.add
+      .text(snap.x, snap.y + 26, snap.name, {
+        fontFamily: 'Fredoka, sans-serif',
+        fontSize: '12px',
+        fontStyle: 'bold',
+        color: '#bae6fd',
+        stroke: '#0f172a',
+        strokeThickness: 4,
+      })
+      .setOrigin(0.5, 0)
+      .setDepth(54);
+    const hpBg = this.add.rectangle(snap.x, snap.y - 38, 40, 6, 0x0f172a).setDepth(54);
+    const hpFill = this.add.rectangle(snap.x - 19, snap.y - 38, 38, 4, 0x22c55e).setOrigin(0, 0.5).setDepth(55);
+
+    this.teammates.set(snap.sessionId, {
+      sessionId: snap.sessionId,
+      x: snap.x,
+      y: snap.y,
+      targetX: snap.x,
+      targetY: snap.y,
+      facing: snap.facing,
+      pose: snap.pose,
+      appearanceJson: snap.appearanceJson,
+      paperDoll,
+      pet,
+      nameTag,
+      hpBg,
+      hpFill,
+    });
+  }
+
   private broadcastBossHud(): void {
     const now = this.time.now;
     EventBus.emit('boss:hudUpdate', {
@@ -664,6 +843,7 @@ export class DungeonBossScene extends Phaser.Scene {
       maxHp: this.bossCtrl.maxHp,
       phase: this.bossCtrl.phase,
       difficulty: this.difficulty,
+      partySize: this.partySize,
       stageLabel: this.bossCtrl.getStageLabel(),
       focusPct: Math.round(this.focusPct),
       focusActive: now < this.focusActiveUntil,
@@ -842,6 +1022,9 @@ export class DungeonBossScene extends Phaser.Scene {
     this.lastAttackAt = now;
 
     const dir = this.player.facingRight ? 1 : -1;
+    if (roomClient.isInCoopDungeon) {
+      roomClient.sendDungeonAttack(cls, this.player.x, this.player.y, dir);
+    }
 
     if (cls === 'archer') {
       this.projectiles.push(this.vfx.spawnArcherArrow(this.player.x, this.player.y, dir, 1));
@@ -1050,6 +1233,9 @@ export class DungeonBossScene extends Phaser.Scene {
       }, 40);
     }
 
+    if (roomClient.isInCoopDungeon) {
+      roomClient.sendDungeonBossDamage(totalDamage, hit.isCrit || focusActive);
+    }
     this.bossCtrl.takeDamage(totalDamage, knockDir, hit.isCrit || focusActive);
     this.emitPlayerState();
     this.broadcastBossHud();
@@ -1404,6 +1590,41 @@ export class DungeonBossScene extends Phaser.Scene {
     }
 
     this.player.syncVisuals(time, onGround);
+
+    // Co-op Dungeon position sync & smooth teammate interpolation
+    if (roomClient.isInCoopDungeon) {
+      const poseNow =
+        time < this.attackAnimUntil
+          ? 'attack'
+          : !onGround
+          ? 'jump'
+          : Math.abs(this.player.body.velocity.x) > 15
+          ? Math.floor(time / 150) % 2 === 0
+            ? 'walk1'
+            : 'walk2'
+          : 'idle';
+      roomClient.sendDungeonMove(
+        this.player.x,
+        this.player.y,
+        this.player.facingRight ? 'right' : 'left',
+        poseNow,
+        this.player.state.hp,
+        bridge.effectiveMaxHp,
+        time
+      );
+    }
+
+    const lerpA = Math.min(1, 1 - Math.exp(-delta * 0.016));
+    this.teammates.forEach((t) => {
+      t.x = Phaser.Math.Linear(t.x, t.targetX, lerpA);
+      t.y = Phaser.Math.Linear(t.y, t.targetY, lerpA);
+      t.paperDoll.setPosition(t.x, t.y + 20);
+      t.paperDoll.setPoseAndFacing(t.pose, t.facing, time);
+      t.pet.update(time, t.x, t.y, t.facing === 'right');
+      t.nameTag.setPosition(t.x, t.y + 26);
+      t.hpBg.setPosition(t.x, t.y - 38);
+      t.hpFill.setPosition(t.x - 19, t.y - 38);
+    });
 
     // Update Multi-Phase Boss AI & Hazards
     const playerBounds = new Phaser.Geom.Rectangle(this.player.x - 16, this.player.y - 26, 32, 48);

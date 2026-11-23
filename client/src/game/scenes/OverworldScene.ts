@@ -152,8 +152,8 @@ export class OverworldScene extends Phaser.Scene {
       EventBus.on('network:switchArea', ({ areaId }) => {
         void this.connectToPlazaArea(areaId, true);
       }),
-      EventBus.on('dungeon:enterRequest', ({ bossId, difficulty }) => {
-        this.enterDungeon(bossId, difficulty);
+      EventBus.on('dungeon:enterRequest', ({ bossId, difficulty, partyMode, partyId }) => {
+        this.enterDungeon(bossId, difficulty, partyMode ?? 'solo', partyId);
       }),
       EventBus.on('input:interact', () => {
         this.tryInteractNearest();
@@ -539,9 +539,108 @@ export class OverworldScene extends Phaser.Scene {
       x: 745,
       y: 260,
       radius: 58,
-      label: 'Press [E] or Tap JOIN → Choose Khmer Boss & Difficulty (Normal/Expert/Calamity)',
+      label: 'Press [E] or Tap JOIN → Choose Khmer Boss & Difficulty (Solo / Co-op)',
       isDungeonPortal: true,
       onInteract: () => EventBus.emit('ui:openModal', { modal: 'modeSelector' }),
+    });
+
+    // ==================== PHASE 8 VILLAGE LANDMARKS ====================
+
+    // 6. ANCIENT PAGODA RESTORATION (North-Center Hilltop)
+    this.addBuildingOrProp({
+      texture: 'ancient_pagoda',
+      x: 480,
+      y: 204,
+      scale: 0.95,
+      shadowW: 92,
+      shadowH: 22,
+      bodyW: 66,
+      bodyH: 26,
+      label: 'ANCIENT PAGODA · BUNDLES',
+      joinArrowY: 112,
+    });
+    this.landmarks.push({
+      x: 480,
+      y: 214,
+      radius: 54,
+      label: 'Press [E] or Tap JOIN → Ancient Pagoda Restoration (6 Altars)',
+      isDungeonPortal: false,
+      onInteract: () => EventBus.emit('ui:openModal', { modal: 'pagoda' }),
+    });
+
+    // 7. CENTRAL PLAZA LUCKY WHEEL KIOSK (South-East of Plaza)
+    this.addBuildingOrProp({
+      texture: 'lucky_wheel_kiosk',
+      x: 590,
+      y: 472,
+      scale: 0.9,
+      shadowW: 48,
+      shadowH: 14,
+      bodyW: 36,
+      bodyH: 18,
+      label: 'LUCKY WHEEL',
+      joinArrowY: 410,
+    });
+    this.landmarks.push({
+      x: 590,
+      y: 478,
+      radius: 46,
+      label: 'Press [E] or Tap JOIN → Spin Royal Lucky Wheel (Coins / Gold)',
+      isDungeonPortal: false,
+      onInteract: () => EventBus.emit('ui:openModal', { modal: 'luckyWheel' }),
+    });
+
+    // 8. VILLAGE PLAYER MARKET BOARD (South-East Market Lane)
+    this.addBuildingOrProp({
+      texture: 'market_board',
+      x: 715,
+      y: 472,
+      scale: 0.95,
+      shadowW: 52,
+      shadowH: 14,
+      bodyW: 40,
+      bodyH: 18,
+      label: 'VILLAGE MARKET (5% TAX)',
+      joinArrowY: 414,
+    });
+    this.landmarks.push({
+      x: 715,
+      y: 478,
+      radius: 48,
+      label: 'Press [E] or Tap JOIN → Player Trading Market Board',
+      isDungeonPortal: false,
+      onInteract: () => EventBus.emit('ui:openModal', { modal: 'market' }),
+    });
+
+    // 9. RIVERSIDE PIER & FISHING POND (South-West Corner)
+    const pondGfx = this.add.graphics().setDepth(3);
+    pondGfx.fillStyle(0x0369a1, 0.92);
+    pondGfx.fillEllipse(215, 515, 168, 92);
+    pondGfx.fillStyle(0x0ea5e9, 0.72);
+    pondGfx.fillEllipse(215, 512, 146, 74);
+    pondGfx.lineStyle(2, 0x7dd3fc, 0.5);
+    pondGfx.strokeEllipse(215, 510, 108, 48);
+
+    const pondCol = this.add.rectangle(195, 522, 110, 52, 0x000000, 0);
+    this.colliders.add(pondCol);
+
+    this.addBuildingOrProp({
+      texture: 'fishing_pier',
+      x: 266,
+      y: 500,
+      scale: 0.85,
+      shadowW: 54,
+      shadowH: 16,
+      label: 'RIVERSIDE PIER · FISH',
+      joinArrowY: 446,
+    });
+    this.landmarks.push({
+      x: 266,
+      y: 496,
+      radius: 56,
+      label: 'Press [E] or Tap JOIN → Cast Line at Riverside Fishing Pier',
+      isDungeonPortal: false,
+      onInteract: () => EventBus.emit('ui:openModal', { modal: 'fishing' }),
     });
   }
 
@@ -599,7 +698,12 @@ export class OverworldScene extends Phaser.Scene {
     });
   }
 
-  private enterDungeon(bossId: BossId = 'sdech_kongkaeb', difficulty: DifficultyMode = 'normal'): void {
+  private enterDungeon(
+    bossId: BossId = 'sdech_kongkaeb',
+    difficulty: DifficultyMode = 'normal',
+    partyMode: 'solo' | 'coop' = 'solo',
+    partyId?: string
+  ): void {
     if (this.transitioning) return;
     this.transitioning = true;
     this.cameras.main.fadeOut(220, 8, 10, 20);
@@ -607,6 +711,8 @@ export class OverworldScene extends Phaser.Scene {
       this.scene.start('DungeonBossScene', {
         bossId,
         difficulty,
+        partyMode,
+        partyId,
         playerState: {
           ...this.player.state,
           zone: 'dungeon',

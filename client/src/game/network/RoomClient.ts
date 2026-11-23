@@ -1,5 +1,10 @@
 import { Client, type Room } from 'colyseus.js';
-import { DEFAULT_LOADOUT, type EquippedLoadout } from '@shared/types';
+import {
+  DEFAULT_LOADOUT,
+  type BossId,
+  type DifficultyMode,
+  type EquippedLoadout,
+} from '@shared/types';
 import { EventBus } from '../EventBus';
 
 export interface RemotePlayerSnapshot {
@@ -129,9 +134,69 @@ function toSnapshot(raw: RawRemotePlayerSchema, key: string): RemotePlayerSnapsh
  * Automatically resolves ws://<current-hostname>:2567 (works on PC localhost & LAN mobile)
  * and falls back gracefully to Offline Mode if the server is unreachable.
  */
+export interface RemoteDungeonPlayerSnapshot {
+  sessionId: string;
+  playerId: string;
+  name: string;
+  x: number;
+  y: number;
+  facing: 'left' | 'right';
+  pose: 'idle' | 'walk1' | 'walk2' | 'jump' | 'attack';
+  hp: number;
+  maxHp: number;
+  appearanceJson: string;
+  activeClass: string;
+}
+
+export interface DungeonRoomHandlers {
+  onPartySizeChange: (partySize: number, maxHp: number, hp: number, phase: 1 | 2) => void;
+  onTeammateAdd: (p: RemoteDungeonPlayerSnapshot) => void;
+  onTeammateChange: (p: RemoteDungeonPlayerSnapshot) => void;
+  onTeammateRemove: (sessionId: string) => void;
+  onTeammateAttack: (msg: { sessionId: string; classId: string; x: number; y: number; dir: number }) => void;
+  onBossHitRemote: (msg: { amount: number; isCrit: boolean; hp: number; maxHp: number; phase: 1 | 2 }) => void;
+  onBossDefeatedRemote: () => void;
+}
+
+interface RawDungeonPlayerSchema {
+  sessionId: string;
+  playerId: string;
+  name: string;
+  x: number;
+  y: number;
+  facing: string;
+  pose: string;
+  hp: number;
+  maxHp: number;
+  appearanceJson: string;
+  activeClass: string;
+  onChange?: (cb: () => void) => void;
+}
+
+interface RawDungeonStateSchema {
+  partyId: string;
+  bossId: string;
+  difficulty: string;
+  partySize: number;
+  boss: {
+    hp: number;
+    maxHp: number;
+    phase: number;
+    alive: boolean;
+    onChange?: (cb: () => void) => void;
+  };
+  players: {
+    size: number;
+    onAdd: (cb: (val: RawDungeonPlayerSchema, key: string) => void, triggerImmediately?: boolean) => void;
+    onRemove: (cb: (val: RawDungeonPlayerSchema, key: string) => void) => void;
+  };
+}
+
 class PlazaRoomClient {
   private client: Client | null = null;
   private room: Room<RawPlazaStateSchema> | null = null;
+  private dungeonRoom: Room<RawDungeonStateSchema> | null = null;
+  private lastDungeonMoveAt = 0;
   private currentAreaId = 'AREA 0';
   private online = false;
   private connecting = false;
@@ -274,14 +339,30 @@ class PlazaRoomClient {
         'dungeonInvite',
         (msg: {
           inviteId: string;
+          partyId: string;
           fromSessionId: string;
           fromPlayerId: string;
           fromName: string;
           areaId: string;
-          bossId: string;
+          bossId: BossId;
+          difficulty: DifficultyMode;
           timestamp: number;
         }) => {
           EventBus.emit('social:dungeonInvite', msg);
+        }
+      );
+
+      room.onMessage(
+        'dungeonPartyReady',
+        (msg: { partyId: string; bossId: BossId; difficulty: DifficultyMode; partnerName: string }) => {
+          EventBus.emit('social:dungeonPartyReady', msg);
+        }
+      );
+
+      room.onMessage(
+        'marketSale',
+        (msg: { itemName: string; quantity: number; buyerName: string; payoutCoins: number; taxCoins: number }) => {
+          EventBus.emit('social:marketSale', msg);
         }
       );
 
@@ -403,11 +484,187 @@ class PlazaRoomClient {
     targetSessionId?: string;
     targetPlayerId?: string;
     targetName?: string;
-    bossId?: string;
+    bossId?: BossId;
+    difficulty?: DifficultyMode;
   }): boolean {
     if (!this.room || !this.online) return false;
     this.room.send('dungeonInvite', target);
     return true;
+  }
+
+  public sendAcceptDungeonInvite(payload: {
+    fromSessionId: string;
+    fromName: string;
+    partyId: string;
+    bossId: BossId;
+    difficulty: DifficultyMode;
+  }): void {
+    if (!this.room || !this.online) return;
+    this.room.send('acceptDungeonInvite', payload);
+  }
+
+  // ==================== PHASE 8 CO-OP DUNGEON ROOM ====================
+
+  public get isInCoopDungeon(): boolean {
+    return Boolean(this.dungeonRoom);
+  }
+
+  public async joinDungeon(
+    opts: {
+      partyId: string;
+      bossId: BossId;
+      difficulty: DifficultyMode;
+      playerId?: string;
+      name: string;
+      loadout: EquippedLoadout;
+      activeClass: string;
+      hp: number;
+      maxHp: number;
+    },
+    handlers: DungeonRoomHandlers
+  ): Promise<boolean> {
+    await this.leaveDungeon();
+    const { wsUrl } = getServerEndpoints();
+    if (!this.client) {
+      this.client = new Client(wsUrl);
+    }
+
+    const toDungeonSnap = (raw: RawDungeonPlayerSchema, key: string): RemoteDungeonPlayerSnapshot => ({
+      sessionId: raw.sessionId || key,
+      playerId: raw.playerId || '',
+      name: raw.name || 'Raider',
+      x: Number.isFinite(raw.x) ? raw.x : 280,
+      y: Number.isFinite(raw.y) ? raw.y : 574,
+      facing: raw.facing === 'left' ? 'left' : 'right',
+      pose:
+        raw.pose === 'walk1' || raw.pose === 'walk2' || raw.pose === 'jump' || raw.pose === 'attack'
+          ? raw.pose
+          : 'idle',
+      hp: Number.isFinite(raw.hp) ? raw.hp : 150,
+      maxHp: Number.isFinite(raw.maxHp) ? raw.maxHp : 150,
+      appearanceJson: raw.appearanceJson || '{}',
+      activeClass: raw.activeClass || 'lbokator',
+    });
+
+    try {
+      const room = await this.client.joinOrCreate<RawDungeonStateSchema>('dungeon', {
+        partyId: opts.partyId,
+        bossId: opts.bossId,
+        difficulty: opts.difficulty,
+        playerId: opts.playerId || '',
+        name: opts.name,
+        appearanceJson: serializeAppearance(opts.loadout),
+        activeClass: opts.activeClass,
+        hp: opts.hp,
+        maxHp: opts.maxHp,
+      });
+
+      this.dungeonRoom = room;
+
+      const syncBoss = () => {
+        if (!room.state?.boss) return;
+        const pSize = Math.max(1, room.state.players?.size ?? room.state.partySize ?? 1);
+        handlers.onPartySizeChange(
+          pSize,
+          room.state.boss.maxHp,
+          room.state.boss.hp,
+          room.state.boss.phase === 2 ? 2 : 1
+        );
+      };
+
+      room.state.boss.onChange?.(() => syncBoss());
+
+      room.state.players.onAdd((p, key) => {
+        syncBoss();
+        if (key === room.sessionId) return;
+        handlers.onTeammateAdd(toDungeonSnap(p, key));
+        p.onChange?.(() => {
+          if (key === room.sessionId) return;
+          handlers.onTeammateChange(toDungeonSnap(p, key));
+        });
+      });
+
+      room.state.players.onRemove((_p, key) => {
+        syncBoss();
+        if (key === room.sessionId) return;
+        handlers.onTeammateRemove(key);
+      });
+
+      room.onMessage(
+        'playerAttack',
+        (msg: { sessionId: string; classId: string; x: number; y: number; dir: number }) => {
+          if (msg.sessionId !== room.sessionId) {
+            handlers.onTeammateAttack(msg);
+          }
+        }
+      );
+
+      room.onMessage(
+        'bossHit',
+        (msg: { fromSessionId: string; amount: number; isCrit: boolean; hp: number; maxHp: number; phase: number }) => {
+          handlers.onBossHitRemote({
+            amount: msg.amount,
+            isCrit: msg.isCrit,
+            hp: msg.hp,
+            maxHp: msg.maxHp,
+            phase: msg.phase === 2 ? 2 : 1,
+          });
+        }
+      );
+
+      room.onMessage('bossDefeated', () => {
+        handlers.onBossDefeatedRemote();
+      });
+
+      syncBoss();
+      return true;
+    } catch {
+      this.dungeonRoom = null;
+      return false;
+    }
+  }
+
+  public async leaveDungeon(): Promise<void> {
+    const active = this.dungeonRoom;
+    this.dungeonRoom = null;
+    if (active) {
+      try {
+        await active.leave();
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
+  }
+
+  public sendDungeonMove(
+    x: number,
+    y: number,
+    facing: 'left' | 'right',
+    pose: string,
+    hp: number,
+    maxHp: number,
+    nowMs: number
+  ): void {
+    if (!this.dungeonRoom || nowMs - this.lastDungeonMoveAt < 50) return;
+    this.lastDungeonMoveAt = nowMs;
+    this.dungeonRoom.send('move', {
+      x: Math.round(x * 10) / 10,
+      y: Math.round(y * 10) / 10,
+      facing,
+      pose,
+      hp,
+      maxHp,
+    });
+  }
+
+  public sendDungeonAttack(classId: string, x: number, y: number, dir: number): void {
+    if (!this.dungeonRoom) return;
+    this.dungeonRoom.send('attack', { classId, x: Math.round(x), y: Math.round(y), dir });
+  }
+
+  public sendDungeonBossDamage(amount: number, isCrit: boolean): void {
+    if (!this.dungeonRoom) return;
+    this.dungeonRoom.send('bossDamage', { amount: Math.round(amount), isCrit });
   }
 
   public async fetchAreas(): Promise<{ online: boolean; areas: AreaChannelInfo[]; totalPlayers: number }> {

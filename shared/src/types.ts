@@ -74,6 +74,8 @@ export type EyeStyleId = 'cheerful' | 'classic' | 'cool' | 'starry';
 
 export type QualityTier = 'normal' | 'gold_star';
 
+export type PagodaBundleProgress = Record<string, string[]>;
+
 export interface Currencies {
   coins: number;
   gold: number;
@@ -192,6 +194,8 @@ export interface PlayerState {
   activeBuffs: ActiveSnackBuff[];
   quickSnackSlots: [string | null, string | null, string | null];
   clearedBosses: BossId[];
+  pagodaBundles: PagodaBundleProgress;
+  luckyWheelPity: number;
   skillDamagePct: number;
   armorDamagePct: number;
   snackBuffPct: number;
@@ -408,6 +412,8 @@ export const INITIAL_PLAYER_STATE: PlayerState = {
   activeBuffs: [],
   quickSnackSlots: ['snack_num_pang', 'snack_kafe', 'snack_pepper_skewer'],
   clearedBosses: [],
+  pagodaBundles: {},
+  luckyWheelPity: 0,
   skillDamagePct: 0.025,
   armorDamagePct: 0.04,
   snackBuffPct: 0,

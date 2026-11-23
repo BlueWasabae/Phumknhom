@@ -54,3 +54,18 @@ CREATE TABLE IF NOT EXISTS public.friendships (
 
 CREATE INDEX IF NOT EXISTS idx_friendships_requester ON public.friendships (requester_id);
 CREATE INDEX IF NOT EXISTS idx_friendships_addressee ON public.friendships (addressee_id);
+
+-- 5. Player-to-Player Village Market Listings (5% Coin Tax Sink)
+CREATE TABLE IF NOT EXISTS public.market_listings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  seller_id TEXT NOT NULL,
+  seller_name TEXT NOT NULL,
+  item_id TEXT NOT NULL,
+  item_name TEXT NOT NULL,
+  quantity INTEGER NOT NULL DEFAULT 1,
+  quality TEXT NOT NULL DEFAULT 'normal',
+  price_coins INTEGER NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_market_listings_created ON public.market_listings (created_at DESC);

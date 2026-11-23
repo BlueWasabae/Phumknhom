@@ -40,9 +40,13 @@ import {
   startArtisanProcess,
   type ActionResult,
 } from './game/systems/FarmingEngine';
-import { respecAllSkills, unlockSkillTalent } from './game/systems/SkillManager';
+import { respecAllSkills, unlockSkillTalent, awardSkillXp } from './game/systems/SkillManager';
+import { donateToPagodaAltar } from './data/pagodaBundles';
 import {
   acceptFriendRequestApi,
+  buyMarketListingApi,
+  cancelMarketListingApi,
+  createMarketListingApi,
   declineFriendRequestApi,
   fetchFriends,
   saveAccountProfile,
@@ -50,6 +54,7 @@ import {
   type AuthSession,
   type FriendRecord,
   type FriendsListResponse,
+  type MarketListingClient,
 } from './game/network/ApiClient';
 import { roomClient } from './game/network/RoomClient';
 import { launchPhaserGame } from './game/config';
@@ -77,6 +82,15 @@ import { AreaSwitcherModal } from './ui/AreaSwitcherModal';
 import { AuthModal } from './ui/AuthModal';
 import { PlayerActionModal } from './ui/PlayerActionModal';
 import { FriendsModal } from './ui/FriendsModal';
+import { FishingModal, type FishingCatchReward } from './ui/FishingModal';
+import {
+  COIN_SPIN_COST,
+  GOLD_SPIN_COST,
+  LuckyWheelModal,
+  type WheelPrize,
+} from './ui/LuckyWheelModal';
+import { PagodaBundleModal } from './ui/PagodaBundleModal';
+import { MarketModal } from './ui/MarketModal';
 
 type ActiveModalType =
   | null
@@ -89,7 +103,11 @@ type ActiveModalType =
   | 'modeSelector'
   | 'areaSwitcher'
   | 'friends'
-  | 'auth';
+  | 'auth'
+  | 'fishing'
+  | 'luckyWheel'
+  | 'pagoda'
+  | 'market';
 
 interface FloatingXpBanner extends SkillXpToastPayload {
   uid: number;
@@ -435,6 +453,194 @@ export const App: React.FC = () => {
     }
   }, []);
 
+  const handleFishingCatch = useCallback(
+    (reward: FishingCatchReward) => {
+      runStateAction((prev) => {
+        let nextInv = prev.inventory.map((i) => ({ ...i }));
+        if (reward.itemId) {
+          const existing = nextInv.find(
+            (i) => i.itemId === reward.itemId && (i.quality ?? 'normal') === 'normal'
+          );
+          if (existing) existing.quantity += 1;
+          else nextInv.push({ itemId: reward.itemId, quantity: 1, itemLevel: 1, quality: 'normal' });
+        }
+        const nextCoins = prev.currencies.coins + (reward.coins ?? 0);
+        const base: PlayerState = {
+          ...prev,
+          coins: nextCoins,
+          currencies: { ...prev.currencies, coins: nextCoins },
+          inventory: nextInv,
+        };
+        const xpRes = awardSkillXp(base, 'fishing', reward.fishingXp, true);
+        return {
+          state: xpRes.state,
+          ok: true,
+          message: `🎣 Caught ${reward.label} (+${reward.fishingXp} Fishing XP)!`,
+        };
+      });
+    },
+    [runStateAction]
+  );
+
+  const handleLuckyWheelSpin = useCallback(
+    (tier: 'coin' | 'gold', prize: WheelPrize) => {
+      runStateAction((prev) => {
+        const coinCost = tier === 'coin' ? COIN_SPIN_COST : 0;
+        const goldCost = tier === 'gold' ? GOLD_SPIN_COST : 0;
+        if (prev.currencies.coins < coinCost || prev.currencies.gold < goldCost) {
+          return { state: prev, ok: false, message: 'Not enough currency for this spin.' };
+        }
+
+        let nextCoins = prev.currencies.coins - coinCost + (prize.coins ?? 0);
+        const nextGold = prev.currencies.gold - goldCost;
+        const nextInv = prev.inventory.map((i) => ({ ...i }));
+        let dupNote = '';
+
+        if (prize.itemId) {
+          const existing = nextInv.find((i) => i.itemId === prize.itemId);
+          if (prize.isEquipment && existing) {
+            nextCoins += 600;
+            dupNote = ' (Already owned → +600 Bonus Coins!)';
+          } else if (existing) {
+            existing.quantity += prize.quantity ?? 1;
+          } else {
+            nextInv.push({
+              itemId: prize.itemId,
+              quantity: prize.quantity ?? 1,
+              itemLevel: 1,
+              quality: 'normal',
+            });
+          }
+        }
+
+        const nextPity =
+          tier === 'gold' ? (prize.isMythic ? 0 : (prev.luckyWheelPity ?? 0) + 1) : prev.luckyWheelPity ?? 0;
+
+        return {
+          state: {
+            ...prev,
+            coins: nextCoins,
+            currencies: { ...prev.currencies, coins: nextCoins, gold: nextGold },
+            inventory: nextInv,
+            luckyWheelPity: nextPity,
+          },
+          ok: true,
+          message: `🎡 Lucky Wheel Won: ${prize.label}${dupNote}`,
+        };
+      });
+    },
+    [runStateAction]
+  );
+
+  const handleBuyMarketListing = useCallback(
+    async (listing: MarketListingClient): Promise<boolean> => {
+      if (playerRef.current.currencies.coins < listing.priceCoins) {
+        EventBus.emit('ui:toast', { text: `Need ${listing.priceCoins.toLocaleString()} Coins.` });
+        return false;
+      }
+      const res = await buyMarketListingApi(authSessionRef.current, listing.id, playerRef.current.name);
+      if (!res.ok) {
+        EventBus.emit('ui:toast', { text: res.error });
+        return false;
+      }
+      runStateAction((prev) => {
+        const nextCoins = Math.max(0, prev.currencies.coins - res.listing.priceCoins);
+        const nextInv = prev.inventory.map((i) => ({ ...i }));
+        const existing = nextInv.find(
+          (i) => i.itemId === res.listing.itemId && (i.quality ?? 'normal') === res.listing.quality
+        );
+        if (existing) existing.quantity += res.listing.quantity;
+        else {
+          nextInv.push({
+            itemId: res.listing.itemId,
+            quantity: res.listing.quantity,
+            itemLevel: 1,
+            quality: res.listing.quality,
+          });
+        }
+        return {
+          state: {
+            ...prev,
+            coins: nextCoins,
+            currencies: { ...prev.currencies, coins: nextCoins },
+            inventory: nextInv,
+          },
+          ok: true,
+          message: `Bought ${res.listing.quantity}× ${res.listing.itemName} for ${res.listing.priceCoins.toLocaleString()}c (5% Tax: ${res.taxCoins}c)!`,
+        };
+      });
+      return true;
+    },
+    [runStateAction]
+  );
+
+  const handleCreateMarketListing = useCallback(
+    async (payload: {
+      itemId: string;
+      itemName: string;
+      quantity: number;
+      quality: QualityTier;
+      priceCoins: number;
+    }): Promise<boolean> => {
+      const res = await createMarketListingApi(authSessionRef.current, {
+        ...payload,
+        sellerName: playerRef.current.name,
+      });
+      if (!res.ok) {
+        EventBus.emit('ui:toast', { text: res.error });
+        return false;
+      }
+      runStateAction((prev) => {
+        const nextInv = prev.inventory.map((i) => ({ ...i }));
+        const idx = nextInv.findIndex(
+          (i) => i.itemId === payload.itemId && (i.quality ?? 'normal') === payload.quality && i.quantity >= payload.quantity
+        );
+        if (idx >= 0) {
+          nextInv[idx].quantity -= payload.quantity;
+        }
+        return {
+          state: { ...prev, inventory: nextInv.filter((i) => i.quantity > 0) },
+          ok: true,
+          message: `Listed ${payload.quantity}× ${payload.itemName} for ${payload.priceCoins.toLocaleString()} Coins (5% tax on sale)!`,
+        };
+      });
+      return true;
+    },
+    [runStateAction]
+  );
+
+  const handleCancelMarketListing = useCallback(
+    async (listing: MarketListingClient): Promise<boolean> => {
+      const res = await cancelMarketListingApi(authSessionRef.current, listing.id);
+      if (!res.ok) {
+        EventBus.emit('ui:toast', { text: res.error });
+        return false;
+      }
+      runStateAction((prev) => {
+        const nextInv = prev.inventory.map((i) => ({ ...i }));
+        const existing = nextInv.find(
+          (i) => i.itemId === res.listing.itemId && (i.quality ?? 'normal') === res.listing.quality
+        );
+        if (existing) existing.quantity += res.listing.quantity;
+        else {
+          nextInv.push({
+            itemId: res.listing.itemId,
+            quantity: res.listing.quantity,
+            itemLevel: 1,
+            quality: res.listing.quality,
+          });
+        }
+        return {
+          state: { ...prev, inventory: nextInv },
+          ok: true,
+          message: `Cancelled listing — returned ${res.listing.quantity}× ${res.listing.itemName} to Container.`,
+        };
+      });
+      return true;
+    },
+    [runStateAction]
+  );
+
   useEffect(() => {
     const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     if (isTouch) setTouchUiEnabled(true);
@@ -537,7 +743,34 @@ export const App: React.FC = () => {
       EventBus.on('social:dungeonInvite', (inv) => {
         setDungeonInvites((prev) => [inv, ...prev.filter((i) => i.fromName !== inv.fromName)].slice(0, 6));
         EventBus.emit('ui:toast', {
-          text: `⚔️ ${inv.fromName} invited you to a Dungeon Raid! Check your Mail Inbox.`,
+          text: `⚔️ ${inv.fromName} invited you to a Co-op Dungeon Raid! Check your Mail Inbox.`,
+        });
+      }),
+      EventBus.on('social:dungeonPartyReady', ({ partyId, bossId, difficulty, partnerName }) => {
+        setActiveModal(null);
+        EventBus.emit('ui:toast', {
+          text: `🤝 ${partnerName} accepted! Warping together into Co-op Raid...`,
+        });
+        EventBus.emit('dungeon:enterRequest', {
+          bossId,
+          difficulty,
+          partyMode: 'coop',
+          partyId,
+        });
+      }),
+      EventBus.on('social:marketSale', ({ itemName, quantity, buyerName, payoutCoins, taxCoins }) => {
+        setPlayer((prev) => {
+          const nextCoins = prev.currencies.coins + payoutCoins;
+          const next: PlayerState = {
+            ...prev,
+            coins: nextCoins,
+            currencies: { ...prev.currencies, coins: nextCoins },
+          };
+          EventBus.emit('player:stateSync', next);
+          return next;
+        });
+        EventBus.emit('ui:toast', {
+          text: `💰 Market Sold! ${buyerName} bought ${quantity}× ${itemName} → +${payoutCoins.toLocaleString()}c (-${taxCoins}c 5% tax)!`,
         });
       }),
       EventBus.on('social:notice', ({ text }) => {
@@ -623,6 +856,7 @@ export const App: React.FC = () => {
           setActiveModal('friends');
         }}
         onOpenAuth={() => setActiveModal('auth')}
+        onOpenMarket={() => setActiveModal('market')}
         onFastForwardFarm={() => runFarmAction((s) => fastForwardFarmTimers(s, 60))}
       />
 
@@ -672,9 +906,14 @@ export const App: React.FC = () => {
         open={activeModal === 'modeSelector'}
         player={player}
         onClose={() => setActiveModal(null)}
-        onEnterDungeon={(bossId: BossId, difficulty: DifficultyMode) => {
+        onEnterDungeon={(
+          bossId: BossId,
+          difficulty: DifficultyMode,
+          partyMode: 'solo' | 'coop',
+          partyId?: string
+        ) => {
           setActiveModal(null);
-          EventBus.emit('dungeon:enterRequest', { bossId, difficulty });
+          EventBus.emit('dungeon:enterRequest', { bossId, difficulty, partyMode, partyId });
         }}
       />
 
@@ -739,14 +978,57 @@ export const App: React.FC = () => {
         }
         onAcceptDungeonInvite={(inv) => {
           setDungeonInvites((prev) => prev.filter((i) => i.inviteId !== inv.inviteId));
-          setActiveModal('modeSelector');
-          EventBus.emit('ui:toast', {
-            text: `Accepted ${inv.fromName}'s Raid Invite! Pick your boss & difficulty!`,
+          roomClient.sendAcceptDungeonInvite({
+            fromSessionId: inv.fromSessionId,
+            fromName: inv.fromName,
+            partyId: inv.partyId,
+            bossId: inv.bossId,
+            difficulty: inv.difficulty,
+          });
+          setActiveModal(null);
+          EventBus.emit('dungeon:enterRequest', {
+            bossId: inv.bossId,
+            difficulty: inv.difficulty,
+            partyMode: 'coop',
+            partyId: inv.partyId,
           });
         }}
         onDeclineDungeonInvite={(inviteId) => {
           setDungeonInvites((prev) => prev.filter((i) => i.inviteId !== inviteId));
         }}
+      />
+
+      <FishingModal
+        open={activeModal === 'fishing'}
+        player={player}
+        onClose={() => setActiveModal(null)}
+        onCatchReward={handleFishingCatch}
+      />
+
+      <LuckyWheelModal
+        open={activeModal === 'luckyWheel'}
+        player={player}
+        onClose={() => setActiveModal(null)}
+        onSpinResult={handleLuckyWheelSpin}
+      />
+
+      <PagodaBundleModal
+        open={activeModal === 'pagoda'}
+        player={player}
+        onClose={() => setActiveModal(null)}
+        onDonateItem={(altarId, itemId) =>
+          runStateAction((s) => donateToPagodaAltar(s, altarId, itemId))
+        }
+      />
+
+      <MarketModal
+        open={activeModal === 'market'}
+        player={player}
+        authSession={authSession}
+        onClose={() => setActiveModal(null)}
+        onBuyListing={handleBuyMarketListing}
+        onCreateListing={handleCreateMarketListing}
+        onCancelListing={handleCancelMarketListing}
       />
 
       {/* Dungeon Victory / Defeat Overlay */}

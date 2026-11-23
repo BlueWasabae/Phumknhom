@@ -30,6 +30,7 @@ import {
   Smile,
   Sparkles,
   Sprout,
+  Store,
   Swords,
   User,
   Users,
@@ -70,6 +71,7 @@ interface HUDProps {
   onOpenFriends: () => void;
   onOpenInbox: () => void;
   onOpenAuth: () => void;
+  onOpenMarket: () => void;
   onFastForwardFarm: () => void;
 }
 
@@ -103,6 +105,7 @@ export const HUD: React.FC<HUDProps> = ({
   onOpenFriends,
   onOpenInbox,
   onOpenAuth,
+  onOpenMarket,
   onFastForwardFarm,
 }) => {
   const [menuDropdownOpen, setMenuDropdownOpen] = useState(false);
@@ -363,6 +366,16 @@ export const HUD: React.FC<HUDProps> = ({
                   type="button"
                   onClick={() => {
                     setMenuDropdownOpen(false);
+                    onOpenMarket();
+                  }}
+                  className="px-3 py-2 rounded-xl hover:bg-amber-200/80 text-left flex items-center gap-2 text-amber-950"
+                >
+                  <Store className="w-4 h-4 text-amber-700" /> Village Market (5% Tax)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuDropdownOpen(false);
                     onOpenFriends();
                   }}
                   className="px-3 py-2 rounded-xl hover:bg-amber-200/80 text-left flex items-center justify-between gap-2 text-amber-950"
@@ -542,6 +555,11 @@ export const HUD: React.FC<HUDProps> = ({
                     <span className="px-1.5 py-0.2 rounded bg-purple-800 text-purple-100 text-[9px] uppercase shrink-0">
                       {bossHud.difficulty}
                     </span>
+                    {(bossHud.partySize ?? 1) > 1 && (
+                      <span className="px-1.5 py-0.2 rounded bg-emerald-700 text-white text-[9px] uppercase shrink-0">
+                        CO-OP {bossHud.partySize}/4
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0 text-amber-100">
                     {bossHud.bossId === 'sdech_kongkaeb' && bossHud.damageTakenThisFight === 0 && (

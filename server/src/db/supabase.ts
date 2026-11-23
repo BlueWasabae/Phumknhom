@@ -27,6 +27,8 @@ export interface SavedPlayerProfile {
   activeBuffs?: unknown[];
   quickSnackSlots?: [string | null, string | null, string | null];
   clearedBosses?: string[];
+  pagodaBundles?: Record<string, string[]>;
+  luckyWheelPity?: number;
   activeClass?: string;
   weapon?: Record<string, unknown>;
   defense?: number;
@@ -101,6 +103,38 @@ if (SUPABASE_URL && SUPABASE_KEY) {
 
 export function getStorageMode(): 'supabase' | 'local_json' {
   return supabaseClient ? 'supabase' : 'local_json';
+}
+
+export function getSupabaseClient(): SupabaseClient | null {
+  return supabaseClient;
+}
+
+export async function creditPlayerCoins(playerId: string, deltaCoins: number): Promise<void> {
+  const gain = Math.max(0, Math.floor(deltaCoins));
+  if (gain <= 0) return;
+
+  if (supabaseClient) {
+    const { data } = await supabaseClient
+      .from('players')
+      .select('coins')
+      .eq('id', playerId)
+      .maybeSingle();
+    if (data && typeof data.coins === 'number') {
+      await supabaseClient
+        .from('players')
+        .update({ coins: data.coins + gain, updated_at: new Date().toISOString() })
+        .eq('id', playerId);
+    }
+    return;
+  }
+
+  const db = readLocalDb();
+  const row = db.players.find((p) => p.id === playerId);
+  if (row) {
+    row.coins = (row.coins ?? 0) + gain;
+    row.updated_at = new Date().toISOString();
+    writeLocalDb(db);
+  }
 }
 
 // ==================== CRYPTO & AUTH TOKENS ====================
@@ -242,6 +276,11 @@ function rowToSavedProfile(row: {
       ? (meta.quickSnackSlots as [string | null, string | null, string | null])
       : undefined,
     clearedBosses: Array.isArray(meta.clearedBosses) ? (meta.clearedBosses as string[]) : [],
+    pagodaBundles:
+      typeof meta.pagodaBundles === 'object' && meta.pagodaBundles
+        ? (meta.pagodaBundles as Record<string, string[]>)
+        : {},
+    luckyWheelPity: typeof meta.luckyWheelPity === 'number' ? meta.luckyWheelPity : 0,
     activeClass: typeof meta.activeClass === 'string' ? meta.activeClass : undefined,
     weapon: typeof meta.weapon === 'object' && meta.weapon ? (meta.weapon as Record<string, unknown>) : undefined,
     defense: typeof meta.defense === 'number' ? meta.defense : undefined,
@@ -283,6 +322,8 @@ export async function registerPlayer(
     activeBuffs: starterProfile?.activeBuffs ?? [],
     quickSnackSlots: starterProfile?.quickSnackSlots,
     clearedBosses: starterProfile?.clearedBosses ?? [],
+    pagodaBundles: starterProfile?.pagodaBundles ?? {},
+    luckyWheelPity: starterProfile?.luckyWheelPity ?? 0,
     activeClass: starterProfile?.activeClass,
     weapon: starterProfile?.weapon,
     defense: starterProfile?.defense,
@@ -489,6 +530,8 @@ export async function savePlayerProfile(
     activeBuffs: profile.activeBuffs ?? [],
     quickSnackSlots: profile.quickSnackSlots,
     clearedBosses: profile.clearedBosses ?? [],
+    pagodaBundles: profile.pagodaBundles ?? {},
+    luckyWheelPity: profile.luckyWheelPity ?? 0,
     activeClass: profile.activeClass,
     weapon: profile.weapon,
     defense: profile.defense,

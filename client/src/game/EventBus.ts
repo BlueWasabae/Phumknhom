@@ -49,6 +49,7 @@ export interface BossHudPayload {
   maxHp: number;
   phase: 1 | 2;
   difficulty: DifficultyMode;
+  partySize?: number;
   stageLabel: string;
   focusPct: number;
   focusActive: boolean;
@@ -113,12 +114,29 @@ export interface IncomingFriendRequestPayload {
 
 export interface IncomingDungeonInvitePayload {
   inviteId: string;
+  partyId: string;
   fromSessionId: string;
   fromPlayerId: string;
   fromName: string;
   areaId: string;
-  bossId: string;
+  bossId: BossId;
+  difficulty: DifficultyMode;
   timestamp: number;
+}
+
+export interface DungeonPartyReadyPayload {
+  partyId: string;
+  bossId: BossId;
+  difficulty: DifficultyMode;
+  partnerName: string;
+}
+
+export interface MarketSalePayload {
+  itemName: string;
+  quantity: number;
+  buyerName: string;
+  payoutCoins: number;
+  taxCoins: number;
 }
 
 export interface EventMap {
@@ -143,12 +161,19 @@ export interface EventMap {
   'social:whisper': WhisperPayload;
   'social:friendRequest': IncomingFriendRequestPayload;
   'social:dungeonInvite': IncomingDungeonInvitePayload;
+  'social:dungeonPartyReady': DungeonPartyReadyPayload;
+  'social:marketSale': MarketSalePayload;
   'social:notice': { text: string };
   'portal:proximity': PortalProximityPayload;
   'combat:hit': { hit: CombatHitResult; dummyHp: number; dummyMaxHp: number };
   'combat:classMeter': ClassMeterPayload;
   'boss:hudUpdate': BossHudPayload;
-  'dungeon:enterRequest': { bossId: BossId; difficulty: DifficultyMode };
+  'dungeon:enterRequest': {
+    bossId: BossId;
+    difficulty: DifficultyMode;
+    partyMode?: 'solo' | 'coop';
+    partyId?: string;
+  };
   'dungeon:outcome': DungeonOutcomePayload | null;
   'mobile:joystick': JoystickVector;
   'input:interact': void;
@@ -172,7 +197,11 @@ export interface EventMap {
       | 'modeSelector'
       | 'areaSwitcher'
       | 'friends'
-      | 'auth';
+      | 'auth'
+      | 'fishing'
+      | 'luckyWheel'
+      | 'pagoda'
+      | 'market';
     farmTab?: 'seeds' | 'livestock' | 'artisan';
     shopTab?: 'primary' | 'secondary';
     friendsTab?: 'friends' | 'inbox';

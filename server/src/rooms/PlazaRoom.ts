@@ -199,10 +199,23 @@ export class PlazaRoom extends Room<PlazaState> {
       'dungeonInvite',
       (
         client,
-        payload: { targetSessionId?: string; targetPlayerId?: string; targetName?: string; bossId?: string }
+        payload: {
+          targetSessionId?: string;
+          targetPlayerId?: string;
+          targetName?: string;
+          bossId?: string;
+          difficulty?: string;
+        }
       ) => {
         const sender = this.state.players.get(client.sessionId);
         if (!sender) return;
+        const partyId = `party_${client.sessionId.slice(0, 6)}_${Date.now().toString(36)}`;
+        const bossId = payload.bossId === 'yeak_thmor' ? 'yeak_thmor' : 'sdech_kongkaeb';
+        const difficulty =
+          payload.difficulty === 'expert' || payload.difficulty === 'calamity'
+            ? payload.difficulty
+            : 'normal';
+
         const delivered = presenceRegistry.sendToTarget(
           {
             sessionId: payload.targetSessionId,
@@ -212,20 +225,50 @@ export class PlazaRoom extends Room<PlazaState> {
           'dungeonInvite',
           {
             inviteId: `inv_${Date.now()}_${client.sessionId.slice(0, 4)}`,
+            partyId,
             fromSessionId: client.sessionId,
             fromPlayerId: sender.playerId,
             fromName: sender.name,
             areaId: this.state.areaId,
-            bossId: payload.bossId || 'sdech_kongkaeb',
+            bossId,
+            difficulty,
             timestamp: Date.now(),
           }
         );
 
         client.send('socialNotice', {
           text: delivered
-            ? `Sent Dungeon Party Invite to ${delivered.username}!`
+            ? `Sent Co-op Dungeon Invite to ${delivered.username}! Once they accept, you will both enter together!`
             : `${payload.targetName || 'Player'} is not currently in the Plaza.`,
         });
+      }
+    );
+
+    this.onMessage(
+      'acceptDungeonInvite',
+      (
+        client,
+        payload: { fromSessionId?: string; fromName?: string; partyId?: string; bossId?: string; difficulty?: string }
+      ) => {
+        const accepter = this.state.players.get(client.sessionId);
+        if (!accepter || !payload?.partyId) return;
+        const bossId = payload.bossId === 'yeak_thmor' ? 'yeak_thmor' : 'sdech_kongkaeb';
+        const difficulty =
+          payload.difficulty === 'expert' || payload.difficulty === 'calamity'
+            ? payload.difficulty
+            : 'normal';
+
+        // Notify inviter to warp immediately into the exact same Co-op DungeonRoom!
+        presenceRegistry.sendToTarget(
+          { sessionId: payload.fromSessionId, username: payload.fromName },
+          'dungeonPartyReady',
+          {
+            partyId: payload.partyId,
+            bossId,
+            difficulty,
+            partnerName: accepter.name,
+          }
+        );
       }
     );
   }

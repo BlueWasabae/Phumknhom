@@ -311,6 +311,132 @@ export class BootScene extends Phaser.Scene {
         tex.refresh();
       }
     }
+
+    // Phase 8 Fallback Pixel-Art Sprites (Zero console 404s!)
+    if (!this.textures.exists('ancient_pagoda')) {
+      const tex = this.textures.createCanvas('ancient_pagoda', 96, 88);
+      if (tex) {
+        const ctx = tex.getContext();
+        ctx.imageSmoothingEnabled = false;
+        // Stone base steps
+        ctx.fillStyle = '#78716c';
+        ctx.fillRect(8, 74, 80, 10);
+        ctx.fillStyle = '#a8a29e';
+        ctx.fillRect(14, 66, 68, 8);
+        // Temple pillars & doorway
+        ctx.fillStyle = '#fef3c7';
+        ctx.fillRect(20, 42, 56, 24);
+        ctx.fillStyle = '#991b1b';
+        ctx.fillRect(20, 42, 6, 24);
+        ctx.fillRect(70, 42, 6, 24);
+        ctx.fillStyle = '#451a03';
+        ctx.fillRect(40, 48, 16, 18);
+        ctx.fillStyle = '#facc15';
+        ctx.fillRect(46, 52, 4, 8);
+        // Tier 1 golden Khmer roof
+        ctx.fillStyle = '#b45309';
+        ctx.fillRect(10, 34, 76, 10);
+        ctx.fillStyle = '#facc15';
+        ctx.fillRect(14, 30, 68, 6);
+        // Tier 2 roof
+        ctx.fillStyle = '#991b1b';
+        ctx.fillRect(22, 22, 52, 8);
+        ctx.fillStyle = '#facc15';
+        ctx.fillRect(26, 18, 44, 5);
+        // Golden spire (Chofa)
+        ctx.fillStyle = '#fde047';
+        ctx.fillRect(44, 4, 8, 14);
+        ctx.fillRect(46, 0, 4, 6);
+        ctx.strokeStyle = '#451a03';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(20, 42, 56, 24);
+        tex.refresh();
+      }
+    }
+
+    if (!this.textures.exists('lucky_wheel_kiosk')) {
+      const tex = this.textures.createCanvas('lucky_wheel_kiosk', 56, 60);
+      if (tex) {
+        const ctx = tex.getContext();
+        ctx.imageSmoothingEnabled = false;
+        // Wooden stand
+        ctx.fillStyle = '#78350f';
+        ctx.fillRect(12, 46, 32, 12);
+        ctx.fillStyle = '#b45309';
+        ctx.fillRect(24, 34, 8, 14);
+        // Colorful prize wheel
+        const cols = ['#ef4444', '#facc15', '#22c55e', '#3b82f6', '#ec4899', '#a855f7'];
+        for (let i = 0; i < 6; i++) {
+          ctx.fillStyle = cols[i];
+          ctx.beginPath();
+          ctx.moveTo(28, 22);
+          ctx.arc(28, 22, 18, (i * Math.PI) / 3, ((i + 1) * Math.PI) / 3);
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.strokeStyle = '#451a03';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(28, 22, 18, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = '#fef08a';
+        ctx.beginPath();
+        ctx.arc(28, 22, 5, 0, Math.PI * 2);
+        ctx.fill();
+        // Top gold pointer
+        ctx.fillStyle = '#facc15';
+        ctx.fillRect(25, 0, 6, 7);
+        tex.refresh();
+      }
+    }
+
+    if (!this.textures.exists('market_board')) {
+      const tex = this.textures.createCanvas('market_board', 56, 52);
+      if (tex) {
+        const ctx = tex.getContext();
+        ctx.imageSmoothingEnabled = false;
+        ctx.fillStyle = '#78350f';
+        ctx.fillRect(10, 32, 6, 18);
+        ctx.fillRect(40, 32, 6, 18);
+        ctx.fillStyle = '#92400e';
+        ctx.fillRect(4, 10, 48, 26);
+        ctx.fillStyle = '#fef3c7';
+        ctx.fillRect(8, 14, 16, 18);
+        ctx.fillRect(28, 14, 20, 12);
+        ctx.fillStyle = '#dc2626';
+        ctx.fillRect(4, 4, 48, 6);
+        ctx.fillStyle = '#facc15';
+        ctx.fillRect(14, 16, 4, 4);
+        ctx.fillRect(36, 16, 4, 4);
+        ctx.strokeStyle = '#451a03';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(4, 10, 48, 26);
+        tex.refresh();
+      }
+    }
+
+    if (!this.textures.exists('fishing_pier')) {
+      const tex = this.textures.createCanvas('fishing_pier', 72, 48);
+      if (tex) {
+        const ctx = tex.getContext();
+        ctx.imageSmoothingEnabled = false;
+        // Wooden planks
+        ctx.fillStyle = '#92400e';
+        ctx.fillRect(8, 12, 56, 26);
+        ctx.fillStyle = '#b45309';
+        for (let x = 10; x < 62; x += 8) {
+          ctx.fillRect(x, 14, 6, 22);
+        }
+        // Dock posts
+        ctx.fillStyle = '#451a03';
+        ctx.fillRect(8, 8, 6, 36);
+        ctx.fillRect(58, 8, 6, 36);
+        // Hanging lantern + fishing rod silhouette
+        ctx.fillStyle = '#facc15';
+        ctx.fillRect(56, 4, 8, 8);
+        tex.refresh();
+      }
+    }
   }
 
   private registerAnimations(): void {

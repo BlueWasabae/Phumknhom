@@ -5,6 +5,13 @@ import cors from 'cors';
 import { Server, matchMaker } from 'colyseus';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { ALLOWED_AREAS, PlazaRoom } from './rooms/PlazaRoom';
+import { DungeonRoom } from './rooms/DungeonRoom';
+import {
+  buyMarketListing,
+  cancelMarketListing,
+  createMarketListing,
+  listMarketListings,
+} from './economy/marketService';
 import { presenceRegistry } from './presence';
 import {
   createFriendRequest,
@@ -258,6 +265,96 @@ app.post('/api/friends/decline', async (req, res) => {
   }
 });
 
+// ==================== PHASE 8 PLAYER MARKET (5% COIN TAX SINK) ====================
+
+app.get('/api/market', async (_req, res) => {
+  try {
+    const listings = await listMarketListings();
+    res.json({ listings, taxRate: 0.05 });
+  } catch (err) {
+    console.error('[Phum Server] GET /api/market error:', err);
+    res.status(500).json({ error: 'Failed to load market listings.' });
+  }
+});
+
+app.post('/api/market/list', async (req, res) => {
+  try {
+    const verified = verifyAuthToken(extractBearerToken(req));
+    const body = req.body as {
+      sellerName?: string;
+      itemId?: string;
+      itemName?: string;
+      quantity?: number;
+      quality?: 'normal' | 'gold_star';
+      priceCoins?: number;
+    };
+    const sellerId = verified?.playerId ?? 'guest';
+    const sellerName = verified?.username ?? (body.sellerName || 'GuestVillager');
+
+    const result = await createMarketListing({
+      sellerId,
+      sellerName,
+      itemId: body.itemId || '',
+      itemName: body.itemName || '',
+      quantity: Number(body.quantity ?? 1),
+      quality: body.quality === 'gold_star' ? 'gold_star' : 'normal',
+      priceCoins: Number(body.priceCoins ?? 50),
+    });
+    if (!result.ok) {
+      res.status(400).json({ error: result.error });
+      return;
+    }
+    res.status(201).json(result);
+  } catch (err) {
+    console.error('[Phum Server] POST /api/market/list error:', err);
+    res.status(500).json({ error: 'Failed to create market listing.' });
+  }
+});
+
+app.post('/api/market/buy', async (req, res) => {
+  try {
+    const verified = verifyAuthToken(extractBearerToken(req));
+    const { listingId, buyerName } = req.body as { listingId?: string; buyerName?: string };
+    if (!listingId) {
+      res.status(400).json({ error: 'Missing listingId.' });
+      return;
+    }
+    const result = await buyMarketListing(
+      listingId,
+      verified?.playerId ?? 'guest',
+      verified?.username ?? (buyerName || 'Villager')
+    );
+    if (!result.ok) {
+      res.status(400).json({ error: result.error });
+      return;
+    }
+    res.json(result);
+  } catch (err) {
+    console.error('[Phum Server] POST /api/market/buy error:', err);
+    res.status(500).json({ error: 'Failed to purchase listing.' });
+  }
+});
+
+app.post('/api/market/cancel', async (req, res) => {
+  try {
+    const verified = verifyAuthToken(extractBearerToken(req));
+    const { listingId } = req.body as { listingId?: string };
+    if (!listingId) {
+      res.status(400).json({ error: 'Missing listingId.' });
+      return;
+    }
+    const result = await cancelMarketListing(listingId, verified?.playerId ?? 'guest');
+    if (!result.ok) {
+      res.status(400).json({ error: result.error });
+      return;
+    }
+    res.json(result);
+  } catch (err) {
+    console.error('[Phum Server] POST /api/market/cancel error:', err);
+    res.status(500).json({ error: 'Failed to cancel listing.' });
+  }
+});
+
 const httpServer = http.createServer(app);
 const gameServer = new Server({
   transport: new WebSocketTransport({
@@ -266,9 +363,10 @@ const gameServer = new Server({
 });
 
 gameServer.define('plaza', PlazaRoom).filterBy(['areaId']);
+gameServer.define('dungeon', DungeonRoom).filterBy(['partyId']);
 
 httpServer.listen(PORT, HOST, () => {
-  console.log(`[ភូមិខ្ញុំ Colyseus] Village Plaza Server listening on ws://${HOST}:${PORT}`);
+  console.log(`[ភូមិខ្ញុំ Colyseus] Village Plaza + Co-op Dungeon Server listening on ws://${HOST}:${PORT}`);
   console.log(`[ភូមិខ្ញុំ Colyseus] Persistence backend: ${getStorageMode().toUpperCase()}`);
-  console.log(`[ភូមិខ្ញុំ Colyseus] REST API ready: /api/areas, /api/auth/*, /api/save, /api/friends/*`);
+  console.log(`[ភូមិខ្ញុំ Colyseus] REST API ready: /api/areas, /api/auth/*, /api/save, /api/friends/*, /api/market/*`);
 });

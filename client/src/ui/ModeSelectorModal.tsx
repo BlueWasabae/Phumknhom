@@ -3,14 +3,19 @@ import type { BossId, DifficultyMode, PlayerState } from '@shared/types';
 import { calculateDamageTaken } from '@shared/balanceFormulas';
 import { computeVillageToDungeonBridge } from '@shared/skillTrees';
 import { KHMER_BOSSES, KHMER_BOSS_LIST, getScaledBossMaxHp } from '@shared/khmerBosses';
-import { Flame, ShieldAlert, Skull, Sparkles, Swords, Trophy } from 'lucide-react';
+import { Flame, ShieldAlert, Skull, Sparkles, Swords, Trophy, User, Users } from 'lucide-react';
 import { NativeDialog } from './NativeDialog';
 
 interface ModeSelectorModalProps {
   open: boolean;
   player: PlayerState;
   onClose: () => void;
-  onEnterDungeon: (bossId: BossId, difficulty: DifficultyMode) => void;
+  onEnterDungeon: (
+    bossId: BossId,
+    difficulty: DifficultyMode,
+    partyMode: 'solo' | 'coop',
+    partyId?: string
+  ) => void;
 }
 
 const DIFFICULTY_OPTIONS: Array<{
@@ -55,9 +60,10 @@ export const ModeSelectorModal: React.FC<ModeSelectorModalProps> = ({
 }) => {
   const [selectedBoss, setSelectedBoss] = useState<BossId>('sdech_kongkaeb');
   const [selectedDiff, setSelectedDiff] = useState<DifficultyMode>('normal');
+  const [partyMode, setPartyMode] = useState<'solo' | 'coop'>('solo');
 
   const bossDef = KHMER_BOSSES[selectedBoss];
-  const scaledHp = getScaledBossMaxHp(selectedBoss, selectedDiff, 1);
+  const scaledHp = getScaledBossMaxHp(selectedBoss, selectedDiff, partyMode === 'coop' ? 2 : 1);
   const bridge = computeVillageToDungeonBridge(player);
   const expectedHitTaken = calculateDamageTaken({
     bossAttack: bossDef.baseAttack,
@@ -178,12 +184,51 @@ export const ModeSelectorModal: React.FC<ModeSelectorModalProps> = ({
           </div>
         </div>
 
-        {/* 3. MATCHUP SUMMARY & LAUNCH */}
+        {/* 3. SOLO VS CO-OP PARTY MODE */}
+        <div className="space-y-1.5">
+          <div className="font-display font-bold text-xs uppercase text-amber-900 flex items-center gap-1.5">
+            <Users className="w-4 h-4 text-emerald-700" /> 3. Party Mode (1–4 Players)
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setPartyMode('solo')}
+              className={`p-2.5 rounded-xl border-2 text-left transition flex items-center gap-2 ${
+                partyMode === 'solo'
+                  ? 'bg-emerald-50 border-emerald-700 text-emerald-950 ring-2 ring-amber-400'
+                  : 'bg-amber-50/80 border-amber-900/25 text-amber-950 hover:bg-white'
+              }`}
+            >
+              <User className="w-4 h-4 shrink-0 text-emerald-700" />
+              <div>
+                <div className="font-display font-bold text-xs">Solo Raid (1P)</div>
+                <div className="text-[10px] opacity-85">Base solo Boss HP · Ideal for No-Hit challenges</div>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setPartyMode('coop')}
+              className={`p-2.5 rounded-xl border-2 text-left transition flex items-center gap-2 ${
+                partyMode === 'coop'
+                  ? 'bg-purple-50 border-purple-700 text-purple-950 ring-2 ring-amber-400'
+                  : 'bg-amber-50/80 border-amber-900/25 text-amber-950 hover:bg-white'
+              }`}
+            >
+              <Users className="w-4 h-4 shrink-0 text-purple-700" />
+              <div>
+                <div className="font-display font-bold text-xs">Co-op Party (Up to 4P)</div>
+                <div className="text-[10px] opacity-85">+65% Boss HP per extra ally · Instanced Treasure Bags!</div>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        {/* 4. MATCHUP SUMMARY & LAUNCH */}
         <div className="p-3 rounded-xl bg-amber-950/10 border border-amber-900/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="text-[11px] text-amber-950 space-y-0.5">
             <div className="font-display font-bold flex items-center gap-1.5">
               <ShieldAlert className="w-4 h-4 text-rose-700" />
-              {bossDef.khmerName} ({selectedDiff.toUpperCase()}) — {scaledHp.toLocaleString()} HP
+              {bossDef.khmerName} ({selectedDiff.toUpperCase()} · {partyMode === 'coop' ? 'CO-OP 2P Preview' : 'SOLO'}) — {scaledHp.toLocaleString()} HP
             </div>
             <div>
               Estimated Hit Taken: <strong className="text-rose-800">-{expectedHitTaken} HP</strong> · Drops:{' '}
@@ -193,11 +238,18 @@ export const ModeSelectorModal: React.FC<ModeSelectorModalProps> = ({
 
           <button
             type="button"
-            onClick={() => onEnterDungeon(selectedBoss, selectedDiff)}
+            onClick={() =>
+              onEnterDungeon(
+                selectedBoss,
+                selectedDiff,
+                partyMode,
+                partyMode === 'coop' ? `coop_${selectedBoss}_${selectedDiff}` : undefined
+              )
+            }
             className="px-5 py-2.5 rounded-xl bg-gradient-to-b from-purple-600 to-purple-800 hover:from-purple-500 hover:to-purple-700 text-amber-50 border-2 border-purple-950 font-display font-bold text-sm flex items-center justify-center gap-2 shadow-lg shrink-0 active:scale-95 transition"
           >
             <Swords className="w-4 h-4" />
-            ENTER DUNGEON
+            {partyMode === 'coop' ? 'JOIN CO-OP RAID' : 'ENTER DUNGEON'}
           </button>
         </div>
       </div>

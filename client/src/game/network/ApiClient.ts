@@ -55,6 +55,8 @@ export interface SavedProfilePayload {
   activeBuffs: PlayerState['activeBuffs'];
   quickSnackSlots: PlayerState['quickSnackSlots'];
   clearedBosses: PlayerState['clearedBosses'];
+  pagodaBundles: PlayerState['pagodaBundles'];
+  luckyWheelPity: number;
   activeClass: PlayerState['activeClass'];
   weapon: PlayerState['weapon'];
   defense: number;
@@ -83,6 +85,8 @@ export function serializePlayerStateForSave(state: PlayerState): SavedProfilePay
     activeBuffs: state.activeBuffs,
     quickSnackSlots: [...state.quickSnackSlots],
     clearedBosses: [...state.clearedBosses],
+    pagodaBundles: { ...(state.pagodaBundles ?? {}) },
+    luckyWheelPity: state.luckyWheelPity ?? 0,
     activeClass: state.activeClass,
     weapon: { ...state.weapon },
     defense: state.defense,
@@ -185,6 +189,9 @@ export function hydratePlayerStateFromSave(
         ? [saved.quickSnackSlots[0], saved.quickSnackSlots[1], saved.quickSnackSlots[2]]
         : [...INITIAL_PLAYER_STATE.quickSnackSlots],
     clearedBosses: Array.isArray(saved?.clearedBosses) ? saved.clearedBosses : [],
+    pagodaBundles:
+      saved?.pagodaBundles && typeof saved.pagodaBundles === 'object' ? saved.pagodaBundles : {},
+    luckyWheelPity: typeof saved?.luckyWheelPity === 'number' ? saved.luckyWheelPity : 0,
   };
 
   const bridge = computeVillageToDungeonBridge(provisional);
@@ -332,4 +339,84 @@ export async function declineFriendRequestApi(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const res = await postJson<{ ok: true }>('/friends/decline', { friendshipId }, session.token);
   return res.ok ? { ok: true } : res;
+}
+
+// ==================== PHASE 8 PLAYER MARKET REST CLIENT ====================
+
+export interface MarketListingClient {
+  id: string;
+  sellerId: string;
+  sellerName: string;
+  itemId: string;
+  itemName: string;
+  quantity: number;
+  quality: 'normal' | 'gold_star';
+  priceCoins: number;
+  createdAt: string;
+}
+
+export async function fetchMarketListings(): Promise<MarketListingClient[]> {
+  try {
+    const res = await fetch(`${getApiBase()}/market`);
+    if (!res.ok) throw new Error('Failed');
+    const json = (await res.json()) as { listings?: MarketListingClient[] };
+    return Array.isArray(json.listings) ? json.listings : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function createMarketListingApi(
+  session: AuthSession | null,
+  payload: {
+    sellerName: string;
+    itemId: string;
+    itemName: string;
+    quantity: number;
+    quality: 'normal' | 'gold_star';
+    priceCoins: number;
+  }
+): Promise<{ ok: true; listing: MarketListingClient } | { ok: false; error: string }> {
+  const res = await postJson<{ listing: MarketListingClient }>(
+    '/market/list',
+    payload,
+    session?.token
+  );
+  if (!res.ok) return res;
+  return { ok: true, listing: res.data.listing };
+}
+
+export async function buyMarketListingApi(
+  session: AuthSession | null,
+  listingId: string,
+  buyerName: string
+): Promise<
+  | { ok: true; listing: MarketListingClient; taxCoins: number; sellerPayout: number }
+  | { ok: false; error: string }
+> {
+  const res = await postJson<{
+    listing: MarketListingClient;
+    taxCoins: number;
+    sellerPayout: number;
+  }>('/market/buy', { listingId, buyerName }, session?.token);
+  if (!res.ok) return res;
+  return {
+    ok: true,
+    listing: res.data.listing,
+    taxCoins: res.data.taxCoins,
+    sellerPayout: res.data.sellerPayout,
+  };
+}
+
+export async function cancelMarketListingApi(
+  session: AuthSession | null,
+  listingId: string
+): Promise<{ ok: true; listing: MarketListingClient } | { ok: false; error: string }> {
+  const res = await postJson<{ listing: MarketListingClient }>(
+    '/market/cancel',
+    { listingId },
+    session?.token
+  );
+  if (!res.ok) return res;
+  return { ok: true, listing: res.data.listing };
 }

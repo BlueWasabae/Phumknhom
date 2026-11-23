@@ -31,7 +31,7 @@ export interface BossControllerCallbacks {
 export class BossController {
   public readonly def: KhmerBossDef;
   public readonly difficulty: DifficultyMode;
-  public readonly maxHp: number;
+  public maxHp: number;
   public hp: number;
   public phase: 1 | 2 = 1;
   public stage: BossStage = 'idle';
@@ -138,6 +138,20 @@ export class BossController {
     if (this.stage === 'active') return 'STRIKING';
     if (this.stage === 'recovery') return 'PUNISH WINDOW';
     return 'STALKING';
+  }
+
+  /**
+   * Synchronizes shared Co-op DungeonRoom boss HP, party-scaled Max HP, and Phase.
+   */
+  public applyCoopBossSync(hp: number, maxHp: number, phase: 1 | 2): void {
+    this.maxHp = Math.max(1, maxHp);
+    this.hp = Math.max(0, Math.min(this.maxHp, hp));
+    if (phase === 2 && this.phase === 1 && this.alive && this.hp > 0) {
+      this.triggerPhase2Roar();
+    }
+    if (this.hp <= 0 && this.alive) {
+      this.die();
+    }
   }
 
   public takeDamage(amount: number, knockDir: number, heavy = false): boolean {

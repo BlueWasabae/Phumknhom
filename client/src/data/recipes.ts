@@ -291,7 +291,10 @@ export function assignQuickSnackSlot(
 export function buyStreetSnack(state: PlayerState, snackId: string, qty = 1): SnackActionResult {
   const def = STREET_SNACKS[snackId];
   if (!def) return { state, ok: false, message: 'Unknown street snack.' };
-  const totalCost = def.buyCoins * qty;
+  // Kitchen Altar Pagoda Bundle grants permanent 20% Snack Cart discount!
+  const kitchenDone = (state.pagodaBundles?.altar_kitchen?.length ?? 0) >= 3;
+  const unitPrice = kitchenDone ? Math.round(def.buyCoins * 0.8) : def.buyCoins;
+  const totalCost = unitPrice * qty;
   if (state.currencies.coins < totalCost) {
     return {
       state,
@@ -312,7 +315,7 @@ export function buyStreetSnack(state: PlayerState, snackId: string, qty = 1): Sn
       quickSnackSlots: nextSlots,
     },
     ok: true,
-    message: `Bought ${qty}× ${def.icon} ${def.name} (-${totalCost.toLocaleString()} Coins)!`,
+    message: `Bought ${qty}× ${def.icon} ${def.name} (-${totalCost.toLocaleString()} Coins${kitchenDone ? ' · -20% Pagoda Discount!' : ''})!`,
   };
 }
 

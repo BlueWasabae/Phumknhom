@@ -242,13 +242,17 @@ export function plantSeedOnPlot(
     return { state, ok: false, message: `Out of ${crop.name} Seeds! Buy more at the Farm Stall.` };
   }
 
+  // Harvest Altar Pagoda Restoration unlocks Glass Greenhouse: +20% permanent farm growth speed!
+  const greenhouseUnlocked = (state.pagodaBundles?.altar_harvest?.length ?? 0) >= 3;
+  const growMs = Math.round(crop.growSeconds * 1000 * (greenhouseUnlocked ? 0.8 : 1));
+
   const plots = state.farm.plots.map((p) =>
     p.index === index
       ? {
           ...p,
           cropId: crop.id,
           plantedAt: now,
-          effectiveGrowMs: crop.growSeconds * 1000,
+          effectiveGrowMs: growMs,
           watered: false,
           fertilized: false,
         }
@@ -261,7 +265,7 @@ export function plantSeedOnPlot(
       5
     ),
     ok: true,
-    message: `Planted ${crop.name} (${formatRemainingTime(crop.growSeconds * 1000)})!`,
+    message: `Planted ${crop.name} (${formatRemainingTime(growMs)}${greenhouseUnlocked ? ' · Greenhouse -20%' : ''})!`,
   };
 }
 
