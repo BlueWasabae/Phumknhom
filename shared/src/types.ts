@@ -255,7 +255,7 @@ export const DEFAULT_LOADOUT: EquippedLoadout = {
   shirt: 'shirt_krama_set',
   pants: 'pants_village_shorts',
   wings: null,
-  pet: 'pet_mini_naga',
+  pet: null,
   weapon: 'weapon_phkak',
   armor: 'armor_rattan_guard',
 };
@@ -401,10 +401,6 @@ export const INITIAL_PLAYER_STATE: PlayerState = {
     { itemId: 'wings_ember', quantity: 1, itemLevel: 6 },
     { itemId: 'wings_garuda', quantity: 1, itemLevel: 10 },
     { itemId: 'wings_yant_halo', quantity: 1, itemLevel: 8 },
-    // Pets
-    { itemId: 'pet_mini_naga', quantity: 1, itemLevel: 5 },
-    { itemId: 'pet_firefly_lantern', quantity: 1, itemLevel: 3 },
-    { itemId: 'pet_lucky_kitten', quantity: 1, itemLevel: 4 },
     // Phase 3 Starter Seeds, Fertilizer & Sample Crops/Ingredients for Artisan & Cooking
     { itemId: 'seed_trakuon', quantity: 8, itemLevel: 1 },
     { itemId: 'seed_slek_krey', quantity: 4, itemLevel: 1 },

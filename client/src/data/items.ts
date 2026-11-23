@@ -469,7 +469,7 @@ export const ITEM_CATALOG: Record<string, CatalogItem> = {
     stats: { defense: 3, critChance: 0.05 },
   },
 
-  // ==================== PETS ====================
+  // ==================== PETS (SHOP / LUCKY WHEEL / DIAMOND STORE ONLY — NO FREE STARTER PET) ====================
   pet_mini_naga: {
     id: 'pet_mini_naga',
     name: 'Mini-Naga Spirit',
@@ -481,6 +481,7 @@ export const ITEM_CATALOG: Record<string, CatalogItem> = {
     primaryColor: '#10b981',
     accentColor: '#facc15',
     styleVariant: 'mini_naga',
+    shopPrice: { coins: 1200 },
     stats: { attack: 3 },
   },
   pet_firefly_lantern: {
@@ -494,6 +495,7 @@ export const ITEM_CATALOG: Record<string, CatalogItem> = {
     primaryColor: '#fde047',
     accentColor: '#fb923c',
     styleVariant: 'firefly_lantern',
+    shopPrice: { coins: 550 },
     stats: { critChance: 0.03 },
   },
   pet_lucky_kitten: {
@@ -507,6 +509,7 @@ export const ITEM_CATALOG: Record<string, CatalogItem> = {
     primaryColor: '#f8fafc',
     accentColor: '#ef4444',
     styleVariant: 'lucky_kitten',
+    shopPrice: { coins: 850 },
     stats: { maxHp: 15 },
   },
 

@@ -76,16 +76,17 @@ function getCachedPetImg(url: string): HTMLImageElement | null {
 
 /**
  * Draws the REAL Ninja Adventure animal/spirit Pet sprite onto React preview canvases.
+ * Renders nothing when petId is empty or unequipped.
  */
 export function drawPetToCanvas(
   ctx: CanvasRenderingContext2D,
-  petId: string,
+  petId: string | null | undefined,
   cx: number,
   cy: number,
   scale = 1,
   timeMs = 0
 ): void {
-  if (!ITEM_CATALOG[petId]) return;
+  if (!petId || !ITEM_CATALOG[petId]) return;
   const map = resolvePetSprite(petId);
   const img = getCachedPetImg(map.url);
   const bob = Math.sin(timeMs / 240) * 2;
@@ -101,19 +102,23 @@ export function drawPetToCanvas(
 }
 
 /**
- * Companion Pet entity rendered using REAL animated Ninja Adventure animal & spirit sprites
- * (CatWhite, Frog, LionCub, Spirit, LanternRed) with smooth bobbing follow and
- * Barami Spirit Tamer auto-attacks in Dungeon.
+ * Companion Pet entity rendered using REAL animated Ninja Adventure animal & spirit sprites.
+ * - Spawns ZERO sprites or shadows when `petId` is `null` (pets must be bought & equipped!).
+ * - For Barami Spirit Tamer (`Krama Whip`), `trySpiritAutoAttack(..., allowTemporarySpirit = true)`
+ *   summons a brief temporary glowing combat spirit while attacking even if no cosmetic pet is equipped.
  */
 export class Pet {
   private scene: Phaser.Scene;
   private zone: ZoneType;
-  private sprite: Phaser.GameObjects.Sprite;
-  private shadow: Phaser.GameObjects.Image;
-  private petId: string | null;
+  private sprite: Phaser.GameObjects.Sprite | null = null;
+  private shadow: Phaser.GameObjects.Image | null = null;
+  private petId: string | null = null;
   private lastAttackAt = 0;
   private curX: number;
   private curY: number;
+  private lastOwnerX: number;
+  private lastOwnerY: number;
+  private lastOwnerFacingRight = true;
 
   constructor(
     scene: Phaser.Scene,
@@ -125,39 +130,55 @@ export class Pet {
   ) {
     this.scene = scene;
     this.zone = zone;
-    this.petId = petId;
     this.curX = x;
     this.curY = y;
+    this.lastOwnerX = x;
+    this.lastOwnerY = y;
 
-    const scale = zone === 'overworld' ? 0.82 : 2.05;
-
-    this.shadow = scene.add
-      .image(x, y + (zone === 'overworld' ? 6 : 16), 'soft_shadow')
-      .setScale(zone === 'overworld' ? 0.2 : 0.48)
-      .setAlpha(0.7);
-
-    this.sprite = scene.add
-      .sprite(x, y, 'pet_cat_white', 0)
-      .setScale(scale)
-      .setOrigin(0.5, 0.85);
+    // Only spawn Phaser objects if a real bought/equipped petId is present!
     this.setPet(petId);
   }
 
-  public setPet(petId: string | null): void {
-    this.petId = petId;
-    const visible = Boolean(petId && ITEM_CATALOG[petId]);
-    this.sprite.setVisible(visible);
-    this.shadow.setVisible(visible);
-    if (!visible || !petId) return;
+  private destroySprites(): void {
+    this.sprite?.destroy();
+    this.sprite = null;
+    this.shadow?.destroy();
+    this.shadow = null;
+  }
 
-    const map = resolvePetSprite(petId);
-    if (this.scene.textures.exists(map.texKey)) {
+  public setPet(petId: string | null): void {
+    this.petId = petId && ITEM_CATALOG[petId] ? petId : null;
+    if (!this.petId) {
+      this.destroySprites();
+      return;
+    }
+
+    const map = resolvePetSprite(this.petId);
+    if (!this.scene.textures.exists(map.texKey)) {
+      this.destroySprites();
+      return;
+    }
+
+    const scale = this.zone === 'overworld' ? 0.82 : 2.05;
+    if (!this.shadow) {
+      this.shadow = this.scene.add
+        .image(this.curX, this.curY + (this.zone === 'overworld' ? 6 : 16), 'soft_shadow')
+        .setScale(this.zone === 'overworld' ? 0.2 : 0.48)
+        .setAlpha(0.7);
+    }
+    if (!this.sprite) {
+      this.sprite = this.scene.add
+        .sprite(this.curX, this.curY, map.texKey, 0)
+        .setScale(scale)
+        .setOrigin(0.5, 0.85);
+    } else {
       this.sprite.setTexture(map.texKey, 0);
-      if (map.tint) this.sprite.setTint(map.tint);
-      else this.sprite.clearTint();
-      if (this.scene.anims.exists(map.animKey)) {
-        this.sprite.play(map.animKey, true);
-      }
+    }
+
+    if (map.tint) this.sprite.setTint(map.tint);
+    else this.sprite.clearTint();
+    if (this.scene.anims.exists(map.animKey)) {
+      this.sprite.play(map.animKey, true);
     }
   }
 
@@ -167,13 +188,17 @@ export class Pet {
     ownerY: number,
     ownerFacingRight: boolean
   ): void {
-    if (!this.petId) return;
+    this.lastOwnerX = ownerX;
+    this.lastOwnerY = ownerY;
+    this.lastOwnerFacingRight = ownerFacingRight;
 
     const offsetX = (ownerFacingRight ? -1 : 1) * (this.zone === 'overworld' ? 16 : 40);
     const offsetY = this.zone === 'overworld' ? 2 : -10;
-
     this.curX = Phaser.Math.Linear(this.curX, ownerX + offsetX, 0.11);
     this.curY = Phaser.Math.Linear(this.curY, ownerY + offsetY, 0.13);
+
+    // No pet equipped -> no sprite to render or follow
+    if (!this.petId || !this.sprite || !this.shadow) return;
 
     const bob = Math.sin(time / 220) * (this.zone === 'overworld' ? 1.8 : 4.5);
     this.sprite.setPosition(this.curX, this.curY + bob);
@@ -189,26 +214,61 @@ export class Pet {
     }
   }
 
+  /**
+   * Barami Spirit Tamer combat spirit strike inside DungeonBossScene:
+   * - If the player has an equipped Pet, fires from the Pet.
+   * - If the player has NO cosmetic pet equipped (`petId === null`) and `allowTemporarySpirit` is true,
+   *   briefly summons an ethereal combat spirit beside the player while attacking so Krama Whip stays 100% playable!
+   */
   public trySpiritAutoAttack(
     time: number,
     targetX: number,
     targetY: number,
     onImpact: () => void,
     forced = false,
-    speedMultiplier = 1
+    speedMultiplier = 1,
+    allowTemporarySpirit = false
   ): boolean {
-    if (!this.petId) return false;
+    if (!this.petId && !allowTemporarySpirit) return false;
     const baseCooldown = forced ? 320 : 1250;
     const cooldown = Math.round(baseCooldown / Math.max(0.5, speedMultiplier));
     if (time - this.lastAttackAt < cooldown) return false;
-    if (Phaser.Math.Distance.Between(this.curX, this.curY, targetX, targetY) > 540) return false;
+
+    const originX = this.petId
+      ? this.curX
+      : this.lastOwnerX + (this.lastOwnerFacingRight ? 28 : -28);
+    const originY = this.petId ? this.curY : this.lastOwnerY - 20;
+
+    if (Phaser.Math.Distance.Between(originX, originY, targetX, targetY) > 540) return false;
 
     this.lastAttackAt = time;
-    const def = ITEM_CATALOG[this.petId];
+    const def = this.petId ? ITEM_CATALOG[this.petId] : undefined;
     const colorHex = Number((def?.primaryColor || '#10b981').replace('#', '0x'));
 
+    // Summon a temporary glowing combat spirit if no permanent cosmetic pet is equipped
+    if (!this.petId && this.scene.textures.exists('pet_spirit')) {
+      const tempSpirit = this.scene.add
+        .sprite(originX, originY, 'pet_spirit', 0)
+        .setScale(2.0)
+        .setTint(0x34d399)
+        .setAlpha(0.92)
+        .setFlipX(!this.lastOwnerFacingRight)
+        .setDepth(63);
+      if (this.scene.anims.exists('pet_spirit_idle')) {
+        tempSpirit.play('pet_spirit_idle');
+      }
+      this.scene.tweens.add({
+        targets: tempSpirit,
+        y: originY - 14,
+        alpha: 0,
+        duration: 420,
+        ease: 'Quad.easeOut',
+        onComplete: () => tempSpirit.destroy(),
+      });
+    }
+
     const orb = this.scene.add
-      .circle(this.curX, this.curY - 6, forced ? 8 : 6, colorHex, 0.95)
+      .circle(originX, originY - 6, forced ? 8 : 6, colorHex, 0.95)
       .setStrokeStyle(2, 0xfef08a)
       .setDepth(64);
 
@@ -236,7 +296,6 @@ export class Pet {
   }
 
   public destroy(): void {
-    this.sprite.destroy();
-    this.shadow.destroy();
+    this.destroySprites();
   }
 }

@@ -1419,12 +1419,13 @@ export class DungeonBossScene extends Phaser.Scene {
             if (this.bossCtrl.alive) {
               this.damageBoss(dir, {
                 bonusMult: 0.72 * (1 + bridge.petDamageBonusPct),
-                tag: 'Spirit Bolt',
+                tag: this.player.state.loadout.pet ? 'Spirit Bolt' : 'Summoned Spirit!',
               });
             }
           },
           true,
-          bridge.petAttackSpeedMult
+          bridge.petAttackSpeedMult,
+          true
         );
       }
       return;

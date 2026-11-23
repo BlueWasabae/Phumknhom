@@ -466,7 +466,10 @@ export async function registerPlayer(
   const level = starterProfile?.level ?? 1;
   const xp = starterProfile?.xp ?? 0;
   const lifeStats = starterProfile?.lifeStats ?? {};
-  const loadout = starterProfile?.loadout ?? {};
+  const loadout: Record<string, unknown> = {
+    ...(starterProfile?.loadout ?? {}),
+    pet: starterProfile?.loadout?.pet ?? null,
+  };
   const skills = starterProfile?.skills ?? {};
   const inventory = starterProfile?.inventory ?? [];
   const farm = starterProfile?.farm ?? { plots: [], trees: [], livestock: [], machines: [] };
