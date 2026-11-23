@@ -2,6 +2,81 @@ import Phaser from 'phaser';
 import type { ZoneType } from '@shared/types';
 import { ITEM_CATALOG } from '../../data/items';
 
+const NA_BASE = '/assets/packs/ninja-adventure/Ninja Adventure - Asset Pack';
+
+interface PetSpriteMapping {
+  texKey: string;
+  animKey: string;
+  url: string;
+  frameW: number;
+  frameH: number;
+  tint?: number;
+}
+
+function resolvePetSprite(petId: string): PetSpriteMapping {
+  const variant = ITEM_CATALOG[petId]?.styleVariant;
+  if (variant === 'golden_frog') {
+    return {
+      texKey: 'pet_frog',
+      animKey: 'pet_frog_idle',
+      url: `${NA_BASE}/Actor/Animal/Frog/SpriteSheet.png`,
+      frameW: 16,
+      frameH: 16,
+      tint: 0xfde047,
+    };
+  }
+  if (variant === 'baby_elephant') {
+    return {
+      texKey: 'pet_lioncub',
+      animKey: 'pet_lioncub_idle',
+      url: `${NA_BASE}/Actor/Animal/LionCub/SpriteSheet.png`,
+      frameW: 16,
+      frameH: 16,
+    };
+  }
+  if (variant === 'firefly_lantern') {
+    return {
+      texKey: 'pet_lantern',
+      animKey: 'pet_lantern_idle',
+      url: `${NA_BASE}/Actor/Monster/LanternRed/SpriteSheet.png`,
+      frameW: 16,
+      frameH: 16,
+      tint: 0xfef08a,
+    };
+  }
+  if (variant === 'mini_naga') {
+    return {
+      texKey: 'pet_spirit',
+      animKey: 'pet_spirit_idle',
+      url: `${NA_BASE}/Actor/Monster/Spirit/SpriteSheet.png`,
+      frameW: 16,
+      frameH: 16,
+      tint: 0x34d399,
+    };
+  }
+  return {
+    texKey: 'pet_cat_white',
+    animKey: 'pet_cat_idle',
+    url: `${NA_BASE}/Actor/Animal/CatWhite/SpriteSheet.png`,
+    frameW: 17,
+    frameH: 15,
+  };
+}
+
+const petPreviewCache = new Map<string, HTMLImageElement>();
+function getCachedPetImg(url: string): HTMLImageElement | null {
+  let img = petPreviewCache.get(url);
+  if (!img && typeof Image !== 'undefined') {
+    img = new Image();
+    img.src = url;
+    petPreviewCache.set(url, img);
+  }
+  return img && img.complete && img.naturalWidth > 0 ? img : null;
+}
+
+/**
+ * Draws the REAL Ninja Adventure animal/spirit Pet sprite onto React preview canvases.
+ */
 export function drawPetToCanvas(
   ctx: CanvasRenderingContext2D,
   petId: string,
@@ -10,150 +85,32 @@ export function drawPetToCanvas(
   scale = 1,
   timeMs = 0
 ): void {
-  const def = ITEM_CATALOG[petId];
-  if (!def) return;
-  const bob = Math.sin(timeMs / 220) * 2.5;
+  if (!ITEM_CATALOG[petId]) return;
+  const map = resolvePetSprite(petId);
+  const img = getCachedPetImg(map.url);
+  const bob = Math.sin(timeMs / 240) * 2;
   ctx.save();
+  ctx.imageSmoothingEnabled = false;
   ctx.translate(cx, cy + bob);
-  ctx.scale(scale, scale);
-
-  if (def.styleVariant === 'mini_naga') {
-    // Hovering emerald Mini-Naga spirit with golden crest
-    ctx.fillStyle = def.primaryColor;
-    ctx.strokeStyle = '#064e3b';
-    ctx.lineWidth = 1.6;
-    // Coiled tail
-    ctx.beginPath();
-    ctx.arc(-6, 5, 5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    // Hooded Naga head
-    ctx.beginPath();
-    ctx.arc(0, -4, 9, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    // Golden Angkor crown spire
-    ctx.fillStyle = def.accentColor;
-    ctx.beginPath();
-    ctx.moveTo(-5, -12);
-    ctx.lineTo(0, -20);
-    ctx.lineTo(5, -12);
-    ctx.closePath();
-    ctx.fill();
-    // Bright eyes
-    ctx.fillStyle = '#fef08a';
-    ctx.fillRect(-4, -6, 2.5, 3);
-    ctx.fillRect(2, -6, 2.5, 3);
-  } else if (def.styleVariant === 'firefly_lantern') {
-    // Glowing Mekong Firefly Lantern jar
-    ctx.fillStyle = 'rgba(253, 224, 71, 0.32)';
-    ctx.beginPath();
-    ctx.arc(0, -4, 14 + Math.sin(timeMs / 150) * 1.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#78350f';
-    ctx.fillRect(-5, -14, 10, 4);
-    ctx.fillStyle = def.primaryColor;
-    ctx.strokeStyle = '#92400e';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.roundRect(-7, -10, 14, 15, 5);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(-2, -6, 4, 4);
-  } else if (def.styleVariant === 'baby_elephant') {
-    // Adorable Baby Angkor Elephant with crimson-gold ceremonial cloth
-    ctx.fillStyle = def.primaryColor;
-    ctx.strokeStyle = '#334155';
-    ctx.lineWidth = 1.5;
-    // Big floppy ears
-    ctx.beginPath();
-    ctx.ellipse(-9, -6, 5, 7, -0.2, 0, Math.PI * 2);
-    ctx.ellipse(9, -6, 5, 7, 0.2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    // Round head & body
-    ctx.beginPath();
-    ctx.roundRect(-8, -11, 16, 15, 7);
-    ctx.fill();
-    ctx.stroke();
-    // Cute curved trunk
-    ctx.beginPath();
-    ctx.roundRect(-2, -3, 4, 9, 2);
-    ctx.fill();
-    ctx.stroke();
-    // Crimson ceremonial crown cloth
-    ctx.fillStyle = def.accentColor;
-    ctx.fillRect(-5, -12, 10, 4);
-    ctx.fillStyle = '#facc15';
-    ctx.fillRect(-2, -12, 4, 4);
-    ctx.fillStyle = '#0f172a';
-    ctx.fillRect(-5, -7, 2.5, 2.5);
-    ctx.fillRect(2.5, -7, 2.5, 2.5);
-  } else if (def.styleVariant === 'golden_frog') {
-    // Cheerful Golden Lucky Frog
-    ctx.fillStyle = def.primaryColor;
-    ctx.strokeStyle = '#854d0e';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.ellipse(0, -3, 10, 8, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    // Bulging frog eyes
-    ctx.beginPath();
-    ctx.arc(-5, -10, 3.8, 0, Math.PI * 2);
-    ctx.arc(5, -10, 3.8, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = '#0f172a';
-    ctx.fillRect(-6, -11, 2.5, 2.5);
-    ctx.fillRect(4, -11, 2.5, 2.5);
-    ctx.fillStyle = def.accentColor;
-    ctx.fillRect(-5, -1, 10, 2);
-  } else {
-    // Lucky White Kitten wearing tiny red Krama scarf
-    ctx.fillStyle = def.primaryColor;
-    ctx.strokeStyle = '#334155';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.roundRect(-9, -11, 18, 14, 6);
-    ctx.fill();
-    ctx.stroke();
-    // Cat ears
-    ctx.beginPath();
-    ctx.moveTo(-8, -9);
-    ctx.lineTo(-10, -16);
-    ctx.lineTo(-3, -11);
-    ctx.moveTo(8, -9);
-    ctx.lineTo(10, -16);
-    ctx.lineTo(3, -11);
-    ctx.fill();
-    ctx.stroke();
-    // Red Krama scarf
-    ctx.fillStyle = def.accentColor;
-    ctx.fillRect(-8, -1, 16, 3.5);
-    // Cute eyes & nose
-    ctx.fillStyle = '#0f172a';
-    ctx.fillRect(-5, -7, 2.5, 3);
-    ctx.fillRect(2.5, -7, 2.5, 3);
-    ctx.fillStyle = '#f472b6';
-    ctx.fillRect(-1, -4, 2, 1.5);
+  if (img) {
+    const w = map.frameW * scale * 1.35;
+    const h = map.frameH * scale * 1.35;
+    ctx.drawImage(img, 0, 0, map.frameW, map.frameH, -w / 2, -h / 2, w, h);
   }
-
   ctx.restore();
 }
 
 /**
- * Companion Pet entity smoothly floating/following behind the player
- * with bobbing idle animation and optional Barami Spirit Tamer auto-attacks in Dungeon.
+ * Companion Pet entity rendered using REAL animated Ninja Adventure animal & spirit sprites
+ * (CatWhite, Frog, LionCub, Spirit, LanternRed) with smooth bobbing follow and
+ * Barami Spirit Tamer auto-attacks in Dungeon.
  */
 export class Pet {
   private scene: Phaser.Scene;
   private zone: ZoneType;
-  private sprite: Phaser.GameObjects.Image;
+  private sprite: Phaser.GameObjects.Sprite;
   private shadow: Phaser.GameObjects.Image;
   private petId: string | null;
-  private texKey: string;
   private lastAttackAt = 0;
   private curX: number;
   private curY: number;
@@ -164,32 +121,26 @@ export class Pet {
     y: number,
     petId: string | null,
     zone: ZoneType,
-    texKey = 'active_pet_tex'
+    _texKey = 'active_pet_tex'
   ) {
     this.scene = scene;
     this.zone = zone;
     this.petId = petId;
-    this.texKey = texKey;
     this.curX = x;
     this.curY = y;
 
-    this.ensureTexture();
-    const scale = zone === 'overworld' ? 0.42 : 0.95;
+    const scale = zone === 'overworld' ? 0.82 : 2.05;
 
     this.shadow = scene.add
-      .image(x, y + (zone === 'overworld' ? 7 : 18), 'soft_shadow')
-      .setScale(zone === 'overworld' ? 0.22 : 0.46)
-      .setAlpha(0.75);
+      .image(x, y + (zone === 'overworld' ? 6 : 16), 'soft_shadow')
+      .setScale(zone === 'overworld' ? 0.2 : 0.48)
+      .setAlpha(0.7);
 
-    this.sprite = scene.add.image(x, y, this.texKey).setScale(scale).setOrigin(0.5, 0.8);
+    this.sprite = scene.add
+      .sprite(x, y, 'pet_cat_white', 0)
+      .setScale(scale)
+      .setOrigin(0.5, 0.85);
     this.setPet(petId);
-  }
-
-  private ensureTexture(): Phaser.Textures.CanvasTexture | null {
-    if (this.scene.textures.exists(this.texKey)) {
-      return this.scene.textures.get(this.texKey) as Phaser.Textures.CanvasTexture;
-    }
-    return this.scene.textures.createCanvas(this.texKey, 48, 48);
   }
 
   public setPet(petId: string | null): void {
@@ -199,13 +150,15 @@ export class Pet {
     this.shadow.setVisible(visible);
     if (!visible || !petId) return;
 
-    const tex = this.ensureTexture();
-    if (!tex) return;
-    const ctx = tex.getContext();
-    ctx.imageSmoothingEnabled = false;
-    ctx.clearRect(0, 0, 48, 48);
-    drawPetToCanvas(ctx, petId, 24, 30, 1.25, 0);
-    tex.refresh();
+    const map = resolvePetSprite(petId);
+    if (this.scene.textures.exists(map.texKey)) {
+      this.sprite.setTexture(map.texKey, 0);
+      if (map.tint) this.sprite.setTint(map.tint);
+      else this.sprite.clearTint();
+      if (this.scene.anims.exists(map.animKey)) {
+        this.sprite.play(map.animKey, true);
+      }
+    }
   }
 
   public update(
@@ -216,30 +169,26 @@ export class Pet {
   ): void {
     if (!this.petId) return;
 
-    const offsetX = (ownerFacingRight ? -1 : 1) * (this.zone === 'overworld' ? 17 : 38);
-    const offsetY = this.zone === 'overworld' ? -3 : -14;
+    const offsetX = (ownerFacingRight ? -1 : 1) * (this.zone === 'overworld' ? 16 : 40);
+    const offsetY = this.zone === 'overworld' ? 2 : -10;
 
-    this.curX = Phaser.Math.Linear(this.curX, ownerX + offsetX, 0.1);
-    this.curY = Phaser.Math.Linear(this.curY, ownerY + offsetY, 0.12);
+    this.curX = Phaser.Math.Linear(this.curX, ownerX + offsetX, 0.11);
+    this.curY = Phaser.Math.Linear(this.curY, ownerY + offsetY, 0.13);
 
-    const bob = Math.sin(time / 220) * (this.zone === 'overworld' ? 2.2 : 5);
+    const bob = Math.sin(time / 220) * (this.zone === 'overworld' ? 1.8 : 4.5);
     this.sprite.setPosition(this.curX, this.curY + bob);
     this.sprite.setFlipX(!ownerFacingRight);
 
     if (this.zone === 'overworld') {
       const depth = this.curY + 8;
       this.sprite.setDepth(depth);
-      this.shadow.setPosition(this.curX, this.curY + 7).setDepth(depth - 1);
+      this.shadow.setPosition(this.curX, this.curY + 5).setDepth(depth - 1);
     } else {
       this.sprite.setDepth(49);
-      this.shadow.setPosition(this.curX, ownerY + 20).setDepth(47);
+      this.shadow.setPosition(this.curX, ownerY + 21).setDepth(47);
     }
   }
 
-  /**
-   * Barami Spirit Tamer auto-attack helper inside DungeonBossScene:
-   * Launches a glowing spirit orb from the pet toward the boss target on a cooldown.
-   */
   public trySpiritAutoAttack(
     time: number,
     targetX: number,
@@ -270,7 +219,6 @@ export class Pet {
       duration: 240,
       ease: 'Quad.easeIn',
       onComplete: () => {
-        // Impact spirit ring burst
         const ring = this.scene.add.circle(targetX, targetY, 10, colorHex, 0.45).setDepth(65);
         this.scene.tweens.add({
           targets: ring,

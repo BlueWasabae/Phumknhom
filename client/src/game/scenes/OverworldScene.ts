@@ -563,19 +563,18 @@ export class OverworldScene extends Phaser.Scene {
       onInteract: () => EventBus.emit('ui:openModal', { modal: 'snackShop', shopTab: 'primary' }),
     });
 
-    // 4. FASHION SHOP — Custom Khmer Boutique if present, else Blue-Roof Boutique
-    const hasCustomBoutique = this.textures.exists('fashion_boutique');
+    // 4. FASHION SHOP — Real Ninja Adventure Blue-Roof Boutique (or custom Khmer PNG if present)
     this.addBuildingOrProp({
-      texture: hasCustomBoutique ? 'fashion_boutique' : 'sv_house_blue',
+      texture: 'fashion_boutique',
       x: 705,
       y: 356,
-      scale: hasCustomBoutique ? 0.68 : 1.15,
-      shadowW: 86,
-      shadowH: 24,
-      bodyW: 66,
-      bodyH: 30,
+      scale: 1.4,
+      shadowW: 78,
+      shadowH: 22,
+      bodyW: 60,
+      bodyH: 28,
       label: 'FASHION SHOP',
-      joinArrowY: 276,
+      joinArrowY: 284,
     });
     this.add.image(705, 370, 'sv_flower_box').setScale(0.85).setDepth(370);
     this.landmarks.push({
@@ -628,18 +627,18 @@ export class OverworldScene extends Phaser.Scene {
 
     // ==================== PHASE 8 VILLAGE LANDMARKS ====================
 
-    // 6. ANCIENT PAGODA RESTORATION (North-Center Hilltop)
+    // 6. ANCIENT PAGODA RESTORATION (North-Center Hilltop — Real Red-Roofed Pagoda!)
     this.addBuildingOrProp({
       texture: 'ancient_pagoda',
       x: 480,
-      y: 204,
-      scale: 0.95,
+      y: 206,
+      scale: 1.38,
       shadowW: 92,
       shadowH: 22,
       bodyW: 66,
       bodyH: 26,
       label: 'ANCIENT PAGODA · BUNDLES',
-      joinArrowY: 112,
+      joinArrowY: 132,
     });
     this.landmarks.push({
       x: 480,
@@ -650,18 +649,18 @@ export class OverworldScene extends Phaser.Scene {
       onInteract: () => EventBus.emit('ui:openModal', { modal: 'pagoda' }),
     });
 
-    // 7. CENTRAL PLAZA LUCKY WHEEL KIOSK (South-East of Plaza)
+    // 7. CENTRAL PLAZA LUCKY WHEEL STALL (Real Ninja Adventure Festival Stall!)
     this.addBuildingOrProp({
       texture: 'lucky_wheel_kiosk',
       x: 590,
       y: 472,
-      scale: 0.9,
-      shadowW: 48,
-      shadowH: 14,
-      bodyW: 36,
+      scale: 1.25,
+      shadowW: 54,
+      shadowH: 15,
+      bodyW: 40,
       bodyH: 18,
       label: 'LUCKY WHEEL',
-      joinArrowY: 410,
+      joinArrowY: 422,
     });
     this.landmarks.push({
       x: 590,
@@ -672,18 +671,18 @@ export class OverworldScene extends Phaser.Scene {
       onInteract: () => EventBus.emit('ui:openModal', { modal: 'luckyWheel' }),
     });
 
-    // 8. VILLAGE PLAYER MARKET BOARD (South-East Market Lane)
+    // 8. VILLAGE PLAYER MARKET STALL (Real Ninja Adventure Market Awning Stall!)
     this.addBuildingOrProp({
       texture: 'market_board',
       x: 715,
       y: 472,
-      scale: 0.95,
-      shadowW: 52,
-      shadowH: 14,
-      bodyW: 40,
+      scale: 1.25,
+      shadowW: 56,
+      shadowH: 15,
+      bodyW: 42,
       bodyH: 18,
       label: 'VILLAGE MARKET (5% TAX)',
-      joinArrowY: 414,
+      joinArrowY: 422,
     });
     this.landmarks.push({
       x: 715,
@@ -694,7 +693,7 @@ export class OverworldScene extends Phaser.Scene {
       onInteract: () => EventBus.emit('ui:openModal', { modal: 'market' }),
     });
 
-    // 9. RIVERSIDE PIER & FISHING POND (South-West Corner)
+    // 9. RIVERSIDE PIER & FISHING POND (Real Serene Village Wooden Pier!)
     const pondGfx = this.add.graphics().setDepth(3);
     pondGfx.fillStyle(0x0369a1, 0.92);
     pondGfx.fillEllipse(215, 515, 168, 92);
@@ -708,16 +707,16 @@ export class OverworldScene extends Phaser.Scene {
 
     this.addBuildingOrProp({
       texture: 'fishing_pier',
-      x: 266,
-      y: 500,
-      scale: 0.85,
-      shadowW: 54,
-      shadowH: 16,
+      x: 268,
+      y: 506,
+      scale: 1.12,
+      shadowW: 44,
+      shadowH: 14,
       label: 'RIVERSIDE PIER · FISH',
-      joinArrowY: 446,
+      joinArrowY: 448,
     });
     this.landmarks.push({
-      x: 266,
+      x: 268,
       y: 496,
       radius: 56,
       label: 'Press [E] or Tap JOIN → Cast Line at Riverside Fishing Pier',
@@ -727,16 +726,16 @@ export class OverworldScene extends Phaser.Scene {
 
     // ==================== EXPANSION LANDMARKS: BUS STOP, ATM, CLUB, BLACKSMITH & PYLON SHRINE ====================
 
-    // 10. VILLAGE EXPRESS BUS STOP (West Plaza Road)
+    // 10. VILLAGE EXPRESS BUS STOP (Real Ninja Adventure Wooden Lantern Signpost)
     const busStop = this.addBuildingOrProp({
       texture: 'bus_stop_sign',
       x: 342,
       y: 404,
-      scale: 0.9,
-      shadowW: 36,
-      shadowH: 10,
+      scale: 1.15,
+      shadowW: 26,
+      shadowH: 9,
       label: 'EXPRESS BUS STOP',
-      joinArrowY: 356,
+      joinArrowY: 360,
     });
     busStop.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
       EventBus.emit('ui:openModal', { modal: 'worldMap' });
@@ -750,55 +749,54 @@ export class OverworldScene extends Phaser.Scene {
       onInteract: () => EventBus.emit('ui:openModal', { modal: 'worldMap' }),
     });
 
-    // 11. VILLAGE ATM BANK VAULT (North-West Plaza Corner)
+    // 11. VILLAGE ATM BANK VAULT (Real Stone Vault House!)
     const atmImg = this.addBuildingOrProp({
       texture: 'atm_kiosk',
-      x: 374,
+      x: 368,
       y: 304,
-      scale: 0.92,
-      shadowW: 34,
-      shadowH: 10,
-      bodyW: 24,
-      bodyH: 16,
+      scale: 1.08,
+      shadowW: 54,
+      shadowH: 14,
+      bodyW: 40,
+      bodyH: 20,
       label: 'ATM BANK VAULT',
     });
     atmImg.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
       EventBus.emit('ui:openModal', { modal: 'reforge', reforgeTab: 'bank' });
     });
     this.landmarks.push({
-      x: 374,
+      x: 368,
       y: 308,
-      radius: 42,
+      radius: 46,
       label: 'Press [E] or Click → ATM Bank Vault (Safe Coin Storage)',
       isDungeonPortal: false,
       onInteract: () => EventBus.emit('ui:openModal', { modal: 'reforge', reforgeTab: 'bank' }),
     });
 
-    // 12. VILLAGE BLACKSMITH FORGE + MASTER SOMNANG BLACKSMITH NPC (North-East Plaza Lane)
+    // 12. VILLAGE BLACKSMITH FORGE + MASTER SOMNANG NPC (Real Stone Furnace + Real Chibi Master Sprite!)
     const forgeImg = this.addBuildingOrProp({
       texture: 'blacksmith_anvil',
       x: 598,
-      y: 286,
-      scale: 0.95,
-      shadowW: 44,
+      y: 288,
+      scale: 1.15,
+      shadowW: 40,
       shadowH: 12,
-      bodyW: 34,
+      bodyW: 32,
       bodyH: 18,
       label: 'BLACKSMITH · REFORGE',
-      joinArrowY: 236,
+      joinArrowY: 230,
     });
     forgeImg.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
       EventBus.emit('ui:openModal', { modal: 'reforge', reforgeTab: 'reforge' });
     });
 
-    const blacksmithNpc = this.addBuildingOrProp({
-      texture: 'npc_blacksmith',
-      x: 632,
-      y: 290,
-      scale: 0.88,
-      shadowW: 26,
-      shadowH: 8,
-    });
+    this.add.image(628, 290, 'soft_shadow').setDisplaySize(22, 8).setDepth(286);
+    const blacksmithNpc = this.add
+      .sprite(628, 290, 'char_master', 0)
+      .setOrigin(0.5, 0.92)
+      .setScale(1.22)
+      .setDepth(290)
+      .setInteractive({ useHandCursor: true });
     this.tweens.add({
       targets: blacksmithNpc,
       y: 288,
@@ -807,7 +805,7 @@ export class OverworldScene extends Phaser.Scene {
       repeat: -1,
       ease: 'Sine.easeInOut',
     });
-    blacksmithNpc.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+    blacksmithNpc.on('pointerdown', () => {
       EventBus.emit('ui:openModal', { modal: 'reforge', reforgeTab: 'reforge' });
     });
     this.landmarks.push({
@@ -819,50 +817,67 @@ export class OverworldScene extends Phaser.Scene {
       onInteract: () => EventBus.emit('ui:openModal', { modal: 'reforge', reforgeTab: 'reforge' }),
     });
 
-    // 12B. SACRED APSARA SHIMMER SPRING (Cavern Edge beside Angkor Dungeon Portal!)
+    // 12B. SACRED APSARA SHIMMER SPRING (Real Animated Purple Water Ripples beside Dungeon Portal!)
     const shimmerGlow = this.add
-      .image(822, 238, 'torch_glow')
+      .image(822, 248, 'torch_glow')
       .setTint(0xc084fc)
       .setScale(0.76)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setDepth(2140)
-      .setAlpha(0.55);
+      .setAlpha(0.58);
     this.glowLights.push(shimmerGlow);
-    const shimmerSpringImg = this.addBuildingOrProp({
-      texture: 'shimmer_spring',
-      x: 822,
-      y: 256,
-      scale: 0.92,
-      shadowW: 54,
-      shadowH: 14,
-      label: 'APSARA SHIMMER SPRING',
-      joinArrowY: 214,
-    });
-    shimmerSpringImg.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+
+    const shimmerHit = this.add
+      .rectangle(822, 250, 48, 24, 0, 0)
+      .setDepth(256)
+      .setInteractive({ useHandCursor: true });
+    for (const rx of [-10, 10]) {
+      const spr = this.add
+        .sprite(822 + rx, 250, 'na_water_purple', 0)
+        .setScale(1.35)
+        .setDepth(252);
+      spr.play('shimmer_ripple');
+    }
+    const shimmerArrow = this.add.image(822, 224, 'join_arrow').setScale(0.52).setDepth(300);
+    this.tweens.add({ targets: shimmerArrow, y: 218, duration: 560, yoyo: true, repeat: -1 });
+    this.add
+      .text(822, 260, 'APSARA SHIMMER', {
+        fontFamily: 'Fredoka, sans-serif',
+        fontSize: '11px',
+        fontStyle: 'bold',
+        color: '#f0abfc',
+        backgroundColor: 'rgba(15, 23, 42, 0.85)',
+        padding: { x: 6, y: 2 },
+      })
+      .setResolution(2)
+      .setScale(0.44)
+      .setOrigin(0.5, 0)
+      .setDepth(262);
+    shimmerHit.on('pointerdown', () => {
       soundManager.playSfx('magic');
       EventBus.emit('ui:openModal', { modal: 'reforge', reforgeTab: 'shimmer' });
     });
     this.landmarks.push({
       x: 822,
-      y: 258,
+      y: 254,
       radius: 46,
       label: 'Press [E] or Click → Sacred Apsara Shimmer Spring (Blessings & Boss Drop Cycle)',
       isDungeonPortal: false,
       onInteract: () => EventBus.emit('ui:openModal', { modal: 'reforge', reforgeTab: 'shimmer' }),
     });
 
-    // 13. PHUM NIGHT CLUB (East Plaza — Tien Len & Ouk Chaktrang!)
+    // 13. PHUM NIGHT CLUB (Real Ninja Adventure Tavern Building!)
     const clubImg = this.addBuildingOrProp({
       texture: 'club_building',
       x: 822,
       y: 364,
-      scale: 0.85,
-      shadowW: 78,
+      scale: 1.32,
+      shadowW: 80,
       shadowH: 20,
-      bodyW: 58,
+      bodyW: 60,
       bodyH: 26,
       label: 'PHUM CLUB · TIEN LEN',
-      joinArrowY: 286,
+      joinArrowY: 294,
     });
     clubImg.setInteractive({ useHandCursor: true }).on('pointerdown', () => this.enterClub());
     this.landmarks.push({
@@ -874,16 +889,16 @@ export class OverworldScene extends Phaser.Scene {
       onInteract: () => this.enterClub(),
     });
 
-    // 14. GREEN PARK: GOLDEN BLESSING SHRINE (Daily +250c & +10% Luck) + BIOME PYLON SHRINE
+    // 14. GREEN PARK: REAL GOLDEN SHRINE GATE + REAL CARVED STONE PYLON SHRINE!
     const parkGfx = this.add.graphics().setDepth(3);
-    parkGfx.fillStyle(0x15803d, 0.48);
-    parkGfx.fillEllipse(468, 514, 184, 78);
+    parkGfx.fillStyle(0x15803d, 0.42);
+    parkGfx.fillEllipse(464, 514, 184, 78);
     parkGfx.lineStyle(1.5, 0x86efac, 0.72);
-    parkGfx.strokeEllipse(468, 514, 174, 68);
+    parkGfx.strokeEllipse(464, 514, 174, 68);
 
-    // 14A. Golden Blessing Shrine (West side of Green Park — pray 1x/day for +250 Coins & +10% Luck 10m!)
+    // 14A. Golden Blessing Shrine Gate (Real Ninja Adventure Red/Gold Torii Shrine!)
     const shrineGlow = this.add
-      .image(422, 488, 'torch_glow')
+      .image(422, 492, 'torch_glow')
       .setTint(0xfacc15)
       .setScale(0.78)
       .setBlendMode(Phaser.BlendModes.ADD)
@@ -894,14 +909,14 @@ export class OverworldScene extends Phaser.Scene {
     const goldenShrineImg = this.addBuildingOrProp({
       texture: 'golden_shrine',
       x: 422,
-      y: 512,
-      scale: 0.92,
-      shadowW: 42,
+      y: 514,
+      scale: 1.18,
+      shadowW: 48,
       shadowH: 13,
-      bodyW: 26,
-      bodyH: 16,
+      bodyW: 32,
+      bodyH: 14,
       label: 'GOLDEN SHRINE · DAILY',
-      joinArrowY: 446,
+      joinArrowY: 468,
     });
     const prayAtShrine = () => {
       this.cameras.main.flash(220, 250, 204, 21);
@@ -917,9 +932,9 @@ export class OverworldScene extends Phaser.Scene {
       onInteract: prayAtShrine,
     });
 
-    // 14B. Angkor Biome Pylon Shrine (East side of Green Park)
+    // 14B. Angkor Biome Pylon Shrine (Real Carved Stone Shrine Statue!)
     const pylonGlow = this.add
-      .image(502, 488, 'torch_glow')
+      .image(502, 492, 'torch_glow')
       .setTint(0x38bdf8)
       .setScale(0.7)
       .setBlendMode(Phaser.BlendModes.ADD)
@@ -930,14 +945,14 @@ export class OverworldScene extends Phaser.Scene {
     const pylonImg = this.addBuildingOrProp({
       texture: 'pylon_shrine',
       x: 502,
-      y: 512,
-      scale: 0.95,
-      shadowW: 44,
+      y: 514,
+      scale: 1.25,
+      shadowW: 42,
       shadowH: 14,
-      bodyW: 26,
+      bodyW: 28,
       bodyH: 16,
       label: 'PYLON SHRINE · MAP',
-      joinArrowY: 448,
+      joinArrowY: 466,
     });
     pylonImg.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
       EventBus.emit('ui:openModal', { modal: 'worldMap' });

@@ -53,7 +53,7 @@ export class BossController {
   private arenaMaxX: number;
   private speedMult: number;
 
-  private sprite: Phaser.GameObjects.Image;
+  private sprite: Phaser.GameObjects.Sprite;
   private shadow: Phaser.GameObjects.Image;
   private throatGlow?: Phaser.GameObjects.Arc;
   private stageBadge: Phaser.GameObjects.Text;
@@ -119,34 +119,64 @@ export class BossController {
     const isAirborne = this.def.rig === 'FloaterRig' || this.def.rig === 'MultiSegmentWormRig';
     this.x = spawnX;
     this.y = isAirborne ? floorY - 210 : floorY;
-    this.baseScale =
-      bossId === 'sdech_kongkaeb'
-        ? 1.55
-        : bossId === 'arp_prey_chrov'
-        ? 1.35
-        : bossId === 'neak_reach'
-        ? 1.3
-        : 1.45;
+
+    // Resolve REAL pixel-art boss texture & scale (preferring custom Khmer PNG if on disk, else Ninja Adventure Boss sheets!)
+    const manifest = scene.cache.json.get('khmer_manifest') as Record<string, string> | undefined;
+    const hasCustomFrog = Boolean(manifest?.boss_sdech_kongkaeb);
+    const hasCustomArp = Boolean(manifest?.boss_arp_prey_chrov);
+    const hasCustomNeak = Boolean(manifest?.boss_neak_reach_head);
+
+    let resolvedTexKey = this.def.textureKey;
+    let idleAnimKey: string | null = null;
+    if (bossId === 'sdech_kongkaeb') {
+      if (hasCustomFrog) {
+        this.baseScale = 1.45;
+      } else {
+        resolvedTexKey = 'boss_giant_frog_idle';
+        idleAnimKey = 'boss_frog_idle';
+        this.baseScale = 3.4;
+      }
+    } else if (bossId === 'arp_prey_chrov') {
+      if (hasCustomArp) {
+        this.baseScale = 1.35;
+      } else {
+        resolvedTexKey = 'boss_giant_spirit_idle';
+        idleAnimKey = 'boss_spirit_idle';
+        this.baseScale = 2.5;
+      }
+    } else if (bossId === 'neak_reach') {
+      resolvedTexKey = hasCustomNeak ? 'boss_neak_reach_head' : 'boss_dragon_head';
+      this.baseScale = hasCustomNeak ? 1.35 : 2.15;
+    } else {
+      // Boss #5: Yeak Thmor -> REAL cleaned transparent Khmer sprite (/assets/khmer/bosses/boss_yeak_thmor.png)
+      this.baseScale = 1.45;
+    }
 
     this.shadow = scene.add
       .image(spawnX, floorY - 2, 'soft_shadow')
-      .setDisplaySize(bossId === 'sdech_kongkaeb' ? 168 : bossId === 'arp_prey_chrov' ? 110 : 176, 30)
+      .setDisplaySize(bossId === 'sdech_kongkaeb' ? 168 : bossId === 'arp_prey_chrov' ? 116 : 176, 30)
       .setAlpha(isAirborne ? 0.5 : 1)
       .setDepth(40);
 
-    // Build 9 trailing body segments behind the head via modular WormBossEntity (10 segments total!)
+    // Build 9 trailing real DragonGreen body segments behind the head (10 segments total!)
     if (this.def.rig === 'MultiSegmentWormRig') {
       this.wormEntity = new WormBossEntity(scene, spawnX, this.y, {
         segmentCount: 9,
-        baseScale: this.baseScale,
+        baseScale: hasCustomNeak ? this.baseScale : 2.0,
+        bodyTextureKey: hasCustomNeak ? 'boss_neak_reach_seg' : 'boss_dragon_body',
+        tailTextureKey: hasCustomNeak ? 'boss_neak_reach_tail' : 'boss_dragon_tail',
       });
     }
 
     this.sprite = scene.add
-      .image(spawnX, this.y, this.def.textureKey)
+      .sprite(spawnX, this.y, resolvedTexKey, 0)
       .setOrigin(0.5, isAirborne ? 0.5 : 0.96)
       .setScale(this.baseScale)
       .setDepth(42);
+
+    if (idleAnimKey && scene.anims.exists(idleAnimKey)) {
+      this.sprite.play(idleAnimKey);
+    }
 
     if (bossId === 'sdech_kongkaeb') {
       this.throatGlow = scene.add

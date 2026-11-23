@@ -61,7 +61,7 @@ interface SecretWallState {
   hitsRemaining: number;
   broken: boolean;
   chestClaimed: boolean;
-  wallRect: Phaser.GameObjects.Rectangle;
+  wallRect: Phaser.GameObjects.Image;
   crackLines: Phaser.GameObjects.Graphics;
   shimmer: Phaser.GameObjects.Arc;
   chestSprite?: Phaser.GameObjects.Image;
@@ -306,36 +306,6 @@ export class DungeonBossScene extends Phaser.Scene {
         this.performClassAttack();
       }
     });
-
-    // Glowing Apsara Shimmer Spring in the safe left cavern alcove (click to open Shimmer Tab!)
-    const shimmerPool = this.add
-      .ellipse(240, FLOOR_Y - 6, 76, 18, 0xc084fc, 0.72)
-      .setStrokeStyle(2.5, 0x67e8f9, 0.95)
-      .setDepth(28)
-      .setInteractive({ useHandCursor: true });
-    this.tweens.add({
-      targets: shimmerPool,
-      alpha: 0.42,
-      scaleX: 1.08,
-      duration: 950,
-      yoyo: true,
-      repeat: -1,
-    });
-    shimmerPool.on('pointerdown', () => {
-      soundManager.playSfx('magic');
-      EventBus.emit('ui:openModal', { modal: 'reforge', reforgeTab: 'shimmer' });
-    });
-    this.add
-      .text(240, FLOOR_Y - 26, '✨ APSARA SHIMMER SPRING', {
-        fontFamily: 'Fredoka, sans-serif',
-        fontSize: '10px',
-        fontStyle: 'bold',
-        color: '#f0abfc',
-        backgroundColor: 'rgba(15,23,42,0.85)',
-        padding: { x: 6, y: 2 },
-      })
-      .setOrigin(0.5)
-      .setDepth(30);
 
     this.tossedCoins = [];
     this.parryActiveUntil = 0;
@@ -626,22 +596,24 @@ export class DungeonBossScene extends Phaser.Scene {
    */
   private buildCrackedSecretWall(): void {
     const wx = 780;
-    const wy = 352;
+    const wy = 358;
     const hasTracker = hasTalent(this.initialState.skills, 'foraging', 'forage_tracker');
 
+    // Real Legacy Fantasy rock boulder sprite (ZERO procedural grey square!)
     const wallRect = this.add
-      .rectangle(wx, wy, 56, 62, 0x57534e, 0.96)
-      .setStrokeStyle(2.5, hasTracker ? 0xfacc15 : 0x78716c)
+      .image(wx, wy, 'lf_boulder')
+      .setScale(1.18)
+      .setTint(hasTracker ? 0xfef08a : 0xcbd5e1)
       .setDepth(18);
 
     const crackLines = this.add.graphics().setDepth(19);
-    crackLines.lineStyle(2, 0x1c1917, 0.95);
+    crackLines.lineStyle(2, 0x1c1917, 0.9);
     crackLines.beginPath();
-    crackLines.moveTo(wx - 16, wy - 20);
-    crackLines.lineTo(wx - 2, wy - 4);
-    crackLines.lineTo(wx - 10, wy + 16);
-    crackLines.moveTo(wx - 2, wy - 4);
-    crackLines.lineTo(wx + 15, wy + 8);
+    crackLines.moveTo(wx - 12, wy - 14);
+    crackLines.lineTo(wx - 1, wy - 2);
+    crackLines.lineTo(wx - 8, wy + 12);
+    crackLines.moveTo(wx - 1, wy - 2);
+    crackLines.lineTo(wx + 12, wy + 7);
     crackLines.strokePath();
 
     const shimmer = this.add
@@ -724,8 +696,11 @@ export class DungeonBossScene extends Phaser.Scene {
   }
 
   /**
-   * Placeable Arena Buff Stations (Heart Lantern, Sacred Campfire, Angkor Bast Statue)
-   * + Iridescent Apsara Shimmer Spring & Return Portal activator!
+   * Placeable Arena Buff Stations rendered with REAL animated sprites (ZERO colored rectangles!):
+   * - Heart Lantern: Animated Ninja Adventure LanternRed + Heart icon + soft warm rose glow
+   * - Sacred Campfire: Animated Serene Village 32x32 Campfire + warm flickering torch_glow
+   * - Angkor Ward: Real carved stone Guardian Statue + soft cyan glow
+   * - Apsara Shimmer Spring: Animated Ninja Adventure Purple Water Ripples + violet glow
    */
   private buildArenaBuffStationsAndShimmerSpring(): void {
     const stations: Array<{
@@ -733,40 +708,91 @@ export class DungeonBossScene extends Phaser.Scene {
       x: number;
       y: number;
       label: string;
-      color: number;
+      glowTint: number;
     }> = [
-      { key: 'heartLantern', x: 460, y: 472, label: '❤️ HEART LANTERN (+3 HP/s)', color: 0xf43f5e },
-      { key: 'sacredCampfire', x: 780, y: FLOOR_Y - 14, label: '🔥 CAMPFIRE (+2 HP/s)', color: 0xf97316 },
-      { key: 'bastStatue', x: 1120, y: 458, label: '🗿 ANGKOR WARD (+6 DEF)', color: 0x38bdf8 },
+      { key: 'heartLantern', x: 460, y: 474, label: '❤️ HEART LANTERN (+3 HP/s)', glowTint: 0xf43f5e },
+      { key: 'sacredCampfire', x: 780, y: FLOOR_Y - 12, label: '🔥 CAMPFIRE (+2 HP/s)', glowTint: 0xf97316 },
+      { key: 'bastStatue', x: 1120, y: 456, label: '🗿 ANGKOR WARD (+6 DEF)', glowTint: 0x38bdf8 },
     ];
 
     stations.forEach((st) => {
+      const activeInit = this.arenaStations[st.key];
       const aura = this.add
-        .circle(st.x, st.y, 26, st.color, this.arenaStations[st.key] ? 0.34 : 0.08)
+        .image(st.x, st.y - 6, 'torch_glow')
+        .setTint(st.glowTint)
+        .setScale(activeInit ? 0.95 : 0.45)
+        .setAlpha(activeInit ? 0.72 : 0.14)
         .setBlendMode(Phaser.BlendModes.ADD)
         .setDepth(17);
-      const post = this.add
-        .rectangle(st.x, st.y, 18, 26, st.color, this.arenaStations[st.key] ? 0.95 : 0.45)
-        .setStrokeStyle(2, 0xfef08a)
-        .setDepth(18)
-        .setInteractive({ useHandCursor: true });
+
+      this.tweens.add({
+        targets: aura,
+        scale: activeInit ? 1.12 : 0.5,
+        duration: 620,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+
+      let visual: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image;
+      let heartBadge: Phaser.GameObjects.Image | null = null;
+      if (st.key === 'sacredCampfire') {
+        const fire = this.add
+          .sprite(st.x, st.y + 8, 'sv_campfire_32', 0)
+          .setOrigin(0.5, 0.9)
+          .setScale(1.35)
+          .setDepth(18)
+          .setInteractive({ useHandCursor: true });
+        fire.play('campfire_burn_32');
+        visual = fire;
+      } else if (st.key === 'heartLantern') {
+        const lantern = this.add
+          .sprite(st.x, st.y + 4, 'pet_lantern', 0)
+          .setOrigin(0.5, 0.85)
+          .setScale(2.1)
+          .setDepth(18)
+          .setInteractive({ useHandCursor: true });
+        lantern.play('pet_lantern_idle');
+        heartBadge = this.add
+          .image(st.x, st.y - 26, 'na_heart')
+          .setScale(1.6)
+          .setDepth(19);
+        this.tweens.add({
+          targets: heartBadge,
+          y: st.y - 31,
+          duration: 700,
+          yoyo: true,
+          repeat: -1,
+        });
+        visual = lantern;
+      } else {
+        visual = this.add
+          .image(st.x, st.y + 12, 'angkor_ward_statue')
+          .setOrigin(0.5, 0.92)
+          .setScale(1.35)
+          .setDepth(18)
+          .setInteractive({ useHandCursor: true });
+      }
+      visual.setAlpha(activeInit ? 1 : 0.42);
+
       const txt = this.add
-        .text(st.x, st.y - 22, this.arenaStations[st.key] ? st.label : `Place ${st.label.split(' (')[0]}`, {
+        .text(st.x, st.y - 36, activeInit ? st.label : `Place ${st.label.split(' (')[0]}`, {
           fontFamily: 'Fredoka, sans-serif',
           fontSize: '10px',
           fontStyle: 'bold',
-          color: this.arenaStations[st.key] ? '#fef08a' : '#94a3b8',
+          color: activeInit ? '#fef08a' : '#94a3b8',
           backgroundColor: 'rgba(15, 23, 42, 0.82)',
           padding: { x: 5, y: 2 },
         })
         .setOrigin(0.5, 1)
         .setDepth(21);
 
-      post.on('pointerdown', () => {
+      visual.on('pointerdown', () => {
         this.arenaStations[st.key] = !this.arenaStations[st.key];
         const on = this.arenaStations[st.key];
-        aura.setAlpha(on ? 0.36 : 0.08);
-        post.setAlpha(on ? 0.95 : 0.45);
+        aura.setAlpha(on ? 0.72 : 0.14);
+        visual.setAlpha(on ? 1 : 0.42);
+        heartBadge?.setAlpha(on ? 1 : 0.35);
         txt.setText(on ? st.label : `Place ${st.label.split(' (')[0]}`).setColor(on ? '#fef08a' : '#94a3b8');
         soundManager.playSfx('magic');
         EventBus.emit('ui:toast', {
@@ -775,20 +801,30 @@ export class DungeonBossScene extends Phaser.Scene {
       });
     });
 
-    // Apsara Shimmer Spring (Left Cavern Shelf) + Return Portal Drop
-    const sx = 246;
-    const sy = FLOOR_Y - 6;
-    const pool = this.add
-      .ellipse(sx, sy, 92, 18, 0xa855f7, 0.78)
-      .setStrokeStyle(2.5, 0x67e8f9, 0.95)
-      .setDepth(17)
-      .setInteractive({ useHandCursor: true });
+    // Real Animated Iridescent Apsara Shimmer Spring (Ninja Adventure Purple Water Ripples!)
+    const sx = 250;
+    const sy = FLOOR_Y - 4;
     const glow = this.add
-      .circle(sx, sy - 10, 38, 0xc084fc, 0.25)
+      .image(sx, sy - 10, 'torch_glow')
+      .setTint(0xc084fc)
+      .setScale(1.1)
+      .setAlpha(0.65)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setDepth(16);
-    this.tweens.add({ targets: [pool, glow], alpha: 0.48, duration: 900, yoyo: true, repeat: -1 });
-    pool.on('pointerdown', () => {
+    this.tweens.add({ targets: glow, alpha: 0.38, scale: 1.25, duration: 950, yoyo: true, repeat: -1 });
+
+    const rippleHit = this.add
+      .rectangle(sx, sy - 4, 84, 28, 0, 0)
+      .setDepth(19)
+      .setInteractive({ useHandCursor: true });
+    for (const rx of [-24, 0, 24]) {
+      const spr = this.add
+        .sprite(sx + rx, sy - 2, 'na_water_purple', 0)
+        .setScale(1.85)
+        .setDepth(17);
+      spr.play('shimmer_ripple');
+    }
+    rippleHit.on('pointerdown', () => {
       soundManager.playSfx('magic');
       EventBus.emit('ui:openModal', { modal: 'reforge', reforgeTab: 'shimmer' });
     });
@@ -797,16 +833,16 @@ export class DungeonBossScene extends Phaser.Scene {
         fontFamily: 'Fredoka, sans-serif',
         fontSize: '10px',
         fontStyle: 'bold',
-        color: '#e879f9',
+        color: '#f0abfc',
         backgroundColor: 'rgba(15, 23, 42, 0.85)',
         padding: { x: 6, y: 2 },
       })
       .setOrigin(0.5, 1)
       .setDepth(22);
 
-    // Quick Return Portal Bookmark Button beside Exit Portal
+    // Quick Return Portal Bookmark Button placed cleanly beside Shimmer Spring without label overlap
     const rpBtn = this.add
-      .text(EXIT_PORTAL_X + 128, FLOOR_Y - 12, '🌀 DROP RETURN PORTAL', {
+      .text(362, FLOOR_Y - 10, '🌀 DROP RETURN PORTAL', {
         fontFamily: 'Fredoka, sans-serif',
         fontSize: '10px',
         fontStyle: 'bold',

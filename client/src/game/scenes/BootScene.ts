@@ -5,6 +5,24 @@ const NA = '/assets/packs/ninja-adventure/Ninja Adventure - Asset Pack';
 const SV = '/assets/packs/serene-village/SERENE_VILLAGE_REVAMPED';
 const LF = '/assets/packs/legacy-fantasy/Legacy-Fantasy - High Forest 2.3';
 
+/**
+ * Verified 16x16 4-directional Ninja Adventure character sprite sheets (64x112 = 4 cols x 7 rows):
+ * Col 0=down, 1=up, 2=left, 3=right | Rows 0-3=walk, Row 4=attack, Row 5=jump
+ */
+export const HERO_CHARACTER_SHEETS = [
+  'char_boy',
+  'char_fighter',
+  'char_hunter',
+  'char_monk',
+  'char_ninja',
+  'char_sultan',
+  'char_knight',
+  'char_princess',
+  'char_master',
+] as const;
+
+export type HeroCharacterKey = (typeof HERO_CHARACTER_SHEETS)[number];
+
 export class BootScene extends Phaser.Scene {
   constructor() {
     super('BootScene');
@@ -15,7 +33,7 @@ export class BootScene extends Phaser.Scene {
     const barBg = this.add.rectangle(width / 2, height / 2, 260, 14, 0x1e293b).setStrokeStyle(2, 0xf59e0b);
     const barFill = this.add.rectangle(width / 2 - 126, height / 2, 0, 8, 0xfacc15).setOrigin(0, 0.5);
     const label = this.add
-      .text(width / 2, height / 2 - 24, 'Loading ភូមិខ្ញុំ 16×16 Pixel Art...', {
+      .text(width / 2, height / 2 - 24, 'Loading ភូមិខ្ញុំ Real Pixel-Art Sprites...', {
         fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
         fontSize: '14px',
         color: '#fef3c7',
@@ -31,27 +49,107 @@ export class BootScene extends Phaser.Scene {
       label.destroy();
     });
 
-    // ---- 1. NINJA ADVENTURE PACK (Chibi Character, Props, Slash VFX, Food, Audio) ----
+    // ---- 1. NINJA ADVENTURE: VERIFIED 16x16 CHIBI CHARACTER SPRITESHEETS (64x112) ----
+    const charPaths: Record<HeroCharacterKey, string> = {
+      char_boy: `${NA}/Actor/Character/Boy/SpriteSheet.png`,
+      char_fighter: `${NA}/Actor/Character/FighterRed/SpriteSheet.png`,
+      char_hunter: `${NA}/Actor/Character/Hunter/SpriteSheet.png`,
+      char_monk: `${NA}/Actor/Character/Monk/SpriteSheet.png`,
+      char_ninja: `${NA}/Actor/Character/NinjaDark/SpriteSheet.png`,
+      char_sultan: `${NA}/Actor/Character/Sultan/SpriteSheet.png`,
+      char_knight: `${NA}/Actor/Character/KnightGold/SpriteSheet.png`,
+      char_princess: `${NA}/Actor/Character/Princess/SpriteSheet.png`,
+      char_master: `${NA}/Actor/Character/Master/SpriteSheet.png`,
+    };
+    for (const [key, url] of Object.entries(charPaths)) {
+      this.load.spritesheet(key, url, { frameWidth: 16, frameHeight: 16 });
+    }
+    // Keep player_boy alias for legacy Arcade physics body reference
     this.load.spritesheet('player_boy', `${NA}/Actor/Character/Boy/SpriteSheet.png`, {
       frameWidth: 16,
       frameHeight: 16,
     });
+
+    // ---- 2. NINJA ADVENTURE: VERIFIED REAL WEAPONS (SpriteInHand / Sprite) ----
+    this.load.image('wp_axe', `${NA}/Items/Weapons/Axe/SpriteInHand.png`);
+    this.load.image('wp_bigsword', `${NA}/Items/Weapons/BigSword/SpriteInHand.png`);
+    this.load.image('wp_sword2', `${NA}/Items/Weapons/Sword2/SpriteInHand.png`);
+    this.load.image('wp_bow', `${NA}/Items/Weapons/Bow/Sprite.png`);
+    this.load.image('wp_bow2', `${NA}/Items/Weapons/Bow2/Sprite.png`);
+    this.load.image('wp_book', `${NA}/Items/Weapons/Book/SpriteInHand.png`);
+    this.load.image('wp_whip', `${NA}/Items/Weapons/Whip/SpriteInHand.png`);
+    this.load.image('wp_lance2', `${NA}/Items/Weapons/Lance2/SpriteInHand.png`);
+    this.load.image('wp_sai', `${NA}/Items/Weapons/Sai/SpriteInHand.png`);
+    this.load.image('wp_club', `${NA}/Items/Weapons/Club/SpriteInHand.png`);
+
+    // ---- 3. NINJA ADVENTURE: VERIFIED REAL PETS & SPIRIT COMPANIONS ----
+    this.load.spritesheet('pet_cat_white', `${NA}/Actor/Animal/CatWhite/SpriteSheet.png`, {
+      frameWidth: 17,
+      frameHeight: 15,
+    });
+    this.load.spritesheet('pet_frog', `${NA}/Actor/Animal/Frog/SpriteSheet.png`, {
+      frameWidth: 16,
+      frameHeight: 16,
+    });
+    this.load.spritesheet('pet_lioncub', `${NA}/Actor/Animal/LionCub/SpriteSheet.png`, {
+      frameWidth: 16,
+      frameHeight: 16,
+    });
+    this.load.spritesheet('pet_dog', `${NA}/Actor/Animal/DogYellow/SpriteSheet.png`, {
+      frameWidth: 21,
+      frameHeight: 17,
+    });
+    this.load.spritesheet('pet_spirit', `${NA}/Actor/Monster/Spirit/SpriteSheet.png`, {
+      frameWidth: 16,
+      frameHeight: 16,
+    });
+    this.load.spritesheet('pet_lantern', `${NA}/Actor/Monster/LanternRed/SpriteSheet.png`, {
+      frameWidth: 16,
+      frameHeight: 16,
+    });
+
+    // ---- 4. NINJA ADVENTURE: VERIFIED REAL BOSS SPRITES ----
+    this.load.spritesheet('boss_giant_frog_idle', `${NA}/Actor/Boss/GiantFrog/Idle40x40.png`, {
+      frameWidth: 40,
+      frameHeight: 40,
+    });
+    this.load.spritesheet('boss_giant_spirit_idle', `${NA}/Actor/Boss/GiantSpirit/Idle.png`, {
+      frameWidth: 50,
+      frameHeight: 50,
+    });
+    this.load.image('boss_dragon_head', `${NA}/Actor/Boss/DragonGreen/Head.png`);
+    this.load.image('boss_dragon_body', `${NA}/Actor/Boss/DragonGreen/Body1.png`);
+    this.load.image('boss_dragon_tail', `${NA}/Actor/Boss/DragonGreen/BodyEnd.png`);
+
+    // ---- 5. NINJA ADVENTURE: VERIFIED TILESETS, FX, TREASURE & AUDIO ----
     this.load.spritesheet('fx_slash', `${NA}/FX/Attack/SlashCurved/SpriteSheet.png`, {
       frameWidth: 32,
       frameHeight: 32,
     });
+    this.load.spritesheet('na_water_purple', `${NA}/Backgrounds/Animated/Water Ripples/SpriteSheetPurple.png`, {
+      frameWidth: 16,
+      frameHeight: 16,
+    });
     this.load.image('na_elements', `${NA}/Backgrounds/Tilesets/TilesetElement.png`);
+    this.load.image('na_houses', `${NA}/Backgrounds/Tilesets/TilesetHouse.png`);
+    this.load.image('na_nature', `${NA}/Backgrounds/Tilesets/TilesetNature.png`);
+    this.load.image('na_chest', `${NA}/Items/Treasure/BigTreasureChest.png`);
+    this.load.image('na_heart', `${NA}/Items/Potion/Heart.png`);
     this.load.image('icon_noodle', `${NA}/Items/Food/Noodle.png`);
     this.load.audio('sfx_levelup', `${NA}/Audio/Jingles/LevelUp1.wav`);
 
-    // ---- 2. SERENE VILLAGE PACK (Native 16x16 Tileset + Animated Campfire) ----
+    // ---- 6. SERENE VILLAGE PACK (Native 16x16 Tileset + Animated Campfires) ----
     this.load.image('serene_16', `${SV}/Serene_Village_16x16.png`);
     this.load.spritesheet('sv_campfire_16', `${SV}/Animated stuff/campfire_16x16.png`, {
       frameWidth: 16,
       frameHeight: 16,
     });
+    this.load.spritesheet('sv_campfire_32', `${SV}/Animated stuff/campfire_32x32.png`, {
+      frameWidth: 32,
+      frameHeight: 32,
+    });
 
-    // ---- 3. LEGACY FANTASY PACK (Parallax Cavern, Tiles, Entrance, Rocks, Wild Boar Mob) ----
+    // ---- 7. LEGACY FANTASY PACK (Parallax Cavern, Tiles, Entrance, Rocks, Wild Boar Mob) ----
     this.load.image('lf_sky', `${LF}/Background/Background.png`);
     this.load.image('lf_trees_bg', `${LF}/Trees/Background.png`);
     this.load.image('lf_tiles', `${LF}/Assets/Tiles.png`);
@@ -66,7 +164,7 @@ export class BootScene extends Phaser.Scene {
       frameHeight: 32,
     });
 
-    // ---- 4. CUSTOM KHMER PIXEL-ART SPRITES (Cleaned Transparent PNGs + Optional Manifest) ----
+    // ---- 8. CUSTOM KHMER PIXEL-ART SPRITES (Verified on Disk + Optional Manifest) ----
     this.load.image('khmer_stilt_house', '/assets/khmer/buildings/khmer_stilt_house.png');
     this.load.image('num_pang_cart', '/assets/khmer/buildings/num_pang_cart.png');
     this.load.image('angkor_portal', '/assets/khmer/buildings/angkor_portal.png');
@@ -96,7 +194,7 @@ export class BootScene extends Phaser.Scene {
 
   private finalizeBoot(): void {
     this.sliceAtlasSubTextures();
-    this.generateUiAndLightTextures();
+    this.generateLightAndUiOverlays();
     this.registerAnimations();
 
     const tabSuffix = Math.floor(10 + Math.random() * 89);
@@ -109,7 +207,14 @@ export class BootScene extends Phaser.Scene {
     });
   }
 
-  private cropToTexture(srcKey: string, dstKey: string, sx: number, sy: number, sw: number, sh: number): void {
+  private cropToTexture(
+    srcKey: string,
+    dstKey: string,
+    sx: number,
+    sy: number,
+    sw: number,
+    sh: number
+  ): void {
     if (this.textures.exists(dstKey) || !this.textures.exists(srcKey)) return;
     const srcImg = this.textures.get(srcKey).getSourceImage() as HTMLImageElement | HTMLCanvasElement;
     const canvasTex = this.textures.createCanvas(dstKey, sw, sh);
@@ -121,9 +226,37 @@ export class BootScene extends Phaser.Scene {
   }
 
   private sliceAtlasSubTextures(): void {
-    // Serene Village native 16x16 grid (304x720 = 19x45 tiles)
-    this.cropToTexture('serene_16', 'sv_grass', 48, 0, 16, 16);
-    this.cropToTexture('serene_16', 'sv_path', 96, 16, 16, 16);
+    // 1. Textured 48x48 Serene Village Meadow Grass (NO flat solid green square!)
+    if (!this.textures.exists('sv_grass') && this.textures.exists('serene_16')) {
+      const svImg = this.textures.get('serene_16').getSourceImage() as HTMLImageElement;
+      const naNature = this.textures.exists('na_nature')
+        ? (this.textures.get('na_nature').getSourceImage() as HTMLImageElement)
+        : null;
+      const tex = this.textures.createCanvas('sv_grass', 48, 48);
+      if (tex) {
+        const ctx = tex.getContext();
+        ctx.imageSmoothingEnabled = false;
+        // Fill 3x3 base Serene Village grass tiles
+        for (let gy = 0; gy < 48; gy += 16) {
+          for (let gx = 0; gx < 48; gx += 16) {
+            ctx.drawImage(svImg, 48, 0, 16, 16, gx, gy, 16, 16);
+          }
+        }
+        // Layer authentic pixel-art grass tufts & clover from Serene Village & Ninja Adventure
+        ctx.drawImage(svImg, 0, 48, 16, 16, 4, 4, 16, 16);
+        ctx.drawImage(svImg, 16, 64, 16, 16, 26, 24, 16, 16);
+        if (naNature) {
+          ctx.globalAlpha = 0.65;
+          ctx.drawImage(naNature, 48, 160, 16, 16, 28, 2, 12, 12);
+          ctx.drawImage(naNature, 64, 160, 16, 16, 6, 30, 12, 12);
+          ctx.globalAlpha = 1;
+        }
+        tex.refresh();
+      }
+    }
+
+    // 2. Serene Village Dirt Path (matching inner sandy-dirt tile, zero mismatched grass corners!)
+    this.cropToTexture('serene_16', 'sv_path', 256, 64, 32, 32);
     this.cropToTexture('serene_16', 'sv_plaza_tile', 256, 64, 32, 32);
     this.cropToTexture('serene_16', 'sv_flowers', 0, 48, 48, 48);
     this.cropToTexture('serene_16', 'sv_sign_wood', 112, 208, 16, 16);
@@ -135,14 +268,56 @@ export class BootScene extends Phaser.Scene {
     this.cropToTexture('serene_16', 'sv_house_red', 0, 336, 48, 64);
     this.cropToTexture('serene_16', 'sv_house_green', 96, 464, 64, 64);
     this.cropToTexture('serene_16', 'sv_house_blue', 96, 592, 64, 64);
+    // Real Serene Village wooden dock / pier!
+    this.cropToTexture('serene_16', 'fishing_pier', 160, 48, 32, 48);
 
-    // Ninja Adventure TilesetElement.png (256x240 = 16x15 tiles)
+    // 3. Real Ninja Adventure TilesetHouse & TilesetElement props (replacing ALL procedural buildings/props!)
+    // Red-roofed Ancient Pagoda (used if custom khmer/buildings/ancient_pagoda.png is not in manifest)
+    this.cropToTexture('na_houses', 'ancient_pagoda', 192, 0, 64, 48);
+    // Blue-roofed Fashion Boutique (used if custom fashion_boutique.png is not in manifest)
+    this.cropToTexture('na_houses', 'fashion_boutique', 256, 0, 48, 48);
+    // Phum Night Club / Tavern building
+    this.cropToTexture('na_houses', 'club_building', 304, 0, 64, 48);
+    // Real Market Stall with awning (replaces blocky market_board!)
+    this.cropToTexture('na_houses', 'market_board', 256, 256, 48, 32);
+    // Real Lucky Wheel / Fortune Stall with goods awning
+    this.cropToTexture('na_houses', 'lucky_wheel_kiosk', 304, 256, 48, 32);
+    // Real Stone Blacksmith Forge Kiln & Anvil
+    this.cropToTexture('na_houses', 'blacksmith_anvil', 496, 192, 32, 48);
+    // Real Carved Stone Guardian Shrine (for Green Park Pylon Shrine & Dungeon Angkor Ward Bast Statue!)
+    this.cropToTexture('na_houses', 'pylon_shrine', 48, 240, 32, 32);
+    this.cropToTexture('na_houses', 'angkor_ward_statue', 80, 240, 32, 32);
+    // Real Golden Torii / Blessing Shrine Gate for Green Park Golden Blessing Shrine!
+    this.cropToTexture('na_houses', 'golden_shrine', 0, 80, 48, 32);
+    // Real Stone Bank / ATM Kiosk Vault house
+    this.cropToTexture('na_houses', 'atm_kiosk', 368, 0, 48, 48);
+    // Real Wooden Notice Signpost for Express Bus Stop
+    this.cropToTexture('na_elements', 'bus_stop_sign', 96, 48, 16, 32);
+
+    // Ninja Adventure Nature Trees (real tropical/golden trees if custom Khmer trees absent!)
+    this.cropToTexture('na_nature', 'sugar_palm_tree', 48, 288, 48, 48);
+    this.cropToTexture('na_nature', 'golden_durian_tree', 144, 288, 48, 48);
+
+    // Ninja Adventure TilesetElement props
     this.cropToTexture('na_elements', 'na_bench', 32, 160, 48, 16);
     this.cropToTexture('na_elements', 'na_cart', 32, 48, 32, 32);
     this.cropToTexture('na_elements', 'na_lantern', 96, 48, 16, 32);
     this.cropToTexture('na_elements', 'na_pebbles', 16, 160, 16, 16);
 
-    // Legacy Fantasy High Forest 2.3
+    // Boss Treasure Bag -> real Ninja Adventure BigTreasureChest!
+    this.cropToTexture('na_chest', 'boss_treasure_bag', 0, 0, 16, 14);
+
+    // Real Boss Sprite Aliases (ZERO procedural boss rectangles!)
+    // Boss #1: Sdech Kongkaeb -> uses real GiantFrog frame if custom khmer PNG not present
+    this.cropToTexture('boss_giant_frog_idle', 'boss_sdech_kongkaeb', 0, 0, 40, 40);
+    // Boss #2: Arp Prey Chrov -> uses real GiantSpirit frame
+    this.cropToTexture('boss_giant_spirit_idle', 'boss_arp_prey_chrov', 0, 0, 50, 50);
+    // Boss #6: Neak Reach -> uses real DragonGreen Head / Body / Tail!
+    this.cropToTexture('boss_dragon_head', 'boss_neak_reach_head', 0, 0, 44, 46);
+    this.cropToTexture('boss_dragon_body', 'boss_neak_reach_seg', 0, 0, 31, 27);
+    this.cropToTexture('boss_dragon_tail', 'boss_neak_reach_tail', 0, 0, 29, 40);
+
+    // Legacy Fantasy High Forest 2.3 (Cavern Dungeon parallax & tiles)
     this.cropToTexture('lf_trees_bg', 'lf_parallax_far', 352, 0, 320, 256);
     this.cropToTexture('lf_trees_bg', 'lf_parallax_mid', 0, 0, 320, 256);
     this.cropToTexture('lf_tiles', 'lf_cave_floor', 16, 96, 48, 64);
@@ -159,8 +334,8 @@ export class BootScene extends Phaser.Scene {
     this.cropToTexture('lf_rocks', 'lf_boulder', 64, 32, 64, 48);
   }
 
-  private generateUiAndLightTextures(): void {
-    // Crisp Yellow Downward "JOIN" Arrow (compact crisp pixel-style)
+  private generateLightAndUiOverlays(): void {
+    // Crisp Yellow Downward "JOIN" Arrow UI indicator
     if (!this.textures.exists('join_arrow')) {
       const tex = this.textures.createCanvas('join_arrow', 34, 36);
       if (tex) {
@@ -187,7 +362,7 @@ export class BootScene extends Phaser.Scene {
       }
     }
 
-    // Soft dark oval ground shadow (reusable for characters, trees, stalls, houses)
+    // Soft radial ground shadow
     if (!this.textures.exists('soft_shadow')) {
       const tex = this.textures.createCanvas('soft_shadow', 64, 24);
       if (tex) {
@@ -204,7 +379,7 @@ export class BootScene extends Phaser.Scene {
       }
     }
 
-    // Glowing portal vortex overlay
+    // Glowing portal vortex additive light
     if (!this.textures.exists('portal_vortex')) {
       const tex = this.textures.createCanvas('portal_vortex', 48, 60);
       if (tex) {
@@ -221,7 +396,7 @@ export class BootScene extends Phaser.Scene {
       }
     }
 
-    // Warm radial flickering torch glow + dust mote dot
+    // Warm radial flickering torch/campfire additive light
     if (!this.textures.exists('torch_glow')) {
       const tex = this.textures.createCanvas('torch_glow', 128, 128);
       if (tex) {
@@ -246,438 +421,20 @@ export class BootScene extends Phaser.Scene {
       }
     }
 
-    // Crisp pixel-art fallback for Boss #1: Sdech Kongkaeb (King Frog)
-    // Automatically skipped if a custom boss_sdech_kongkaeb.png is loaded.
-    if (!this.textures.exists('boss_sdech_kongkaeb')) {
-      const tex = this.textures.createCanvas('boss_sdech_kongkaeb', 96, 84);
-      if (tex) {
-        const ctx = tex.getContext();
-        ctx.imageSmoothingEnabled = false;
-        // Back webbed feet
-        ctx.fillStyle = '#14532d';
-        ctx.fillRect(10, 68, 22, 10);
-        ctx.fillRect(64, 68, 22, 10);
-        // Chunky haunches
-        ctx.fillStyle = '#15803d';
-        ctx.fillRect(12, 44, 20, 26);
-        ctx.fillRect(64, 44, 20, 26);
-        // Main bulbous frog torso
-        ctx.fillStyle = '#16a34a';
-        ctx.fillRect(18, 28, 60, 44);
-        ctx.fillStyle = '#22c55e';
-        ctx.fillRect(22, 32, 52, 34);
-        // Muddy spots & warts
-        ctx.fillStyle = '#14532d';
-        ctx.fillRect(24, 36, 8, 6);
-        ctx.fillRect(62, 38, 10, 6);
-        ctx.fillRect(28, 52, 6, 6);
-        ctx.fillRect(60, 54, 8, 6);
-        // Inflatable cream-gold throat pouch & belly
-        ctx.fillStyle = '#fef08a';
-        ctx.fillRect(30, 48, 36, 20);
-        ctx.fillStyle = '#fde047';
-        ctx.fillRect(34, 52, 28, 14);
-        // Wide grumpy king mouth
-        ctx.fillStyle = '#7f1d1d';
-        ctx.fillRect(24, 44, 48, 4);
-        ctx.fillStyle = '#f472b6';
-        ctx.fillRect(42, 45, 12, 3);
-        // Bulging eyes
-        ctx.fillStyle = '#15803d';
-        ctx.fillRect(22, 16, 18, 16);
-        ctx.fillRect(56, 16, 18, 16);
-        ctx.fillStyle = '#fef08a';
-        ctx.fillRect(25, 19, 12, 10);
-        ctx.fillRect(59, 19, 12, 10);
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(29, 21, 5, 6);
-        ctx.fillRect(62, 21, 5, 6);
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(30, 21, 2, 2);
-        ctx.fillRect(63, 21, 2, 2);
-        // Golden Angkor Frog Crown
-        ctx.fillStyle = '#facc15';
-        ctx.fillRect(34, 14, 28, 8);
-        ctx.fillRect(34, 8, 6, 6);
-        ctx.fillRect(45, 4, 6, 10);
-        ctx.fillRect(56, 8, 6, 6);
-        ctx.fillStyle = '#ef4444';
-        ctx.fillRect(46, 15, 4, 5);
-        // Dark crisp pixel outline accents
-        ctx.strokeStyle = '#052e16';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(18, 28, 60, 44);
-        tex.refresh();
-      }
-    }
-
-    // Glowing Treasure Bag sprite for Boss loot drops
-    if (!this.textures.exists('boss_treasure_bag')) {
-      const tex = this.textures.createCanvas('boss_treasure_bag', 36, 36);
-      if (tex) {
-        const ctx = tex.getContext();
-        ctx.imageSmoothingEnabled = false;
-        ctx.fillStyle = '#7c2d12';
-        ctx.fillRect(8, 12, 20, 20);
-        ctx.fillStyle = '#b45309';
-        ctx.fillRect(10, 14, 16, 16);
-        ctx.fillStyle = '#facc15';
-        ctx.fillRect(10, 10, 16, 4);
-        ctx.fillRect(15, 16, 6, 8);
-        ctx.fillStyle = '#fef08a';
-        ctx.fillRect(12, 6, 12, 5);
-        ctx.strokeStyle = '#451a03';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(8, 12, 20, 20);
-        tex.refresh();
-      }
-    }
-
-    // Phase 8 Fallback Pixel-Art Sprites (Zero console 404s!)
-    if (!this.textures.exists('ancient_pagoda')) {
-      const tex = this.textures.createCanvas('ancient_pagoda', 96, 88);
-      if (tex) {
-        const ctx = tex.getContext();
-        ctx.imageSmoothingEnabled = false;
-        // Stone base steps
-        ctx.fillStyle = '#78716c';
-        ctx.fillRect(8, 74, 80, 10);
-        ctx.fillStyle = '#a8a29e';
-        ctx.fillRect(14, 66, 68, 8);
-        // Temple pillars & doorway
-        ctx.fillStyle = '#fef3c7';
-        ctx.fillRect(20, 42, 56, 24);
-        ctx.fillStyle = '#991b1b';
-        ctx.fillRect(20, 42, 6, 24);
-        ctx.fillRect(70, 42, 6, 24);
-        ctx.fillStyle = '#451a03';
-        ctx.fillRect(40, 48, 16, 18);
-        ctx.fillStyle = '#facc15';
-        ctx.fillRect(46, 52, 4, 8);
-        // Tier 1 golden Khmer roof
-        ctx.fillStyle = '#b45309';
-        ctx.fillRect(10, 34, 76, 10);
-        ctx.fillStyle = '#facc15';
-        ctx.fillRect(14, 30, 68, 6);
-        // Tier 2 roof
-        ctx.fillStyle = '#991b1b';
-        ctx.fillRect(22, 22, 52, 8);
-        ctx.fillStyle = '#facc15';
-        ctx.fillRect(26, 18, 44, 5);
-        // Golden spire (Chofa)
-        ctx.fillStyle = '#fde047';
-        ctx.fillRect(44, 4, 8, 14);
-        ctx.fillRect(46, 0, 4, 6);
-        ctx.strokeStyle = '#451a03';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(20, 42, 56, 24);
-        tex.refresh();
-      }
-    }
-
-    if (!this.textures.exists('lucky_wheel_kiosk')) {
-      const tex = this.textures.createCanvas('lucky_wheel_kiosk', 56, 60);
-      if (tex) {
-        const ctx = tex.getContext();
-        ctx.imageSmoothingEnabled = false;
-        // Wooden stand
-        ctx.fillStyle = '#78350f';
-        ctx.fillRect(12, 46, 32, 12);
-        ctx.fillStyle = '#b45309';
-        ctx.fillRect(24, 34, 8, 14);
-        // Colorful prize wheel
-        const cols = ['#ef4444', '#facc15', '#22c55e', '#3b82f6', '#ec4899', '#a855f7'];
-        for (let i = 0; i < 6; i++) {
-          ctx.fillStyle = cols[i];
-          ctx.beginPath();
-          ctx.moveTo(28, 22);
-          ctx.arc(28, 22, 18, (i * Math.PI) / 3, ((i + 1) * Math.PI) / 3);
-          ctx.closePath();
-          ctx.fill();
-        }
-        ctx.strokeStyle = '#451a03';
-        ctx.lineWidth = 2.5;
-        ctx.beginPath();
-        ctx.arc(28, 22, 18, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.fillStyle = '#fef08a';
-        ctx.beginPath();
-        ctx.arc(28, 22, 5, 0, Math.PI * 2);
-        ctx.fill();
-        // Top gold pointer
-        ctx.fillStyle = '#facc15';
-        ctx.fillRect(25, 0, 6, 7);
-        tex.refresh();
-      }
-    }
-
-    if (!this.textures.exists('market_board')) {
-      const tex = this.textures.createCanvas('market_board', 56, 52);
-      if (tex) {
-        const ctx = tex.getContext();
-        ctx.imageSmoothingEnabled = false;
-        ctx.fillStyle = '#78350f';
-        ctx.fillRect(10, 32, 6, 18);
-        ctx.fillRect(40, 32, 6, 18);
-        ctx.fillStyle = '#92400e';
-        ctx.fillRect(4, 10, 48, 26);
-        ctx.fillStyle = '#fef3c7';
-        ctx.fillRect(8, 14, 16, 18);
-        ctx.fillRect(28, 14, 20, 12);
-        ctx.fillStyle = '#dc2626';
-        ctx.fillRect(4, 4, 48, 6);
-        ctx.fillStyle = '#facc15';
-        ctx.fillRect(14, 16, 4, 4);
-        ctx.fillRect(36, 16, 4, 4);
-        ctx.strokeStyle = '#451a03';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(4, 10, 48, 26);
-        tex.refresh();
-      }
-    }
-
-    if (!this.textures.exists('fishing_pier')) {
-      const tex = this.textures.createCanvas('fishing_pier', 72, 48);
-      if (tex) {
-        const ctx = tex.getContext();
-        ctx.imageSmoothingEnabled = false;
-        // Wooden planks
-        ctx.fillStyle = '#92400e';
-        ctx.fillRect(8, 12, 56, 26);
-        ctx.fillStyle = '#b45309';
-        for (let x = 10; x < 62; x += 8) {
-          ctx.fillRect(x, 14, 6, 22);
-        }
-        // Dock posts
-        ctx.fillStyle = '#451a03';
-        ctx.fillRect(8, 8, 6, 36);
-        ctx.fillRect(58, 8, 6, 36);
-        // Hanging lantern + fishing rod silhouette
-        ctx.fillStyle = '#facc15';
-        ctx.fillRect(56, 4, 8, 8);
-        tex.refresh();
-      }
-    }
-
-    // ==================== PHASE 9 PIXEL-ART BOSS & KHMER TREE FALLBACKS ====================
-    // Boss #2: Arp Prey Chrov (FloaterRig — Floating Head + Bioluminescent Entrails)
-    if (!this.textures.exists('boss_arp_prey_chrov')) {
-      const tex = this.textures.createCanvas('boss_arp_prey_chrov', 76, 92);
-      if (tex) {
-        const ctx = tex.getContext();
-        ctx.imageSmoothingEnabled = false;
-        // Glowing green/crimson spectral organ trails below head
-        ctx.fillStyle = '#059669';
-        ctx.fillRect(28, 46, 20, 20);
-        ctx.fillStyle = '#34d399';
-        ctx.fillRect(32, 48, 12, 16);
-        ctx.fillStyle = '#e11d48';
-        ctx.fillRect(24, 54, 6, 22);
-        ctx.fillRect(46, 54, 6, 20);
-        ctx.fillRect(35, 62, 6, 24);
-        ctx.fillStyle = '#fb7185';
-        ctx.fillRect(36, 66, 4, 14);
-        // Flowing wild dark hair
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(14, 12, 48, 36);
-        ctx.fillRect(10, 22, 8, 28);
-        ctx.fillRect(58, 22, 8, 28);
-        // Pale eerie face
-        ctx.fillStyle = '#d1fae5';
-        ctx.fillRect(22, 18, 32, 26);
-        ctx.fillStyle = '#a7f3d0';
-        ctx.fillRect(24, 20, 28, 22);
-        // Glowing crimson-emerald eyes
-        ctx.fillStyle = '#022c22';
-        ctx.fillRect(26, 26, 8, 6);
-        ctx.fillRect(42, 26, 8, 6);
-        ctx.fillStyle = '#f43f5e';
-        ctx.fillRect(28, 27, 4, 4);
-        ctx.fillRect(44, 27, 4, 4);
-        // Fanged grimace
-        ctx.fillStyle = '#4c0519';
-        ctx.fillRect(28, 36, 20, 5);
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(30, 36, 3, 3);
-        ctx.fillRect(43, 36, 3, 3);
-        // Bioluminescent spark dots
-        ctx.fillStyle = '#6ee7b7';
-        ctx.fillRect(18, 62, 4, 4);
-        ctx.fillRect(54, 68, 4, 4);
-        ctx.fillRect(34, 86, 4, 4);
-        tex.refresh();
-      }
-    }
-
-    // Boss #6: Neak Reach (MultiSegmentWormRig — Shadow Naga Head, Segment, Tail)
-    if (!this.textures.exists('boss_neak_reach_head')) {
-      const tex = this.textures.createCanvas('boss_neak_reach_head', 76, 68);
-      if (tex) {
-        const ctx = tex.getContext();
-        ctx.imageSmoothingEnabled = false;
-        // Flared Angkorian cobra hood
-        ctx.fillStyle = '#4c1d95';
-        ctx.fillRect(12, 10, 52, 46);
-        ctx.fillStyle = '#7e22ce';
-        ctx.fillRect(16, 14, 44, 38);
-        // Golden Khmer crown flame spires
-        ctx.fillStyle = '#facc15';
-        ctx.fillRect(26, 4, 24, 10);
-        ctx.fillRect(34, 0, 8, 8);
-        ctx.fillRect(18, 8, 6, 8);
-        ctx.fillRect(52, 8, 6, 8);
-        // Serpent snout & scales
-        ctx.fillStyle = '#3b0764';
-        ctx.fillRect(22, 22, 32, 32);
-        ctx.fillStyle = '#6b21a8';
-        ctx.fillRect(24, 24, 28, 24);
-        // Glowing venom-green eyes
-        ctx.fillStyle = '#4ade80';
-        ctx.fillRect(26, 28, 8, 6);
-        ctx.fillRect(42, 28, 8, 6);
-        ctx.fillStyle = '#fef08a';
-        ctx.fillRect(29, 29, 3, 3);
-        ctx.fillRect(45, 29, 3, 3);
-        // Venomous fangs & jaw
-        ctx.fillStyle = '#14532d';
-        ctx.fillRect(26, 42, 24, 8);
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(28, 42, 4, 6);
-        ctx.fillRect(44, 42, 4, 6);
-        ctx.fillStyle = '#4ade80';
-        ctx.fillRect(35, 48, 6, 8);
-        tex.refresh();
-      }
-    }
-
-    if (!this.textures.exists('boss_neak_reach_seg')) {
-      const tex = this.textures.createCanvas('boss_neak_reach_seg', 44, 44);
-      if (tex) {
-        const ctx = tex.getContext();
-        ctx.imageSmoothingEnabled = false;
-        ctx.fillStyle = '#3b0764';
-        ctx.fillRect(6, 6, 32, 32);
-        ctx.fillStyle = '#6b21a8';
-        ctx.fillRect(9, 9, 26, 26);
-        ctx.fillStyle = '#a855f7';
-        ctx.fillRect(14, 12, 16, 12);
-        // Golden Angkor dorsal spine & emerald venom core
-        ctx.fillStyle = '#facc15';
-        ctx.fillRect(18, 2, 8, 7);
-        ctx.fillStyle = '#4ade80';
-        ctx.fillRect(19, 19, 6, 6);
-        tex.refresh();
-      }
-    }
-
-    if (!this.textures.exists('boss_neak_reach_tail')) {
-      const tex = this.textures.createCanvas('boss_neak_reach_tail', 36, 28);
-      if (tex) {
-        const ctx = tex.getContext();
-        ctx.imageSmoothingEnabled = false;
-        ctx.fillStyle = '#4c1d95';
-        ctx.fillRect(4, 6, 24, 16);
-        ctx.fillStyle = '#7e22ce';
-        ctx.fillRect(8, 8, 18, 12);
-        ctx.fillStyle = '#4ade80';
-        ctx.fillRect(24, 10, 10, 8);
-        ctx.fillStyle = '#facc15';
-        ctx.fillRect(12, 3, 6, 5);
-        tex.refresh();
-      }
-    }
-
-    // Iconic Cambodian Sugar Palm Tree (Thnot) Fallback
-    if (!this.textures.exists('sugar_palm_tree')) {
-      const tex = this.textures.createCanvas('sugar_palm_tree', 48, 76);
-      if (tex) {
-        const ctx = tex.getContext();
-        ctx.imageSmoothingEnabled = false;
-        // Slender ringed trunk
-        ctx.fillStyle = '#78350f';
-        ctx.fillRect(21, 28, 6, 46);
-        ctx.fillStyle = '#92400e';
-        for (let y = 32; y < 70; y += 6) {
-          ctx.fillRect(21, y, 6, 2);
-        }
-        // Radiating palm fan canopy
-        ctx.fillStyle = '#15803d';
-        ctx.fillRect(8, 14, 32, 16);
-        ctx.fillRect(14, 6, 20, 22);
-        ctx.fillStyle = '#22c55e';
-        ctx.fillRect(4, 18, 12, 8);
-        ctx.fillRect(32, 18, 12, 8);
-        ctx.fillRect(16, 4, 16, 12);
-        ctx.fillStyle = '#4ade80';
-        ctx.fillRect(18, 8, 12, 6);
-        // Dark brown hanging sugar palm fruit clusters
-        ctx.fillStyle = '#451a03';
-        ctx.fillRect(18, 26, 5, 5);
-        ctx.fillRect(25, 26, 5, 5);
-        tex.refresh();
-      }
-    }
-
-    // Golden Durian Tree Fallback
-    if (!this.textures.exists('golden_durian_tree')) {
-      const tex = this.textures.createCanvas('golden_durian_tree', 52, 68);
-      if (tex) {
-        const ctx = tex.getContext();
-        ctx.imageSmoothingEnabled = false;
-        ctx.fillStyle = '#713f12';
-        ctx.fillRect(22, 36, 8, 30);
-        ctx.fillStyle = '#3f6212';
-        ctx.fillRect(8, 12, 36, 28);
-        ctx.fillStyle = '#65a30d';
-        ctx.fillRect(12, 8, 28, 24);
-        ctx.fillStyle = '#84cc16';
-        ctx.fillRect(16, 12, 20, 12);
-        // Glowing golden durians!
-        ctx.fillStyle = '#facc15';
-        ctx.fillRect(14, 24, 6, 7);
-        ctx.fillRect(32, 22, 6, 7);
-        ctx.fillRect(23, 16, 6, 7);
-        ctx.fillStyle = '#fef08a';
-        ctx.fillRect(16, 26, 2, 2);
-        ctx.fillRect(34, 24, 2, 2);
-        tex.refresh();
-      }
-    }
-
-    // ==================== EXPANSION PIXEL-ART LANDMARK SPRITES (ZERO 404s!) ====================
-    if (!this.textures.exists('bus_stop_sign')) {
-      const tex = this.textures.createCanvas('bus_stop_sign', 36, 48);
-      if (tex) {
-        const ctx = tex.getContext();
-        ctx.imageSmoothingEnabled = false;
-        ctx.fillStyle = '#475569';
-        ctx.fillRect(16, 16, 4, 30);
-        ctx.fillStyle = '#0284c7';
-        ctx.fillRect(6, 4, 24, 16);
-        ctx.fillStyle = '#facc15';
-        ctx.fillRect(10, 8, 16, 8);
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(12, 10, 4, 4);
-        ctx.fillRect(20, 10, 4, 4);
-        tex.refresh();
-      }
-    }
-
+    // Cute pixel-art Green Village Bus (unique vehicle not in medieval packs)
     if (!this.textures.exists('village_bus')) {
       const tex = this.textures.createCanvas('village_bus', 80, 42);
       if (tex) {
         const ctx = tex.getContext();
         ctx.imageSmoothingEnabled = false;
-        // Cute Pixel-Art GREEN Village Bus with Khmer gold trim
         ctx.fillStyle = '#14532d';
-        ctx.fillRect(10, 4, 58, 4); // roof rack
+        ctx.fillRect(10, 4, 58, 4);
         ctx.fillStyle = '#15803d';
-        ctx.fillRect(4, 8, 72, 24); // main green hull
+        ctx.fillRect(4, 8, 72, 24);
         ctx.fillStyle = '#22c55e';
-        ctx.fillRect(6, 10, 68, 12); // upper bright green body
+        ctx.fillRect(6, 10, 68, 12);
         ctx.fillStyle = '#facc15';
-        ctx.fillRect(4, 21, 72, 5); // Khmer gold racing stripe
-        // Cozy passenger windows
+        ctx.fillRect(4, 21, 72, 5);
         ctx.fillStyle = '#e0f2fe';
         for (let wx = 10; wx <= 56; wx += 14) {
           ctx.fillRect(wx, 12, 10, 8);
@@ -685,10 +442,8 @@ export class BootScene extends Phaser.Scene {
           ctx.fillRect(wx, 17, 10, 3);
           ctx.fillStyle = '#e0f2fe';
         }
-        // Front windshield & glowing headlights
         ctx.fillStyle = '#fef08a';
         ctx.fillRect(72, 24, 4, 5);
-        // Dark pixel bumper + chunky tires with gold hubcaps
         ctx.fillStyle = '#0f172a';
         ctx.fillRect(2, 29, 76, 3);
         ctx.fillRect(14, 30, 12, 10);
@@ -699,203 +454,36 @@ export class BootScene extends Phaser.Scene {
         tex.refresh();
       }
     }
-
-    if (!this.textures.exists('golden_shrine')) {
-      const tex = this.textures.createCanvas('golden_shrine', 46, 58);
-      if (tex) {
-        const ctx = tex.getContext();
-        ctx.imageSmoothingEnabled = false;
-        // Stepped sandstone + gold base
-        ctx.fillStyle = '#78350f';
-        ctx.fillRect(5, 46, 36, 10);
-        ctx.fillStyle = '#b45309';
-        ctx.fillRect(9, 40, 28, 7);
-        // Golden lotus shrine pillars & alcove
-        ctx.fillStyle = '#f59e0b';
-        ctx.fillRect(12, 22, 22, 18);
-        ctx.fillStyle = '#fde047';
-        ctx.fillRect(15, 24, 16, 14);
-        // Glowing blessing orb inside alcove
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(20, 28, 6, 6);
-        // Tiered Angkor golden crown spire
-        ctx.fillStyle = '#d97706';
-        ctx.fillRect(9, 17, 28, 6);
-        ctx.fillStyle = '#facc15';
-        ctx.fillRect(14, 11, 18, 6);
-        ctx.fillStyle = '#fef08a';
-        ctx.fillRect(19, 5, 8, 6);
-        ctx.fillRect(21, 1, 4, 4);
-        ctx.strokeStyle = '#451a03';
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(12, 22, 22, 18);
-        tex.refresh();
-      }
-    }
-
-    if (!this.textures.exists('atm_kiosk')) {
-      const tex = this.textures.createCanvas('atm_kiosk', 34, 44);
-      if (tex) {
-        const ctx = tex.getContext();
-        ctx.imageSmoothingEnabled = false;
-        ctx.fillStyle = '#1e3a8a';
-        ctx.fillRect(5, 6, 24, 36);
-        ctx.fillStyle = '#38bdf8';
-        ctx.fillRect(9, 12, 16, 11);
-        ctx.fillStyle = '#facc15';
-        ctx.fillRect(9, 27, 16, 4);
-        ctx.fillStyle = '#94a3b8';
-        ctx.fillRect(11, 34, 12, 5);
-        tex.refresh();
-      }
-    }
-
-    if (!this.textures.exists('blacksmith_anvil')) {
-      const tex = this.textures.createCanvas('blacksmith_anvil', 44, 36);
-      if (tex) {
-        const ctx = tex.getContext();
-        ctx.imageSmoothingEnabled = false;
-        ctx.fillStyle = '#78350f';
-        ctx.fillRect(10, 22, 24, 12);
-        ctx.fillStyle = '#334155';
-        ctx.fillRect(6, 12, 32, 10);
-        ctx.fillStyle = '#64748b';
-        ctx.fillRect(8, 10, 26, 4);
-        ctx.fillStyle = '#f97316';
-        ctx.fillRect(16, 6, 12, 4);
-        ctx.fillStyle = '#facc15';
-        ctx.fillRect(19, 4, 6, 3);
-        tex.refresh();
-      }
-    }
-
-    if (!this.textures.exists('club_building')) {
-      const tex = this.textures.createCanvas('club_building', 84, 72);
-      if (tex) {
-        const ctx = tex.getContext();
-        ctx.imageSmoothingEnabled = false;
-        ctx.fillStyle = '#3b0764';
-        ctx.fillRect(8, 22, 68, 46);
-        ctx.fillStyle = '#ec4899';
-        ctx.fillRect(6, 14, 72, 10);
-        ctx.fillStyle = '#facc15';
-        ctx.fillRect(16, 17, 52, 4);
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(32, 44, 20, 24);
-        ctx.fillStyle = '#38bdf8';
-        ctx.fillRect(14, 32, 14, 12);
-        ctx.fillRect(56, 32, 14, 12);
-        ctx.strokeStyle = '#f0abfc';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(8, 22, 68, 46);
-        tex.refresh();
-      }
-    }
-
-    if (!this.textures.exists('pylon_shrine')) {
-      const tex = this.textures.createCanvas('pylon_shrine', 44, 56);
-      if (tex) {
-        const ctx = tex.getContext();
-        ctx.imageSmoothingEnabled = false;
-        ctx.fillStyle = '#78716c';
-        ctx.fillRect(8, 42, 28, 12);
-        ctx.fillStyle = '#a8a29e';
-        ctx.fillRect(12, 36, 20, 6);
-        // Floating Angkor Pylon Crystal
-        ctx.fillStyle = '#0284c7';
-        ctx.fillRect(16, 10, 12, 20);
-        ctx.fillStyle = '#38bdf8';
-        ctx.fillRect(18, 6, 8, 26);
-        ctx.fillStyle = '#e0f2fe';
-        ctx.fillRect(20, 12, 4, 12);
-        tex.refresh();
-      }
-    }
-
-    if (!this.textures.exists('npc_blacksmith')) {
-      const tex = this.textures.createCanvas('npc_blacksmith', 34, 44);
-      if (tex) {
-        const ctx = tex.getContext();
-        ctx.imageSmoothingEnabled = false;
-        // Boots & leather apron
-        ctx.fillStyle = '#2b1b17';
-        ctx.fillRect(9, 24, 16, 18);
-        ctx.fillStyle = '#5c3317';
-        ctx.fillRect(10, 24, 14, 14);
-        ctx.fillStyle = '#78350f';
-        ctx.fillRect(11, 25, 12, 10);
-        // Muscular arms + skin head
-        ctx.fillStyle = '#2b1b17';
-        ctx.fillRect(9, 8, 16, 15);
-        ctx.fillStyle = '#d99a6c';
-        ctx.fillRect(10, 9, 14, 13);
-        ctx.fillRect(6, 22, 4, 9);
-        ctx.fillRect(24, 20, 4, 9);
-        // Red Krama blacksmith bandana & expressive eyes
-        ctx.fillStyle = '#dc2626';
-        ctx.fillRect(9, 9, 16, 4);
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(11, 9, 3, 2);
-        ctx.fillRect(17, 9, 3, 2);
-        ctx.fillStyle = '#18181b';
-        ctx.fillRect(13, 15, 2, 3);
-        ctx.fillRect(19, 15, 2, 3);
-        // Iron Blacksmith Hammer in right hand
-        ctx.fillStyle = '#78350f';
-        ctx.fillRect(26, 12, 3, 14);
-        ctx.fillStyle = '#475569';
-        ctx.fillRect(22, 9, 10, 5);
-        ctx.fillStyle = '#cbd5e1';
-        ctx.fillRect(23, 10, 8, 2);
-        tex.refresh();
-      }
-    }
-
-    if (!this.textures.exists('shimmer_spring')) {
-      const tex = this.textures.createCanvas('shimmer_spring', 64, 42);
-      if (tex) {
-        const ctx = tex.getContext();
-        ctx.imageSmoothingEnabled = false;
-        // Carved Angkor sandstone spring rim
-        ctx.fillStyle = '#57534e';
-        ctx.beginPath();
-        ctx.ellipse(32, 24, 30, 15, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#a8a29e';
-        ctx.beginPath();
-        ctx.ellipse(32, 22, 26, 12, 0, 0, Math.PI * 2);
-        ctx.fill();
-        // Iridescent rainbow Apsara Shimmer liquid
-        const grad = ctx.createLinearGradient(10, 14, 54, 30);
-        grad.addColorStop(0, '#c084fc');
-        grad.addColorStop(0.35, '#38bdf8');
-        grad.addColorStop(0.7, '#f472b6');
-        grad.addColorStop(1, '#fde047');
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.ellipse(32, 22, 22, 9, 0, 0, Math.PI * 2);
-        ctx.fill();
-        // Sparkle pixels
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(22, 19, 3, 2);
-        ctx.fillRect(36, 23, 3, 2);
-        ctx.fillRect(30, 16, 2, 2);
-        tex.refresh();
-      }
-    }
   }
 
   private registerAnimations(): void {
-    const walkDirs: Array<[string, number[]]> = [
-      ['boy_walk_down', [0, 4, 8, 12]],
-      ['boy_walk_up', [1, 5, 9, 13]],
-      ['boy_walk_left', [2, 6, 10, 14]],
-      ['boy_walk_right', [3, 7, 11, 15]],
+    // Register 4-directional walk animations for ALL 9 verified Ninja Adventure character sheets!
+    const dirs: Array<[string, number[]]> = [
+      ['down', [0, 4, 8, 12]],
+      ['up', [1, 5, 9, 13]],
+      ['left', [2, 6, 10, 14]],
+      ['right', [3, 7, 11, 15]],
     ];
-    for (const [key, frames] of walkDirs) {
-      if (!this.anims.exists(key)) {
+    for (const key of HERO_CHARACTER_SHEETS) {
+      for (const [d, frames] of dirs) {
+        const animKey = `${key}_walk_${d}`;
+        if (!this.anims.exists(animKey)) {
+          this.anims.create({
+            key: animKey,
+            frames: frames.map((frame) => ({ key, frame })),
+            frameRate: 9,
+            repeat: -1,
+          });
+        }
+      }
+    }
+
+    // Legacy boy_walk_* aliases
+    for (const [d, frames] of dirs) {
+      const k = `boy_walk_${d}`;
+      if (!this.anims.exists(k)) {
         this.anims.create({
-          key,
+          key: k,
           frames: frames.map((frame) => ({ key: 'player_boy', frame })),
           frameRate: 9,
           repeat: -1,
@@ -903,6 +491,45 @@ export class BootScene extends Phaser.Scene {
       }
     }
 
+    // Real Boss idle animations (GiantFrog 5 frames, GiantSpirit 5 frames)
+    if (!this.anims.exists('boss_frog_idle')) {
+      this.anims.create({
+        key: 'boss_frog_idle',
+        frames: [0, 1, 2, 3, 4].map((frame) => ({ key: 'boss_giant_frog_idle', frame })),
+        frameRate: 7,
+        repeat: -1,
+      });
+    }
+    if (!this.anims.exists('boss_spirit_idle')) {
+      this.anims.create({
+        key: 'boss_spirit_idle',
+        frames: [0, 1, 2, 3, 4].map((frame) => ({ key: 'boss_giant_spirit_idle', frame })),
+        frameRate: 7,
+        repeat: -1,
+      });
+    }
+
+    // Real Pet animations
+    const petAnims: Array<[string, string, number[], number]> = [
+      ['pet_cat_idle', 'pet_cat_white', [0, 1], 4],
+      ['pet_frog_idle', 'pet_frog', [0, 1], 5],
+      ['pet_lioncub_idle', 'pet_lioncub', [0, 1], 5],
+      ['pet_dog_idle', 'pet_dog', [0, 1], 5],
+      ['pet_spirit_idle', 'pet_spirit', [0, 4, 8, 12], 7],
+      ['pet_lantern_idle', 'pet_lantern', [0, 4, 8, 12], 7],
+    ];
+    for (const [animKey, texKey, frames, frameRate] of petAnims) {
+      if (!this.anims.exists(animKey)) {
+        this.anims.create({
+          key: animKey,
+          frames: frames.map((frame) => ({ key: texKey, frame })),
+          frameRate,
+          repeat: -1,
+        });
+      }
+    }
+
+    // Real Campfires, Shimmer Water Ripples & Slash FX
     if (!this.anims.exists('slash_curved')) {
       this.anims.create({
         key: 'slash_curved',
@@ -911,7 +538,6 @@ export class BootScene extends Phaser.Scene {
         repeat: 0,
       });
     }
-
     if (!this.anims.exists('campfire_burn')) {
       this.anims.create({
         key: 'campfire_burn',
@@ -920,7 +546,22 @@ export class BootScene extends Phaser.Scene {
         repeat: -1,
       });
     }
-
+    if (!this.anims.exists('campfire_burn_32')) {
+      this.anims.create({
+        key: 'campfire_burn_32',
+        frames: [0, 1, 2, 3].map((frame) => ({ key: 'sv_campfire_32', frame })),
+        frameRate: 8,
+        repeat: -1,
+      });
+    }
+    if (!this.anims.exists('shimmer_ripple')) {
+      this.anims.create({
+        key: 'shimmer_ripple',
+        frames: [0, 1, 2, 3].map((frame) => ({ key: 'na_water_purple', frame })),
+        frameRate: 5,
+        repeat: -1,
+      });
+    }
     if (!this.anims.exists('boar_idle_anim')) {
       this.anims.create({
         key: 'boar_idle_anim',
@@ -929,7 +570,6 @@ export class BootScene extends Phaser.Scene {
         repeat: -1,
       });
     }
-
     if (!this.anims.exists('boar_hit_anim')) {
       this.anims.create({
         key: 'boar_hit_anim',
