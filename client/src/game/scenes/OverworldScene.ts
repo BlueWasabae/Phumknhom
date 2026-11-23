@@ -300,23 +300,23 @@ export class OverworldScene extends Phaser.Scene {
       onInteract: () => EventBus.emit('ui:toast', { text: 'Phum Village • AREA 0 (Multiplayer sync arrives in Phase 6)' }),
     });
 
-    // 2. FARM — Green-Roof Farmhouse + Wooden Fence Garden Pen (Top-Left)
+    // 2. PLAYER'S KHMER STILT HOUSE & FARM GATE (Top-Left, Custom Khmer Pixel Art)
     this.addBuildingOrProp({
-      texture: 'sv_house_green',
+      texture: 'khmer_stilt_house',
       x: 205,
-      y: 224,
-      scale: 1.15,
-      shadowW: 86,
-      shadowH: 24,
-      bodyW: 66,
+      y: 242,
+      scale: 0.72,
+      shadowW: 94,
+      shadowH: 26,
+      bodyW: 68,
       bodyH: 30,
-      label: 'FARM GATE',
-      joinArrowY: 148,
+      label: 'MY KHMER HOME · FARM',
+      joinArrowY: 132,
     });
     this.addBuildingOrProp({
       texture: 'sv_fence_pen',
-      x: 286,
-      y: 234,
+      x: 298,
+      y: 240,
       scale: 1.0,
       shadowW: 54,
       shadowH: 16,
@@ -325,44 +325,33 @@ export class OverworldScene extends Phaser.Scene {
     });
     this.landmarks.push({
       x: 205,
-      y: 234,
-      radius: 48,
-      label: 'Personal Farm Gate (Stardew Farming unlocks in Phase 3)',
+      y: 250,
+      radius: 54,
+      label: 'My Khmer Stilt Home & Farm Gate (Stardew Farming in Phase 3)',
       isDungeonPortal: false,
-      onInteract: () => EventBus.emit('ui:toast', { text: 'FARM Gate — Crop planting, watering & timers arrive in Phase 3!' }),
+      onInteract: () => EventBus.emit('ui:toast', { text: 'Khmer Stilt Home & FARM — Crop planting & timers arrive in Phase 3!' }),
     });
 
-    // 3. SNACK CART — Cozy Red-Roof Stall + Ninja Adventure Wooden Cart + Noodle Emblem (Center-Left)
+    // 3. KHMER NUM PANG STREET SNACK CART (Center-Left, Custom Khmer Pixel Art)
     this.addBuildingOrProp({
-      texture: 'sv_house_red',
+      texture: 'num_pang_cart',
       x: 255,
-      y: 356,
-      scale: 1.15,
-      shadowW: 66,
-      shadowH: 20,
-      bodyW: 50,
-      bodyH: 26,
-      label: 'SNACK CART',
-      joinArrowY: 278,
+      y: 364,
+      scale: 0.58,
+      shadowW: 58,
+      shadowH: 18,
+      bodyW: 42,
+      bodyH: 22,
+      label: 'NUM PANG CART',
+      joinArrowY: 288,
     });
-    this.addBuildingOrProp({
-      texture: 'na_cart',
-      x: 205,
-      y: 360,
-      scale: 0.95,
-      shadowW: 32,
-      shadowH: 12,
-      bodyW: 24,
-      bodyH: 14,
-    });
-    this.add.image(255, 294, 'icon_noodle').setScale(0.9).setDepth(370);
     this.landmarks.push({
       x: 255,
-      y: 368,
+      y: 372,
       radius: 48,
-      label: 'Khmer Street Snack Cart (Phase 4)',
+      label: 'Khmer Street Snack Cart — Num Pang & Iced Coffee (Phase 4)',
       isDungeonPortal: false,
-      onInteract: () => EventBus.emit('ui:toast', { text: 'SNACK CART — Num Pang & Kafé combat buffs arrive in Phase 4!' }),
+      onInteract: () => EventBus.emit('ui:toast', { text: 'NUM PANG CART — Street snack combat buffs arrive in Phase 4!' }),
     });
 
     // 4. FASHION SHOP — Blue-Roof Boutique + Flower Boxes (Center-Right)
@@ -388,35 +377,41 @@ export class OverworldScene extends Phaser.Scene {
       onInteract: () => EventBus.emit('ui:toast', { text: 'FASHION SHOP — 9-Layer Modular Paper-Doll unlocks in Phase 2!' }),
     });
 
-    // 5. DUNGEON PORTAL — Legacy Fantasy Cave/Temple Archway + Swirling Vortex + Bouncing JOIN Arrow (Top-Right)
-    this.addBuildingOrProp({
-      texture: 'lf_cave_entrance',
-      x: 745,
-      y: 234,
-      scale: 0.62,
-      shadowW: 84,
-      shadowH: 22,
-      bodyW: 56,
-      bodyH: 24,
-      label: 'DUNGEON PORTAL',
-      joinArrowY: 132,
-    });
-    const vortex = this.add.image(752, 200, 'portal_vortex').setScale(0.75).setDepth(238);
+    // 5. ANGKOR DUNGEON PORTAL (Top-Right, Custom Angkor Wat Portal + Glow + Bouncing JOIN Arrow)
+    const portalGlow = this.add
+      .image(745, 206, 'portal_vortex')
+      .setScale(1.15)
+      .setAlpha(0.55)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(244);
     this.tweens.add({
-      targets: vortex,
-      alpha: 0.52,
-      scale: 0.88,
-      duration: 850,
+      targets: portalGlow,
+      alpha: 0.25,
+      scale: 1.32,
+      duration: 900,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut',
     });
 
+    this.addBuildingOrProp({
+      texture: 'angkor_portal',
+      x: 745,
+      y: 252,
+      scale: 0.68,
+      shadowW: 92,
+      shadowH: 24,
+      bodyW: 60,
+      bodyH: 26,
+      label: 'ANGKOR DUNGEON PORTAL',
+      joinArrowY: 124,
+    });
+
     this.landmarks.push({
       x: 745,
-      y: 246,
-      radius: 54,
-      label: 'Press [E] or Tap JOIN → Enter Ancient Cavern',
+      y: 260,
+      radius: 58,
+      label: 'Press [E] or Tap JOIN → Challenge Yeak Thmor (Ancient Cavern)',
       isDungeonPortal: true,
       onInteract: () => this.enterDungeon(),
     });

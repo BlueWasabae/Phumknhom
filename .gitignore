@@ -4,6 +4,7 @@ dist/
 .env.*
 .asset-archives/
 client/public/assets/packs/
+client/public/assets/raw_khmer/
 *.zip
 *.log
 .DS_Store

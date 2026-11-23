@@ -65,6 +65,12 @@ export class BootScene extends Phaser.Scene {
       frameWidth: 48,
       frameHeight: 32,
     });
+
+    // ---- 4. CUSTOM KHMER PIXEL-ART SPRITES (Cleaned Transparent PNGs) ----
+    this.load.image('khmer_stilt_house', '/assets/khmer/buildings/khmer_stilt_house.png');
+    this.load.image('num_pang_cart', '/assets/khmer/buildings/num_pang_cart.png');
+    this.load.image('angkor_portal', '/assets/khmer/buildings/angkor_portal.png');
+    this.load.image('boss_yeak_thmor', '/assets/khmer/bosses/boss_yeak_thmor.png');
   }
 
   create(): void {

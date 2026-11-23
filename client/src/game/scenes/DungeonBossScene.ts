@@ -7,11 +7,11 @@ import { Player } from '../entities/Player';
 const ARENA_W = 1800;
 const ARENA_H = 720;
 const FLOOR_Y = 620;
-const MONSTER_SPAWN_X = 1380;
-const MONSTER_SPAWN_Y = FLOOR_Y - 38;
-const MONSTER_MAX_HP = 180;
+const BOSS_SPAWN_X = 1390;
+const BOSS_SPAWN_Y = FLOOR_Y - 104;
+const BOSS_MAX_HP = 360;
 const EXIT_PORTAL_X = 118;
-const EXIT_PORTAL_Y = FLOOR_Y - 68;
+const EXIT_PORTAL_Y = FLOOR_Y - 78;
 
 interface DustMote {
   sprite: Phaser.GameObjects.Image;
@@ -29,14 +29,15 @@ export class DungeonBossScene extends Phaser.Scene {
   private elevatedPlatforms!: Phaser.Physics.Arcade.StaticGroup;
   private dustMotes: DustMote[] = [];
 
-  // Real animated Legacy Fantasy Wild Boar monster
-  private monster!: Phaser.Physics.Arcade.Sprite;
-  private monsterShadow!: Phaser.GameObjects.Image;
-  private monsterHp = MONSTER_MAX_HP;
-  private monsterAlive = true;
-  private monsterBarBg!: Phaser.GameObjects.Rectangle;
-  private monsterBarFill!: Phaser.GameObjects.Rectangle;
-  private monsterLabel!: Phaser.GameObjects.Text;
+  // Custom Khmer Boss: Yeak Thmor (Stone Yaksha)
+  private boss!: Phaser.GameObjects.Image;
+  private bossShadow!: Phaser.GameObjects.Image;
+  private bossBreatheTween?: Phaser.Tweens.Tween;
+  private bossHp = BOSS_MAX_HP;
+  private bossAlive = true;
+  private bossBarBg!: Phaser.GameObjects.Rectangle;
+  private bossBarFill!: Phaser.GameObjects.Rectangle;
+  private bossLabel!: Phaser.GameObjects.Text;
 
   // Platformer & Combat State
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -60,8 +61,8 @@ export class DungeonBossScene extends Phaser.Scene {
     this.initialState = data?.playerState
       ? { ...data.playerState, zone: 'dungeon', weapon: { ...data.playerState.weapon } }
       : { ...INITIAL_PLAYER_STATE, zone: 'dungeon', weapon: { ...INITIAL_PLAYER_STATE.weapon } };
-    this.monsterHp = MONSTER_MAX_HP;
-    this.monsterAlive = true;
+    this.bossHp = BOSS_MAX_HP;
+    this.bossAlive = true;
     this.jumpsUsed = 0;
     this.nearExitSent = false;
     this.transitioning = false;
@@ -77,7 +78,7 @@ export class DungeonBossScene extends Phaser.Scene {
     this.drawParallaxCavernAndAtmosphere();
     this.buildArenaPlatforms();
     this.buildExitPortal();
-    this.buildCavernMonster();
+    this.buildYeakThmorBoss();
 
     this.player = new Player(this, 240, FLOOR_Y - 46, this.initialState, 'dungeon');
     this.physics.add.collider(this.player.sprite, this.solidFloor);
@@ -282,32 +283,37 @@ export class DungeonBossScene extends Phaser.Scene {
   }
 
   private buildExitPortal(): void {
-    this.add.image(EXIT_PORTAL_X, EXIT_PORTAL_Y, 'lf_cave_entrance').setScale(1.2).setDepth(18);
-    const vortex = this.add
-      .image(EXIT_PORTAL_X + 12, EXIT_PORTAL_Y + 8, 'portal_vortex')
-      .setTint(0x34d399)
-      .setScale(1.35)
-      .setDepth(20);
+    this.add
+      .image(EXIT_PORTAL_X, FLOOR_Y - 2, 'soft_shadow')
+      .setDisplaySize(130, 26)
+      .setDepth(17);
+    const glow = this.add
+      .image(EXIT_PORTAL_X, EXIT_PORTAL_Y, 'portal_vortex')
+      .setScale(1.6)
+      .setAlpha(0.55)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(19);
     this.tweens.add({
-      targets: vortex,
-      alpha: 0.5,
-      scale: 1.55,
+      targets: glow,
+      alpha: 0.25,
+      scale: 1.8,
       duration: 850,
       yoyo: true,
       repeat: -1,
     });
+    this.add.image(EXIT_PORTAL_X, FLOOR_Y + 4, 'angkor_portal').setOrigin(0.5, 0.96).setScale(0.92).setDepth(20);
 
-    const arrow = this.add.image(EXIT_PORTAL_X + 8, EXIT_PORTAL_Y - 102, 'join_arrow').setScale(1.2).setDepth(24);
+    const arrow = this.add.image(EXIT_PORTAL_X, EXIT_PORTAL_Y - 108, 'join_arrow').setScale(1.2).setDepth(24);
     this.tweens.add({
       targets: arrow,
-      y: EXIT_PORTAL_Y - 114,
+      y: EXIT_PORTAL_Y - 120,
       duration: 560,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut',
     });
     this.add
-      .text(EXIT_PORTAL_X + 8, FLOOR_Y - 6, 'VILLAGE EXIT', {
+      .text(EXIT_PORTAL_X, FLOOR_Y - 6, 'VILLAGE EXIT', {
         fontFamily: 'Fredoka, sans-serif',
         fontSize: '12px',
         fontStyle: 'bold',
@@ -319,37 +325,50 @@ export class DungeonBossScene extends Phaser.Scene {
       .setDepth(24);
   }
 
-  private buildCavernMonster(): void {
-    this.monsterShadow = this.add.image(MONSTER_SPAWN_X, FLOOR_Y - 2, 'soft_shadow').setScale(1.4, 0.8).setDepth(40);
-    this.monster = this.physics.add.sprite(MONSTER_SPAWN_X, MONSTER_SPAWN_Y, 'boar_idle', 0);
-    this.monster.setScale(2.2);
-    this.monster.play('boar_idle_anim');
-    this.monster.setCollideWorldBounds(true);
-    this.monster.setDragX(520);
-    this.monster.setBounce(0.16);
-    this.monster.setSize(34, 24).setOffset(7, 8);
-    this.monster.setDepth(42);
-    this.physics.add.collider(this.monster, this.solidFloor);
+  private buildYeakThmorBoss(): void {
+    // Soft dark oval ground shadow anchored under Yeak Thmor's feet
+    this.bossShadow = this.add
+      .image(BOSS_SPAWN_X, FLOOR_Y - 2, 'soft_shadow')
+      .setDisplaySize(172, 30)
+      .setDepth(40);
 
-    this.monsterLabel = this.add
-      .text(MONSTER_SPAWN_X, MONSTER_SPAWN_Y - 52, 'Cavern Boar (Training)', {
-        fontFamily: 'Fredoka, sans-serif',
-        fontSize: '12px',
+    this.boss = this.add
+      .image(BOSS_SPAWN_X, FLOOR_Y, 'boss_yeak_thmor')
+      .setOrigin(0.5, 0.96)
+      .setScale(1.45)
+      .setDepth(42);
+
+    // Gentle living breathing + bobbing idle tween
+    this.bossBreatheTween = this.tweens.add({
+      targets: this.boss,
+      scaleY: 1.5,
+      scaleX: 1.42,
+      y: FLOOR_Y - 4,
+      duration: 1050,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    this.bossLabel = this.add
+      .text(BOSS_SPAWN_X, BOSS_SPAWN_Y - 118, 'យក្សថ្ម · Yeak Thmor (Stone Yaksha)', {
+        fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
+        fontSize: '14px',
         fontStyle: 'bold',
-        color: '#fde68a',
+        color: '#fde047',
         stroke: '#0f172a',
-        strokeThickness: 3,
+        strokeThickness: 4,
       })
       .setOrigin(0.5, 1)
       .setDepth(46);
 
-    this.monsterBarBg = this.add
-      .rectangle(MONSTER_SPAWN_X, MONSTER_SPAWN_Y - 40, 82, 9, 0x0f172a)
-      .setStrokeStyle(1.5, 0x64748b)
+    this.bossBarBg = this.add
+      .rectangle(BOSS_SPAWN_X, BOSS_SPAWN_Y - 104, 148, 12, 0x0f172a)
+      .setStrokeStyle(2, 0xf59e0b)
       .setDepth(46);
 
-    this.monsterBarFill = this.add
-      .rectangle(MONSTER_SPAWN_X - 39, MONSTER_SPAWN_Y - 40, 78, 5, 0xef4444)
+    this.bossBarFill = this.add
+      .rectangle(BOSS_SPAWN_X - 71, BOSS_SPAWN_Y - 104, 142, 7, 0xef4444)
       .setOrigin(0, 0.5)
       .setDepth(47);
   }
@@ -402,15 +421,15 @@ export class DungeonBossScene extends Phaser.Scene {
     slash.play('slash_curved');
     slash.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => slash.destroy());
 
-    if (this.monsterAlive) {
-      const swingBox = new Phaser.Geom.Rectangle(hitX - 50, hitY - 40, 100, 80);
-      if (Phaser.Geom.Intersects.RectangleToRectangle(swingBox, this.monster.getBounds())) {
-        this.hitCavernMonster(dir);
+    if (this.bossAlive) {
+      const swingBox = new Phaser.Geom.Rectangle(hitX - 54, hitY - 46, 108, 92);
+      if (Phaser.Geom.Intersects.RectangleToRectangle(swingBox, this.boss.getBounds())) {
+        this.hitYeakThmor(dir);
       }
     }
   }
 
-  private hitCavernMonster(knockDir: number): void {
+  private hitYeakThmor(knockDir: number): void {
     const { weapon, skillDamagePct, armorDamagePct, snackBuffPct } = this.player.state;
 
     const hit = calculatePlayerDamage({
@@ -420,34 +439,38 @@ export class DungeonBossScene extends Phaser.Scene {
       skillPct: skillDamagePct,
       armorPct: armorDamagePct,
       snackBuffPct: snackBuffPct,
-      enemyDefense: 6,
+      enemyDefense: 8,
       armorPen: weapon.armorPen,
-      bossDR: 0,
+      bossDR: 0.05,
       critChance: weapon.critChance,
     });
 
-    this.monsterHp = Math.max(0, this.monsterHp - hit.finalDamage);
-    this.monster.setVelocity(knockDir * weapon.knockbackForce, -165);
-    this.monster.setTintFill(0xffffff);
-    this.monster.play('boar_hit_anim', true);
-    this.monster.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
-      if (this.monsterAlive) this.monster.play('boar_idle_anim');
+    this.bossHp = Math.max(0, this.bossHp - hit.finalDamage);
+
+    // Crisp white hit-flash + heavy stone recoil shake
+    this.boss.setTintFill(0xffffff);
+    this.tweens.add({
+      targets: this.boss,
+      x: BOSS_SPAWN_X + knockDir * 10,
+      duration: 60,
+      yoyo: true,
+      ease: 'Quad.easeOut',
     });
     this.time.delayedCall(95, () => {
-      if (this.monsterAlive) this.monster.clearTint();
+      if (this.bossAlive) this.boss.clearTint();
     });
 
     this.spawnFloatingText(
-      this.monster.x + (Math.random() - 0.5) * 28,
-      this.monster.y - 40,
+      this.boss.x + (Math.random() - 0.5) * 58,
+      this.boss.y - 140,
       hit.isCrit ? `${hit.finalDamage}! CRIT` : `${hit.finalDamage}`,
       hit.isCrit ? '#facc15' : '#ffffff',
-      hit.isCrit ? '22px' : '16px'
+      hit.isCrit ? '24px' : '17px'
     );
 
     // 40ms hit-stop impact juice on Crits
     if (hit.isCrit) {
-      this.cameras.main.shake(95, 0.005);
+      this.cameras.main.shake(110, 0.006);
       this.physics.world.pause();
       window.setTimeout(() => {
         if (this.scene.isActive('DungeonBossScene')) {
@@ -456,23 +479,24 @@ export class DungeonBossScene extends Phaser.Scene {
       }, 40);
     }
 
-    EventBus.emit('combat:hit', { hit, dummyHp: this.monsterHp, dummyMaxHp: MONSTER_MAX_HP });
+    EventBus.emit('combat:hit', { hit, dummyHp: this.bossHp, dummyMaxHp: BOSS_MAX_HP });
 
-    if (this.monsterHp <= 0) {
-      this.defeatAndRespawnMonster();
+    if (this.bossHp <= 0) {
+      this.defeatAndRespawnBoss();
     }
   }
 
-  private defeatAndRespawnMonster(): void {
-    this.monsterAlive = false;
-    this.monster.setVisible(false);
-    this.monsterShadow.setVisible(false);
-    this.monsterBarBg.setVisible(false);
-    this.monsterBarFill.setVisible(false);
-    this.monsterLabel.setText('Respawning in 3s...').setColor('#fbbf24');
+  private defeatAndRespawnBoss(): void {
+    this.bossAlive = false;
+    this.bossBreatheTween?.pause();
+    this.boss.setVisible(false);
+    this.bossShadow.setVisible(false);
+    this.bossBarBg.setVisible(false);
+    this.bossBarFill.setVisible(false);
+    this.bossLabel.setText('Yeak Thmor Vanquished! Respawning in 3s...').setColor('#fbbf24');
 
-    this.player.state.coins += 25;
-    this.player.state.xp += 30;
+    this.player.state.coins += 75;
+    this.player.state.xp += 60;
     let leveledUp = false;
     while (this.player.state.xp >= getXpForNextLevel(this.player.state.level)) {
       this.player.state.xp -= getXpForNextLevel(this.player.state.level);
@@ -486,22 +510,21 @@ export class DungeonBossScene extends Phaser.Scene {
       this.sound.play('sfx_levelup', { volume: 0.35 });
     }
     EventBus.emit('player:state', { ...this.player.state, weapon: { ...this.player.state.weapon } });
-    this.spawnFloatingText(this.monster.x, this.monster.y - 54, '+25 Coins · +30 XP', '#4ade80', '14px');
+    this.spawnFloatingText(BOSS_SPAWN_X, BOSS_SPAWN_Y - 54, '+75 Coins · +60 XP', '#4ade80', '16px');
 
     this.time.delayedCall(3000, () => {
       if (!this.scene.isActive('DungeonBossScene')) return;
-      this.monsterHp = MONSTER_MAX_HP;
-      this.monsterAlive = true;
-      this.monster.setPosition(MONSTER_SPAWN_X, MONSTER_SPAWN_Y);
-      this.monster.setVelocity(0, 0);
-      this.monster.clearTint();
-      this.monster.play('boar_idle_anim');
-      this.monster.setVisible(true);
-      this.monsterShadow.setVisible(true);
-      this.monsterBarBg.setVisible(true);
-      this.monsterBarFill.setVisible(true);
-      this.monsterLabel.setText('Cavern Boar (Training)').setColor('#fde68a');
-      this.spawnFloatingText(MONSTER_SPAWN_X, MONSTER_SPAWN_Y - 46, 'Monster Respawned!', '#86efac', '13px');
+      this.bossHp = BOSS_MAX_HP;
+      this.bossAlive = true;
+      this.boss.setPosition(BOSS_SPAWN_X, FLOOR_Y);
+      this.boss.clearTint();
+      this.boss.setVisible(true);
+      this.bossShadow.setVisible(true);
+      this.bossBarBg.setVisible(true);
+      this.bossBarFill.setVisible(true);
+      this.bossBreatheTween?.resume();
+      this.bossLabel.setText('យក្សថ្ម · Yeak Thmor (Stone Yaksha)').setColor('#fde047');
+      this.spawnFloatingText(BOSS_SPAWN_X, BOSS_SPAWN_Y - 70, 'Yeak Thmor Awakens!', '#fde047', '15px');
     });
   }
 
@@ -611,15 +634,15 @@ export class DungeonBossScene extends Phaser.Scene {
       m.sprite.y = m.baseY + Math.sin(time / 900 + m.phase) * 14;
     }
 
-    if (this.monsterAlive) {
-      const ratio = Math.max(0, this.monsterHp / MONSTER_MAX_HP);
-      this.monsterShadow.setPosition(this.monster.x, FLOOR_Y - 2);
-      this.monsterBarBg.setPosition(this.monster.x, this.monster.y - 40);
-      this.monsterBarFill.setPosition(this.monster.x - 39, this.monster.y - 40);
-      this.monsterBarFill.width = 78 * ratio;
-      this.monsterLabel.setPosition(this.monster.x, this.monster.y - 52);
+    if (this.bossAlive) {
+      const ratio = Math.max(0, this.bossHp / BOSS_MAX_HP);
+      this.bossShadow.setPosition(this.boss.x, FLOOR_Y - 2);
+      this.bossBarBg.setPosition(this.boss.x, BOSS_SPAWN_Y - 104);
+      this.bossBarFill.setPosition(this.boss.x - 71, BOSS_SPAWN_Y - 104);
+      this.bossBarFill.width = 142 * ratio;
+      this.bossLabel.setPosition(this.boss.x, BOSS_SPAWN_Y - 118);
     } else {
-      this.monsterLabel.setPosition(MONSTER_SPAWN_X, MONSTER_SPAWN_Y - 52);
+      this.bossLabel.setPosition(BOSS_SPAWN_X, BOSS_SPAWN_Y - 118);
     }
 
     const nearExit = this.isNearExitPortal();
