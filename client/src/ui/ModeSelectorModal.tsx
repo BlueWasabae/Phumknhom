@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import type { BossId, DifficultyMode, PlayerState } from '@shared/types';
 import { calculateDamageTaken } from '@shared/balanceFormulas';
 import { computeVillageToDungeonBridge } from '@shared/skillTrees';
@@ -9,6 +9,7 @@ import { NativeDialog } from './NativeDialog';
 interface ModeSelectorModalProps {
   open: boolean;
   player: PlayerState;
+  initialBossId?: BossId;
   onClose: () => void;
   onEnterDungeon: (
     bossId: BossId,
@@ -55,12 +56,19 @@ const DIFFICULTY_OPTIONS: Array<{
 export const ModeSelectorModal: React.FC<ModeSelectorModalProps> = ({
   open,
   player,
+  initialBossId,
   onClose,
   onEnterDungeon,
 }) => {
-  const [selectedBoss, setSelectedBoss] = useState<BossId>('sdech_kongkaeb');
+  const [selectedBoss, setSelectedBoss] = useState<BossId>(initialBossId ?? 'sdech_kongkaeb');
   const [selectedDiff, setSelectedDiff] = useState<DifficultyMode>('normal');
   const [partyMode, setPartyMode] = useState<'solo' | 'coop'>('solo');
+
+  useEffect(() => {
+    if (open && initialBossId) {
+      setSelectedBoss(initialBossId);
+    }
+  }, [initialBossId, open]);
 
   const bossDef = KHMER_BOSSES[selectedBoss];
   const scaledHp = getScaledBossMaxHp(selectedBoss, selectedDiff, partyMode === 'coop' ? 2 : 1);

@@ -10,6 +10,8 @@ import { EventBus, type JoystickVector } from '../EventBus';
 import { Player } from '../entities/Player';
 import { RemotePlayerEntity } from '../entities/RemotePlayerEntity';
 import { areaIdToChannel, channelToAreaId, roomClient } from '../network/RoomClient';
+import { soundManager } from '../systems/SoundManager';
+import { SeasonAtmosphereOverlay } from '../systems/SeasonClock';
 
 // Cozy 16x16 Stardew-scale village world (60 x 42 tiles) rendered at 2.5x - 2.9x camera zoom
 const MAP_W = 960;
@@ -33,6 +35,8 @@ export class OverworldScene extends Phaser.Scene {
   private colliders!: Phaser.Physics.Arcade.StaticGroup;
   private remotePlayers = new Map<string, RemotePlayerEntity>();
   private localPlayerId = '';
+  private atmosphere?: SeasonAtmosphereOverlay;
+  private glowLights: Phaser.GameObjects.Image[] = [];
 
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keys!: Record<'W' | 'A' | 'S' | 'D' | 'E', Phaser.Input.Keyboard.Key>;
@@ -60,6 +64,8 @@ export class OverworldScene extends Phaser.Scene {
     // Stardew / Avatar World Mode: Top-Down 2.5D (gravity = 0)
     this.physics.world.gravity.y = 0;
     this.physics.world.setBounds(0, HORIZON_H, MAP_W, MAP_H - HORIZON_H);
+    this.glowLights = [];
+    soundManager.playBgm('village');
 
     // 1. 2.5D Top Horizon Strip (Sky + Distant Mountain Treeline along north border)
     this.buildTopHorizonStrip();
@@ -75,6 +81,34 @@ export class OverworldScene extends Phaser.Scene {
     this.colliders = this.physics.add.staticGroup();
     this.buildLandmarks();
     this.buildFencesAndTrees();
+
+    // 4-Season Weather Particles & Day/Night Atmosphere Overlay
+    this.atmosphere = new SeasonAtmosphereOverlay(this, MAP_W, MAP_H);
+    this.glowLights.forEach((g) => this.atmosphere?.registerGlowLight(g));
+
+    // Gentle expanding water ripples at the Riverside Fishing Pond
+    this.time.addEvent({
+      delay: 1450,
+      loop: true,
+      callback: () => {
+        if (!this.scene.isActive('OverworldScene')) return;
+        const rx = 185 + Math.random() * 68;
+        const ry = 496 + Math.random() * 34;
+        const ripple = this.add
+          .ellipse(rx, ry, 10, 5, 0xbae6fd, 0)
+          .setStrokeStyle(1.2, 0xe0f2fe, 0.72)
+          .setDepth(5);
+        this.tweens.add({
+          targets: ripple,
+          scaleX: 3.1,
+          scaleY: 2.8,
+          alpha: 0,
+          duration: 1350,
+          ease: 'Sine.easeOut',
+          onComplete: () => ripple.destroy(),
+        });
+      },
+    });
 
     // 4. Real 4-directional Animated Chibi Player + Soft Shadow
     this.player = new Player(this, 480, 405, this.initialState, 'overworld');
@@ -173,6 +207,8 @@ export class OverworldScene extends Phaser.Scene {
       this.unsubs.forEach((u) => u());
       this.unsubs = [];
       this.clearRemotePlayers();
+      this.atmosphere?.destroy();
+      this.atmosphere = undefined;
       void roomClient.leavePlaza(false);
       this.player.destroy();
     });
@@ -309,8 +345,14 @@ export class OverworldScene extends Phaser.Scene {
       this.add.image(px, py, 'na_pebbles').setDepth(4).setAlpha(0.85);
     }
 
-    // Animated Central Plaza Campfire + Warm Glow + Cozy Benches + Lanterns
-    this.add.image(480, 368, 'torch_glow').setScale(0.7).setDepth(5).setAlpha(0.55);
+    // Animated Central Plaza Campfire + Warm Flickering Glow + Cozy Benches + Lanterns
+    const fireGlow = this.add
+      .image(480, 368, 'torch_glow')
+      .setScale(0.85)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(2140)
+      .setAlpha(0.5);
+    this.glowLights.push(fireGlow);
     const fire = this.add.sprite(480, 365, 'sv_campfire_16', 0).setScale(1.15).setDepth(365);
     fire.play('campfire_burn');
 
@@ -320,10 +362,17 @@ export class OverworldScene extends Phaser.Scene {
     this.add.image(528, 342, 'soft_shadow').setScale(0.75, 0.35).setDepth(340);
     this.add.image(528, 340, 'na_bench').setDepth(341);
 
-    // Decorative Plaza Lantern Posts
+    // Decorative Plaza Lantern Posts with Warm Night-Adaptive Flickering Glow
     for (const [lx, ly] of [[400, 318], [560, 318], [400, 422], [560, 422]]) {
       this.add.image(lx, ly + 6, 'soft_shadow').setScale(0.28, 0.2).setDepth(ly);
       this.add.image(lx, ly, 'na_lantern').setOrigin(0.5, 0.85).setDepth(ly + 1);
+      const lGlow = this.add
+        .image(lx, ly - 14, 'torch_glow')
+        .setScale(0.52)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(2140)
+        .setAlpha(0.35);
+      this.glowLights.push(lGlow);
     }
   }
 
@@ -482,12 +531,13 @@ export class OverworldScene extends Phaser.Scene {
       onInteract: () => EventBus.emit('ui:openModal', { modal: 'snackShop', shopTab: 'primary' }),
     });
 
-    // 4. FASHION SHOP — Blue-Roof Boutique + Flower Boxes (Center-Right)
+    // 4. FASHION SHOP — Custom Khmer Boutique if present, else Blue-Roof Boutique
+    const hasCustomBoutique = this.textures.exists('fashion_boutique');
     this.addBuildingOrProp({
-      texture: 'sv_house_blue',
+      texture: hasCustomBoutique ? 'fashion_boutique' : 'sv_house_blue',
       x: 705,
       y: 356,
-      scale: 1.15,
+      scale: hasCustomBoutique ? 0.68 : 1.15,
       shadowW: 86,
       shadowH: 24,
       bodyW: 66,
@@ -658,26 +708,35 @@ export class OverworldScene extends Phaser.Scene {
       });
     }
 
-    // Layered Y-sorted perimeter trees with soft oval ground shadows
-    const trees: Array<[number, number, 'sv_tree_green' | 'sv_tree_teal']> = [
-      [74, 165, 'sv_tree_green'], [118, 195, 'sv_tree_teal'], [72, 315, 'sv_tree_teal'],
-      [82, 460, 'sv_tree_green'], [138, 565, 'sv_tree_teal'], [285, 560, 'sv_tree_green'],
-      [370, 585, 'sv_tree_teal'], [595, 585, 'sv_tree_green'], [695, 560, 'sv_tree_teal'],
-      [830, 555, 'sv_tree_green'], [878, 445, 'sv_tree_teal'], [885, 310, 'sv_tree_green'],
-      [875, 180, 'sv_tree_teal'], [575, 138, 'sv_tree_green'], [390, 136, 'sv_tree_teal'],
+    // Layered Y-sorted perimeter trees (including Khmer Sugar Palms & Golden Durian) + gentle breeze sway
+    const trees: Array<[number, number, 'sv_tree_green' | 'sv_tree_teal' | 'sugar_palm_tree' | 'golden_durian_tree']> = [
+      [74, 165, 'sugar_palm_tree'], [118, 195, 'sv_tree_teal'], [72, 315, 'sv_tree_teal'],
+      [82, 460, 'sugar_palm_tree'], [138, 565, 'sv_tree_teal'], [285, 560, 'golden_durian_tree'],
+      [370, 585, 'sv_tree_teal'], [595, 585, 'sugar_palm_tree'], [695, 560, 'sv_tree_teal'],
+      [830, 555, 'golden_durian_tree'], [878, 445, 'sv_tree_teal'], [885, 310, 'sugar_palm_tree'],
+      [875, 180, 'sv_tree_teal'], [575, 138, 'sugar_palm_tree'], [390, 136, 'sv_tree_teal'],
     ];
-    for (const [tx, ty, tex] of trees) {
-      this.addBuildingOrProp({
+    trees.forEach(([tx, ty, tex], idx) => {
+      const isKhmerTree = tex === 'sugar_palm_tree' || tex === 'golden_durian_tree';
+      const treeImg = this.addBuildingOrProp({
         texture: tex,
         x: tx,
         y: ty,
-        scale: 1.1,
+        scale: isKhmerTree ? 0.88 : 1.1,
         shadowW: 36,
         shadowH: 12,
         bodyW: 16,
         bodyH: 12,
       });
-    }
+      this.tweens.add({
+        targets: treeImg,
+        angle: idx % 2 === 0 ? 2.2 : -2.2,
+        duration: 2100 + (idx % 5) * 320,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    });
   }
 
   private enterFarm(): void {
@@ -724,6 +783,7 @@ export class OverworldScene extends Phaser.Scene {
           activeBuffs: [...this.player.state.activeBuffs],
           quickSnackSlots: [...this.player.state.quickSnackSlots],
           clearedBosses: [...this.player.state.clearedBosses],
+          bossDefeats: { ...(this.player.state.bossDefeats ?? {}) },
         },
       });
     });
@@ -794,6 +854,7 @@ export class OverworldScene extends Phaser.Scene {
     // Throttled multiplayer position sync (~18Hz) + smooth remote player lerp
     roomClient.sendMove(this.player.x, this.player.y, this.player.facing, isMoving, time);
     this.remotePlayers.forEach((remote) => remote.update(time, delta));
+    this.atmosphere?.update(time, delta);
 
     const nearest = this.findNearestLandmark();
     if (nearest) {

@@ -2,7 +2,7 @@ export type ZoneType = 'overworld' | 'dungeon' | 'farm';
 
 export type DifficultyMode = 'normal' | 'expert' | 'calamity' | 'death';
 
-export type BossId = 'sdech_kongkaeb' | 'yeak_thmor';
+export type BossId = 'sdech_kongkaeb' | 'arp_prey_chrov' | 'yeak_thmor' | 'neak_reach';
 
 export type BossRigType =
   | 'QuadrupedHopperRig'
@@ -194,6 +194,7 @@ export interface PlayerState {
   activeBuffs: ActiveSnackBuff[];
   quickSnackSlots: [string | null, string | null, string | null];
   clearedBosses: BossId[];
+  bossDefeats: Record<string, number>;
   pagodaBundles: PagodaBundleProgress;
   luckyWheelPity: number;
   skillDamagePct: number;
@@ -412,6 +413,7 @@ export const INITIAL_PLAYER_STATE: PlayerState = {
   activeBuffs: [],
   quickSnackSlots: ['snack_num_pang', 'snack_kafe', 'snack_pepper_skewer'],
   clearedBosses: [],
+  bossDefeats: {},
   pagodaBundles: {},
   luckyWheelPity: 0,
   skillDamagePct: 0.025,

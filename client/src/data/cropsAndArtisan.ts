@@ -737,4 +737,25 @@ export const FARM_ITEMS: Record<string, FarmItemMeta> = {
     primaryColor: '#d97706',
     description: 'Sunken Angkorian temple key fished from river depths. Accepted by the Blacksmith Altar.',
   },
+  // Phase 9 Boss Drops (Arp Prey Chrov & Neak Reach)
+  drop_spirit_orb: {
+    id: 'drop_spirit_orb',
+    name: 'Spirit Ember Orb',
+    khmerName: 'ដួងភ្លើងអាបព្រៃជ្រៅ',
+    kind: 'artisan',
+    rarity: 'rare',
+    sellCoins: 185,
+    primaryColor: '#10b981',
+    description: 'Bioluminescent ghostly ember dropped by Arp Prey Chrov in the Dark Bamboo Woods.',
+  },
+  drop_naga_scale: {
+    id: 'drop_naga_scale',
+    name: 'Shadow Naga Scale',
+    khmerName: 'ស្រកានាគរាជ',
+    kind: 'artisan',
+    rarity: 'epic',
+    sellCoins: 340,
+    primaryColor: '#a855f7',
+    description: 'Iridescent violet-emerald serpent scale dropped by Neak Reach (Shadow Naga).',
+  },
 };

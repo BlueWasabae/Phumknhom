@@ -18,6 +18,7 @@ import {
 } from '@shared/skillTrees';
 import { KHMER_BOSSES, rollBossLoot, type RolledBossLoot } from '@shared/khmerBosses';
 import { awardSkillXp } from '../systems/SkillManager';
+import { soundManager } from '../systems/SoundManager';
 import { EventBus, type JoystickVector } from '../EventBus';
 import { Player } from '../entities/Player';
 import { PaperDoll, type PaperDollPose } from '../entities/PaperDoll';
@@ -199,6 +200,7 @@ export class DungeonBossScene extends Phaser.Scene {
     // Terraria / Calamity Mode: Side-Scrolling 2D (gravity = 800)
     this.physics.world.gravity.y = 800;
     this.physics.world.setBounds(0, 0, ARENA_W, ARENA_H);
+    soundManager.playBgm('boss');
 
     this.vfx = new ClassCombatVFX(this);
     this.drawParallaxCavernAndAtmosphere();
@@ -235,7 +237,8 @@ export class DungeonBossScene extends Phaser.Scene {
       200,
       ARENA_W - 110,
       {
-        onHitPlayer: (rawAtk, label, pullDir) => this.handlePlayerHit(rawAtk, label, pullDir),
+        onHitPlayer: (rawAtk, label, pullDir, isPoison) =>
+          this.handlePlayerHit(rawAtk, label, pullDir, isPoison),
         onFloatingText: (x, y, text, color, fontSize) =>
           this.spawnFloatingText(x, y, text, color, fontSize ?? '16px'),
         onPhaseChange: () => {
@@ -358,25 +361,49 @@ export class DungeonBossScene extends Phaser.Scene {
   }
 
   private drawParallaxCavernAndAtmosphere(): void {
-    const isFrog = this.bossId === 'sdech_kongkaeb';
+    const skyTint =
+      this.bossId === 'sdech_kongkaeb'
+        ? 0x16342a
+        : this.bossId === 'arp_prey_chrov'
+        ? 0x0b1d1b
+        : this.bossId === 'neak_reach'
+        ? 0x22163b
+        : 0x202744;
+    const farTint =
+      this.bossId === 'sdech_kongkaeb'
+        ? 0x1d4235
+        : this.bossId === 'arp_prey_chrov'
+        ? 0x0f2a22
+        : this.bossId === 'neak_reach'
+        ? 0x2f1e4f
+        : 0x25354f;
+    const midTint =
+      this.bossId === 'sdech_kongkaeb'
+        ? 0x163026
+        : this.bossId === 'arp_prey_chrov'
+        ? 0x0a1c17
+        : this.bossId === 'neak_reach'
+        ? 0x211438
+        : 0x1a263a;
+
     this.add
       .tileSprite(ARENA_W / 2, ARENA_H / 2, ARENA_W, ARENA_H, 'lf_sky')
       .setTileScale(2.8, 2.8)
-      .setTint(isFrog ? 0x16342a : 0x202744)
+      .setTint(skyTint)
       .setScrollFactor(0.1)
       .setDepth(0);
 
     this.add
       .tileSprite(ARENA_W / 2, 405, ARENA_W, 256, 'lf_parallax_far')
       .setTileScale(2.2, 2.2)
-      .setTint(isFrog ? 0x1d4235 : 0x25354f)
+      .setTint(farTint)
       .setScrollFactor(0.2)
       .setDepth(2);
 
     this.add
       .tileSprite(ARENA_W / 2, 445, ARENA_W, 256, 'lf_parallax_mid')
       .setTileScale(2.2, 2.2)
-      .setTint(isFrog ? 0x163026 : 0x1a263a)
+      .setTint(midTint)
       .setScrollFactor(0.5)
       .setDepth(4);
 
@@ -864,17 +891,31 @@ export class DungeonBossScene extends Phaser.Scene {
       activeBuffs: [...this.player.state.activeBuffs],
       quickSnackSlots: [...this.player.state.quickSnackSlots],
       clearedBosses: [...this.player.state.clearedBosses],
+      bossDefeats: { ...(this.player.state.bossDefeats ?? {}) },
     });
   }
 
   // ==================== PLAYER DAMAGE TAKEN & DEFEAT ====================
-  private handlePlayerHit(rawBossAttack: number, label: string, pullDir?: number): void {
+  private handlePlayerHit(
+    rawBossAttack: number,
+    label: string,
+    pullDir?: number,
+    isPoison = false
+  ): void {
     const now = this.time.now;
     if (this.playerDefeated || this.transitioning || now < this.invulnerableUntil || !this.bossCtrl.alive) {
       return;
     }
 
     const bridge = computeVillageToDungeonBridge(this.player.state, Date.now(), this.consecutiveMeleeHits);
+
+    // Coconut Water Anti-Venom Counter (negates Shadow Naga poison pools & venom spits!)
+    if (isPoison && bridge.poisonImmune) {
+      this.invulnerableUntil = now + 520;
+      soundManager.playSfx('magic');
+      this.spawnFloatingText(this.player.x, this.player.y - 44, '🥥 ANTI-VENOM IMMUNE!', '#67e8f9', '15px');
+      return;
+    }
     const effectiveDefense =
       now < this.defenseCrackedUntil
         ? Math.max(0, Math.round(this.player.state.defense * 0.75))
@@ -902,6 +943,7 @@ export class DungeonBossScene extends Phaser.Scene {
     this.player.state.hp = Math.max(0, this.player.state.hp - dmg);
     this.player.paperDoll.flashWhite(150);
     this.cameras.main.shake(120, 0.006);
+    soundManager.playSfx('hit');
 
     if (pullDir) {
       this.player.body.setVelocityX(pullDir * 310);
@@ -1027,16 +1069,19 @@ export class DungeonBossScene extends Phaser.Scene {
     }
 
     if (cls === 'archer') {
+      soundManager.playSfx('arrow');
       this.projectiles.push(this.vfx.spawnArcherArrow(this.player.x, this.player.y, dir, 1));
       return;
     }
 
     if (cls === 'mystic') {
+      soundManager.playSfx('magic');
       this.projectiles.push(this.vfx.spawnMysticOrb(this.player.x, this.player.y, dir));
       return;
     }
 
     if (cls === 'tamer') {
+      soundManager.playSfx('krama');
       this.vfx.playKramaWhipSnap(this.player.x, this.player.y, dir);
       const whipBox = new Phaser.Geom.Rectangle(this.player.x + (dir > 0 ? 0 : -118), this.player.y - 44, 118, 88);
       this.checkMeleeBoxHits(whipBox, dir, { bonusMult: 1, tag: 'Krama Mark!' });
@@ -1066,6 +1111,7 @@ export class DungeonBossScene extends Phaser.Scene {
       this.player.paperDoll.setStealthTint(false);
       this.broadcastClassMeter();
 
+      soundManager.playSfx('swing');
       this.vfx.playShadowTwinSlash(this.player.x, this.player.y, dir, isShadowStrike);
       const slashBox = new Phaser.Geom.Rectangle(this.player.x + dir * 46 - 52, this.player.y - 46, 104, 92);
       this.checkMeleeBoxHits(slashBox, dir, {
@@ -1078,6 +1124,7 @@ export class DungeonBossScene extends Phaser.Scene {
 
     // Lbokator Warrior 3-Hit Animal-Stance Combo (also used by Golden Frying Pan & Stone Club!)
     const stance = this.lbokatorStance;
+    soundManager.playSfx('swing');
     this.vfx.playLbokatorSlash(this.player.x, this.player.y, dir, stance);
     const swingBox = new Phaser.Geom.Rectangle(this.player.x + dir * 50 - 54, this.player.y - 48, 108, 96);
     const isGoldenPan = weapon.id === 'weapon_golden_pan';
@@ -1120,8 +1167,8 @@ export class DungeonBossScene extends Phaser.Scene {
       }
     }
 
-    // 3. Check Boss
-    if (this.bossCtrl.alive && Phaser.Geom.Intersects.RectangleToRectangle(box, this.bossCtrl.getBounds())) {
+    // 3. Check Boss (Head OR any of Neak Reach's 10 serpent body segments!)
+    if (this.bossCtrl.alive && this.bossCtrl.intersectsHitbox(box)) {
       this.damageBoss(dir, opts);
     }
   }
@@ -1194,11 +1241,18 @@ export class DungeonBossScene extends Phaser.Scene {
     const combatSkillId = CLASS_TO_COMBAT_SKILL[this.player.state.activeClass];
     const skillRes = awardSkillXp(this.player.state, combatSkillId, hit.isCrit ? 14 : 9, true);
     this.player.state = skillRes.state;
-    if (skillRes.leveledUp && this.cache.audio.exists('sfx_levelup')) {
-      this.sound.play('sfx_levelup', { volume: 0.28 });
+    if (skillRes.leveledUp) {
+      soundManager.playSfx('level_up');
     }
 
     const isGoldenPan = weapon.id === 'weapon_golden_pan';
+    if (isGoldenPan) {
+      soundManager.playSfx('bonk');
+    } else if (hit.isCrit || focusActive) {
+      soundManager.playSfx('crit');
+    } else {
+      soundManager.playSfx('hit');
+    }
     const label = isGoldenPan
       ? `BONK! ${hit.finalDamage}${hit.isCrit ? '!' : ''}`
       : opts.tag
@@ -1266,6 +1320,11 @@ export class DungeonBossScene extends Phaser.Scene {
     if (isFirstClear) {
       this.player.state.clearedBosses = [...this.player.state.clearedBosses, def.id];
     }
+    const prevKills = this.player.state.bossDefeats?.[def.id] ?? 0;
+    this.player.state.bossDefeats = {
+      ...(this.player.state.bossDefeats ?? {}),
+      [def.id]: prevKills + 1,
+    };
 
     // Immediate Vitality & Character XP
     this.player.state.xp += def.charXp;
@@ -1278,9 +1337,7 @@ export class DungeonBossScene extends Phaser.Scene {
       const nb = computeVillageToDungeonBridge(this.player.state);
       this.player.state.hp = nb.effectiveMaxHp;
     }
-    if (this.cache.audio.exists('sfx_levelup')) {
-      this.sound.play('sfx_levelup', { volume: 0.38 });
-    }
+    soundManager.playSfx('victory');
     this.emitPlayerState();
     this.broadcastBossHud();
 
@@ -1388,6 +1445,7 @@ export class DungeonBossScene extends Phaser.Scene {
     }
 
     const totalCoins = rolled.coins + extraDupCoins;
+    soundManager.playSfx('coin');
     this.player.state.inventory = nextInv;
     this.player.state.coins += totalCoins;
     this.player.state.currencies.coins = this.player.state.coins;
@@ -1478,6 +1536,7 @@ export class DungeonBossScene extends Phaser.Scene {
           activeBuffs: [...this.player.state.activeBuffs],
           quickSnackSlots: [...this.player.state.quickSnackSlots],
           clearedBosses: [...this.player.state.clearedBosses],
+          bossDefeats: { ...(this.player.state.bossDefeats ?? {}) },
         },
       });
     });
@@ -1649,7 +1708,6 @@ export class DungeonBossScene extends Phaser.Scene {
     }
 
     // Update Projectiles (Divine Archer Arrows & Achar Mystic Orbs)
-    const bossBounds = this.bossCtrl.getBounds();
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const p = this.projectiles[i];
       p.node.x += p.vx * dt;
@@ -1678,8 +1736,8 @@ export class DungeonBossScene extends Phaser.Scene {
         }
       }
 
-      // Boss hit check
-      if (!hitSomething && this.bossCtrl.alive && Phaser.Geom.Intersects.RectangleToRectangle(pBox, bossBounds)) {
+      // Boss hit check (Head OR any trailing Shadow Naga segment)
+      if (!hitSomething && this.bossCtrl.alive && this.bossCtrl.intersectsHitbox(pBox)) {
         const hitDir = p.vx >= 0 ? 1 : -1;
         this.vfx.playImpactSparks(p.node.x, p.node.y, p.colorHex);
         if (p.kind === 'arrow') {

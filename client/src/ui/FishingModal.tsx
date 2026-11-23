@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { PlayerState } from '@shared/types';
 import { hasTalent } from '@shared/skillTrees';
 import { Fish, Sparkles, Waves } from 'lucide-react';
+import { soundManager } from '../game/systems/SoundManager';
 import { NativeDialog } from './NativeDialog';
 
 export interface FishingCatchReward {
@@ -144,6 +145,7 @@ export const FishingModal: React.FC<FishingModalProps> = ({
     setZoneStart(start);
 
     waitTimerRef.current = window.setTimeout(() => {
+      soundManager.playSfx('splash');
       setPhase('splash');
       markerRef.current = 8;
       dirRef.current = 1;
@@ -180,6 +182,7 @@ export const FishingModal: React.FC<FishingModalProps> = ({
         fishingXp: Math.round(baseReward.fishingXp * (riverAltarDone ? 1.2 : 1)),
       };
       onCatchReward(reward);
+      soundManager.playSfx(reward.coins ? 'coin' : 'harvest');
       setLastOutcome({
         ok: true,
         text: `🎣 Caught ${reward.label} (${reward.rarity}) · +${reward.fishingXp} Fishing XP!`,

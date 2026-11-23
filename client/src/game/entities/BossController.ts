@@ -15,16 +15,20 @@ import {
 export type BossStage = 'idle' | 'windup' | 'active' | 'recovery' | 'phase_roar' | 'defeated';
 
 export interface BossControllerCallbacks {
-  onHitPlayer: (rawAttack: number, label: string, pullDir?: number) => void;
+  onHitPlayer: (rawAttack: number, label: string, pullDir?: number, isPoison?: boolean) => void;
   onFloatingText: (x: number, y: number, text: string, color: string, fontSize?: string) => void;
   onPhaseChange: (phase: 2) => void;
   onDefeated: () => void;
 }
 
 /**
- * Reusable Multi-Phase Khmer Boss Rig Engine supporting:
- * - Boss #1: Sdech Kongkaeb (King Frog — QuadrupedHopperRig)
- * - Boss #5: Yeak Thmor (Stone Yaksha — HumanoidRig)
+ * Reusable Multi-Phase Khmer Boss Rig Engine supporting ALL 4 Rigs from
+ * docs/GDD_KHMER_LORE_AND_ANIMATION.md:
+ * 1. QuadrupedHopperRig  -> Boss #1: Sdech Kongkaeb (King Frog)
+ * 2. FloaterRig          -> Boss #2: Arp Prey Chrov (Dark Cavern Bioluminescent Ghost)
+ * 3. HumanoidRig         -> Boss #5: Yeak Thmor (Stone Yaksha)
+ * 4. MultiSegmentWormRig -> Boss #6: Neak Reach (10-Segment Shadow Naga + Poison Pools)
+ *
  * Strictly enforces the 4-Stage Boss Telegraph Rule:
  *   Wind-Up (0.5s–0.8s) -> Active Strike -> Impact Juice -> Recovery Window (0.7s–1.1s)
  */
@@ -54,11 +58,34 @@ export class BossController {
   private stageBadge: Phaser.GameObjects.Text;
   private baseScale: number;
 
+  // FloaterRig (Arp Prey Chrov) Dark Cavern Veil + Bioluminescent Spotlight Aura
+  private darkVeil?: Phaser.GameObjects.Rectangle;
+  private arpSpotlight?: Phaser.GameObjects.Arc;
+  private arpOuterGlow?: Phaser.GameObjects.Arc;
+  private playerLanternGlow?: Phaser.GameObjects.Arc;
+  private isFigure8Swooping = false;
+  private swoopStartAt = 0;
+  private swoopDurationMs = 1900;
+  private swoopCenterX = 900;
+  private swoopCenterY = 390;
+  private isSpinning = false;
+  private lastOrbDropAt = 0;
+
+  // MultiSegmentWormRig (Neak Reach — Shadow Naga) 10-segment sinusoidal serpent body
+  private wormSegments: Phaser.GameObjects.Image[] = [];
+  private wormTrail: Array<{ x: number; y: number }> = [];
+  private wormVx = -180;
+  private wormVy = 0;
+  private wormTargetX = 900;
+  private wormTargetY = 380;
+  private wormLunging = false;
+
   private nextStateAt = 0;
   private attackCounter = 0;
   private pendingAction?: () => void;
   private activeAttackHitApplied = false;
   private dashVelX = 0;
+  private dashVelY = 0;
   private dashHitboxActive = false;
   private dashLabel = '';
   private leapTargetX = 0;
@@ -89,18 +116,44 @@ export class BossController {
     this.speedMult = getDifficultySpeedMultiplier(difficulty);
     this.telegraphs = new TelegraphRenderer(scene);
 
+    const isAirborne = this.def.rig === 'FloaterRig' || this.def.rig === 'MultiSegmentWormRig';
     this.x = spawnX;
-    this.y = floorY;
-    this.baseScale = bossId === 'sdech_kongkaeb' ? 1.55 : 1.45;
+    this.y = isAirborne ? floorY - 210 : floorY;
+    this.baseScale =
+      bossId === 'sdech_kongkaeb'
+        ? 1.55
+        : bossId === 'arp_prey_chrov'
+        ? 1.35
+        : bossId === 'neak_reach'
+        ? 1.3
+        : 1.45;
 
     this.shadow = scene.add
       .image(spawnX, floorY - 2, 'soft_shadow')
-      .setDisplaySize(bossId === 'sdech_kongkaeb' ? 168 : 176, 30)
+      .setDisplaySize(bossId === 'sdech_kongkaeb' ? 168 : bossId === 'arp_prey_chrov' ? 110 : 176, 30)
+      .setAlpha(isAirborne ? 0.5 : 1)
       .setDepth(40);
 
+    // Build 9 trailing body segments behind the head for MultiSegmentWormRig (10 segments total!)
+    if (this.def.rig === 'MultiSegmentWormRig') {
+      for (let i = 0; i < 160; i++) {
+        this.wormTrail.push({ x: spawnX + i * 3.5, y: this.y + Math.sin(i * 0.15) * 18 });
+      }
+      for (let s = 1; s <= 9; s++) {
+        const isTail = s === 9;
+        const segScale = this.baseScale * (isTail ? 0.85 : Math.max(0.74, 1.04 - s * 0.032));
+        const seg = scene.add
+          .image(spawnX + s * 34, this.y, isTail ? 'boss_neak_reach_tail' : 'boss_neak_reach_seg')
+          .setOrigin(0.5, 0.5)
+          .setScale(segScale)
+          .setDepth(41 - s * 0.05);
+        this.wormSegments.push(seg);
+      }
+    }
+
     this.sprite = scene.add
-      .image(spawnX, floorY, this.def.textureKey)
-      .setOrigin(0.5, 0.96)
+      .image(spawnX, this.y, this.def.textureKey)
+      .setOrigin(0.5, isAirborne ? 0.5 : 0.96)
       .setScale(this.baseScale)
       .setDepth(42);
 
@@ -110,13 +163,35 @@ export class BossController {
         .setDepth(43);
     }
 
+    // FloaterRig (Arp Prey Chrov): Darkened cavern veil + radial bioluminescent spotlight aura
+    if (this.def.rig === 'FloaterRig') {
+      this.darkVeil = scene.add
+        .rectangle(900, 360, 2200, 960, 0x020617, 0.56)
+        .setDepth(32);
+
+      this.arpOuterGlow = scene.add
+        .circle(spawnX, this.y, 170, 0x10b981, 0.22)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(33);
+
+      this.arpSpotlight = scene.add
+        .circle(spawnX, this.y, 92, 0x34d399, 0.34)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(34);
+
+      this.playerLanternGlow = scene.add
+        .circle(280, floorY - 46, 128, 0xfef08a, 0.18)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(33);
+    }
+
     this.stageBadge = scene.add
-      .text(spawnX, floorY - 175, '', {
+      .text(spawnX, this.y - 110, '', {
         fontFamily: 'Fredoka, sans-serif',
         fontSize: '12px',
         fontStyle: 'bold',
         color: '#fef08a',
-        backgroundColor: 'rgba(15, 23, 42, 0.82)',
+        backgroundColor: 'rgba(15, 23, 42, 0.85)',
         padding: { x: 8, y: 2 },
       })
       .setOrigin(0.5, 1)
@@ -129,6 +204,22 @@ export class BossController {
 
   public getBounds(): Phaser.Geom.Rectangle {
     return this.sprite.getBounds();
+  }
+
+  /**
+   * Checks collision against the Boss Head OR any trailing segment of MultiSegmentWormRig!
+   */
+  public intersectsHitbox(rect: Phaser.Geom.Rectangle): boolean {
+    if (!this.alive) return false;
+    if (Phaser.Geom.Intersects.RectangleToRectangle(rect, this.sprite.getBounds())) {
+      return true;
+    }
+    for (const seg of this.wormSegments) {
+      if (seg.active && Phaser.Geom.Intersects.RectangleToRectangle(rect, seg.getBounds())) {
+        return true;
+      }
+    }
+    return false;
   }
 
   public getStageLabel(): string {
@@ -160,6 +251,8 @@ export class BossController {
 
     // Stage 3: White flash + knock shudder
     this.sprite.setTintFill(0xffffff);
+    this.wormSegments.forEach((seg) => seg.setTintFill(0xffffff));
+
     const baseX = this.x;
     this.scene.tweens.add({
       targets: this.sprite,
@@ -169,7 +262,10 @@ export class BossController {
       ease: 'Quad.easeOut',
     });
     this.scene.time.delayedCall(85, () => {
-      if (this.alive) this.sprite.clearTint();
+      if (this.alive) {
+        this.sprite.clearTint();
+        this.wormSegments.forEach((seg) => seg.clearTint());
+      }
     });
 
     // Check Phase 2 transition (<50% HP)
@@ -189,22 +285,40 @@ export class BossController {
     this.stage = 'phase_roar';
     this.pendingAction = undefined;
     this.dashVelX = 0;
+    this.dashVelY = 0;
     this.dashHitboxActive = false;
     this.isLeaping = false;
-    this.y = this.floorY;
+    this.isFigure8Swooping = false;
+    this.isSpinning = false;
+    this.wormLunging = false;
+    if (this.def.rig !== 'FloaterRig' && this.def.rig !== 'MultiSegmentWormRig') {
+      this.y = this.floorY;
+    }
     this.telegraphs.clearAll();
 
-    this.sprite.setTint(this.def.id === 'sdech_kongkaeb' ? 0xf87171 : 0xf59e0b);
-    this.telegraphs.playImpactJuice(this.x, this.y - 60, 'red', true);
-    this.callbacks.onFloatingText(
-      this.x,
-      this.y - 175,
+    const p2Tint =
+      this.def.id === 'sdech_kongkaeb'
+        ? 0xf87171
+        : this.def.id === 'arp_prey_chrov'
+        ? 0xf43f5e
+        : this.def.id === 'neak_reach'
+        ? 0xc084fc
+        : 0xf59e0b;
+    this.sprite.setTint(p2Tint);
+    if (this.arpSpotlight) this.arpSpotlight.setFillStyle(0xf43f5e, 0.42);
+    if (this.arpOuterGlow) this.arpOuterGlow.setFillStyle(0xe11d48, 0.28);
+
+    const p2Banner =
       this.def.id === 'sdech_kongkaeb'
         ? 'PHASE 2 · KING FROG ENRAGES!'
-        : 'PHASE 2 · STONE YAKSHA ROARS!',
-      '#f87171',
-      '20px'
-    );
+        : this.def.id === 'arp_prey_chrov'
+        ? 'PHASE 2 · ARP CRIMSON HAUNT!'
+        : this.def.id === 'neak_reach'
+        ? 'PHASE 2 · SHADOW NAGA COILS!'
+        : 'PHASE 2 · STONE YAKSHA ROARS!';
+
+    this.telegraphs.playImpactJuice(this.x, this.y - 40, 'red', true);
+    this.callbacks.onFloatingText(this.x, this.y - 120, p2Banner, '#f87171', '20px');
     this.callbacks.onPhaseChange(2);
 
     this.scene.time.delayedCall(950, () => {
@@ -220,16 +334,29 @@ export class BossController {
     this.stage = 'defeated';
     this.pendingAction = undefined;
     this.dashVelX = 0;
+    this.dashVelY = 0;
     this.dashHitboxActive = false;
     this.isLeaping = false;
+    this.isFigure8Swooping = false;
+    this.isSpinning = false;
+    this.wormLunging = false;
     this.telegraphs.clearAll();
     this.clearHazards();
     this.stageBadge.setVisible(false);
     if (this.throatGlow) this.throatGlow.setAlpha(0);
 
-    this.telegraphs.playImpactJuice(this.x, this.y - 70, 'yellow', true);
+    // Lift Arp's cavern darkness cleanly on victory!
+    if (this.darkVeil) {
+      this.scene.tweens.add({ targets: this.darkVeil, alpha: 0, duration: 500 });
+    }
+    if (this.arpSpotlight) this.arpSpotlight.setVisible(false);
+    if (this.arpOuterGlow) this.arpOuterGlow.setVisible(false);
+    if (this.playerLanternGlow) this.playerLanternGlow.setVisible(false);
+
+    this.telegraphs.playImpactJuice(this.x, this.y - 30, 'yellow', true);
+    const fadeTargets: Phaser.GameObjects.GameObject[] = [this.sprite, this.shadow, ...this.wormSegments];
     this.scene.tweens.add({
-      targets: [this.sprite, this.shadow],
+      targets: fadeTargets,
       alpha: 0,
       scaleX: this.baseScale * 1.25,
       scaleY: 0.2,
@@ -238,6 +365,7 @@ export class BossController {
       onComplete: () => {
         this.sprite.setVisible(false);
         this.shadow.setVisible(false);
+        this.wormSegments.forEach((s) => s.setVisible(false));
       },
     });
     this.callbacks.onDefeated();
@@ -273,7 +401,7 @@ export class BossController {
     this.sprite.setTint(tintHex);
     this.stageBadge.setText(badgeText).setVisible(true);
 
-    // Subtle crouch/telegraph squash
+    // Subtle telegraph squash
     this.scene.tweens.add({
       targets: this.sprite,
       scaleY: this.baseScale * 0.86,
@@ -287,7 +415,12 @@ export class BossController {
     const adjusted = Math.max(680, Math.round(recoveryMs / this.speedMult));
     this.stage = 'recovery';
     this.dashVelX = 0;
+    this.dashVelY = 0;
     this.dashHitboxActive = false;
+    this.isFigure8Swooping = false;
+    this.isSpinning = false;
+    this.wormLunging = false;
+    this.sprite.setAngle(0);
     this.sprite.clearTint();
     if (this.throatGlow) this.throatGlow.setAlpha(0);
     this.sprite.setScale(this.baseScale);
@@ -295,24 +428,27 @@ export class BossController {
     this.nextStateAt = this.scene.time.now + adjusted;
   }
 
-  private chooseNextAttack(playerX: number, now: number): void {
+  private chooseNextAttack(playerX: number, playerY: number, now: number): void {
     this.attackCounter += 1;
     this.stageBadge.setColor('#fef08a');
     const dir = playerX < this.x ? -1 : 1;
     this.sprite.setFlipX(dir > 0);
 
-    if (this.def.id === 'sdech_kongkaeb') {
+    if (this.def.rig === 'QuadrupedHopperRig') {
       this.runKingFrogAttack(playerX, dir, now);
+    } else if (this.def.rig === 'FloaterRig') {
+      this.runArpFloaterAttack(playerX, playerY, dir, now);
+    } else if (this.def.rig === 'MultiSegmentWormRig') {
+      this.runNeakReachWormAttack(playerX, playerY, dir, now);
     } else {
       this.runStoneYakshaAttack(playerX, dir, now);
     }
   }
 
-  // ==================== BOSS #1: SDECH KONGKAEB (KING FROG) ====================
+  // ==================== BOSS #1: SDECH KONGKAEB (QuadrupedHopperRig) ====================
   private runKingFrogAttack(playerX: number, dir: number, now: number): void {
     if (this.phase === 1) {
       if (this.attackCounter % 2 === 1) {
-        // Phase 1A: High Jump Slam toward player
         const targetX = Phaser.Math.Clamp(playerX, this.arenaMinX + 120, this.arenaMaxX - 120);
         const windup = 640;
         this.telegraphs.showGroundZone(targetX, this.floorY, 170, 26, 'red', windup + 420);
@@ -336,7 +472,6 @@ export class BossController {
           };
         });
       } else {
-        // Phase 1B: Sticky Tongue Lash Telegraph (Yellow line)
         const reach = 320;
         const tipX = Phaser.Math.Clamp(this.x + dir * reach, this.arenaMinX, this.arenaMaxX);
         const windup = 620;
@@ -373,7 +508,6 @@ export class BossController {
       return;
     }
 
-    // Phase 2 (<50% HP): Throat-Inflate Double Belly-Flop Shockwaves + 2 Mini Tadpoles!
     if (this.attackCounter % 2 === 1) {
       const windup = 760;
       if (this.throatGlow) {
@@ -425,7 +559,6 @@ export class BossController {
         this.pendingAction = () => this.enterRecovery(950);
       });
     } else {
-      // Phase 2B: Spawn 2 Bouncing Mini Tadpoles (Green telegraph)
       const windup = 580;
       this.startWindup('green', windup, 'TADPOLE SWARM!', () => {
         this.stage = 'active';
@@ -463,11 +596,100 @@ export class BossController {
     }
   }
 
-  // ==================== BOSS #5: YEAK THMOR (STONE YAKSHA) ====================
+  // ==================== BOSS #2: ARP PREY CHROV (FloaterRig) ====================
+  private runArpFloaterAttack(playerX: number, playerY: number, dir: number, _now: number): void {
+    if (this.attackCounter % 2 === 1) {
+      // Attack A: Bioluminescent Figure-8 Swoop dropping glowing spirit embers!
+      const windup = this.phase === 2 ? 520 : 620;
+      this.swoopCenterX = Phaser.Math.Clamp((this.x + playerX) / 2, this.arenaMinX + 260, this.arenaMaxX - 260);
+      this.swoopCenterY = Phaser.Math.Clamp(playerY - 110, 260, 440);
+      this.telegraphs.showLineTelegraph(
+        this.swoopCenterX - 280,
+        this.swoopCenterY,
+        this.swoopCenterX + 280,
+        36,
+        this.phase === 2 ? 'red' : 'green',
+        windup
+      );
+      this.startWindup(this.phase === 2 ? 'red' : 'green', windup, 'FIGURE-8 SWOOP!', () => {
+        this.stage = 'active';
+        this.sprite.clearTint();
+        this.sprite.setScale(this.baseScale);
+        this.isFigure8Swooping = true;
+        this.swoopStartAt = this.scene.time.now;
+        this.swoopDurationMs = Math.round((this.phase === 2 ? 1550 : 1950) / this.speedMult);
+        this.dashHitboxActive = true;
+        this.dashLabel = 'Arp Figure-8 Swoop';
+        this.lastOrbDropAt = 0;
+        this.nextStateAt = this.swoopStartAt + this.swoopDurationMs;
+        this.pendingAction = () => {
+          this.isFigure8Swooping = false;
+          if (this.phase === 2) {
+            this.spawnArpOrbRing(6);
+          }
+          this.enterRecovery(this.phase === 2 ? 780 : 900);
+        };
+      });
+    } else {
+      // Attack B: Laughing Spinning Dash across the darkened cavern!
+      const targetY = Phaser.Math.Clamp(playerY - 14, 240, this.floorY - 64);
+      const dashEndX = Phaser.Math.Clamp(this.x + dir * 560, this.arenaMinX + 100, this.arenaMaxX - 100);
+      const windup = this.phase === 2 ? 500 : 620;
+      this.y = Phaser.Math.Linear(this.y, targetY, 0.45);
+      this.telegraphs.showLineTelegraph(this.x, this.y, dashEndX, 46, 'yellow', windup);
+      this.isSpinning = true;
+      this.startWindup('yellow', windup, 'SPINNING DASH!', () => {
+        this.stage = 'active';
+        this.sprite.clearTint();
+        const speed = (this.phase === 2 ? 760 : 620) * this.speedMult;
+        const dx = dashEndX - this.x;
+        const dy = targetY - this.y;
+        const dist = Math.max(1, Math.hypot(dx, dy));
+        this.dashVelX = (dx / dist) * speed;
+        this.dashVelY = (dy / dist) * speed * 0.55;
+        this.dashHitboxActive = true;
+        this.dashLabel = 'Arp Spinning Dash';
+        this.nextStateAt = this.scene.time.now + Math.round(620 / this.speedMult);
+        this.pendingAction = () => {
+          this.isSpinning = false;
+          this.spawnArpOrbRing(this.phase === 2 ? 6 : 4);
+          this.enterRecovery(860);
+        };
+      });
+    }
+  }
+
+  private spawnArpOrbRing(count: number): void {
+    const color = this.phase === 2 ? 0xf43f5e : 0x34d399;
+    const stroke = this.phase === 2 ? 0xfecdd3 : 0xa7f3d0;
+    const speed = (this.phase === 2 ? 255 : 205) * this.speedMult;
+    for (let i = 0; i < count; i++) {
+      const ang = (i / count) * Math.PI * 2 + 0.25;
+      const orb = this.scene.add
+        .circle(this.x, this.y, 11, color, 0.92)
+        .setStrokeStyle(2.5, stroke)
+        .setDepth(60);
+      this.hazards.push({
+        kind: 'orb',
+        sprite: orb,
+        x: this.x,
+        y: this.y,
+        vx: Math.cos(ang) * speed,
+        vy: Math.sin(ang) * speed,
+        width: 20,
+        height: 20,
+        damage: Math.round(this.def.baseAttack * 0.8),
+        expiresAt: this.scene.time.now + 2600,
+        alive: true,
+        label: 'Arp Spirit Ember',
+      });
+    }
+  }
+
+  // ==================== BOSS #5: YEAK THMOR (HumanoidRig) ====================
   private runStoneYakshaAttack(playerX: number, dir: number, _now: number): void {
     if (this.phase === 1) {
       if (this.attackCounter % 2 === 1) {
-        // Phase 1A: Heavy Club Slam (Red zone) + Rolling Ground Shockwave
         const slamX = Phaser.Math.Clamp(this.x + dir * 92, this.arenaMinX + 80, this.arenaMaxX - 80);
         const windup = 720;
         this.telegraphs.showGroundZone(slamX, this.floorY, 190, 32, 'red', windup);
@@ -493,7 +715,6 @@ export class BossController {
           this.pendingAction = () => this.enterRecovery(960);
         });
       } else {
-        // Phase 1B: Sandstone Charge (Yellow lane)
         const chargeEnd = Phaser.Math.Clamp(this.x + dir * 340, this.arenaMinX + 120, this.arenaMaxX - 120);
         const windup = 640;
         this.telegraphs.showLineTelegraph(this.x, this.floorY - 56, chargeEnd, 54, 'yellow', windup);
@@ -510,7 +731,6 @@ export class BossController {
       return;
     }
 
-    // Phase 2 (<50% HP): Ceiling Boulders (3-4 falling rocks) + Faster Armored Dash Charge
     if (this.attackCounter % 2 === 1) {
       const windup = 750;
       const count = this.difficulty === 'calamity' ? 4 : 3;
@@ -577,6 +797,111 @@ export class BossController {
     }
   }
 
+  // ==================== BOSS #6: NEAK REACH (MultiSegmentWormRig) ====================
+  private runNeakReachWormAttack(playerX: number, playerY: number, dir: number, _now: number): void {
+    if (this.attackCounter % 2 === 1) {
+      // Attack A: Venom Spit Volley -> splashes into Green Poison Pools (Countered by Coconut Anti-Venom!)
+      const windup = this.phase === 2 ? 560 : 680;
+      const spitCount = this.phase === 2 ? 3 : 2;
+      for (let i = 0; i < spitCount; i++) {
+        const tx = Phaser.Math.Clamp(
+          playerX + (i - (spitCount - 1) / 2) * 145,
+          this.arenaMinX + 100,
+          this.arenaMaxX - 100
+        );
+        this.telegraphs.showGroundZone(tx, this.floorY, 118, 22, 'green', windup + 360);
+      }
+      this.startWindup('green', windup, 'NAGA VENOM SPIT!', () => {
+        this.stage = 'active';
+        this.sprite.clearTint();
+        this.sprite.setScale(this.baseScale);
+        for (let i = 0; i < spitCount; i++) {
+          const tx = Phaser.Math.Clamp(
+            playerX + (i - (spitCount - 1) / 2) * 145,
+            this.arenaMinX + 100,
+            this.arenaMaxX - 100
+          );
+          const flightSec = 0.62;
+          const vx = (tx - this.x) / flightSec;
+          const vy = (this.floorY - 16 - this.y - 0.5 * 740 * flightSec * flightSec) / flightSec;
+          const glob = this.scene.add
+            .circle(this.x, this.y, 13, 0x22c55e, 0.95)
+            .setStrokeStyle(2.5, 0xbef264)
+            .setDepth(60);
+          this.hazards.push({
+            kind: 'venom_glob',
+            sprite: glob,
+            x: this.x,
+            y: this.y,
+            vx,
+            vy,
+            width: 24,
+            height: 24,
+            damage: Math.round(this.def.baseAttack * 0.78),
+            expiresAt: this.scene.time.now + 2400,
+            isPoison: true,
+            alive: true,
+            label: 'Naga Venom Spit',
+          });
+        }
+        this.nextStateAt = this.scene.time.now + 440;
+        this.pendingAction = () => this.enterRecovery(880);
+      });
+    } else {
+      // Attack B: Serpentine Platform Lunge weaving smoothly across the arena!
+      const windup = this.phase === 2 ? 520 : 620;
+      const destX = Phaser.Math.Clamp(playerX + dir * 220, this.arenaMinX + 140, this.arenaMaxX - 140);
+      const destY = Phaser.Math.Clamp(playerY - 24, 240, this.floorY - 70);
+      this.telegraphs.showLineTelegraph(this.x, destY, destX, 48, 'purple', windup);
+      this.startWindup('purple', windup, 'SERPENTINE LUNGE!', () => {
+        this.stage = 'active';
+        this.sprite.clearTint();
+        this.wormTargetX = destX;
+        this.wormTargetY = destY;
+        this.wormLunging = true;
+        this.dashHitboxActive = true;
+        this.dashLabel = 'Shadow Naga Lunge';
+        this.nextStateAt = this.scene.time.now + Math.round((this.phase === 2 ? 980 : 1150) / this.speedMult);
+        this.pendingAction = () => {
+          this.wormLunging = false;
+          this.enterRecovery(920);
+        };
+      });
+    }
+  }
+
+  private spawnPoisonPool(x: number): void {
+    const pool = this.scene.add
+      .ellipse(x, this.floorY - 8, 114, 20, 0x16a34a, 0.72)
+      .setStrokeStyle(2.5, 0x86efac, 0.95)
+      .setDepth(54);
+
+    this.scene.tweens.add({
+      targets: pool,
+      scaleX: 1.08,
+      scaleY: 0.88,
+      duration: 420,
+      yoyo: true,
+      repeat: -1,
+    });
+
+    this.hazards.push({
+      kind: 'poison_pool',
+      sprite: pool,
+      x,
+      y: this.floorY - 10,
+      vx: 0,
+      vy: 0,
+      width: 108,
+      height: 22,
+      damage: Math.round(this.def.baseAttack * 0.65),
+      expiresAt: this.scene.time.now + 5600,
+      isPoison: true,
+      alive: true,
+      label: 'Naga Poison Pool',
+    });
+  }
+
   private checkAreaHit(
     cx: number,
     radius: number,
@@ -589,17 +914,58 @@ export class BossController {
     }
   }
 
+  private updateWormTrailAndSegments(time: number): void {
+    const first = this.wormTrail[0];
+    if (!first || Phaser.Math.Distance.Between(this.x, this.y, first.x, first.y) >= 3) {
+      this.wormTrail.unshift({ x: this.x, y: this.y });
+      if (this.wormTrail.length > 260) {
+        this.wormTrail.pop();
+      }
+    }
+
+    const spacing = 36;
+    let trailIdx = 0;
+    let prevX = this.x;
+    let prevY = this.y;
+
+    for (let s = 0; s < this.wormSegments.length; s++) {
+      let accumulated = 0;
+      let targetPt = this.wormTrail[Math.min(trailIdx, this.wormTrail.length - 1)] ?? { x: prevX, y: prevY };
+
+      while (trailIdx < this.wormTrail.length - 1) {
+        const a = this.wormTrail[trailIdx];
+        const b = this.wormTrail[trailIdx + 1];
+        const d = Phaser.Math.Distance.Between(a.x, a.y, b.x, b.y);
+        accumulated += d;
+        trailIdx += 1;
+        if (accumulated >= spacing) {
+          targetPt = b;
+          break;
+        }
+      }
+
+      const wave = Math.sin(time * 0.0085 - s * 0.65) * 9;
+      const sx = targetPt.x;
+      const sy = targetPt.y + wave;
+      const seg = this.wormSegments[s];
+      seg.setPosition(sx, sy);
+      seg.setRotation(Math.atan2(prevY - sy, prevX - sx));
+      prevX = sx;
+      prevY = sy;
+    }
+  }
+
   public update(
     time: number,
     delta: number,
     playerX: number,
-    _playerY: number,
+    playerY: number,
     playerBounds: Phaser.Geom.Rectangle
   ): void {
     const dt = delta / 1000;
 
     if (this.alive) {
-      // Handle Leap Arc (QuadrupedHopperRig)
+      // 1. QuadrupedHopperRig Leap Arc
       if (this.isLeaping) {
         const t = Math.min(1, (time - this.leapStartAt) / Math.max(1, this.leapDurationMs));
         this.x = Phaser.Math.Linear(this.leapStartX, this.leapTargetX, t);
@@ -607,13 +973,101 @@ export class BossController {
         this.y = this.floorY - arcH;
       }
 
-      // Handle Dash Charge (HumanoidRig)
-      if (this.dashVelX !== 0) {
+      // 2. FloaterRig Figure-8 Swoop & Spinning Dash
+      if (this.def.rig === 'FloaterRig') {
+        if (this.isFigure8Swooping) {
+          const t = (time - this.swoopStartAt) / Math.max(1, this.swoopDurationMs);
+          const ang = t * Math.PI * 2;
+          this.x = Phaser.Math.Clamp(
+            this.swoopCenterX + Math.sin(ang) * 320,
+            this.arenaMinX + 90,
+            this.arenaMaxX - 90
+          );
+          this.y = Phaser.Math.Clamp(
+            this.swoopCenterY + Math.sin(ang * 2) * 115,
+            210,
+            this.floorY - 76
+          );
+          if (time - this.lastOrbDropAt > (this.phase === 2 ? 320 : 480)) {
+            this.lastOrbDropAt = time;
+            const orb = this.scene.add
+              .circle(this.x, this.y, 10, this.phase === 2 ? 0xf43f5e : 0x10b981, 0.9)
+              .setStrokeStyle(2, 0xfef08a)
+              .setDepth(60);
+            this.hazards.push({
+              kind: 'orb',
+              sprite: orb,
+              x: this.x,
+              y: this.y,
+              vx: (Math.random() - 0.5) * 60,
+              vy: 155 * this.speedMult,
+              width: 18,
+              height: 18,
+              damage: Math.round(this.def.baseAttack * 0.72),
+              expiresAt: time + 2200,
+              alive: true,
+              label: 'Bioluminescent Ember',
+            });
+          }
+          if (this.dashHitboxActive && !this.activeAttackHitApplied) {
+            if (Phaser.Geom.Intersects.RectangleToRectangle(this.getBounds(), playerBounds)) {
+              this.activeAttackHitApplied = true;
+              this.callbacks.onHitPlayer(this.def.baseAttack, this.dashLabel);
+            }
+          }
+        }
+        if (this.isSpinning) {
+          this.sprite.angle += 760 * dt;
+        } else {
+          this.sprite.angle = Math.sin(time * 0.005) * 6;
+        }
+      }
+
+      // 3. MultiSegmentWormRig Smooth Sinusoidal Platform Weaving
+      if (this.def.rig === 'MultiSegmentWormRig') {
+        const targetX = this.wormLunging
+          ? this.wormTargetX
+          : Phaser.Math.Clamp(
+              playerX + Math.sin(time * 0.0014) * 310,
+              this.arenaMinX + 140,
+              this.arenaMaxX - 140
+            );
+        const targetY = this.wormLunging
+          ? this.wormTargetY
+          : Phaser.Math.Clamp(360 + Math.sin(time * 0.0028) * 135, 220, this.floorY - 95);
+
+        const maxSpd = (this.wormLunging ? 460 : 210) * this.speedMult;
+        const dx = targetX - this.x;
+        const dy = targetY - this.y;
+        const dist = Math.max(1, Math.hypot(dx, dy));
+        const desiredVx = (dx / dist) * maxSpd;
+        const desiredVy = (dy / dist) * maxSpd;
+        const steer = this.wormLunging ? 6.2 : 3.1;
+        this.wormVx = Phaser.Math.Linear(this.wormVx, desiredVx, Math.min(1, steer * dt));
+        this.wormVy = Phaser.Math.Linear(this.wormVy, desiredVy, Math.min(1, steer * dt));
+        this.x = Phaser.Math.Clamp(this.x + this.wormVx * dt, this.arenaMinX + 90, this.arenaMaxX - 90);
+        this.y = Phaser.Math.Clamp(this.y + this.wormVy * dt, 190, this.floorY - 68);
+        this.sprite.setFlipX(this.wormVx > 0);
+
+        if (this.wormLunging && this.dashHitboxActive && !this.activeAttackHitApplied) {
+          if (this.intersectsHitbox(playerBounds)) {
+            this.activeAttackHitApplied = true;
+            this.callbacks.onHitPlayer(this.def.baseAttack, this.dashLabel);
+          }
+        }
+        this.updateWormTrailAndSegments(time);
+      }
+
+      // 4. Linear Dash Charge (HumanoidRig & FloaterRig Spinning Dash)
+      if (this.dashVelX !== 0 || this.dashVelY !== 0) {
         this.x = Phaser.Math.Clamp(
           this.x + this.dashVelX * dt,
           this.arenaMinX + 90,
           this.arenaMaxX - 90
         );
+        if (this.dashVelY !== 0) {
+          this.y = Phaser.Math.Clamp(this.y + this.dashVelY * dt, 200, this.floorY - 64);
+        }
         if (this.dashHitboxActive && !this.activeAttackHitApplied) {
           if (Phaser.Geom.Intersects.RectangleToRectangle(this.getBounds(), playerBounds)) {
             this.activeAttackHitApplied = true;
@@ -622,11 +1076,16 @@ export class BossController {
         }
       }
 
-      // Idle subtle breathing / stalking step toward player
-      if (this.stage === 'idle' && !this.isLeaping) {
+      // 5. Idle subtle stalking toward player
+      if (this.stage === 'idle' && !this.isLeaping && this.def.rig !== 'MultiSegmentWormRig') {
         const dist = playerX - this.x;
         this.sprite.setFlipX(dist > 0);
-        if (Math.abs(dist) > 220) {
+        if (this.def.rig === 'FloaterRig') {
+          const desiredX = Phaser.Math.Clamp(playerX + (dist > 0 ? -240 : 240), this.arenaMinX + 110, this.arenaMaxX - 110);
+          const desiredY = Phaser.Math.Clamp(playerY - 125 + Math.sin(time * 0.004) * 32, 230, this.floorY - 110);
+          this.x = Phaser.Math.Linear(this.x, desiredX, Math.min(1, 1.8 * dt));
+          this.y = Phaser.Math.Linear(this.y, desiredY, Math.min(1, 2.2 * dt));
+        } else if (Math.abs(dist) > 220) {
           const stepSpeed = (this.def.id === 'sdech_kongkaeb' ? 56 : 44) * this.speedMult;
           this.x = Phaser.Math.Clamp(
             this.x + Math.sign(dist) * stepSpeed * dt,
@@ -639,7 +1098,7 @@ export class BossController {
       // State Machine Tick
       if (this.stage !== 'phase_roar' && time >= this.nextStateAt) {
         if (this.stage === 'idle') {
-          this.chooseNextAttack(playerX, time);
+          this.chooseNextAttack(playerX, playerY, time);
         } else if (this.stage === 'windup' || this.stage === 'active') {
           const fn = this.pendingAction;
           this.pendingAction = undefined;
@@ -651,19 +1110,30 @@ export class BossController {
         }
       }
 
-      // Sync Boss Visual Position
-      const breathe = this.stage === 'idle' || this.stage === 'recovery' ? Math.sin(time / 320) * 3 : 0;
+      // Sync Boss Visual Position & Aura Lights
+      const isAirborne = this.def.rig === 'FloaterRig' || this.def.rig === 'MultiSegmentWormRig';
+      const breathe = this.stage === 'idle' || this.stage === 'recovery' ? Math.sin(time / 290) * (isAirborne ? 7 : 3) : 0;
       this.sprite.setPosition(this.x, this.y + breathe);
       this.shadow.setPosition(this.x, this.floorY - 2);
-      const heightFactor = Math.max(0.4, 1 - (this.floorY - this.y) / 360);
+      const heightFactor = Math.max(0.35, 1 - (this.floorY - this.y) / 390);
       this.shadow.setScale(heightFactor, heightFactor);
+
       if (this.throatGlow) {
         this.throatGlow.setPosition(this.x, this.y - 42);
       }
-      this.stageBadge.setPosition(this.x, this.y - 175);
+      if (this.arpSpotlight && this.arpOuterGlow) {
+        const pulse = 1 + Math.sin(time * 0.008) * 0.09;
+        this.arpSpotlight.setPosition(this.x, this.y + breathe).setScale(pulse);
+        this.arpOuterGlow.setPosition(this.x, this.y + breathe).setScale(pulse * 1.05);
+      }
+      if (this.playerLanternGlow) {
+        this.playerLanternGlow.setPosition(playerX, playerY - 12);
+      }
+
+      this.stageBadge.setPosition(this.x, this.y - (isAirborne ? 82 : 175));
     }
 
-    // Update Active Boss Hazards (Shockwaves, Boulders, Mini Tadpoles, Tongue)
+    // Update Active Boss Hazards (Shockwaves, Boulders, Mini Tadpoles, Tongue, Orbs, Venom, Poison Pools)
     for (let i = this.hazards.length - 1; i >= 0; i--) {
       const h = this.hazards[i];
       if (!h.alive || time >= h.expiresAt) {
@@ -679,11 +1149,23 @@ export class BossController {
         if (h.y >= this.floorY - 14) {
           h.y = this.floorY - 14;
           h.vy = -340;
-          // Hop toward player
           h.vx = Math.sign(playerX - h.x || 1) * (150 * this.speedMult);
         }
         if (h.x < this.arenaMinX + 30 || h.x > this.arenaMaxX - 30) {
           h.vx *= -1;
+        }
+      } else if (h.kind === 'venom_glob') {
+        h.vy += 740 * dt;
+        h.x += h.vx * dt;
+        h.y += h.vy * dt;
+        if (h.y >= this.floorY - 14) {
+          const splashX = Phaser.Math.Clamp(h.x, this.arenaMinX + 60, this.arenaMaxX - 60);
+          this.telegraphs.playImpactJuice(splashX, this.floorY - 8, 'green', false);
+          this.spawnPoisonPool(splashX);
+          h.alive = false;
+          h.sprite.destroy();
+          this.hazards.splice(i, 1);
+          continue;
         }
       } else {
         h.x += h.vx * dt;
@@ -692,7 +1174,6 @@ export class BossController {
 
       h.sprite.setPosition(h.x, h.y);
 
-      // Boulder floor impact
       if (h.kind === 'boulder' && h.y >= this.floorY - 18) {
         this.telegraphs.playImpactJuice(h.x, this.floorY - 10, 'red', false);
         h.alive = false;
@@ -701,7 +1182,6 @@ export class BossController {
         continue;
       }
 
-      // Check collision with Player
       const hRect = new Phaser.Geom.Rectangle(
         h.x - h.width / 2,
         h.y - h.height / 2,
@@ -710,8 +1190,8 @@ export class BossController {
       );
       if (Phaser.Geom.Intersects.RectangleToRectangle(hRect, playerBounds)) {
         const pullDir = h.kind === 'tongue' ? Math.sign(this.x - playerX) : undefined;
-        this.callbacks.onHitPlayer(h.damage, h.label, pullDir);
-        if (h.kind !== 'tadpole') {
+        this.callbacks.onHitPlayer(h.damage, h.label, pullDir, h.isPoison);
+        if (h.kind !== 'tadpole' && h.kind !== 'poison_pool') {
           h.alive = false;
           h.sprite.destroy();
           this.hazards.splice(i, 1);
@@ -727,5 +1207,11 @@ export class BossController {
     this.shadow.destroy();
     this.throatGlow?.destroy();
     this.stageBadge.destroy();
+    this.darkVeil?.destroy();
+    this.arpSpotlight?.destroy();
+    this.arpOuterGlow?.destroy();
+    this.playerLanternGlow?.destroy();
+    this.wormSegments.forEach((s) => s.destroy());
+    this.wormSegments = [];
   }
 }

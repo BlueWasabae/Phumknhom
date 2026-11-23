@@ -3,11 +3,14 @@
 ភូមិខ្ញុំ (Phum Khnhom) — Reusable Khmer Pixel-Art Sprite Cleaner
 Performs edge-connected flood-fill background removal (threshold >= 240) so interior
 white highlights (fangs, teeth, glass glints, awning stripes) stay untouched,
-trims transparent margins, and resizes with NEAREST neighbor for razor-sharp pixel art.
+trims transparent margins, resizes with NEAREST neighbor for razor-sharp pixel art,
+and writes client/public/assets/khmer/manifest.json so BootScene loads only existing PNGs
+with ZERO console 404 errors.
 """
 
 from __future__ import annotations
 
+import json
 from collections import deque
 from pathlib import Path
 from typing import Literal
@@ -16,8 +19,11 @@ from PIL import Image
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 RAW_DIR = REPO_ROOT / "client" / "public" / "assets" / "raw_khmer"
-OUT_BUILDINGS = REPO_ROOT / "client" / "public" / "assets" / "khmer" / "buildings"
-OUT_BOSSES = REPO_ROOT / "client" / "public" / "assets" / "khmer" / "bosses"
+KHMER_ROOT = REPO_ROOT / "client" / "public" / "assets" / "khmer"
+OUT_BUILDINGS = KHMER_ROOT / "buildings"
+OUT_BOSSES = KHMER_ROOT / "bosses"
+OUT_TREES = KHMER_ROOT / "trees"
+MANIFEST_PATH = KHMER_ROOT / "manifest.json"
 
 WHITE_THRESHOLD = 240
 
@@ -25,8 +31,15 @@ WHITE_THRESHOLD = 240
 SPRITE_RULES: dict[str, tuple[Path, Literal["width", "height"], int]] = {
     "khmer_stilt_house": (OUT_BUILDINGS, "width", 128),
     "angkor_portal": (OUT_BUILDINGS, "width", 128),
+    "ancient_pagoda": (OUT_BUILDINGS, "width", 128),
+    "fashion_boutique": (OUT_BUILDINGS, "width", 120),
     "num_pang_cart": (OUT_BUILDINGS, "width", 88),
+    "sugar_palm_tree": (OUT_TREES, "height", 96),
+    "golden_durian_tree": (OUT_TREES, "height", 92),
     "boss_yeak_thmor": (OUT_BOSSES, "height", 144),
+    "boss_sdech_kongkaeb": (OUT_BOSSES, "height", 112),
+    "boss_arp_prey_chrov": (OUT_BOSSES, "height", 96),
+    "boss_neak_reach_head": (OUT_BOSSES, "height", 84),
 }
 
 
@@ -96,18 +109,25 @@ def trim_and_resize(
 def clean_all() -> None:
     OUT_BUILDINGS.mkdir(parents=True, exist_ok=True)
     OUT_BOSSES.mkdir(parents=True, exist_ok=True)
+    OUT_TREES.mkdir(parents=True, exist_ok=True)
 
     sources = sorted(
         p for p in RAW_DIR.iterdir() if p.is_file() and p.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}
-    )
-    if not sources:
-        raise FileNotFoundError(f"No raw sprites found in {RAW_DIR}")
+    ) if RAW_DIR.exists() else []
 
     for src in sources:
         stem = src.stem
         out_dir, axis, target_px = SPRITE_RULES.get(
             stem,
-            (OUT_BOSSES if stem.startswith("boss_") else OUT_BUILDINGS, "width", 128),
+            (
+                OUT_BOSSES
+                if stem.startswith("boss_")
+                else OUT_TREES
+                if stem.endswith("_tree")
+                else OUT_BUILDINGS,
+                "width",
+                128,
+            ),
         )
         out_dir.mkdir(parents=True, exist_ok=True)
         out_path = out_dir / f"{stem}.png"
@@ -117,6 +137,18 @@ def clean_all() -> None:
             final = trim_and_resize(cleaned, axis, target_px)
             final.save(out_path, format="PNG", optimize=True)
             print(f"[OK] {src.name} -> {out_path.relative_to(REPO_ROOT)} ({final.width}x{final.height})")
+
+    # Build manifest of all cleaned transparent Khmer PNGs currently on disk
+    manifest: dict[str, str] = {}
+    for folder in (OUT_BUILDINGS, OUT_BOSSES, OUT_TREES):
+        if not folder.exists():
+            continue
+        for png in sorted(folder.glob("*.png")):
+            rel = png.relative_to(REPO_ROOT / "client" / "public").as_posix()
+            manifest[png.stem] = f"/{rel}"
+
+    MANIFEST_PATH.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    print(f"[MANIFEST] Wrote {len(manifest)} sprite(s) to {MANIFEST_PATH.relative_to(REPO_ROOT)}")
 
 
 if __name__ == "__main__":

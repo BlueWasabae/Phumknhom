@@ -3,7 +3,9 @@ import { DungeonPlayer, DungeonState } from '../schema/DungeonState';
 
 const BOSS_SOLO_HP: Record<string, number> = {
   sdech_kongkaeb: 4500,
+  arp_prey_chrov: 9000,
   yeak_thmor: 18000,
+  neak_reach: 24000,
 };
 
 const DIFFICULTY_MULT: Record<string, number> = {
@@ -36,7 +38,10 @@ export class DungeonRoom extends Room<DungeonState> {
     const partyId = typeof options?.partyId === 'string' && options.partyId.trim()
       ? options.partyId.trim().slice(0, 64)
       : `coop_${Date.now().toString(36)}`;
-    const bossId = options?.bossId === 'yeak_thmor' ? 'yeak_thmor' : 'sdech_kongkaeb';
+    const bossId =
+      typeof options?.bossId === 'string' && options.bossId in BOSS_SOLO_HP
+        ? options.bossId
+        : 'sdech_kongkaeb';
     const difficulty =
       options?.difficulty === 'expert' ||
       options?.difficulty === 'calamity' ||

@@ -18,6 +18,7 @@ import { STREET_SNACKS, countInventoryAnyQuality } from '../data/recipes';
 import {
   Award,
   Backpack,
+  BookOpen,
   Cloud,
   Coins,
   FastForward,
@@ -34,6 +35,8 @@ import {
   Swords,
   User,
   Users,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 import {
   EventBus,
@@ -42,6 +45,15 @@ import {
   type FarmToolMode,
   type NetworkStatusPayload,
 } from '../game/EventBus';
+import { soundManager, type AudioSettings } from '../game/systems/SoundManager';
+import {
+  SEASONS,
+  SEASON_ORDER,
+  seasonClock,
+  type DayPeriod,
+  type SeasonClockSnapshot,
+  type SeasonId,
+} from '../game/systems/SeasonClock';
 import { NativeDialog } from './NativeDialog';
 
 interface HUDProps {
@@ -72,6 +84,7 @@ interface HUDProps {
   onOpenInbox: () => void;
   onOpenAuth: () => void;
   onOpenMarket: () => void;
+  onOpenBestiary: () => void;
   onFastForwardFarm: () => void;
 }
 
@@ -106,18 +119,31 @@ export const HUD: React.FC<HUDProps> = ({
   onOpenInbox,
   onOpenAuth,
   onOpenMarket,
+  onOpenBestiary,
   onFastForwardFarm,
 }) => {
   const [menuDropdownOpen, setMenuDropdownOpen] = useState(false);
   const [balanceModalOpen, setBalanceModalOpen] = useState(false);
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
+  const [audioSettings, setAudioSettings] = useState<AudioSettings>(() => soundManager.getSettings());
+  const [seasonSnap, setSeasonSnap] = useState<SeasonClockSnapshot>(() => seasonClock.getSnapshot());
   const [emoteOpen, setEmoteOpen] = useState(false);
   const [previewDiff, setPreviewDiff] = useState<DifficultyMode>('normal');
   const [previewParty, setPreviewParty] = useState(2);
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    const id = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(id);
+    const unsubAudio = soundManager.subscribe(setAudioSettings);
+    const unsubSeason = seasonClock.subscribe(setSeasonSnap);
+    const id = window.setInterval(() => {
+      setNow(Date.now());
+      setSeasonSnap(seasonClock.getSnapshot());
+    }, 1000);
+    return () => {
+      unsubAudio();
+      unsubSeason();
+      window.clearInterval(id);
+    };
   }, []);
 
   const bridge = computeVillageToDungeonBridge(player, now);
@@ -230,6 +256,22 @@ export const HUD: React.FC<HUDProps> = ({
             ? `Online • ${networkStatus.playerCount} ${networkStatus.playerCount === 1 ? 'player' : 'players'}`
             : 'Offline Mode'}
         </span>
+      </button>
+
+      {/* 4-Season Weather & Day/Night Badge */}
+      <button
+        type="button"
+        onClick={() => {
+          soundManager.playSfx('click');
+          setSettingsModalOpen(true);
+        }}
+        title={`${seasonSnap.season.name} · Day ${seasonSnap.dayOfSeason}/14 · ${seasonSnap.season.weatherLabel} · ${seasonSnap.periodLabel} (${seasonSnap.timeText}). Click for Weather & Audio Settings.`}
+        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-950/10 hover:bg-amber-950/20 text-[10px] font-display font-bold text-amber-950 whitespace-nowrap transition cursor-pointer"
+      >
+        <span>{seasonSnap.season.icon}</span>
+        <span className="hidden sm:inline">{seasonSnap.season.shortLabel}</span>
+        <span className="opacity-75">D{seasonSnap.dayOfSeason}</span>
+        <span>{seasonSnap.periodIcon}</span>
       </button>
 
       <div className="flex items-center gap-2 shrink-0">
@@ -414,6 +456,33 @@ export const HUD: React.FC<HUDProps> = ({
                 <button
                   type="button"
                   onClick={() => {
+                    soundManager.playSfx('click');
+                    setMenuDropdownOpen(false);
+                    onOpenBestiary();
+                  }}
+                  className="px-3 py-2 rounded-xl hover:bg-amber-200/80 text-left flex items-center gap-2 text-amber-950"
+                >
+                  <BookOpen className="w-4 h-4 text-rose-800" /> Bestiary &amp; Boss Log
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    soundManager.playSfx('click');
+                    setMenuDropdownOpen(false);
+                    setSettingsModalOpen(true);
+                  }}
+                  className="px-3 py-2 rounded-xl hover:bg-amber-200/80 text-left flex items-center gap-2 text-amber-950"
+                >
+                  {audioSettings.muted ? (
+                    <VolumeX className="w-4 h-4 text-rose-700" />
+                  ) : (
+                    <Volume2 className="w-4 h-4 text-emerald-700" />
+                  )}{' '}
+                  Audio &amp; Weather Settings
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
                     setMenuDropdownOpen(false);
                     setBalanceModalOpen(true);
                   }}
@@ -430,6 +499,22 @@ export const HUD: React.FC<HUDProps> = ({
 
           {/* TOP-RIGHT */}
           <div className="pointer-events-auto flex items-center gap-1.5 shrink-0 relative">
+            <button
+              type="button"
+              onClick={() => soundManager.toggleMute()}
+              aria-label={audioSettings.muted ? 'Unmute Audio' : 'Mute Audio'}
+              title={audioSettings.muted ? 'Audio Muted — Click to Unmute' : 'Audio On — Click to Mute'}
+              className={`stardew-btn p-2 rounded-xl shrink-0 ${
+                audioSettings.muted ? 'opacity-70 ring-1 ring-rose-500' : ''
+              }`}
+            >
+              {audioSettings.muted ? (
+                <VolumeX className="w-4 h-4 text-rose-700" />
+              ) : (
+                <Volume2 className="w-4 h-4 text-emerald-800" />
+              )}
+            </button>
+
             <button
               type="button"
               onClick={() => setEmoteOpen((o) => !o)}
@@ -846,6 +931,159 @@ export const HUD: React.FC<HUDProps> = ({
               {lastHit.isCrit ? ' (CRIT 1.75×)' : ''} · raw {lastHit.rawDamage} · variance ×{lastHit.varianceMultiplier}
             </div>
           )}
+        </div>
+      </NativeDialog>
+
+      {/* Audio & 4-Season Weather Settings Modal */}
+      <NativeDialog
+        open={settingsModalOpen}
+        onClose={() => setSettingsModalOpen(false)}
+        title="Audio & 4-Season Atmosphere Settings"
+        subtitle={`${seasonSnap.season.icon} ${seasonSnap.season.name} (${seasonSnap.season.khmerName}) · Day ${seasonSnap.dayOfSeason}/14 · ${seasonSnap.periodIcon} ${seasonSnap.timeText}`}
+        maxWidthClass="w-[min(94vw,490px)]"
+      >
+        <div className="space-y-3.5 text-xs">
+          {/* Audio Mixer */}
+          <div className="p-3 rounded-xl bg-amber-50 border border-amber-900/25 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="font-display font-bold text-amber-950 flex items-center gap-1.5">
+                {audioSettings.muted ? <VolumeX className="w-4 h-4 text-rose-700" /> : <Volume2 className="w-4 h-4 text-emerald-700" />}
+                Audio Engine (Pack OGG/WAV + Synth Fallback)
+              </span>
+              <button
+                type="button"
+                onClick={() => soundManager.toggleMute()}
+                className={`px-2.5 py-1 rounded-lg font-display font-bold text-[11px] border ${
+                  audioSettings.muted
+                    ? 'bg-rose-700 text-white border-rose-950'
+                    : 'bg-emerald-700 text-white border-emerald-950'
+                }`}
+              >
+                {audioSettings.muted ? 'Muted' : 'Sound On'}
+              </button>
+            </div>
+
+            <label className="block space-y-1">
+              <div className="flex justify-between font-bold text-amber-900 text-[11px]">
+                <span>Music (BGM)</span>
+                <span>{Math.round(audioSettings.bgmVolume * 100)}%</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={Math.round(audioSettings.bgmVolume * 100)}
+                onChange={(e) => soundManager.setBgmVolume(Number(e.target.value) / 100)}
+                className="w-full accent-amber-700"
+              />
+            </label>
+
+            <label className="block space-y-1">
+              <div className="flex justify-between font-bold text-amber-900 text-[11px]">
+                <span>Sound Effects (SFX)</span>
+                <span>{Math.round(audioSettings.sfxVolume * 100)}%</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={Math.round(audioSettings.sfxVolume * 100)}
+                onChange={(e) => soundManager.setSfxVolume(Number(e.target.value) / 100)}
+                className="w-full accent-emerald-700"
+              />
+            </label>
+
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {(
+                [
+                  ['swing', '⚔️ Swing'],
+                  ['bonk', '🍳 BONK!'],
+                  ['coin', '🪙 Coin'],
+                  ['splash', '💦 Splash'],
+                  ['level_up', '🎺 Level Up'],
+                ] as const
+              ).map(([sfx, label]) => (
+                <button
+                  key={sfx}
+                  type="button"
+                  onClick={() => soundManager.playSfx(sfx)}
+                  className="px-2 py-1 rounded-lg bg-white hover:bg-amber-100 border border-amber-900/30 font-bold text-[10px] text-amber-950"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 4-Season Khmer Calendar & Weather Preview */}
+          <div className="p-3 rounded-xl bg-amber-50 border border-amber-900/25 space-y-2">
+            <div className="font-display font-bold text-amber-950">
+              4-Season Khmer Weather Cycle
+            </div>
+            <p className="text-[11px] text-amber-900/90 leading-snug">
+              <strong>Active Effect:</strong> {seasonSnap.season.effectText}
+              <br />
+              <strong>Season Festival:</strong> {seasonSnap.season.festival}
+            </p>
+            <div className="grid grid-cols-2 gap-1.5">
+              {SEASON_ORDER.map((sid: SeasonId) => {
+                const s = SEASONS[sid];
+                const active = seasonSnap.season.id === sid;
+                return (
+                  <button
+                    key={sid}
+                    type="button"
+                    onClick={() => {
+                      soundManager.playSfx('click');
+                      seasonClock.setSeasonOverride(sid);
+                    }}
+                    className={`p-2 rounded-xl border text-left transition ${
+                      active
+                        ? 'bg-emerald-700 text-white border-emerald-950 shadow'
+                        : 'bg-white hover:bg-amber-100 text-amber-950 border-amber-900/25'
+                    }`}
+                  >
+                    <div className="font-display font-bold text-[11px]">
+                      {s.icon} {s.shortLabel}
+                    </div>
+                    <div className="text-[9px] opacity-85">{s.weatherLabel}</div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+              <span className="text-[10px] font-bold text-amber-900 uppercase">Time of Day:</span>
+              {(
+                [
+                  [null, 'Auto'],
+                  ['day', '☀️ Day'],
+                  ['sunset', '🌇 Sunset'],
+                  ['night', '🌙 Night'],
+                ] as Array<[DayPeriod | null, string]>
+              ).map(([p, label]) => {
+                const currentOverride = seasonClock.getOverrides().period;
+                const active = currentOverride === p;
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => {
+                      soundManager.playSfx('click');
+                      seasonClock.setPeriodOverride(p);
+                    }}
+                    className={`px-2 py-1 rounded-lg border text-[10px] font-bold ${
+                      active
+                        ? 'bg-indigo-800 text-white border-indigo-950'
+                        : 'bg-white text-amber-950 border-amber-900/25'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </NativeDialog>
     </>

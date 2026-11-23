@@ -27,6 +27,7 @@ export interface SavedPlayerProfile {
   activeBuffs?: unknown[];
   quickSnackSlots?: [string | null, string | null, string | null];
   clearedBosses?: string[];
+  bossDefeats?: Record<string, number>;
   pagodaBundles?: Record<string, string[]>;
   luckyWheelPity?: number;
   activeClass?: string;
@@ -276,6 +277,10 @@ function rowToSavedProfile(row: {
       ? (meta.quickSnackSlots as [string | null, string | null, string | null])
       : undefined,
     clearedBosses: Array.isArray(meta.clearedBosses) ? (meta.clearedBosses as string[]) : [],
+    bossDefeats:
+      typeof meta.bossDefeats === 'object' && meta.bossDefeats
+        ? (meta.bossDefeats as Record<string, number>)
+        : {},
     pagodaBundles:
       typeof meta.pagodaBundles === 'object' && meta.pagodaBundles
         ? (meta.pagodaBundles as Record<string, string[]>)
@@ -322,6 +327,7 @@ export async function registerPlayer(
     activeBuffs: starterProfile?.activeBuffs ?? [],
     quickSnackSlots: starterProfile?.quickSnackSlots,
     clearedBosses: starterProfile?.clearedBosses ?? [],
+    bossDefeats: starterProfile?.bossDefeats ?? {},
     pagodaBundles: starterProfile?.pagodaBundles ?? {},
     luckyWheelPity: starterProfile?.luckyWheelPity ?? 0,
     activeClass: starterProfile?.activeClass,
@@ -530,6 +536,7 @@ export async function savePlayerProfile(
     activeBuffs: profile.activeBuffs ?? [],
     quickSnackSlots: profile.quickSnackSlots,
     clearedBosses: profile.clearedBosses ?? [],
+    bossDefeats: profile.bossDefeats ?? {},
     pagodaBundles: profile.pagodaBundles ?? {},
     luckyWheelPity: profile.luckyWheelPity ?? 0,
     activeClass: profile.activeClass,

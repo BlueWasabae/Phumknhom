@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { PlayerState } from '@shared/types';
 import { Coins, Sparkles, Star } from 'lucide-react';
+import { soundManager } from '../game/systems/SoundManager';
 import { NativeDialog } from './NativeDialog';
 
 export interface WheelPrize {
@@ -93,9 +94,17 @@ export const LuckyWheelModal: React.FC<LuckyWheelModalProps> = ({
     setRotation(nextRot);
 
     const wonPrize = prizes[chosenIdx];
+    // Decelerating wheel peg ticks during the 2.55s spin
+    const tickDelays = [
+      70, 145, 225, 310, 400, 500, 610, 730, 865, 1015, 1185, 1380, 1605, 1875, 2190,
+    ];
+    tickDelays.forEach((ms) => {
+      window.setTimeout(() => soundManager.playSfx('wheel_tick', 0.08), ms);
+    });
     window.setTimeout(() => {
       setSpinning(false);
       setLastWon(wonPrize);
+      soundManager.playSfx(wonPrize.isMythic ? 'level_up' : wonPrize.coins ? 'coin' : 'harvest');
       onSpinResult(tier, wonPrize);
     }, 2600);
   };

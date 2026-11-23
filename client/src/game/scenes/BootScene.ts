@@ -66,14 +66,35 @@ export class BootScene extends Phaser.Scene {
       frameHeight: 32,
     });
 
-    // ---- 4. CUSTOM KHMER PIXEL-ART SPRITES (Cleaned Transparent PNGs) ----
+    // ---- 4. CUSTOM KHMER PIXEL-ART SPRITES (Cleaned Transparent PNGs + Optional Manifest) ----
     this.load.image('khmer_stilt_house', '/assets/khmer/buildings/khmer_stilt_house.png');
     this.load.image('num_pang_cart', '/assets/khmer/buildings/num_pang_cart.png');
     this.load.image('angkor_portal', '/assets/khmer/buildings/angkor_portal.png');
     this.load.image('boss_yeak_thmor', '/assets/khmer/bosses/boss_yeak_thmor.png');
+    this.load.json('khmer_manifest', '/assets/khmer/manifest.json');
   }
 
   create(): void {
+    const manifest = this.cache.json.get('khmer_manifest') as Record<string, string> | undefined;
+    const extraEntries = manifest
+      ? Object.entries(manifest).filter(([key]) => !this.textures.exists(key))
+      : [];
+
+    if (extraEntries.length > 0) {
+      for (const [key, url] of extraEntries) {
+        this.load.image(key, url);
+      }
+      this.load.once(Phaser.Loader.Events.COMPLETE, () => {
+        this.finalizeBoot();
+      });
+      this.load.start();
+      return;
+    }
+
+    this.finalizeBoot();
+  }
+
+  private finalizeBoot(): void {
     this.sliceAtlasSubTextures();
     this.generateUiAndLightTextures();
     this.registerAnimations();
@@ -434,6 +455,191 @@ export class BootScene extends Phaser.Scene {
         // Hanging lantern + fishing rod silhouette
         ctx.fillStyle = '#facc15';
         ctx.fillRect(56, 4, 8, 8);
+        tex.refresh();
+      }
+    }
+
+    // ==================== PHASE 9 PIXEL-ART BOSS & KHMER TREE FALLBACKS ====================
+    // Boss #2: Arp Prey Chrov (FloaterRig — Floating Head + Bioluminescent Entrails)
+    if (!this.textures.exists('boss_arp_prey_chrov')) {
+      const tex = this.textures.createCanvas('boss_arp_prey_chrov', 76, 92);
+      if (tex) {
+        const ctx = tex.getContext();
+        ctx.imageSmoothingEnabled = false;
+        // Glowing green/crimson spectral organ trails below head
+        ctx.fillStyle = '#059669';
+        ctx.fillRect(28, 46, 20, 20);
+        ctx.fillStyle = '#34d399';
+        ctx.fillRect(32, 48, 12, 16);
+        ctx.fillStyle = '#e11d48';
+        ctx.fillRect(24, 54, 6, 22);
+        ctx.fillRect(46, 54, 6, 20);
+        ctx.fillRect(35, 62, 6, 24);
+        ctx.fillStyle = '#fb7185';
+        ctx.fillRect(36, 66, 4, 14);
+        // Flowing wild dark hair
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(14, 12, 48, 36);
+        ctx.fillRect(10, 22, 8, 28);
+        ctx.fillRect(58, 22, 8, 28);
+        // Pale eerie face
+        ctx.fillStyle = '#d1fae5';
+        ctx.fillRect(22, 18, 32, 26);
+        ctx.fillStyle = '#a7f3d0';
+        ctx.fillRect(24, 20, 28, 22);
+        // Glowing crimson-emerald eyes
+        ctx.fillStyle = '#022c22';
+        ctx.fillRect(26, 26, 8, 6);
+        ctx.fillRect(42, 26, 8, 6);
+        ctx.fillStyle = '#f43f5e';
+        ctx.fillRect(28, 27, 4, 4);
+        ctx.fillRect(44, 27, 4, 4);
+        // Fanged grimace
+        ctx.fillStyle = '#4c0519';
+        ctx.fillRect(28, 36, 20, 5);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(30, 36, 3, 3);
+        ctx.fillRect(43, 36, 3, 3);
+        // Bioluminescent spark dots
+        ctx.fillStyle = '#6ee7b7';
+        ctx.fillRect(18, 62, 4, 4);
+        ctx.fillRect(54, 68, 4, 4);
+        ctx.fillRect(34, 86, 4, 4);
+        tex.refresh();
+      }
+    }
+
+    // Boss #6: Neak Reach (MultiSegmentWormRig — Shadow Naga Head, Segment, Tail)
+    if (!this.textures.exists('boss_neak_reach_head')) {
+      const tex = this.textures.createCanvas('boss_neak_reach_head', 76, 68);
+      if (tex) {
+        const ctx = tex.getContext();
+        ctx.imageSmoothingEnabled = false;
+        // Flared Angkorian cobra hood
+        ctx.fillStyle = '#4c1d95';
+        ctx.fillRect(12, 10, 52, 46);
+        ctx.fillStyle = '#7e22ce';
+        ctx.fillRect(16, 14, 44, 38);
+        // Golden Khmer crown flame spires
+        ctx.fillStyle = '#facc15';
+        ctx.fillRect(26, 4, 24, 10);
+        ctx.fillRect(34, 0, 8, 8);
+        ctx.fillRect(18, 8, 6, 8);
+        ctx.fillRect(52, 8, 6, 8);
+        // Serpent snout & scales
+        ctx.fillStyle = '#3b0764';
+        ctx.fillRect(22, 22, 32, 32);
+        ctx.fillStyle = '#6b21a8';
+        ctx.fillRect(24, 24, 28, 24);
+        // Glowing venom-green eyes
+        ctx.fillStyle = '#4ade80';
+        ctx.fillRect(26, 28, 8, 6);
+        ctx.fillRect(42, 28, 8, 6);
+        ctx.fillStyle = '#fef08a';
+        ctx.fillRect(29, 29, 3, 3);
+        ctx.fillRect(45, 29, 3, 3);
+        // Venomous fangs & jaw
+        ctx.fillStyle = '#14532d';
+        ctx.fillRect(26, 42, 24, 8);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(28, 42, 4, 6);
+        ctx.fillRect(44, 42, 4, 6);
+        ctx.fillStyle = '#4ade80';
+        ctx.fillRect(35, 48, 6, 8);
+        tex.refresh();
+      }
+    }
+
+    if (!this.textures.exists('boss_neak_reach_seg')) {
+      const tex = this.textures.createCanvas('boss_neak_reach_seg', 44, 44);
+      if (tex) {
+        const ctx = tex.getContext();
+        ctx.imageSmoothingEnabled = false;
+        ctx.fillStyle = '#3b0764';
+        ctx.fillRect(6, 6, 32, 32);
+        ctx.fillStyle = '#6b21a8';
+        ctx.fillRect(9, 9, 26, 26);
+        ctx.fillStyle = '#a855f7';
+        ctx.fillRect(14, 12, 16, 12);
+        // Golden Angkor dorsal spine & emerald venom core
+        ctx.fillStyle = '#facc15';
+        ctx.fillRect(18, 2, 8, 7);
+        ctx.fillStyle = '#4ade80';
+        ctx.fillRect(19, 19, 6, 6);
+        tex.refresh();
+      }
+    }
+
+    if (!this.textures.exists('boss_neak_reach_tail')) {
+      const tex = this.textures.createCanvas('boss_neak_reach_tail', 36, 28);
+      if (tex) {
+        const ctx = tex.getContext();
+        ctx.imageSmoothingEnabled = false;
+        ctx.fillStyle = '#4c1d95';
+        ctx.fillRect(4, 6, 24, 16);
+        ctx.fillStyle = '#7e22ce';
+        ctx.fillRect(8, 8, 18, 12);
+        ctx.fillStyle = '#4ade80';
+        ctx.fillRect(24, 10, 10, 8);
+        ctx.fillStyle = '#facc15';
+        ctx.fillRect(12, 3, 6, 5);
+        tex.refresh();
+      }
+    }
+
+    // Iconic Cambodian Sugar Palm Tree (Thnot) Fallback
+    if (!this.textures.exists('sugar_palm_tree')) {
+      const tex = this.textures.createCanvas('sugar_palm_tree', 48, 76);
+      if (tex) {
+        const ctx = tex.getContext();
+        ctx.imageSmoothingEnabled = false;
+        // Slender ringed trunk
+        ctx.fillStyle = '#78350f';
+        ctx.fillRect(21, 28, 6, 46);
+        ctx.fillStyle = '#92400e';
+        for (let y = 32; y < 70; y += 6) {
+          ctx.fillRect(21, y, 6, 2);
+        }
+        // Radiating palm fan canopy
+        ctx.fillStyle = '#15803d';
+        ctx.fillRect(8, 14, 32, 16);
+        ctx.fillRect(14, 6, 20, 22);
+        ctx.fillStyle = '#22c55e';
+        ctx.fillRect(4, 18, 12, 8);
+        ctx.fillRect(32, 18, 12, 8);
+        ctx.fillRect(16, 4, 16, 12);
+        ctx.fillStyle = '#4ade80';
+        ctx.fillRect(18, 8, 12, 6);
+        // Dark brown hanging sugar palm fruit clusters
+        ctx.fillStyle = '#451a03';
+        ctx.fillRect(18, 26, 5, 5);
+        ctx.fillRect(25, 26, 5, 5);
+        tex.refresh();
+      }
+    }
+
+    // Golden Durian Tree Fallback
+    if (!this.textures.exists('golden_durian_tree')) {
+      const tex = this.textures.createCanvas('golden_durian_tree', 52, 68);
+      if (tex) {
+        const ctx = tex.getContext();
+        ctx.imageSmoothingEnabled = false;
+        ctx.fillStyle = '#713f12';
+        ctx.fillRect(22, 36, 8, 30);
+        ctx.fillStyle = '#3f6212';
+        ctx.fillRect(8, 12, 36, 28);
+        ctx.fillStyle = '#65a30d';
+        ctx.fillRect(12, 8, 28, 24);
+        ctx.fillStyle = '#84cc16';
+        ctx.fillRect(16, 12, 20, 12);
+        // Glowing golden durians!
+        ctx.fillStyle = '#facc15';
+        ctx.fillRect(14, 24, 6, 7);
+        ctx.fillRect(32, 22, 6, 7);
+        ctx.fillRect(23, 16, 6, 7);
+        ctx.fillStyle = '#fef08a';
+        ctx.fillRect(16, 26, 2, 2);
+        ctx.fillRect(34, 24, 2, 2);
         tex.refresh();
       }
     }

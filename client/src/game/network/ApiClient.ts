@@ -55,6 +55,7 @@ export interface SavedProfilePayload {
   activeBuffs: PlayerState['activeBuffs'];
   quickSnackSlots: PlayerState['quickSnackSlots'];
   clearedBosses: PlayerState['clearedBosses'];
+  bossDefeats?: Record<string, number>;
   pagodaBundles: PlayerState['pagodaBundles'];
   luckyWheelPity: number;
   activeClass: PlayerState['activeClass'];
@@ -85,6 +86,7 @@ export function serializePlayerStateForSave(state: PlayerState): SavedProfilePay
     activeBuffs: state.activeBuffs,
     quickSnackSlots: [...state.quickSnackSlots],
     clearedBosses: [...state.clearedBosses],
+    bossDefeats: { ...(state.bossDefeats ?? {}) },
     pagodaBundles: { ...(state.pagodaBundles ?? {}) },
     luckyWheelPity: state.luckyWheelPity ?? 0,
     activeClass: state.activeClass,
@@ -189,6 +191,8 @@ export function hydratePlayerStateFromSave(
         ? [saved.quickSnackSlots[0], saved.quickSnackSlots[1], saved.quickSnackSlots[2]]
         : [...INITIAL_PLAYER_STATE.quickSnackSlots],
     clearedBosses: Array.isArray(saved?.clearedBosses) ? saved.clearedBosses : [],
+    bossDefeats:
+      saved?.bossDefeats && typeof saved.bossDefeats === 'object' ? saved.bossDefeats : {},
     pagodaBundles:
       saved?.pagodaBundles && typeof saved.pagodaBundles === 'object' ? saved.pagodaBundles : {},
     luckyWheelPity: typeof saved?.luckyWheelPity === 'number' ? saved.luckyWheelPity : 0,

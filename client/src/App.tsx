@@ -91,6 +91,8 @@ import {
 } from './ui/LuckyWheelModal';
 import { PagodaBundleModal } from './ui/PagodaBundleModal';
 import { MarketModal } from './ui/MarketModal';
+import { BestiaryModal } from './ui/BestiaryModal';
+import { soundManager } from './game/systems/SoundManager';
 
 type ActiveModalType =
   | null
@@ -107,7 +109,8 @@ type ActiveModalType =
   | 'fishing'
   | 'luckyWheel'
   | 'pagoda'
-  | 'market';
+  | 'market'
+  | 'bestiary';
 
 interface FloatingXpBanner extends SkillXpToastPayload {
   uid: number;
@@ -152,6 +155,7 @@ export const App: React.FC = () => {
   const [inspectedPlayer, setInspectedPlayer] = useState<InspectedRemotePlayer | null>(null);
   const [farmModalTab, setFarmModalTab] = useState<FarmModalTab>('seeds');
   const [shopTab, setShopTab] = useState<'primary' | 'secondary'>('primary');
+  const [preselectedBossId, setPreselectedBossId] = useState<BossId>('sdech_kongkaeb');
   const [selectedCropId, setSelectedCropId] = useState('trakuon');
   const [farmToolMode, setFarmToolMode] = useState<FarmToolMode>('smart');
   const [lastHit, setLastHit] = useState<CombatHitResult | null>(null);
@@ -279,7 +283,9 @@ export const App: React.FC = () => {
             message: `Quick-Snack Slot [${slotIndex + 1}] is empty. Assign a snack at the Num Pang Cart!`,
           };
         }
-        return consumeStreetSnack(s, snackId);
+        const res = consumeStreetSnack(s, snackId);
+        if (res.ok) soundManager.playSfx('heal');
+        return res;
       });
     },
     [runStateAction]
@@ -543,6 +549,7 @@ export const App: React.FC = () => {
         EventBus.emit('ui:toast', { text: res.error });
         return false;
       }
+      soundManager.playSfx('coin');
       runStateAction((prev) => {
         const nextCoins = Math.max(0, prev.currencies.coins - res.listing.priceCoins);
         const nextInv = prev.inventory.map((i) => ({ ...i }));
@@ -590,6 +597,7 @@ export const App: React.FC = () => {
         EventBus.emit('ui:toast', { text: res.error });
         return false;
       }
+      soundManager.playSfx('coin');
       runStateAction((prev) => {
         const nextInv = prev.inventory.map((i) => ({ ...i }));
         const idx = nextInv.findIndex(
@@ -616,6 +624,7 @@ export const App: React.FC = () => {
         EventBus.emit('ui:toast', { text: res.error });
         return false;
       }
+      soundManager.playSfx('coin');
       runStateAction((prev) => {
         const nextInv = prev.inventory.map((i) => ({ ...i }));
         const existing = nextInv.find(
@@ -759,6 +768,7 @@ export const App: React.FC = () => {
         });
       }),
       EventBus.on('social:marketSale', ({ itemName, quantity, buyerName, payoutCoins, taxCoins }) => {
+        soundManager.playSfx('coin');
         setPlayer((prev) => {
           const nextCoins = prev.currencies.coins + payoutCoins;
           const next: PlayerState = {
@@ -777,6 +787,9 @@ export const App: React.FC = () => {
         EventBus.emit('ui:toast', { text });
       }),
       EventBus.on('skill:xpGained', (payload) => {
+        if (payload.leveledUp) {
+          soundManager.playSfx('level_up');
+        }
         const uid = xpUid++;
         setXpBanners((prev) => [...prev.slice(-2), { ...payload, uid }]);
         window.setTimeout(() => {
@@ -857,6 +870,7 @@ export const App: React.FC = () => {
         }}
         onOpenAuth={() => setActiveModal('auth')}
         onOpenMarket={() => setActiveModal('market')}
+        onOpenBestiary={() => setActiveModal('bestiary')}
         onFastForwardFarm={() => runFarmAction((s) => fastForwardFarmTimers(s, 60))}
       />
 
@@ -905,6 +919,7 @@ export const App: React.FC = () => {
       <ModeSelectorModal
         open={activeModal === 'modeSelector'}
         player={player}
+        initialBossId={preselectedBossId}
         onClose={() => setActiveModal(null)}
         onEnterDungeon={(
           bossId: BossId,
@@ -912,8 +927,20 @@ export const App: React.FC = () => {
           partyMode: 'solo' | 'coop',
           partyId?: string
         ) => {
+          soundManager.playSfx('click');
           setActiveModal(null);
           EventBus.emit('dungeon:enterRequest', { bossId, difficulty, partyMode, partyId });
+        }}
+      />
+
+      <BestiaryModal
+        open={activeModal === 'bestiary'}
+        player={player}
+        onClose={() => setActiveModal(null)}
+        onChallengeBoss={(bossId) => {
+          soundManager.playSfx('click');
+          setPreselectedBossId(bossId);
+          setActiveModal('modeSelector');
         }}
       />
 
@@ -1143,13 +1170,37 @@ export const App: React.FC = () => {
         initialTab={shopTab}
         player={player}
         onClose={() => setActiveModal(null)}
-        onBuySnack={(snackId, qty = 1) => runStateAction((s) => buyStreetSnack(s, snackId, qty))}
-        onCookSnack={(snackId) => runStateAction((s) => cookStreetSnack(s, snackId))}
-        onEatSnack={(snackId) => runStateAction((s) => consumeStreetSnack(s, snackId))}
+        onBuySnack={(snackId, qty = 1) =>
+          runStateAction((s) => {
+            const res = buyStreetSnack(s, snackId, qty);
+            if (res.ok) soundManager.playSfx('coin');
+            return res;
+          })
+        }
+        onCookSnack={(snackId) =>
+          runStateAction((s) => {
+            const res = cookStreetSnack(s, snackId);
+            if (res.ok) soundManager.playSfx('harvest');
+            return res;
+          })
+        }
+        onEatSnack={(snackId) =>
+          runStateAction((s) => {
+            const res = consumeStreetSnack(s, snackId);
+            if (res.ok) soundManager.playSfx('heal');
+            return res;
+          })
+        }
         onAssignQuickSlot={(slotIndex, snackId) =>
           runStateAction((s) => assignQuickSnackSlot(s, slotIndex, snackId))
         }
-        onBuyFashion={(itemId) => runStateAction((s) => buyFashionItem(s, itemId))}
+        onBuyFashion={(itemId) =>
+          runStateAction((s) => {
+            const res = buyFashionItem(s, itemId);
+            if (res.ok) soundManager.playSfx('coin');
+            return res;
+          })
+        }
         onEquipFashion={handleEquipItem}
         onCustomizeLook={(patch) => applyLoadoutPatch(patch)}
       />

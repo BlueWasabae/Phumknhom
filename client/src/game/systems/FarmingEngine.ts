@@ -296,6 +296,35 @@ export function waterPlot(state: PlayerState, index: number, now = Date.now()): 
 }
 
 /**
+ * Monsoon Rains (Summer) Weather Effect (docs/GDD_OPEN_WORLD_EXPANSION.md §3.1):
+ * Automatically waters every planted, unwatered plot (-20% remaining grow time).
+ */
+export function autoWaterAllPlotsForMonsoon(
+  state: PlayerState,
+  now = Date.now()
+): { state: PlayerState; wateredCount: number } {
+  let wateredCount = 0;
+  const plots = state.farm.plots.map((p) => {
+    if (!p.unlocked || !p.tilled || !p.cropId || !p.plantedAt || p.watered) {
+      return p;
+    }
+    const elapsed = Math.max(0, now - p.plantedAt);
+    const remaining = Math.max(0, p.effectiveGrowMs - elapsed);
+    const reducedRemaining = Math.round(remaining * 0.8);
+    wateredCount += 1;
+    return { ...p, watered: true, effectiveGrowMs: elapsed + reducedRemaining };
+  });
+
+  if (wateredCount === 0) {
+    return { state, wateredCount: 0 };
+  }
+  return {
+    state: { ...state, farm: { ...state.farm, plots } },
+    wateredCount,
+  };
+}
+
+/**
  * Fertilizer grants a 20% chance for Gold-Star crop (1.5x Coins & +60s buff duration).
  */
 export function fertilizePlot(state: PlayerState, index: number): ActionResult {

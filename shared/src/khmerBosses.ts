@@ -28,6 +28,9 @@ export interface KhmerBossDef {
   vitalityXp: number;
   charXp: number;
   accentColor: string;
+  lore: string;
+  trophyName: string;
+  trophyIcon: string;
   phase1Summary: string;
   phase2Summary: string;
   drops: BossLootEntry[];
@@ -44,8 +47,11 @@ export interface RolledBossLoot {
 }
 
 /**
- * Boss #1 (King Frog) & Boss #5 (Stone Yaksha) from
- * docs/GDD_SYSTEMS_SKILLS_AND_BALANCE.md & docs/GDD_KHMER_LORE_AND_ANIMATION.md
+ * All 4 Reusable Khmer Boss Rigs (docs/GDD_KHMER_LORE_AND_ANIMATION.md):
+ * - #1 Sdech Kongkaeb (QuadrupedHopperRig)
+ * - #2 Arp Prey Chrov (FloaterRig)
+ * - #5 Yeak Thmor Prasat (HumanoidRig)
+ * - #6 Neak Reach — Shadow Naga (MultiSegmentWormRig)
  */
 export const KHMER_BOSSES: Record<BossId, KhmerBossDef> = {
   sdech_kongkaeb: {
@@ -66,6 +72,9 @@ export const KHMER_BOSSES: Record<BossId, KhmerBossDef> = {
     vitalityXp: 65,
     charXp: 90,
     accentColor: '#22c55e',
+    lore: 'Sovereign of the flooded rice paddies who hoards ancient coins beneath a golden lotus crown.',
+    trophyName: 'Golden Frog Crown Trophy',
+    trophyIcon: '🐸',
     phase1Summary: 'High jump slams toward player + sticky tongue lash telegraph.',
     phase2Summary: 'Inflates bright red throat pouch → double belly-flop shockwaves + 2 bouncing mini tadpoles.',
     drops: [
@@ -96,6 +105,55 @@ export const KHMER_BOSSES: Record<BossId, KhmerBossDef> = {
     noHitEasterEggItemId: 'weapon_golden_pan',
     noHitEasterEggHint: 'No-Hit Secret: Defeat King Frog taking 0 damage to unlock The Golden Frying Pan!',
   },
+  arp_prey_chrov: {
+    id: 'arp_prey_chrov',
+    rosterNumber: 2,
+    khmerName: 'អាបព្រៃជ្រៅ',
+    englishName: 'Arp Prey Chrov (Forest Ghost)',
+    shortTitle: 'Arp Ghost · Boss #2',
+    biomeName: 'Dark Bamboo Woods',
+    rig: 'FloaterRig',
+    textureKey: 'boss_arp_prey_chrov',
+    soloNormalHp: 9000,
+    baseAttack: 26,
+    defense: 8,
+    bossDR: 0.06,
+    coinsReward: 340,
+    firstClearGold: 4,
+    vitalityXp: 90,
+    charXp: 130,
+    accentColor: '#10b981',
+    lore: 'Nocturnal folklore ghost hunting in pitch-dark bamboo woods; its bioluminescent aura is the sole light in the gloom.',
+    trophyName: 'Bioluminescent Arp Lantern',
+    trophyIcon: '👻',
+    phase1Summary: 'Darkens the cavern with a radial spotlight aura; fast figure-8 swoops & laughing spin-dashes.',
+    phase2Summary: 'Crimson spectral overdrive → double spin-dashes & radial bioluminescent orb rings.',
+    drops: [
+      {
+        itemId: 'drop_spirit_orb',
+        label: 'Spirit Ember Orb',
+        chanceNormal: 1,
+        chanceExpert: 1,
+        quantity: 2,
+      },
+      {
+        itemId: 'hat_spirit_veil',
+        label: 'Bamboo Spirit Veil',
+        chanceNormal: 0.16,
+        chanceExpert: 0.34,
+        quantity: 1,
+        isEquipment: true,
+      },
+      {
+        itemId: 'wings_arp_aura',
+        label: 'Ghostly Lantern Halo',
+        chanceNormal: 0.08,
+        chanceExpert: 0.2,
+        quantity: 1,
+        isEquipment: true,
+      },
+    ],
+  },
   yeak_thmor: {
     id: 'yeak_thmor',
     rosterNumber: 5,
@@ -114,6 +172,9 @@ export const KHMER_BOSSES: Record<BossId, KhmerBossDef> = {
     vitalityXp: 120,
     charXp: 180,
     accentColor: '#f59e0b',
+    lore: 'Colossal sandstone temple guardian awakened by ancient tremors, wielding a fiery war club (Dambong).',
+    trophyName: 'Sandstone Yaksha Horn',
+    trophyIcon: '🗿',
     phase1Summary: 'Telegraphed heavy club slam (red zone) + rolling ground shockwave.',
     phase2Summary: 'Roars, drops 3–4 falling ceiling boulders + faster armored dash charge.',
     drops: [
@@ -149,11 +210,62 @@ export const KHMER_BOSSES: Record<BossId, KhmerBossDef> = {
       },
     ],
   },
+  neak_reach: {
+    id: 'neak_reach',
+    rosterNumber: 6,
+    khmerName: 'នាគរាជ',
+    englishName: 'Neak Reach (Shadow Naga)',
+    shortTitle: 'Shadow Naga · Boss #6',
+    biomeName: 'Sunken Naga Sanctum',
+    rig: 'MultiSegmentWormRig',
+    textureKey: 'boss_neak_reach_head',
+    soloNormalHp: 24000,
+    baseAttack: 46,
+    defense: 14,
+    bossDR: 0.1,
+    coinsReward: 620,
+    firstClearGold: 6,
+    vitalityXp: 165,
+    charXp: 240,
+    accentColor: '#a855f7',
+    lore: 'Sacred 10-segment serpent weaving effortlessly through sunken Angkor ledges. Drink Coconut Water for Anti-Venom!',
+    trophyName: 'Royal Shadow Naga Crest',
+    trophyIcon: '🐉',
+    phase1Summary: '10-segment sinusoidal serpent weaves through platforms & spits green poison pools (Coconut Anti-Venom counters!).',
+    phase2Summary: 'Enraged serpent coils → rapid high-speed platform lunges + 3-way venom pool volleys.',
+    drops: [
+      {
+        itemId: 'drop_naga_scale',
+        label: 'Shadow Naga Scale',
+        chanceNormal: 1,
+        chanceExpert: 1,
+        quantity: 2,
+      },
+      {
+        itemId: 'weapon_naga_fang',
+        label: 'Naga Venom Fang',
+        chanceNormal: 0.16,
+        chanceExpert: 0.34,
+        quantity: 1,
+        isEquipment: true,
+      },
+      {
+        itemId: 'hat_naga_crest',
+        label: 'Royal Naga Crest',
+        chanceNormal: 0.07,
+        chanceExpert: 0.18,
+        quantity: 1,
+        isEquipment: true,
+      },
+    ],
+  },
 };
 
 export const KHMER_BOSS_LIST: KhmerBossDef[] = [
   KHMER_BOSSES.sdech_kongkaeb,
+  KHMER_BOSSES.arp_prey_chrov,
   KHMER_BOSSES.yeak_thmor,
+  KHMER_BOSSES.neak_reach,
 ];
 
 export function getScaledBossMaxHp(

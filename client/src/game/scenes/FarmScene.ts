@@ -8,6 +8,7 @@ import {
   ROW_CROPS,
 } from '../../data/cropsAndArtisan';
 import {
+  autoWaterAllPlotsForMonsoon,
   collectArtisanOutput,
   collectLivestock,
   fertilizePlot,
@@ -23,6 +24,8 @@ import {
   unlockPlot,
   waterPlot,
 } from '../systems/FarmingEngine';
+import { soundManager } from '../systems/SoundManager';
+import { SeasonAtmosphereOverlay } from '../systems/SeasonClock';
 import { EventBus, type FarmToolMode, type JoystickVector } from '../EventBus';
 import { Player } from '../entities/Player';
 
@@ -73,6 +76,7 @@ export class FarmScene extends Phaser.Scene {
   private nearExitSent = false;
   private transitioning = false;
   private lastVisualRefresh = 0;
+  private atmosphere?: SeasonAtmosphereOverlay;
   private unsubs: Array<() => void> = [];
 
   constructor() {
@@ -101,6 +105,7 @@ export class FarmScene extends Phaser.Scene {
   create(): void {
     this.physics.world.gravity.y = 0;
     this.physics.world.setBounds(0, HORIZON_H, FARM_W, FARM_H - HORIZON_H);
+    soundManager.playBgm('village');
 
     // 1. North Horizon Strip + Lush Serene Village Grass
     this.add
@@ -210,6 +215,9 @@ export class FarmScene extends Phaser.Scene {
     this.redrawAllPlots();
     this.redrawDynamicZones();
 
+    // 4-Season Weather Particles & Day/Night Lighting Overlay (Monsoon auto-waters plots!)
+    this.atmosphere = new SeasonAtmosphereOverlay(this, FARM_W, FARM_H);
+
     EventBus.emit('scene:ready', { zone: 'farm' });
     EventBus.emit('player:state', this.player.state);
     EventBus.emit('portal:proximity', { nearPortal: false, label: '', targetZone: 'overworld' });
@@ -218,6 +226,8 @@ export class FarmScene extends Phaser.Scene {
       this.scale.off('resize', this.applyResponsiveZoom, this);
       this.unsubs.forEach((u) => u());
       this.unsubs = [];
+      this.atmosphere?.destroy();
+      this.atmosphere = undefined;
       this.player.destroy();
     });
   }
@@ -293,11 +303,27 @@ export class FarmScene extends Phaser.Scene {
     artPad.fillRoundedRect(540, 442, 215, 86, 8);
     this.add.tileSprite(647, 485, 206, 78, 'sv_plaza_tile').setDepth(6);
 
-    // 6. Decorative Border Trees
-    for (const [tx, ty] of [[68, 165], [76, 360], [72, 530], [790, 165], [796, 365], [790, 535]]) {
+    // 6. Decorative Border Trees (Sugar Palms + Serene Village Trees with gentle breeze sway)
+    const borderTrees: Array<[number, number, 'sugar_palm_tree' | 'sv_tree_green']> = [
+      [68, 165, 'sugar_palm_tree'], [76, 360, 'sv_tree_green'], [72, 530, 'sugar_palm_tree'],
+      [790, 165, 'sugar_palm_tree'], [796, 365, 'sv_tree_green'], [790, 535, 'sugar_palm_tree'],
+    ];
+    borderTrees.forEach(([tx, ty, tex], idx) => {
       this.add.image(tx, ty - 2, 'soft_shadow').setDisplaySize(36, 12).setDepth(ty - 4);
-      this.add.image(tx, ty, 'sv_tree_green').setOrigin(0.5, 0.92).setScale(1.1).setDepth(ty);
-    }
+      const tImg = this.add
+        .image(tx, ty, tex)
+        .setOrigin(0.5, 0.92)
+        .setScale(tex === 'sugar_palm_tree' ? 0.85 : 1.1)
+        .setDepth(ty);
+      this.tweens.add({
+        targets: tImg,
+        angle: idx % 2 === 0 ? 2 : -2,
+        duration: 2200 + idx * 240,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    });
 
     // 7. South Village Exit Gate + Bouncing Yellow JOIN Arrow
     const exitPad = this.add
@@ -428,21 +454,30 @@ export class FarmScene extends Phaser.Scene {
     const now = Date.now();
     if (!plot.unlocked) {
       const res = unlockPlot(this.player.state, index);
-      if (res.ok) this.spawnPopSparkle(visual.cx, visual.cy, 0xfacc15, 'Unlocked!');
+      if (res.ok) {
+        soundManager.playSfx('coin');
+        this.spawnPopSparkle(visual.cx, visual.cy, 0xfacc15, 'Unlocked!');
+      }
       this.commitFarmState(res.state, res.message, res.ok);
       return;
     }
 
     if (!plot.tilled) {
       const res = tillPlot(this.player.state, index);
-      if (res.ok) this.spawnPopSparkle(visual.cx, visual.cy, 0xd97706, 'Tilled');
+      if (res.ok) {
+        soundManager.playSfx('click');
+        this.spawnPopSparkle(visual.cx, visual.cy, 0xd97706, 'Tilled');
+      }
       this.commitFarmState(res.state, res.message, res.ok);
       return;
     }
 
     if (!plot.cropId) {
       const res = plantSeedOnPlot(this.player.state, index, this.selectedCropId, now);
-      if (res.ok) this.spawnPopSparkle(visual.cx, visual.cy, 0x4ade80, 'Planted!');
+      if (res.ok) {
+        soundManager.playSfx('click');
+        this.spawnPopSparkle(visual.cx, visual.cy, 0x4ade80, 'Planted!');
+      }
       this.commitFarmState(res.state, res.message, res.ok);
       return;
     }
@@ -451,6 +486,7 @@ export class FarmScene extends Phaser.Scene {
     if (prog.ready) {
       const res = harvestPlot(this.player.state, index, now);
       if (res.ok) {
+        soundManager.playSfx('harvest');
         this.spawnPopSparkle(
           visual.cx,
           visual.cy,
@@ -581,13 +617,23 @@ export class FarmScene extends Phaser.Scene {
       if (!def) return;
       const prog = getTreeProgress(tree, now);
 
+      const treeTex =
+        tree.treeId === 'golden_durian'
+          ? 'golden_durian_tree'
+          : tree.treeId === 'sugar_palm' || tree.treeId === 'coconut_palm'
+          ? 'sugar_palm_tree'
+          : 'sv_tree_teal';
+      const usesKhmerTree = treeTex === 'sugar_palm_tree' || treeTex === 'golden_durian_tree';
+
       const shadow = this.add.image(tx, ty - 2, 'soft_shadow').setDisplaySize(38, 12);
       const img = this.add
-        .image(tx, ty, 'sv_tree_teal')
+        .image(tx, ty, treeTex)
         .setOrigin(0.5, 0.92)
-        .setScale(prog.ready || tree.mature ? 1.05 : 0.72)
-        .setTint(Number(def.canopyColor.replace('#', '0x')))
+        .setScale(prog.ready || tree.mature ? (usesKhmerTree ? 0.86 : 1.05) : 0.62)
         .setInteractive({ useHandCursor: true });
+      if (!usesKhmerTree) {
+        img.setTint(Number(def.canopyColor.replace('#', '0x')));
+      }
 
       const g = this.add.graphics();
       if (prog.ready) {
@@ -796,7 +842,7 @@ export class FarmScene extends Phaser.Scene {
     });
   }
 
-  update(time: number): void {
+  update(time: number, delta: number): void {
     const typing =
       document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA';
 
@@ -832,10 +878,22 @@ export class FarmScene extends Phaser.Scene {
     }
 
     this.player.syncVisuals(time, true);
+    const weatherSnap = this.atmosphere?.update(time, delta);
 
-    // Refresh plot/tree/livestock/machine countdown badges every 1s
+    // Refresh plot/tree/livestock/machine countdown badges every 1s + Monsoon Auto-Watering!
     if (time - this.lastVisualRefresh > 1000) {
       this.lastVisualRefresh = time;
+      if (weatherSnap?.season.autoWatersFarm) {
+        const rainRes = autoWaterAllPlotsForMonsoon(this.player.state, Date.now());
+        if (rainRes.wateredCount > 0) {
+          this.player.state = { ...rainRes.state, zone: 'farm' };
+          EventBus.emit('player:state', this.player.state);
+          soundManager.playSfx('splash');
+          EventBus.emit('ui:toast', {
+            text: `🌧️ Monsoon Rains auto-watered ${rainRes.wateredCount} farm plot(s) (-20% grow time)!`,
+          });
+        }
+      }
       this.redrawAllPlots();
       this.redrawDynamicZones();
     }

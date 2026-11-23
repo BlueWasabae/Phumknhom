@@ -10,8 +10,8 @@ const TELEGRAPH_PALETTE: Record<TelegraphColor, { fill: number; stroke: number; 
 };
 
 export interface BossHazard {
-  kind: 'shockwave' | 'boulder' | 'tadpole' | 'tongue';
-  sprite: Phaser.GameObjects.Container | Phaser.GameObjects.Arc | Phaser.GameObjects.Rectangle;
+  kind: 'shockwave' | 'boulder' | 'tadpole' | 'tongue' | 'orb' | 'venom_glob' | 'poison_pool';
+  sprite: Phaser.GameObjects.Container | Phaser.GameObjects.Arc | Phaser.GameObjects.Rectangle | Phaser.GameObjects.Ellipse;
   x: number;
   y: number;
   vx: number;
@@ -21,6 +21,7 @@ export interface BossHazard {
   damage: number;
   expiresAt: number;
   hp?: number; // Killable mini-mobs like King Frog's tadpoles
+  isPoison?: boolean; // Countered by Coconut Water Anti-Venom buff!
   alive: boolean;
   label: string;
 }

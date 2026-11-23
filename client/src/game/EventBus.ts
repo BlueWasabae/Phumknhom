@@ -201,7 +201,8 @@ export interface EventMap {
       | 'fishing'
       | 'luckyWheel'
       | 'pagoda'
-      | 'market';
+      | 'market'
+      | 'bestiary';
     farmTab?: 'seeds' | 'livestock' | 'artisan';
     shopTab?: 'primary' | 'secondary';
     friendsTab?: 'friends' | 'inbox';

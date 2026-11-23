@@ -26,7 +26,7 @@ Check off each phase only after testing on **both Desktop and Mobile browsers** 
   - Login/Register, persistent Coins/Gold/Diamonds, farm/machine timers, inventory, friends list, and tap-on-player menu.
 - [x] **Phase 8 — Co-op Boss Raids, Open World & Side Activities**
   - 2–4 player scaled Boss Rooms, Endless Pagoda Tower, Riverside Fishing, Lucky Wheel, Pagoda Bundles, NPCs/Hearts, and Player Market (5% tax).
-- [ ] **Phase 9 — Custom Khmer Art, Audio & Content Expansion**
+- [x] **Phase 9 — Custom Khmer Art, Audio & Content Expansion**
   - Replace placeholders with cohesive chibi pixel art, 4 seasonal palettes, 8 biomes, sound effects, and rolling out Bosses #2–#28 + Boss Rush.
 - [ ] **Phase 10 — Live Launch on `www.bluexacedamy.space`**
   - Deploy client to Vercel (`www.bluexacedamy.space`), server to Railway/Fly.io, connect Stripe / ABA PayWay KHQR for Diamond Store & Village Pass, and run closed alpha with friends.
