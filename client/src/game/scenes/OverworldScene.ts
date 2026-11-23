@@ -8,6 +8,8 @@ import {
 import { computeVillageToDungeonBridge } from '@shared/skillTrees';
 import { EventBus, type JoystickVector } from '../EventBus';
 import { Player } from '../entities/Player';
+import { RemotePlayerEntity } from '../entities/RemotePlayerEntity';
+import { areaIdToChannel, channelToAreaId, roomClient } from '../network/RoomClient';
 
 // Cozy 16x16 Stardew-scale village world (60 x 42 tiles) rendered at 2.5x - 2.9x camera zoom
 const MAP_W = 960;
@@ -27,7 +29,9 @@ export class OverworldScene extends Phaser.Scene {
   private initialState: PlayerState = { ...INITIAL_PLAYER_STATE };
   private player!: Player;
   private promptText!: Phaser.GameObjects.Text;
+  private areaSignText!: Phaser.GameObjects.Text;
   private colliders!: Phaser.Physics.Arcade.StaticGroup;
+  private remotePlayers = new Map<string, RemotePlayerEntity>();
 
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keys!: Record<'W' | 'A' | 'S' | 'D' | 'E', Phaser.Input.Keyboard.Key>;
@@ -110,15 +114,25 @@ export class OverworldScene extends Phaser.Scene {
       }),
       EventBus.on('player:chat', ({ text }) => {
         this.player.showSpeechBubble(text, 4500);
+        roomClient.sendChat(text);
       }),
       EventBus.on('player:emote', ({ emoji }) => {
         this.player.showEmote(emoji, 3000);
+        roomClient.sendEmote(emoji);
       }),
       EventBus.on('player:loadoutChanged', ({ loadout, playerState }) => {
         this.player.applyLoadoutUpdate(loadout, playerState);
+        roomClient.sendAppearance(loadout, playerState.name);
       }),
       EventBus.on('player:stateSync', (nextState) => {
+        const nameChanged = this.player.state.name !== nextState.name;
         this.player.syncPlayerState(nextState);
+        if (nameChanged) {
+          roomClient.sendAppearance(this.player.state.loadout, nextState.name);
+        }
+      }),
+      EventBus.on('network:switchArea', ({ areaId }) => {
+        void this.connectToPlazaArea(areaId, true);
       }),
       EventBus.on('dungeon:enterRequest', ({ bossId, difficulty }) => {
         this.enterDungeon(bossId, difficulty);
@@ -132,12 +146,83 @@ export class OverworldScene extends Phaser.Scene {
     EventBus.emit('player:state', this.player.state);
     EventBus.emit('portal:proximity', { nearPortal: false, label: '', targetZone: 'dungeon' });
 
+    // Join Colyseus multiplayer Village Plaza room (graceful Offline fallback if server is down)
+    const initialArea = channelToAreaId(this.player.state.areaChannel);
+    void this.connectToPlazaArea(initialArea, false);
+
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off('resize', this.applyResponsiveZoom, this);
       this.unsubs.forEach((u) => u());
       this.unsubs = [];
+      this.clearRemotePlayers();
+      void roomClient.leavePlaza(false);
       this.player.destroy();
     });
+  }
+
+  private clearRemotePlayers(): void {
+    this.remotePlayers.forEach((entity) => entity.destroy());
+    this.remotePlayers.clear();
+  }
+
+  private async connectToPlazaArea(areaId: string, showToast: boolean): Promise<void> {
+    this.clearRemotePlayers();
+    const channel = areaIdToChannel(areaId);
+    this.player.state.areaChannel = channel;
+    this.areaSignText?.setText(areaId);
+    EventBus.emit('player:state', { ...this.player.state });
+
+    const ok = await roomClient.joinPlaza(
+      areaId,
+      {
+        name: this.player.state.name,
+        x: this.player.x,
+        y: this.player.y,
+        facing: this.player.facing,
+        loadout: this.player.state.loadout,
+      },
+      {
+        onRemoteAdd: (snap) => {
+          if (!this.scene.isActive('OverworldScene')) return;
+          if (this.remotePlayers.has(snap.sessionId)) {
+            this.remotePlayers.get(snap.sessionId)?.applySnapshot(snap);
+            return;
+          }
+          const ent = new RemotePlayerEntity(this, snap);
+          this.remotePlayers.set(snap.sessionId, ent);
+        },
+        onRemoteChange: (snap) => {
+          if (!this.scene.isActive('OverworldScene')) return;
+          this.remotePlayers.get(snap.sessionId)?.applySnapshot(snap);
+        },
+        onRemoteRemove: (sessionId) => {
+          const ent = this.remotePlayers.get(sessionId);
+          if (ent) {
+            ent.destroy();
+            this.remotePlayers.delete(sessionId);
+          }
+        },
+        onChat: (msg) => {
+          if (!this.scene.isActive('OverworldScene')) return;
+          if (msg.sessionId === roomClient.sessionId) return;
+          this.remotePlayers.get(msg.sessionId)?.showSpeechBubble(msg.text, 4500);
+          EventBus.emit('network:remoteChat', msg);
+        },
+        onEmote: (msg) => {
+          if (!this.scene.isActive('OverworldScene')) return;
+          if (msg.sessionId === roomClient.sessionId) return;
+          this.remotePlayers.get(msg.sessionId)?.showEmote(msg.emoji, 3000);
+        },
+      }
+    );
+
+    if (showToast) {
+      EventBus.emit('ui:toast', {
+        text: ok
+          ? `Connected to ${areaId} (Multiplayer Plaza live!)`
+          : `Switched to ${areaId} (Offline Mode — Colyseus server unreachable)`,
+      });
+    }
   }
 
   private applyResponsiveZoom = (): void => {
@@ -282,8 +367,8 @@ export class OverworldScene extends Phaser.Scene {
   }
 
   private buildLandmarks(): void {
-    // 1. AREA 0 Wooden Street Sign at Plaza Entrance
-    this.addBuildingOrProp({
+    // 1. AREA 0 Wooden Street Sign at Plaza Entrance (Clickable + Press E to Switch Areas!)
+    const signImg = this.addBuildingOrProp({
       texture: 'sv_sign_wood',
       x: 416,
       y: 374,
@@ -293,8 +378,11 @@ export class OverworldScene extends Phaser.Scene {
       bodyW: 14,
       bodyH: 8,
     });
-    this.add
-      .text(416, 349, 'AREA 0', {
+    signImg.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+      EventBus.emit('ui:openModal', { modal: 'areaSwitcher' });
+    });
+    this.areaSignText = this.add
+      .text(416, 349, channelToAreaId(this.initialState.areaChannel), {
         fontFamily: 'Fredoka, sans-serif',
         fontSize: '11px',
         fontStyle: 'bold',
@@ -305,14 +393,18 @@ export class OverworldScene extends Phaser.Scene {
       .setResolution(2)
       .setScale(0.44)
       .setOrigin(0.5)
-      .setDepth(390);
+      .setDepth(390)
+      .setInteractive({ useHandCursor: true });
+    this.areaSignText.on('pointerdown', () => {
+      EventBus.emit('ui:openModal', { modal: 'areaSwitcher' });
+    });
     this.landmarks.push({
       x: 416,
       y: 378,
-      radius: 34,
-      label: 'AREA 0 Channel Sign (Online Channels in Phase 6)',
+      radius: 38,
+      label: 'Press [E] or Click → Switch Multiplayer Area (AREA 0 / 1 / 2)',
       isDungeonPortal: false,
-      onInteract: () => EventBus.emit('ui:toast', { text: 'Phum Village • AREA 0 (Multiplayer sync arrives in Phase 6)' }),
+      onInteract: () => EventBus.emit('ui:openModal', { modal: 'areaSwitcher' }),
     });
 
     // 2. PLAYER'S KHMER STILT HOUSE & FARM GATE (Top-Left, Custom Khmer Pixel Art)
@@ -532,7 +624,7 @@ export class OverworldScene extends Phaser.Scene {
     }
   }
 
-  update(time: number): void {
+  update(time: number, delta: number): void {
     const typing =
       document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA';
 
@@ -551,7 +643,8 @@ export class OverworldScene extends Phaser.Scene {
     }
 
     const len = Math.hypot(vx, vy);
-    if (len > 0.1) {
+    const isMoving = len > 0.1;
+    if (isMoving) {
       const bridge = computeVillageToDungeonBridge(this.player.state);
       const speed = 115 * (1 + Math.min(0.45, bridge.moveSpeedBonusPct));
       const nx = vx / Math.max(1, len);
@@ -570,6 +663,10 @@ export class OverworldScene extends Phaser.Scene {
     }
 
     this.player.syncVisuals(time, true);
+
+    // Throttled multiplayer position sync (~18Hz) + smooth remote player lerp
+    roomClient.sendMove(this.player.x, this.player.y, this.player.facing, isMoving, time);
+    this.remotePlayers.forEach((remote) => remote.update(time, delta));
 
     const nearest = this.findNearestLandmark();
     if (nearest) {

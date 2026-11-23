@@ -70,6 +70,20 @@ export interface DungeonOutcomePayload {
   lootLabels: string[];
 }
 
+export interface NetworkStatusPayload {
+  online: boolean;
+  areaId: string;
+  areaChannel: number;
+  playerCount: number;
+}
+
+export interface RemoteChatPayload {
+  sessionId: string;
+  name: string;
+  text: string;
+  timestamp: number;
+}
+
 export interface EventMap {
   'scene:ready': { zone: ZoneType };
   'player:state': PlayerState;
@@ -84,6 +98,9 @@ export interface EventMap {
   'skill:xpGained': SkillXpToastPayload;
   'player:chat': { text: string };
   'player:emote': { emoji: EmoteSymbol };
+  'network:status': NetworkStatusPayload;
+  'network:remoteChat': RemoteChatPayload;
+  'network:switchArea': { areaId: string };
   'portal:proximity': PortalProximityPayload;
   'combat:hit': { hit: CombatHitResult; dummyHp: number; dummyMaxHp: number };
   'combat:classMeter': ClassMeterPayload;
@@ -109,7 +126,8 @@ export interface EventMap {
       | 'snackShop'
       | 'fashionShop'
       | 'skills'
-      | 'modeSelector';
+      | 'modeSelector'
+      | 'areaSwitcher';
     farmTab?: 'seeds' | 'livestock' | 'artisan';
     shopTab?: 'primary' | 'secondary';
   };

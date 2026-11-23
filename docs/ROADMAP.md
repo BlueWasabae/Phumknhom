@@ -20,7 +20,7 @@ Check off each phase only after testing on **both Desktop and Mobile browsers** 
 - [x] **Phase 5 — Terraria/Calamity Combat & First Bosses**
   - 5 Class weapon types, Dash/Double-Jump, Quick-Slot snack healing, Focus/Fury gauges, and Normal/Expert/Calamity toggles.
   - Build Boss #1 (*Sdech Kongkaeb — King Frog*) & Boss #5 (*Yeak Thmor — Stone Yaksha*) with Treasure Bags, cracked secret walls, and the No-Hit *Golden Frying Pan* Easter egg.
-- [ ] **Phase 6 — Online Multiplayer Plaza (Colyseus)**
+- [x] **Phase 6 — Online Multiplayer Plaza (Colyseus)**
   - Real-time multi-channel `AREA 0` / `AREA 1` village plaza, synced movement, overhead chat bubbles, and emotes.
 - [ ] **Phase 7 — Accounts, Cloud Saves & Social (Supabase)**
   - Login/Register, persistent Coins/Gold/Diamonds, farm/machine timers, inventory, friends list, and tap-on-player menu.

@@ -78,8 +78,13 @@ export class BootScene extends Phaser.Scene {
     this.generateUiAndLightTextures();
     this.registerAnimations();
 
+    const tabSuffix = Math.floor(10 + Math.random() * 89);
     this.scene.start('OverworldScene', {
-      playerState: { ...INITIAL_PLAYER_STATE, weapon: { ...INITIAL_PLAYER_STATE.weapon } },
+      playerState: {
+        ...INITIAL_PLAYER_STATE,
+        name: `PhumHero_${tabSuffix}`,
+        weapon: { ...INITIAL_PLAYER_STATE.weapon },
+      },
     });
   }
 

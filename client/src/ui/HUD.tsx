@@ -31,12 +31,19 @@ import {
   Swords,
   User,
 } from 'lucide-react';
-import { EventBus, type BossHudPayload, type ClassMeterPayload, type FarmToolMode } from '../game/EventBus';
+import {
+  EventBus,
+  type BossHudPayload,
+  type ClassMeterPayload,
+  type FarmToolMode,
+  type NetworkStatusPayload,
+} from '../game/EventBus';
 import { NativeDialog } from './NativeDialog';
 
 interface HUDProps {
   player: PlayerState;
   zone: ZoneType;
+  networkStatus: NetworkStatusPayload;
   chatOpen: boolean;
   onToggleChat: () => void;
   touchUiEnabled: boolean;
@@ -53,6 +60,7 @@ interface HUDProps {
   onOpenWardrobe: () => void;
   onOpenFarmModal: () => void;
   onOpenSkills: () => void;
+  onOpenAreaSwitcher: () => void;
   onFastForwardFarm: () => void;
 }
 
@@ -62,6 +70,7 @@ const DIFFICULTIES: DifficultyMode[] = ['normal', 'expert', 'calamity', 'death']
 export const HUD: React.FC<HUDProps> = ({
   player,
   zone,
+  networkStatus,
   chatOpen,
   onToggleChat,
   touchUiEnabled,
@@ -78,6 +87,7 @@ export const HUD: React.FC<HUDProps> = ({
   onOpenWardrobe,
   onOpenFarmModal,
   onOpenSkills,
+  onOpenAreaSwitcher,
   onFastForwardFarm,
 }) => {
   const [menuDropdownOpen, setMenuDropdownOpen] = useState(false);
@@ -158,22 +168,52 @@ export const HUD: React.FC<HUDProps> = ({
       : 'Lion Strike';
 
   const zonePill = (
-    <div className="pointer-events-auto stardew-panel px-2.5 sm:px-3.5 py-1 rounded-2xl flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1 text-xs max-w-full">
-      <span
-        className={`font-display font-bold px-2 py-0.5 rounded-lg text-[11px] whitespace-nowrap border ${
-          zone === 'overworld'
-            ? 'bg-emerald-700 text-amber-50 border-emerald-950'
-            : zone === 'farm'
-            ? 'bg-amber-700 text-amber-50 border-amber-950'
-            : 'bg-purple-800 text-amber-100 border-purple-950'
-        }`}
+    <div className="pointer-events-auto stardew-panel px-2.5 sm:px-3.5 py-1 rounded-2xl flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs max-w-full">
+      {zone === 'overworld' ? (
+        <button
+          type="button"
+          onClick={onOpenAreaSwitcher}
+          title="Click to switch Multiplayer Plaza Area (AREA 0 / AREA 1 / AREA 2)"
+          className="font-display font-bold px-2 py-0.5 rounded-lg text-[11px] whitespace-nowrap border bg-emerald-700 hover:bg-emerald-600 text-amber-50 border-emerald-950 transition cursor-pointer"
+        >
+          Phum Village • {networkStatus.areaId} ▾
+        </button>
+      ) : (
+        <span
+          className={`font-display font-bold px-2 py-0.5 rounded-lg text-[11px] whitespace-nowrap border ${
+            zone === 'farm'
+              ? 'bg-amber-700 text-amber-50 border-amber-950'
+              : 'bg-purple-800 text-amber-100 border-purple-950'
+          }`}
+        >
+          {zone === 'farm'
+            ? `My Homestead • Farm Lv.${player.lifeStats.farmLevel}`
+            : 'Ancient Cavern • Dungeon'}
+        </span>
+      )}
+
+      {/* Tiny Green/Gray Connection Status Dot */}
+      <button
+        type="button"
+        onClick={onOpenAreaSwitcher}
+        title={
+          networkStatus.online
+            ? `Connected to ${networkStatus.areaId} (${networkStatus.playerCount} online)`
+            : 'Colyseus server unreachable — playing in Offline Mode'
+        }
+        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-amber-950/10 hover:bg-amber-950/20 text-[10px] font-display font-bold text-amber-950 whitespace-nowrap transition"
       >
-        {zone === 'overworld'
-          ? `Phum Village • AREA ${player.areaChannel}`
-          : zone === 'farm'
-          ? `My Homestead • Farm Lv.${player.lifeStats.farmLevel}`
-          : 'Ancient Cavern • Dungeon'}
-      </span>
+        <span
+          className={`w-2 h-2 rounded-full shrink-0 ${
+            networkStatus.online ? 'bg-emerald-500 animate-pulse' : 'bg-stone-400'
+          }`}
+        />
+        <span>
+          {networkStatus.online
+            ? `Online • ${networkStatus.playerCount} ${networkStatus.playerCount === 1 ? 'player' : 'players'}`
+            : 'Offline Mode'}
+        </span>
+      </button>
 
       <div className="flex items-center gap-2 shrink-0">
         <div className="flex items-center gap-1">

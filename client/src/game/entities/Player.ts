@@ -137,6 +137,10 @@ export class Player {
   }
 
   public applyLoadoutUpdate(loadout: EquippedLoadout, nextState: PlayerState): void {
+    if (this.state.name !== nextState.name) {
+      this.nameTag.setText(nextState.name);
+    }
+
     this.state = {
       ...nextState,
       zone: this.zone,
@@ -164,6 +168,10 @@ export class Player {
       this.state.loadout.hairColor !== nextState.loadout.hairColor ||
       this.state.loadout.skinColor !== nextState.loadout.skinColor ||
       this.state.loadout.eyeStyle !== nextState.loadout.eyeStyle;
+
+    if (this.state.name !== nextState.name) {
+      this.nameTag.setText(nextState.name);
+    }
 
     this.state = {
       ...nextState,

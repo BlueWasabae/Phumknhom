@@ -48,6 +48,7 @@ import {
   type ClassMeterPayload,
   type DungeonOutcomePayload,
   type FarmToolMode,
+  type NetworkStatusPayload,
   type SkillXpToastPayload,
 } from './game/EventBus';
 import { HUD } from './ui/HUD';
@@ -59,6 +60,7 @@ import { FarmModal, type FarmModalTab } from './ui/FarmModal';
 import { ShopModal, type ShopMode } from './ui/ShopModal';
 import { SkillTreeModal } from './ui/SkillTreeModal';
 import { ModeSelectorModal } from './ui/ModeSelectorModal';
+import { AreaSwitcherModal } from './ui/AreaSwitcherModal';
 
 type ActiveModalType =
   | null
@@ -68,7 +70,8 @@ type ActiveModalType =
   | 'snackShop'
   | 'fashionShop'
   | 'skills'
-  | 'modeSelector';
+  | 'modeSelector'
+  | 'areaSwitcher';
 
 interface FloatingXpBanner extends SkillXpToastPayload {
   uid: number;
@@ -79,6 +82,7 @@ export const App: React.FC = () => {
 
   const [player, setPlayer] = useState<PlayerState>(() => ({
     ...INITIAL_PLAYER_STATE,
+    name: `PhumHero_${Math.floor(10 + Math.random() * 89)}`,
     weapon: { ...INITIAL_PLAYER_STATE.weapon },
     loadout: { ...INITIAL_PLAYER_STATE.loadout },
     currencies: { ...INITIAL_PLAYER_STATE.currencies },
@@ -89,6 +93,12 @@ export const App: React.FC = () => {
   }));
 
   const [zone, setZone] = useState<ZoneType>('overworld');
+  const [networkStatus, setNetworkStatus] = useState<NetworkStatusPayload>({
+    online: false,
+    areaId: 'AREA 0',
+    areaChannel: 0,
+    playerCount: 1,
+  });
   const [nearPortal, setNearPortal] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [touchUiEnabled, setTouchUiEnabled] = useState(false);
@@ -112,7 +122,7 @@ export const App: React.FC = () => {
     {
       id: 'sys-welcome',
       sender: 'Phum Guide',
-      text: 'Phase 5 live! Walk to the ANGKOR DUNGEON PORTAL (top-right) to choose King Frog or Stone Yaksha in Normal, Expert, or Calamity mode!',
+      text: 'Phase 6 Multiplayer Plaza live! Open a 2nd tab or phone browser to walk, chat, emote & flex outfits live in AREA 0–2!',
       timestamp: Date.now(),
     },
   ]);
@@ -289,6 +299,20 @@ export const App: React.FC = () => {
       EventBus.on('dungeon:outcome', (outcome) => {
         setDungeonOutcome(outcome);
       }),
+      EventBus.on('network:status', (status) => {
+        setNetworkStatus(status);
+      }),
+      EventBus.on('network:remoteChat', (msg) => {
+        setMessages((prev) => [
+          ...prev.slice(-39),
+          {
+            id: `rem-${msg.sessionId}-${msg.timestamp}`,
+            sender: msg.name,
+            text: msg.text,
+            timestamp: msg.timestamp,
+          },
+        ]);
+      }),
       EventBus.on('skill:xpGained', (payload) => {
         const uid = xpUid++;
         setXpBanners((prev) => [...prev.slice(-2), { ...payload, uid }]);
@@ -331,6 +355,7 @@ export const App: React.FC = () => {
       <HUD
         player={player}
         zone={zone}
+        networkStatus={networkStatus}
         chatOpen={chatOpen}
         onToggleChat={() => setChatOpen((o) => !o)}
         touchUiEnabled={touchUiEnabled}
@@ -353,6 +378,7 @@ export const App: React.FC = () => {
           setActiveModal('farm');
         }}
         onOpenSkills={() => setActiveModal('skills')}
+        onOpenAreaSwitcher={() => setActiveModal('areaSwitcher')}
         onFastForwardFarm={() => runFarmAction((s) => fastForwardFarmTimers(s, 60))}
       />
 
@@ -404,6 +430,23 @@ export const App: React.FC = () => {
         onEnterDungeon={(bossId: BossId, difficulty: DifficultyMode) => {
           setActiveModal(null);
           EventBus.emit('dungeon:enterRequest', { bossId, difficulty });
+        }}
+      />
+
+      <AreaSwitcherModal
+        open={activeModal === 'areaSwitcher'}
+        networkStatus={networkStatus}
+        playerName={player.name}
+        onClose={() => setActiveModal(null)}
+        onSwitchArea={(areaId) => {
+          EventBus.emit('network:switchArea', { areaId });
+        }}
+        onRenamePlayer={(nextName) => {
+          runStateAction((s) => ({
+            state: { ...s, name: nextName },
+            ok: true,
+            message: `Display name updated to ${nextName}!`,
+          }));
         }}
       />
 
