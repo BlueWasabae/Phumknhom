@@ -71,11 +71,11 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
   };
 
   return (
-    <div className="fixed left-3 bottom-3 sm:bottom-4 z-30 w-[min(88vw,340px)] stardew-panel rounded-2xl overflow-hidden flex flex-col">
+    <div className="fixed left-3 bottom-3 sm:bottom-4 z-30 w-[min(88vw,340px)] phum-panel rounded-2xl overflow-hidden flex flex-col">
       <button
         type="button"
         onClick={() => setHistoryExpanded((v) => !v)}
-        className="px-3 py-1.5 stardew-wood flex items-center justify-between text-[11px] font-display font-bold"
+        className="px-3 py-1.5 phum-wood flex items-center justify-between text-[11px] font-display font-bold"
       >
         <span>Area & Whisper Chat ({messages.length})</span>
         {historyExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
@@ -114,7 +114,7 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
         <button
           type="submit"
           aria-label="Send chat message"
-          className="stardew-btn px-2.5 py-1.5 rounded-lg"
+          className="phum-btn px-2.5 py-1.5 rounded-lg"
         >
           <Send className="w-3.5 h-3.5" />
         </button>

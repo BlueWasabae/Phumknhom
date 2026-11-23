@@ -77,7 +77,7 @@ export const PlayerActionModal: React.FC<PlayerActionModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setViewingProfile(true)}
-                  className="stardew-btn py-2.5 px-3 rounded-xl font-display font-bold text-xs flex items-center justify-center gap-1.5"
+                  className="phum-btn py-2.5 px-3 rounded-xl font-display font-bold text-xs flex items-center justify-center gap-1.5"
                 >
                   <User className="w-4 h-4 text-amber-900" /> View Profile
                 </button>

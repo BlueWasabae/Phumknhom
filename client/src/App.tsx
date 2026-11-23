@@ -56,9 +56,9 @@ import {
 } from './data/diamondStore';
 import {
   applyShimmerTransmute,
-  claimCalamityStarterChest,
-  craftCalamityWeapon,
-} from './data/calamityWeapons';
+  claimKhmerArsenalStarterChest,
+  craftKhmerArsenalWeapon,
+} from './data/khmerArsenal';
 import {
   payBusFare,
   unlockBiomeAndPylon,
@@ -1300,16 +1300,16 @@ export const App: React.FC = () => {
           })
         }
         onBankAction={handleBankAction}
-        onCraftCalamityWeapon={(itemId) =>
+        onCraftArsenalWeapon={(itemId) =>
           runStateAction((s) => {
-            const res = craftCalamityWeapon(s, itemId);
+            const res = craftKhmerArsenalWeapon(s, itemId);
             if (res.ok) soundManager.playSfx('level_up');
             return res;
           })
         }
         onClaimStarterChest={() =>
           runStateAction((s) => {
-            const res = claimCalamityStarterChest(s);
+            const res = claimKhmerArsenalStarterChest(s);
             if (res.ok) soundManager.playSfx('level_up');
             return res;
           })
@@ -1463,7 +1463,7 @@ export const App: React.FC = () => {
       {/* Dungeon Victory / Defeat Overlay */}
       {dungeonOutcome && zone === 'dungeon' && (
         <div className="fixed inset-0 z-30 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="stardew-panel w-[min(92vw,440px)] rounded-2xl p-5 text-center space-y-3 shadow-2xl">
+          <div className="phum-panel w-[min(92vw,440px)] rounded-2xl p-5 text-center space-y-3 shadow-2xl">
             {dungeonOutcome.outcome === 'victory' ? (
               <>
                 <div className="font-display font-bold text-2xl text-amber-900">
@@ -1495,7 +1495,7 @@ export const App: React.FC = () => {
                       setDungeonOutcome(null);
                       EventBus.emit('input:rematch');
                     }}
-                    className="stardew-btn px-4 py-2 rounded-xl font-display font-bold text-xs"
+                    className="phum-btn px-4 py-2 rounded-xl font-display font-bold text-xs"
                   >
                     Fight Again
                   </button>
@@ -1526,7 +1526,7 @@ export const App: React.FC = () => {
                       setDungeonOutcome(null);
                       EventBus.emit('input:rematch');
                     }}
-                    className="stardew-btn px-4 py-2 rounded-xl font-display font-bold text-xs"
+                    className="phum-btn px-4 py-2 rounded-xl font-display font-bold text-xs"
                   >
                     Retry Boss (Full HP)
                   </button>
@@ -1641,7 +1641,7 @@ export const App: React.FC = () => {
       />
 
       {toast && (
-        <div className="pointer-events-none fixed bottom-24 left-1/2 -translate-x-1/2 z-40 max-w-[90vw] px-4 py-1.5 rounded-full stardew-panel font-display font-bold text-xs text-center">
+        <div className="pointer-events-none fixed bottom-24 left-1/2 -translate-x-1/2 z-40 max-w-[90vw] px-4 py-1.5 rounded-full phum-panel font-display font-bold text-xs text-center">
           {toast}
         </div>
       )}

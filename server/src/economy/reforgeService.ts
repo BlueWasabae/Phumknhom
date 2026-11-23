@@ -53,7 +53,7 @@ const tickerEvents: GlobalTickerEvent[] = [
   },
   {
     id: 'tk_boss',
-    text: '⚔️ Server Hero Sokha just defeated Yeak Thmor on Calamity Mode in Angkor Ruins!',
+    text: '⚔️ Server Hero Sokha just defeated Yeak Thmor on Mythic Mode in Angkor Ruins!',
     category: 'boss',
     timestamp: Date.now() - 80_000,
   },

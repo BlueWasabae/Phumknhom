@@ -5,7 +5,7 @@ export interface BossLootEntry {
   itemId: string;
   label: string;
   chanceNormal: number;  // 0..1
-  chanceExpert: number;  // 0..1 (Expert/Calamity Treasure Bag boost)
+  chanceExpert: number;  // 0..1 (Expert/Mythic Treasure Bag boost)
   quantity: number;
   isEquipment?: boolean;
 }
@@ -279,7 +279,7 @@ export function getScaledBossMaxHp(
 
 export function getDifficultySpeedMultiplier(difficulty: DifficultyMode): number {
   if (difficulty === 'death') return 1.5;
-  if (difficulty === 'calamity') return 1.32;
+  if (difficulty === 'mythic') return 1.32;
   if (difficulty === 'expert') return 1.18;
   return 1.0;
 }
@@ -293,9 +293,9 @@ export function rollBossLoot(
 ): RolledBossLoot {
   const def = KHMER_BOSSES[bossId];
   const isTreasureBag = difficulty !== 'normal';
-  const coinMult = difficulty === 'calamity' ? 1.8 : difficulty === 'expert' ? 1.4 : 1;
+  const coinMult = difficulty === 'mythic' ? 1.8 : difficulty === 'expert' ? 1.4 : 1;
   const coins = Math.round(def.coinsReward * coinMult);
-  const gold = (isFirstClear ? def.firstClearGold : 0) + (difficulty === 'calamity' ? 2 : difficulty === 'expert' ? 1 : 0);
+  const gold = (isFirstClear ? def.firstClearGold : 0) + (difficulty === 'mythic' ? 2 : difficulty === 'expert' ? 1 : 0);
 
   const items: RolledBossLoot['items'] = [];
   for (const drop of def.drops) {

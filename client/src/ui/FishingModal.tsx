@@ -258,7 +258,7 @@ export const FishingModal: React.FC<FishingModalProps> = ({
           )}
         </div>
 
-        {/* Stardew-Style Timing Catch Bar */}
+        {/* Khmer River Timing Catch Bar */}
         <div className="space-y-1">
           <div className="flex justify-between text-[10px] font-bold text-amber-900 uppercase">
             <span>Catch Timing Bar</span>
@@ -293,7 +293,7 @@ export const FishingModal: React.FC<FishingModalProps> = ({
               type="button"
               disabled={phase === 'waiting'}
               onClick={startCast}
-              className="w-full stardew-btn py-3 rounded-xl font-display font-bold text-sm disabled:opacity-55 flex items-center justify-center gap-2"
+              className="w-full phum-btn py-3 rounded-xl font-display font-bold text-sm disabled:opacity-55 flex items-center justify-center gap-2"
             >
               <Fish className="w-4 h-4" />
               {phase === 'waiting' ? 'Waiting for a bite...' : 'Cast Line [Space]'}

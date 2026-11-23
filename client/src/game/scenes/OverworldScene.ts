@@ -14,7 +14,7 @@ import { soundManager } from '../systems/SoundManager';
 import { SeasonAtmosphereOverlay } from '../systems/SeasonClock';
 import { travelManager, type TravelRequestPayload } from '../systems/TravelAndPylons';
 
-// Cozy 16x16 Stardew-scale village world (60 x 42 tiles) rendered at 2.5x - 2.9x camera zoom
+// Cozy 16x16 Phum Khnhom village world (60 x 42 tiles) rendered at 2.5x - 2.9x camera zoom
 const MAP_W = 960;
 const MAP_H = 672;
 const HORIZON_H = 82;
@@ -71,7 +71,7 @@ export class OverworldScene extends Phaser.Scene {
   }
 
   create(): void {
-    // Stardew / Avatar World Mode: Top-Down 2.5D (gravity = 0)
+    // 2D Social Village RPG Mode: Top-Down 2.5D (gravity = 0)
     this.physics.world.gravity.y = 0;
     this.physics.world.setBounds(0, HORIZON_H, MAP_W, MAP_H - HORIZON_H);
     this.glowLights = [];
@@ -151,7 +151,7 @@ export class OverworldScene extends Phaser.Scene {
       .setDepth(2600)
       .setVisible(false);
 
-    // 5. Crisp Stardew Camera Zoom (2.5x - 2.9x based on screen width) + Resize Handler
+    // 5. Crisp Village Camera Zoom (2.5x - 2.9x based on screen width) + Resize Handler
     this.applyResponsiveZoom();
     this.scale.on('resize', this.applyResponsiveZoom, this);
 
@@ -812,7 +812,7 @@ export class OverworldScene extends Phaser.Scene {
       x: 614,
       y: 292,
       radius: 52,
-      label: 'Press [E] or Click → Master Somnang Blacksmith (Reforge & Calamity Arsenal)',
+      label: 'Press [E] or Click → Master Somnang Blacksmith (Reforge & Khmer Mythic Arsenal)',
       isDungeonPortal: false,
       onInteract: () => EventBus.emit('ui:openModal', { modal: 'reforge', reforgeTab: 'reforge' }),
     });

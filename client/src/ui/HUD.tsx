@@ -99,7 +99,7 @@ interface HUDProps {
 }
 
 const EMOTES: EmoteSymbol[] = ['👋', '😄', '❤️', '🔥'];
-const DIFFICULTIES: DifficultyMode[] = ['normal', 'expert', 'calamity', 'death'];
+const DIFFICULTIES: DifficultyMode[] = ['normal', 'expert', 'mythic', 'death'];
 
 export const HUD: React.FC<HUDProps> = ({
   player,
@@ -235,7 +235,7 @@ export const HUD: React.FC<HUDProps> = ({
       : 'Phnom Penh';
 
   const zonePill = (
-    <div className="pointer-events-auto stardew-panel px-2.5 sm:px-3.5 py-1 rounded-2xl flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs max-w-full">
+    <div className="pointer-events-auto phum-panel px-2.5 sm:px-3.5 py-1 rounded-2xl flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs max-w-full">
       <button
         type="button"
         onClick={onOpenServerCity}
@@ -368,7 +368,7 @@ export const HUD: React.FC<HUDProps> = ({
             <button
               type="button"
               onClick={() => setMenuDropdownOpen((o) => !o)}
-              className="stardew-btn px-2.5 sm:px-3 py-1.5 rounded-xl font-display font-bold text-xs sm:text-sm flex items-center gap-1.5 shrink-0"
+              className="phum-btn px-2.5 sm:px-3 py-1.5 rounded-xl font-display font-bold text-xs sm:text-sm flex items-center gap-1.5 shrink-0"
             >
               <Menu className="w-4 h-4 shrink-0" />
               <span>MENU</span>
@@ -379,7 +379,7 @@ export const HUD: React.FC<HUDProps> = ({
               onClick={onOpenWorldMap}
               aria-label="World Map (M)"
               title="Fullscreen World Map, City Districts & Biome Pylons (M)"
-              className="stardew-btn px-2 py-1.5 rounded-xl font-display font-bold text-xs flex items-center gap-1 shrink-0"
+              className="phum-btn px-2 py-1.5 rounded-xl font-display font-bold text-xs flex items-center gap-1 shrink-0"
             >
               <MapIcon className="w-4 h-4 text-emerald-900 shrink-0" />
               <span className="hidden sm:inline">Map</span>
@@ -390,7 +390,7 @@ export const HUD: React.FC<HUDProps> = ({
               onClick={onOpenInventory}
               aria-label="Inventory (I)"
               title="Inventory · Wearing & Container (I / B)"
-              className="stardew-btn p-2 rounded-xl shrink-0"
+              className="phum-btn p-2 rounded-xl shrink-0"
             >
               <Backpack className="w-4 h-4" />
             </button>
@@ -400,7 +400,7 @@ export const HUD: React.FC<HUDProps> = ({
               onClick={onOpenInbox}
               aria-label="Mail Inbox"
               title="Mail Inbox · Friend Requests & Dungeon Invites"
-              className="stardew-btn relative p-2 rounded-xl shrink-0"
+              className="phum-btn relative p-2 rounded-xl shrink-0"
             >
               <Mail className="w-4 h-4" />
               {inboxCount > 0 && (
@@ -414,13 +414,13 @@ export const HUD: React.FC<HUDProps> = ({
               type="button"
               onClick={onToggleChat}
               aria-label="Toggle Chat"
-              className={`stardew-btn p-2 rounded-xl shrink-0 ${chatOpen ? 'ring-2 ring-amber-500' : ''}`}
+              className={`phum-btn p-2 rounded-xl shrink-0 ${chatOpen ? 'ring-2 ring-amber-500' : ''}`}
             >
               <MessageCircle className="w-4 h-4" />
             </button>
 
             {menuDropdownOpen && (
-              <div className="absolute left-0 top-12 w-56 stardew-panel rounded-2xl p-1.5 z-30 flex flex-col gap-1 text-xs font-display font-bold">
+              <div className="absolute left-0 top-12 w-56 phum-panel rounded-2xl p-1.5 z-30 flex flex-col gap-1 text-xs font-display font-bold">
                 <button
                   type="button"
                   onClick={() => {
@@ -633,7 +633,7 @@ export const HUD: React.FC<HUDProps> = ({
               onClick={() => soundManager.toggleMute()}
               aria-label={audioSettings.muted ? 'Unmute Audio' : 'Mute Audio'}
               title={audioSettings.muted ? 'Audio Muted — Click to Unmute' : 'Audio On — Click to Mute'}
-              className={`stardew-btn p-2 rounded-xl shrink-0 ${
+              className={`phum-btn p-2 rounded-xl shrink-0 ${
                 audioSettings.muted ? 'opacity-70 ring-1 ring-rose-500' : ''
               }`}
             >
@@ -648,7 +648,7 @@ export const HUD: React.FC<HUDProps> = ({
               type="button"
               onClick={() => setEmoteOpen((o) => !o)}
               aria-label="Emote Picker"
-              className="stardew-btn p-2 rounded-xl shrink-0"
+              className="phum-btn p-2 rounded-xl shrink-0"
             >
               <Smile className="w-4 h-4" />
             </button>
@@ -656,7 +656,7 @@ export const HUD: React.FC<HUDProps> = ({
             <button
               type="button"
               onClick={onToggleTouchUi}
-              className={`stardew-btn px-2.5 py-1.5 rounded-xl font-display font-bold text-xs flex items-center gap-1 shrink-0 ${
+              className={`phum-btn px-2.5 py-1.5 rounded-xl font-display font-bold text-xs flex items-center gap-1 shrink-0 ${
                 touchUiEnabled ? 'ring-2 ring-emerald-600' : ''
               }`}
               title="Preview Mobile Touch Controls on Desktop"
@@ -666,7 +666,7 @@ export const HUD: React.FC<HUDProps> = ({
             </button>
 
             {emoteOpen && (
-              <div className="absolute right-0 top-12 stardew-panel p-1.5 rounded-2xl flex gap-1.5 z-30">
+              <div className="absolute right-0 top-12 phum-panel p-1.5 rounded-2xl flex gap-1.5 z-30">
                 {EMOTES.map((emoji) => (
                   <button
                     key={emoji}
@@ -690,7 +690,7 @@ export const HUD: React.FC<HUDProps> = ({
         {/* FARM QUICK SEED, FERTILIZER & FAST-FORWARD BAR */}
         {zone === 'farm' && (
           <div className="flex justify-center w-full">
-            <div className="pointer-events-auto stardew-panel px-2.5 py-1.5 rounded-2xl flex flex-wrap items-center justify-center gap-1.5 text-[11px] font-display font-bold max-w-full">
+            <div className="pointer-events-auto phum-panel px-2.5 py-1.5 rounded-2xl flex flex-wrap items-center justify-center gap-1.5 text-[11px] font-display font-bold max-w-full">
               {ROW_CROP_LIST.map((crop) => {
                 const qty = countItem(crop.seedItemId);
                 const active = farmToolMode === 'smart' && selectedCropId === crop.id;
@@ -746,7 +746,7 @@ export const HUD: React.FC<HUDProps> = ({
           </div>
         )}
 
-        {/* DUNGEON BOSS HEALTH BAR, CLASS METER & CALAMITY FOCUS/FURY GAUGES */}
+        {/* DUNGEON BOSS HEALTH BAR, CLASS METER & MYTHIC FOCUS/FURY GAUGES */}
         {zone === 'dungeon' && (
           <div className="flex flex-col items-center gap-1.5 w-full">
             {/* Sleek Top-Center Boss Health Bar */}
@@ -804,9 +804,9 @@ export const HUD: React.FC<HUDProps> = ({
               </div>
             )}
 
-            {/* Class Meter + Calamity Focus / Fury Gauges */}
+            {/* Class Meter + Mythic Focus / Fury Gauges */}
             <div className="flex flex-wrap items-center justify-center gap-1.5">
-              <div className="pointer-events-auto stardew-panel px-3 py-1 rounded-full flex items-center gap-2.5 text-[11px] font-display font-bold">
+              <div className="pointer-events-auto phum-panel px-3 py-1 rounded-full flex items-center gap-2.5 text-[11px] font-display font-bold">
                 <span
                   className="px-2 py-0.5 rounded-full text-amber-50"
                   style={{ backgroundColor: activeClassDef.badgeBg }}
@@ -853,8 +853,8 @@ export const HUD: React.FC<HUDProps> = ({
                 )}
               </div>
 
-              {/* Calamity Focus (Adrenaline) & Fury (Rage) Gauges */}
-              {bossHud && bossHud.difficulty === 'calamity' && (
+              {/* Mythic Focus & Fury Gauges */}
+              {bossHud && bossHud.difficulty === 'mythic' && (
                 <div className="pointer-events-auto bg-slate-950/90 border-2 border-purple-500/80 rounded-full px-2.5 py-1 flex items-center gap-2 text-[10px] font-display font-bold text-white shadow">
                   <button
                     type="button"
@@ -922,7 +922,7 @@ export const HUD: React.FC<HUDProps> = ({
               return (
                 <div
                   key={buff.id}
-                  className="stardew-panel px-2 py-0.5 rounded-full flex items-center gap-1 text-[10px] font-display font-bold text-amber-950 shadow"
+                  className="phum-panel px-2 py-0.5 rounded-full flex items-center gap-1 text-[10px] font-display font-bold text-amber-950 shadow"
                 >
                   <span>{buff.icon}</span>
                   <span className="text-purple-900">{tags.join(' ')}</span>
@@ -936,7 +936,7 @@ export const HUD: React.FC<HUDProps> = ({
         )}
 
         {/* 3-Slot Quick-Snack Bar ([1], [2], [3] on PC or Tap on Mobile) */}
-        <div className="pointer-events-auto stardew-panel px-2 py-1 rounded-2xl flex items-center gap-1.5 shadow-lg">
+        <div className="pointer-events-auto phum-panel px-2 py-1 rounded-2xl flex items-center gap-1.5 shadow-lg">
           {([0, 1, 2] as const).map((slotIdx) => {
             const snackId = player.quickSnackSlots[slotIdx];
             const snack = snackId ? STREET_SNACKS[snackId] : null;

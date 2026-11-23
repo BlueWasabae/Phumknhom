@@ -2,9 +2,9 @@
 
 ## 1. High-Concept Vision
 **ភូមិខ្ញុំ (Phum Khnhom)** is a cross-platform (PC & Mobile Web) 2D online RPG that fuses three iconic experiences into one seamless world:
-1. **Stardew Valley (Village & Farm):** Cozy top-down farming, crop timers, fishing, crafting, and building a personal homestead.
-2. **Classic 2D Social MMO (Town Plaza & Style):** Crowded multi-channel village squares (`AREA 0`, `AREA 1`), chibi paper-doll fashion, wings, pets, street snack carts, Lucky Wheel spins, quiz NPCs, and live overhead chat bubbles.
-3. **Terraria (Dungeons & Boss Raids):** Entering a Dungeon Portal shifts the game into 2D side-scrolling action-platforming with jumping, dodging, weapon combat, breakable loot nodes, and multi-phase solo or co-op boss fights.
+1. **Homestead Village & Farm:** Cozy top-down farming, crop timers, fishing, crafting, and building a personal Khmer homestead.
+2. **2D Social Village RPG (Town Plaza & Style):** Crowded multi-channel village squares (`AREA 0`, `AREA 1`), chibi paper-doll fashion, wings, pets, street snack carts, Lucky Wheel spins, quiz NPCs, and live overhead chat bubbles.
+3. **Side-Scrolling Boss Caverns:** Entering a Dungeon Portal shifts the game into 2D side-scrolling action-platforming with jumping, dodging, weapon combat, breakable loot nodes, and multi-phase solo or co-op boss fights.
 
 **Target Platforms:** Web Browser (Desktop & Mobile responsive) hosted on `www.bluexacedamy.space` (later wrappable to Android/iOS via Capacitor).
 
@@ -91,7 +91,7 @@ Players move between districts using `join` gates or the **Village Bus**:
 
 ## 6. Farming, Fishing & Street Snacks
 
-### Starter Crops (Stardew-Style Personal Farm)
+### Starter Crops (Personal Homestead Farm)
 * **Trakuon (Water Morning Glory):** Fast growth (2 min) | Cheap starter crop | Used in basic HP snacks.
 * **Jasmine Rice (Phka Rumduol):** Medium growth (10 min) | Steady coin profit | Core cooking staple.
 * **Pink Lotus:** Medium-long growth (20 min) | High value | Used in Magic/Energy potions.
@@ -111,7 +111,7 @@ Snacks can be eaten in the village (restoring `Healthy`/`Happy`) OR slotted into
 
 ---
 
-## 7. Terraria-Style Dungeons & Boss Progression
+## 7. Side-Scrolling Boss Caverns & Boss Progression
 
 ### Dungeon Mechanics
 * **Controls:** Left/Right movement, Jump + Double Jump (or Dash with brief invincibility frames), Primary Weapon Attack, Quick-Slot Snack heal.

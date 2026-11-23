@@ -212,7 +212,7 @@ export class PlazaRoom extends Room<PlazaState> {
         const partyId = `party_${client.sessionId.slice(0, 6)}_${Date.now().toString(36)}`;
         const bossId = payload.bossId === 'yeak_thmor' ? 'yeak_thmor' : 'sdech_kongkaeb';
         const difficulty =
-          payload.difficulty === 'expert' || payload.difficulty === 'calamity'
+          payload.difficulty === 'expert' || payload.difficulty === 'mythic'
             ? payload.difficulty
             : 'normal';
 
@@ -254,7 +254,7 @@ export class PlazaRoom extends Room<PlazaState> {
         if (!accepter || !payload?.partyId) return;
         const bossId = payload.bossId === 'yeak_thmor' ? 'yeak_thmor' : 'sdech_kongkaeb';
         const difficulty =
-          payload.difficulty === 'expert' || payload.difficulty === 'calamity'
+          payload.difficulty === 'expert' || payload.difficulty === 'mythic'
             ? payload.difficulty
             : 'normal';
 

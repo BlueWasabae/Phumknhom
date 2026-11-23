@@ -7,10 +7,10 @@ import {
 } from '@shared/reforgeModifiers';
 import { computeVillageToDungeonBridge } from '@shared/skillTrees';
 import {
-  CALAMITY_WEAPON_LIST,
+  KHMER_ARSENAL_LIST,
   SHIMMER_RECIPES,
   countShimmerInputs,
-} from '../data/calamityWeapons';
+} from '../data/khmerArsenal';
 import { Gift, Hammer, Landmark, Shield, Sparkles, Swords } from 'lucide-react';
 import { NativeDialog } from './NativeDialog';
 
@@ -24,7 +24,7 @@ interface ReforgeModalProps {
   onReforge: (category: ReforgeCategory) => Promise<void>;
   onShimmerTransmute: (recipeId: string) => void;
   onBankAction: (action: 'deposit' | 'withdraw', amount: number) => Promise<void>;
-  onCraftCalamityWeapon: (itemId: string) => void;
+  onCraftArsenalWeapon: (itemId: string) => void;
   onClaimStarterChest: () => void;
   onEquipWeapon: (itemId: string) => void;
 }
@@ -37,7 +37,7 @@ export const ReforgeModal: React.FC<ReforgeModalProps> = ({
   onReforge,
   onShimmerTransmute,
   onBankAction,
-  onCraftCalamityWeapon,
+  onCraftArsenalWeapon,
   onClaimStarterChest,
   onEquipWeapon,
 }) => {
@@ -85,7 +85,7 @@ export const ReforgeModal: React.FC<ReforgeModalProps> = ({
   const permanentRecipes = SHIMMER_RECIPES.filter((r) => r.rewardKind === 'blessing');
   const bossSwapRecipes = SHIMMER_RECIPES.filter((r) => r.rewardKind === 'boss_swap');
 
-  const ownsAllCalamity = CALAMITY_WEAPON_LIST.every((w) =>
+  const ownsAllArsenal = KHMER_ARSENAL_LIST.every((w) =>
     player.inventory.some((i) => i.itemId === w.itemId)
   );
 
@@ -125,7 +125,7 @@ export const ReforgeModal: React.FC<ReforgeModalProps> = ({
         </div>
 
         <div className="max-h-[62dvh] overflow-y-auto pr-1 space-y-3">
-          {/* TAB 1: TERRARIA-STYLE REFORGING + 6 CALAMITY KHMER WEAPONS */}
+          {/* TAB 1: BLACKSMITH PREFIX REFORGING + 6 KHMER MYTHIC ARSENAL WEAPONS */}
           {tab === 'reforge' && (
             <>
               <div className="grid sm:grid-cols-2 gap-3">
@@ -162,7 +162,7 @@ export const ReforgeModal: React.FC<ReforgeModalProps> = ({
                     type="button"
                     disabled={busy || player.currencies.coins < weaponReforgeCost}
                     onClick={() => void runReforge('weapon')}
-                    className="w-full stardew-btn py-2.5 rounded-xl font-display font-bold text-xs disabled:opacity-45"
+                    className="w-full phum-btn py-2.5 rounded-xl font-display font-bold text-xs disabled:opacity-45"
                   >
                     {busy && sparkSide === 'weapon'
                       ? '💥 Hammering Sparks...'
@@ -203,7 +203,7 @@ export const ReforgeModal: React.FC<ReforgeModalProps> = ({
                     type="button"
                     disabled={busy || player.currencies.coins < armorReforgeCost}
                     onClick={() => void runReforge('armor')}
-                    className="w-full stardew-btn py-2.5 rounded-xl font-display font-bold text-xs disabled:opacity-45"
+                    className="w-full phum-btn py-2.5 rounded-xl font-display font-bold text-xs disabled:opacity-45"
                   >
                     {busy && sparkSide === 'armor'
                       ? '✨ Forging Ward...'
@@ -212,30 +212,30 @@ export const ReforgeModal: React.FC<ReforgeModalProps> = ({
                 </div>
               </div>
 
-              {/* 6 SIGNATURE CALAMITY KHMER WEAPONS FORGE & STARTER TEST CHEST */}
+              {/* 6 SIGNATURE KHMER MYTHIC ARSENAL WEAPONS FORGE & STARTER TEST CHEST */}
               <div className="p-3.5 rounded-2xl bg-gradient-to-br from-slate-900 via-amber-950/90 to-slate-900 text-amber-50 border-2 border-amber-500/60 space-y-2.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <div className="font-display font-bold text-sm text-amber-300">
-                      ⚔️ Calamity Khmer Weapon Arsenal (6 Signature Relics)
+                      ⚔️ Khmer Mythic Arsenal (6 Signature Relics)
                     </div>
                     <div className="text-[10px] text-amber-100/80">
-                      Right-Click or press <kbd className="px-1 bg-slate-800 rounded">Q</kbd> in Dungeons for Preah Khan Parry & Golden Riel Coin Toss!
+                      Right-Click or press <kbd className="px-1 bg-slate-800 rounded">Q</kbd> in Boss Caverns for Preah Khan Parry & Golden Riel Coin Toss!
                     </div>
                   </div>
                   <button
                     type="button"
-                    disabled={ownsAllCalamity}
+                    disabled={ownsAllArsenal}
                     onClick={onClaimStarterChest}
                     className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-300 text-amber-950 font-display font-bold text-[11px] border-2 border-amber-950 flex items-center gap-1.5 shadow disabled:opacity-45"
                   >
                     <Gift className="w-3.5 h-3.5" />
-                    {ownsAllCalamity ? '✓ All 6 Weapons Claimed' : '🎁 Open Test Chest (All 6 Free!)'}
+                    {ownsAllArsenal ? '✓ All 6 Weapons Claimed' : '🎁 Open Test Chest (All 6 Free!)'}
                   </button>
                 </div>
 
                 <div className="grid sm:grid-cols-2 gap-2">
-                  {CALAMITY_WEAPON_LIST.map((w) => {
+                  {KHMER_ARSENAL_LIST.map((w) => {
                     const owned = player.inventory.some((i) => i.itemId === w.itemId);
                     const equipped = player.loadout.weapon === w.itemId;
                     return (
@@ -266,7 +266,7 @@ export const ReforgeModal: React.FC<ReforgeModalProps> = ({
                           ) : (
                             <button
                               type="button"
-                              onClick={() => onCraftCalamityWeapon(w.itemId)}
+                              onClick={() => onCraftArsenalWeapon(w.itemId)}
                               className="w-full py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-display font-bold text-[11px]"
                             >
                               ⚒️ Forge ({w.craftCoins.toLocaleString()}c

@@ -1,6 +1,6 @@
 export type ZoneType = 'overworld' | 'dungeon' | 'farm' | 'club';
 
-export type DifficultyMode = 'normal' | 'expert' | 'calamity' | 'death';
+export type DifficultyMode = 'normal' | 'expert' | 'mythic' | 'death';
 
 export type BossId = 'sdech_kongkaeb' | 'arp_prey_chrov' | 'yeak_thmor' | 'neak_reach';
 

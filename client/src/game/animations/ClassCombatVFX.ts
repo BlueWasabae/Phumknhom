@@ -328,7 +328,7 @@ export class ClassCombatVFX {
     });
   }
 
-  // ==================== CALAMITY ARSENAL VFX ====================
+  // ==================== KHMER MYTHIC ARSENAL VFX ====================
 
   /**
    * 8-Biome Preah Khan elemental crescent wave tinted by active World Map Biome

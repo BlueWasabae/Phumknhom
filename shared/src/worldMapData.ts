@@ -311,7 +311,7 @@ export const WORLD_BIOMES: Record<BiomeId, WorldBiomeDef> = {
     unlockCostCoins: 1600,
     bossId: 'neak_reach',
     targetScene: 'DungeonBossScene',
-    description: 'Floating astral pagoda above the clouds for Act III Calamity Trials & celestial relics.',
+    description: 'Floating astral pagoda above the clouds for Act III Mythic Trials & celestial relics.',
     preahKhanElement: 'Astral Eclipse',
     preahKhanBonusDmgPct: 0.2,
     preahKhanColorHex: 0xfacc15,

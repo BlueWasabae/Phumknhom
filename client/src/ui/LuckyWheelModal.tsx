@@ -211,7 +211,7 @@ export const LuckyWheelModal: React.FC<LuckyWheelModalProps> = ({
               type="button"
               disabled={spinning || !canAfford}
               onClick={triggerSpin}
-              className="w-full stardew-btn py-2.5 rounded-xl font-display font-bold text-sm disabled:opacity-45 shadow"
+              className="w-full phum-btn py-2.5 rounded-xl font-display font-bold text-sm disabled:opacity-45 shadow"
             >
               {spinning
                 ? 'Spinning...'

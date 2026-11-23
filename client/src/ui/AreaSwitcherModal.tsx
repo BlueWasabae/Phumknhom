@@ -96,7 +96,7 @@ export const AreaSwitcherModal: React.FC<AreaSwitcherModalProps> = ({
             type="button"
             onClick={() => void refreshAreas()}
             disabled={loading}
-            className="stardew-btn px-2.5 py-1 rounded-lg font-display font-bold text-[11px] inline-flex items-center gap-1 disabled:opacity-50"
+            className="phum-btn px-2.5 py-1 rounded-lg font-display font-bold text-[11px] inline-flex items-center gap-1 disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             Refresh
@@ -115,7 +115,7 @@ export const AreaSwitcherModal: React.FC<AreaSwitcherModalProps> = ({
           />
           <button
             type="submit"
-            className="stardew-btn px-3 py-1.5 rounded-xl font-display font-bold text-xs shrink-0"
+            className="phum-btn px-3 py-1.5 rounded-xl font-display font-bold text-xs shrink-0"
           >
             Set Name
           </button>
@@ -175,7 +175,7 @@ export const AreaSwitcherModal: React.FC<AreaSwitcherModalProps> = ({
                   className={`px-3.5 py-2 rounded-xl font-display font-bold text-xs shrink-0 transition ${
                     isCurrent
                       ? 'bg-emerald-700 hover:bg-emerald-600 text-white border-2 border-emerald-950'
-                      : 'stardew-btn disabled:opacity-45'
+                      : 'phum-btn disabled:opacity-45'
                   }`}
                 >
                   {isCurrent ? (networkStatus.online ? 'Reconnect' : 'Connect') : 'Join'}

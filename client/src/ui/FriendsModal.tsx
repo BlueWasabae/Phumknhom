@@ -117,7 +117,7 @@ export const FriendsModal: React.FC<FriendsModalProps> = ({
           <button
             type="button"
             onClick={onRefresh}
-            className="stardew-btn px-2.5 py-1 rounded-lg font-display font-bold text-[11px] inline-flex items-center gap-1"
+            className="phum-btn px-2.5 py-1 rounded-lg font-display font-bold text-[11px] inline-flex items-center gap-1"
           >
             <RefreshCw className="w-3.5 h-3.5" /> Refresh
           </button>
@@ -137,7 +137,7 @@ export const FriendsModal: React.FC<FriendsModalProps> = ({
                     onClose();
                     onOpenAuth();
                   }}
-                  className="stardew-btn px-4 py-2 rounded-xl font-display font-bold text-xs inline-flex items-center gap-1.5"
+                  className="phum-btn px-4 py-2 rounded-xl font-display font-bold text-xs inline-flex items-center gap-1.5"
                 >
                   <LogIn className="w-4 h-4" /> Login / Create Account
                 </button>
@@ -155,7 +155,7 @@ export const FriendsModal: React.FC<FriendsModalProps> = ({
                   />
                   <button
                     type="submit"
-                    className="stardew-btn px-3 py-1.5 rounded-xl font-display font-bold text-xs inline-flex items-center gap-1 shrink-0"
+                    className="phum-btn px-3 py-1.5 rounded-xl font-display font-bold text-xs inline-flex items-center gap-1 shrink-0"
                   >
                     <UserPlus className="w-3.5 h-3.5" /> Add
                   </button>

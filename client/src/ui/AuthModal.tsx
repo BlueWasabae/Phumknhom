@@ -78,7 +78,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         <div className="p-3 rounded-xl bg-gradient-to-r from-emerald-900 via-amber-900 to-purple-900 text-amber-50 border-2 border-amber-500/70 space-y-1 shadow">
           <div className="font-display font-bold text-sm flex items-center gap-1.5 text-amber-200">
             <Sparkles className="w-4 h-4 text-yellow-300 shrink-0" />
-            Stardew Farm · Social Village Plaza · Calamity Bosses
+            2D Social Village RPG · Homestead Farm · Boss Caverns
           </div>
           <p className="text-[11px] text-amber-100/90 leading-snug">
             Cloud accounts save your real-timestamp crops, Artisan machines, street snacks, 5 Khmer classes, and Friends list!
@@ -160,7 +160,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <button
             type="submit"
             disabled={submitting}
-            className="w-full stardew-btn py-2.5 rounded-xl font-display font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+            className="w-full phum-btn py-2.5 rounded-xl font-display font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-50"
           >
             <Cloud className="w-4 h-4" />
             {submitting

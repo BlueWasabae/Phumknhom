@@ -284,7 +284,7 @@ export class BootScene extends Phaser.Scene {
     this.cropToTexture('na_houses', 'lucky_wheel_kiosk', 304, 256, 48, 32);
     // Real Stone Blacksmith Forge Kiln & Anvil
     this.cropToTexture('na_houses', 'blacksmith_anvil', 496, 192, 32, 48);
-    // Real Carved Stone Guardian Shrine (for Green Park Pylon Shrine & Dungeon Angkor Ward Bast Statue!)
+    // Real Carved Stone Guardian Shrine (for Green Park Pylon Shrine & Dungeon Angkor Ward Statue!)
     this.cropToTexture('na_houses', 'pylon_shrine', 48, 240, 32, 32);
     this.cropToTexture('na_houses', 'angkor_ward_statue', 80, 240, 32, 32);
     // Real Golden Torii / Blessing Shrine Gate for Green Park Golden Blessing Shrine!

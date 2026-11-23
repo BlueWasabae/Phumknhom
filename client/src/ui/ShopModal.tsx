@@ -254,7 +254,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({
                           type="button"
                           disabled={!canBuy}
                           onClick={() => onBuySnack(snack.id, 1)}
-                          className="flex-1 stardew-btn py-1.5 rounded-xl font-display font-bold text-xs disabled:opacity-45"
+                          className="flex-1 phum-btn py-1.5 rounded-xl font-display font-bold text-xs disabled:opacity-45"
                         >
                           Buy 1 ({snack.buyCoins}c)
                         </button>
@@ -465,7 +465,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({
                           e.stopPropagation();
                           onBuyFashion(item.id);
                         }}
-                        className="w-full stardew-btn py-1.5 rounded-xl font-display font-bold text-xs disabled:opacity-45"
+                        className="w-full phum-btn py-1.5 rounded-xl font-display font-bold text-xs disabled:opacity-45"
                       >
                         Buy · {goldCost > 0 ? `★ ${goldCost} Gold` : `${coinCost.toLocaleString()} Coins`}
                       </button>

@@ -15,7 +15,7 @@ const DEFAULT_WORLD_EVENTS: TickerItem[] = [
   },
   {
     id: 'evt-yeak',
-    text: '⚔️ A hero just defeated Yeak Thmor on Calamity Mode!',
+    text: '⚔️ A hero just defeated Yeak Thmor on Mythic Mode!',
   },
   {
     id: 'evt-shrine',

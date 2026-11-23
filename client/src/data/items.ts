@@ -782,7 +782,7 @@ export const ITEM_CATALOG: Record<string, CatalogItem> = {
     styleVariant: 'garuda',
     stats: {},
   },
-  // ==================== CALAMITY ARSENAL WEAPONS (6 SIGNATURE KHMER RELICS) ====================
+  // ==================== KHMER MYTHIC ARSENAL WEAPONS (6 SIGNATURE KHMER RELICS) ====================
   weapon_preah_khan: {
     id: 'weapon_preah_khan',
     name: 'Preah Khan of the 8 Biomes',
@@ -918,7 +918,7 @@ export const ITEM_CATALOG: Record<string, CatalogItem> = {
     classId: 'shadow',
     rarity: 'legendary',
     stylishScore: 94,
-    description: 'Calamity shadow blade that unleashes a screen-tearing Reality-Rip on full Stealth!',
+    description: 'Mythic shadow blade that unleashes a screen-tearing Reality-Rip on full Stealth!',
     primaryColor: '#c026d3',
     accentColor: '#22d3ee',
     styleVariant: 'kambet',

@@ -44,8 +44,8 @@ const DIFFICULTY_OPTIONS: Array<{
     desc: 'Faster boss telegraphs & hits. Drops an instanced Boss Treasure Bag with boosted rare drop rates + bonus Gold.',
   },
   {
-    id: 'calamity',
-    label: 'Calamity',
+    id: 'mythic',
+    label: 'Mythic',
     mult: '1.9× HP',
     badge: 'Focus + Fury + Def Crack',
     color: 'border-purple-700 bg-purple-50 text-purple-950',

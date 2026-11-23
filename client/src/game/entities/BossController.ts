@@ -756,7 +756,7 @@ export class BossController {
 
     if (this.attackCounter % 2 === 1) {
       const windup = 750;
-      const count = this.difficulty === 'calamity' ? 4 : 3;
+      const count = this.difficulty === 'mythic' ? 4 : 3;
       const dropXs: number[] = [];
       for (let i = 0; i < count; i++) {
         const offset = (i - (count - 1) / 2) * 165 + (Math.random() - 0.5) * 45;

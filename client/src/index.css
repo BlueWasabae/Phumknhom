@@ -48,8 +48,8 @@ dialog::backdrop {
   overscroll-behavior: contain;
 }
 
-/* Cozy Warm-Wood & Cream Stardew-Inspired UI Surfaces */
-.stardew-btn {
+/* Cozy Warm-Wood & Cream Phum Khnhom Village UI Surfaces */
+.phum-btn {
   background: linear-gradient(180deg, #fffbeb 0%, #fde68a 100%);
   border: 2.5px solid #5c2d0c;
   box-shadow:
@@ -60,11 +60,11 @@ dialog::backdrop {
   color: #3b1905;
 }
 
-.stardew-btn:hover {
+.phum-btn:hover {
   filter: brightness(1.04);
 }
 
-.stardew-btn:active {
+.phum-btn:active {
   transform: translateY(2px);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.7),
@@ -72,7 +72,7 @@ dialog::backdrop {
     0 2px 6px rgba(0, 0, 0, 0.3);
 }
 
-.stardew-panel {
+.phum-panel {
   background: linear-gradient(180deg, rgba(255, 248, 228, 0.96) 0%, rgba(246, 226, 179, 0.96) 100%);
   border: 3px solid #5c2d0c;
   box-shadow:
@@ -82,7 +82,7 @@ dialog::backdrop {
   color: #3b1905;
 }
 
-.stardew-wood {
+.phum-wood {
   background: linear-gradient(180deg, #7c3f18 0%, #5c2d0c 100%);
   border-bottom: 2.5px solid #3b1905;
   color: #fef3c7;

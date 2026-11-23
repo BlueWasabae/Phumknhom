@@ -311,7 +311,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                     <button
                       type="button"
                       onClick={() => onEquip(selectedEquipDef.id)}
-                      className="w-full stardew-btn py-2 rounded-xl font-display font-bold text-xs"
+                      className="w-full phum-btn py-2 rounded-xl font-display font-bold text-xs"
                     >
                       Equip {selectedEquipDef.classId ? `(${KHMER_CLASSES[selectedEquipDef.classId].englishName})` : ''}
                     </button>

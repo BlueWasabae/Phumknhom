@@ -2,7 +2,7 @@
 
 ## 1. The 28-Boss Megaroster (Core + Optional + Sentinels + Superbosses)
 
-Borrowing from Terraria Calamity Mod's structure—which pairs mandatory story bosses with optional biome encounters, multi-boss sentinel gauntlets, and secret superbosses—**ភូមិខ្ញុំ** scales to **28 distinct bosses** plus 3 hidden superbosses. Optional bosses are never forced on casual farmers, yet reward specialized gear, pets, and economy boosts.
+Pairing mandatory story bosses with optional biome encounters, multi-boss sentinel gauntlets, and secret superbosses, **ភូមិខ្ញុំ (Phum Khnhom)** scales to **28 distinct bosses** plus 3 hidden superbosses. Optional bosses are never forced on casual farmers, yet reward specialized gear, pets, and economy boosts.
 
 *Note: During any active boss fight, a global **Boss Presence** rule automatically suppresses normal mob spawns so players focus purely on boss mechanics.*
 
@@ -31,9 +31,9 @@ Borrowing from Terraria Calamity Mod's structure—which pairs mandatory story b
 | 16 | **Astral Golem** *(Infected Construct)* | Optional | Starfall Crater at Night | Starlight Bars, Gravity Dash Charm |
 | 17 | **Kroth Meas** *(Garuda Sentinel)* | Core | Sky Pagoda Spire (Wind Key) | *Radiant Garuda Wings*, Skybreaker Spear |
 | 18 | **Plaguebringer Empress** | Core | Blighted Marsh (Plague Transmitter) | Rogue Stealth Armor, Venom Wings |
-| 19 | **Rahu, Devourer of the Moon** | **Act Gate** | Eclipse Sanctum (Moon Altar) | **Unlocks Act III (Calamity)** + *Moon-Eater Blade* |
+| 19 | **Rahu, Devourer of the Moon** | **Act Gate** | Eclipse Sanctum (Moon Altar) | **Unlocks Act III (Mythic Tier)** + *Moon-Eater Blade* |
 
-### Act III: Calamity of the Ancient Gods (Levels 61–100 | 9 Bosses)
+### Act III: Mythic Trials of the Ancient Gods (Levels 61–100 | 9 Bosses)
 | # | Boss Name | Type | Biome & Summon Condition | Signature Reward |
 | :--- | :--- | :--- | :--- | :--- |
 | 20 | **The Three Pagoda Guardians** | Core | Sacred Underworld (Profaned Shard) | Guardian Relics (Defense/Offense/Heal) |
@@ -44,7 +44,7 @@ Borrowing from Terraria Calamity Mod's structure—which pairs mandatory story b
 | 25 | **Poltergeist of the Ruined Temple** | Optional | Haunted Crypt (Spirit Beacon) | Necroplasmic Weapons & Summons |
 | 26 | **Astral Serpent of the Void** | Core | Astral Spire (Cosmic Worm) | Cosmilite Bars, *Astral Dragon Summon* |
 | 27 | **Ancient Mechanical Pantheon** *(3-in-1)* | Endgame | Sky Terminal (Signal Decoder) | Exo-Tech Weapons, Unlimited Flight Chair |
-| 28 | **Sovannakara, Primordial Calamity** | **Final Boss** | Altar of the Accursed | **Mythic Calamity Gear**, Server-Wide Title |
+| 28 | **Sovannakara, Primordial Sovereign** | **Final Boss** | Altar of the Accursed | **Mythic Sovereign Gear**, Server-Wide Title |
 
 * **Hidden Superbosses (Bonus #29–#31):** **The Durian Golem** (Nighttime Golden Durian farm secret), **The Shadow Tax Collector** (carrying 1M+ unbanked Coins in Blighted Marsh), and **The Primordial Abyssal Wyrm** (using a Rod of Teleportation inside the deepest Abyss layer).
 
@@ -55,7 +55,7 @@ Borrowing from Terraria Calamity Mod's structure—which pairs mandatory story b
 ### A. Boss Difficulty Tiers (Selectable at Any Dungeon Portal)
 1. **Normal Mode:** Standard HP, base attack speeds, forgiving cooldowns. Ideal for cozy farmers.
 2. **Expert Mode:** +50% Boss HP, faster telegraphs, extra Phase 2 attack patterns, drops instanced **Treasure Bags** with unique Expert Accessories.
-3. **Calamity Mode *(Revengeance Equivalent)*:** Activates **Focus (Adrenaline)** and **Fury (Rage)** gauges, enables **Defense Damage** (hits briefly crack armor), reworks boss AI with tighter bullet-hell patterns, and adds exclusive Mythic Relics.
+3. **Mythic Mode *(មហិទ្ធិឫទ្ធិ)*:** Activates **Focus** and **Fury** gauges, enables **Defense Damage** (hits briefly crack armor), reworks boss AI with tighter bullet-hell patterns, and adds exclusive Mythic Relics.
 4. **Death / Nightmare Mode:** Extreme speed, no natural HP regen during boss phases, aggressive enrage timers—purely for prestige titles, glowing statues, and **+25% rare cosmetic drop rates**.
 
 ### B. Character Challenge Modes (Chosen at Character Creation)
@@ -68,17 +68,17 @@ Borrowing from Terraria Calamity Mod's structure—which pairs mandatory story b
 9. **Village Invasion Waves *(Open-World Defense)*:** Every 4 hours (or summoned with a War Horn), waves of *Blighted Goblins*, *Blood Moon Spirits*, or *Sky Pirates* march toward Central Plaza. All online players in the Area fight together to defend the Village Gate for shared Coin/Material rewards.
 10. **Guild Raids *(8-Player Clan Co-op)*:** Guilds clear 3 preparatory relic rooms during the week to collect weakening artifacts, then unite on weekends to battle a massive **Colossal World Worm** with shared guild damage milestones.
 11. **Normalized PvP Duel & Battle Arena:** Players can challenge friends in Plaza or queue 1v1 / 3v3 side-scrolling PvP. **Anti-Pay-to-Win Rule:** All weapons and armor normalize to equal Tier power inside PvP—pure skill, class builds, and dodging decide winners.
-12. **Boss Rush Marathon:** Unlocked after Boss #28. Fight all 28 bosses back-to-back scaled to Level 100 stats using the **Terminus Relic** for the ultimate *Calamity Crown*.
+12. **Boss Rush Marathon:** Unlocked after Boss #28. Fight all 28 bosses back-to-back scaled to Level 100 stats using the **Angkor Finale Relic** for the ultimate *Mythic Crown*.
 
 ---
 
-## 3. The 12-Skill RPG System (Stardew 1.6 + Core Keeper Hybrid)
+## 3. The 12-Skill RPG System (Cross-World Village & Cavern Progression)
 
 Players level **12 independent skills (Lv. 1–100)** directly through playing. Every skill rewards:
 * **Passive Stat Per Level** (Lv. 1–100).
 * **1 Talent Point every 5 levels** (+5 bonus at Lv. 100 = **25 Talent Points per skill**, respec anytime for a Coin sink fee).
-* **Branching Professions** at **Lv. 25 & Lv. 50** (Stardew Valley style).
-* **Cross-World Synergy Talents** (Core Keeper style): Leveling peaceful village skills unlocks real combat advantages in dungeons, and combat skills boost farm efficiency.
+* **Branching Professions** at **Lv. 25 & Lv. 50**.
+* **Cross-World Synergy Talents**: Leveling peaceful village skills unlocks real combat advantages in Boss Caverns, and combat skills boost farm efficiency.
 
 ### Life-Sim & Economy Skills (6 Skills)
 | Skill | How It Levels | Gain Per Level | Key Talents & Cross-Combat Synergies | Lv. 25 / 50 Professions |
@@ -100,7 +100,7 @@ Players level **12 independent skills (Lv. 1–100)** directly through playing. 
 | **11. Rogue & Agility** | Throwing weapons, dashes & dodging | +0.4% Rogue Dmg & +0.1% Speed | **Shadow Stealth** (+25% faster Stealth Bar fill); **On Your Toes** (+15% speed boost for 3 sec after dodging); **Escape Artist** (-40% stun/slow duration). |
 | **12. Vitality** | Scoring enemy & boss kills | +2 Max HP | **Stayin' Alive** (stronger regen under 50% HP); **Protection of the Ancients** (-12% damage taken from bosses); **Cheat Death** (once per boss fight, survive lethal hit at 15% HP). |
 
-### Endgame "Mastery Shrine" (Stardew 1.6 Inspired)
+### Endgame "Mastery Shrine" (Lv. 100 Village & Combat Ascension)
 Once a player hits **Level 50+ in all 12 skills** (or Level 100 in at least 5), the **Ancient Mastery Shrine** behind the Pagoda opens. Excess XP from *any* activity converts into **Mastery Points** (`10,000 → 15,000 → 20,000 → 25,000 → 30,000`) to unlock 5 game-changing relics:
 1. **Farming Mastery:** *Mythic Lotus Scythe* (harvests a 5x5 area in 1 swing) + *Statue of Daily Blessings*.
 2. **Mining Mastery:** *Heavy Forge* (smelts 5 bars at once with double yield) + *Portable Teleport Anvil*.
@@ -126,18 +126,18 @@ Every hit calculates cleanly in 4 steps (with ±8% variance):
 * `FinalDmg = AfterDef * (1 - BossDR) * CritMult * FocusMult`
   * **UpgradeLv (`+0` to `+10`):** +6% base weapon power per upgrade (max +60% at `+10`).
   * **CritMult:** `1.0` normally, `1.75` on Critical Hit (boosted by `Happy` stat + talents).
-  * **FocusMult:** `2.20` during a 5-second Calamity Focus burst.
+  * **FocusMult:** `2.20` during a 5-second Mythic Focus burst.
 
-### 3. Player Defense & Calamity Diminishing Damage Reduction (DR)
+### 3. Player Defense & Diminishing Damage Reduction (DR)
 * `EffectiveDR = 1 - (1 / (1 + RawDR))`
 * `DamageTaken = max(1, (BossAttack - (CurrentDef * D_mode)) * (1 - EffectiveDR))`
-  * **D_mode (Defense Multiplier):** `0.50` in Normal, `0.75` in Expert, `1.00` in Calamity/Death.
-  * **Defense Damage (Calamity/Death Mode):** Getting hit temporarily reduces `CurrentDef` by 25% of the hit's impact for 3 seconds (recharging smoothly once you stop taking hits).
+  * **D_mode (Defense Multiplier):** `0.50` in Normal, `0.75` in Expert, `1.00` in Mythic/Death.
+  * **Defense Damage (Mythic/Death Mode):** Getting hit temporarily reduces `CurrentDef` by 25% of the hit's impact for 3 seconds (recharging smoothly once you stop taking hits).
 
 ### 4. Co-op Boss HP Scaling Formula
 * `BossHP_party = BossHP_solo * (1 + 0.65 * (PartySize - 1)) * M_diff`
   * `PartySize`: `1` to `4`.
-  * `M_diff`: `1.0` (Normal), `1.5` (Expert), `1.9` (Calamity), `2.3` (Death).
+  * `M_diff`: `1.0` (Normal), `1.5` (Expert), `1.9` (Mythic), `2.3` (Death).
 
 ### 5. Step-by-Step Progression Balance Sheet (Lv. 1 → Lv. 100)
 Target fight duration (**Time-to-Kill / TTK**) stays in the **2.5 to 5.0 minute** sweet spot across the entire game:
@@ -149,4 +149,4 @@ Target fight duration (**Time-to-Kill / TTK**) stays in the **2.5 to 5.0 minute*
 | **Early Act II** *(Boss 10–14)* | 26–42 | 480 – 650 | 38 – 62 | 65 – 120 | 300 – 750 | 65,000 – 165,000 | 75 – 115 | ~3.5 min |
 | **Late Act II** *(Boss 15–19)* | 43–60 | 680 – 850 | 66 – 95 | 135 – 240 | 850 – 2,200 | 200,000 – 520,000 | 125 – 185 | ~4.0 min |
 | **Early Act III** *(Boss 20–25)* | 61–82 | 900 – 1,200 | 105 – 145 | 280 – 550 | 2,800 – 7,500 | 750,000 – 2,100,000 | 200 – 290 | ~4.5 min |
-| **Endgame Calamity** *(Boss 26–28)* | 83–100 | 1,300 – 1,800 | 155 – 220 | 650 – 1,400 | 9,000 – 26,000 | 2,800,000 – 7,500,000 | 320 – 480 | ~5.0 min |
+| **Endgame Mythic** *(Boss 26–28)* | 83–100 | 1,300 – 1,800 | 155 – 220 | 650 – 1,400 | 9,000 – 26,000 | 2,800,000 – 7,500,000 | 320 – 480 | ~5.0 min |

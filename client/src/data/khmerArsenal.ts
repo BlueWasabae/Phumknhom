@@ -2,7 +2,7 @@ import type { KhmerClassId, PlayerState } from '@shared/types';
 import { getEvolvingBladeMultiplier } from '@shared/balanceFormulas';
 import { getBiomeOrFallback } from '@shared/worldMapData';
 
-export type CalamitySpecialKind =
+export type KhmerArsenalSpecialKind =
   | 'biome_preah_khan'
   | 'golden_riel_coin_shot'
   | 'evolving_angkor_blade'
@@ -10,12 +10,12 @@ export type CalamitySpecialKind =
   | 'frost_fang_singha'
   | 'hanuman_spirit_banner';
 
-export interface CalamityWeaponMeta {
+export interface KhmerArsenalWeaponMeta {
   itemId: string;
   name: string;
   khmerName: string;
   classId: KhmerClassId;
-  specialKind: CalamitySpecialKind;
+  specialKind: KhmerArsenalSpecialKind;
   craftCoins: number;
   requiredMaterialId?: string;
   requiredMaterialQty?: number;
@@ -25,7 +25,7 @@ export interface CalamityWeaponMeta {
   secondaryActionLabel?: string;
 }
 
-export const CALAMITY_WEAPONS: Record<string, CalamityWeaponMeta> = {
+export const KHMER_ARSENAL_WEAPONS: Record<string, KhmerArsenalWeaponMeta> = {
   weapon_preah_khan: {
     itemId: 'weapon_preah_khan',
     name: 'Preah Khan of the 8 Biomes',
@@ -38,7 +38,7 @@ export const CALAMITY_WEAPONS: Record<string, CalamityWeaponMeta> = {
     requiredMaterialLabel: '2× Slime Core',
     tagline: 'Biome-attuned sacred Angkor blade with a Parry → Reality Rip counter!',
     mechanicSummary:
-      'Attunes element & passive to your active Biome (Rice = Healing Wind, Mines/Ruins = Explosive Fire, Marsh = Armor Shred). Right-Click / [R] raises a 0.35s golden Parry guard to charge a screen-tearing Reality Rip!',
+      'Attunes element & passive to your active Biome (Rice = Healing Wind, Mines/Ruins = Explosive Fire, Marsh = Armor Shred). Right-Click / [Q] raises a 0.35s golden Parry guard to charge a screen-tearing Reality Rip!',
     secondaryActionLabel: '🛡️ PARRY',
   },
   weapon_golden_riel_shot: {
@@ -51,9 +51,9 @@ export const CALAMITY_WEAPONS: Record<string, CalamityWeaponMeta> = {
     requiredMaterialId: 'drop_spirit_orb',
     requiredMaterialQty: 2,
     requiredMaterialLabel: '2× Spirit Ember Orb',
-    tagline: 'Ultrakill-inspired Khmer coin trick-shot crossbow!',
+    tagline: 'Khmer golden coin trick-shot crossbow!',
     mechanicSummary:
-      'Right-Click / [R] flicks a spinning Gold Coin into the air (chain up to 3!). Shoot any airborne coin to ricochet a blinding golden lightning beam into the boss for a guaranteed 100% Super-Crit!',
+      'Right-Click / [Q] flicks a spinning Gold Coin into the air (chain up to 3!). Shoot any airborne coin to ricochet a blinding golden lightning beam into the boss for a guaranteed 100% Super-Crit!',
     secondaryActionLabel: '🪙 TOSS COIN',
   },
   weapon_evolving_angkor_blade: {
@@ -108,7 +108,7 @@ export const CALAMITY_WEAPONS: Record<string, CalamityWeaponMeta> = {
   },
 };
 
-export const CALAMITY_WEAPON_LIST = Object.values(CALAMITY_WEAPONS);
+export const KHMER_ARSENAL_LIST = Object.values(KHMER_ARSENAL_WEAPONS);
 
 export interface PreahKhanBiomeProfile {
   elementName: string;
@@ -168,12 +168,12 @@ export function getEvolvingRelicMultiplier(player: PlayerState): number {
   return getEvolvingBladeMultiplier(getUniqueBossClearsCount(player));
 }
 
-export function craftCalamityWeapon(
+export function craftKhmerArsenalWeapon(
   state: PlayerState,
   itemId: string
 ): { state: PlayerState; ok: boolean; message: string } {
-  const meta = CALAMITY_WEAPONS[itemId];
-  if (!meta) return { state, ok: false, message: 'Unknown Calamity weapon blueprint.' };
+  const meta = KHMER_ARSENAL_WEAPONS[itemId];
+  if (!meta) return { state, ok: false, message: 'Unknown Khmer Mythic Arsenal blueprint.' };
   if (state.inventory.some((i) => i.itemId === itemId)) {
     return { state, ok: false, message: `You already own ${meta.name}! Equip it in Inventory.` };
   }
@@ -216,14 +216,14 @@ export function craftCalamityWeapon(
 }
 
 /**
- * Starter Test Chest granting all 6 signature Calamity Khmer weapons so players can test every mechanic immediately!
+ * Starter Test Chest granting all 6 signature Khmer Mythic Arsenal weapons for immediate testing.
  */
-export function claimCalamityStarterChest(
+export function claimKhmerArsenalStarterChest(
   state: PlayerState
 ): { state: PlayerState; ok: boolean; message: string } {
   const nextInv = state.inventory.map((i) => ({ ...i }));
   let added = 0;
-  for (const w of CALAMITY_WEAPON_LIST) {
+  for (const w of KHMER_ARSENAL_LIST) {
     if (!nextInv.some((i) => i.itemId === w.itemId)) {
       nextInv.push({ itemId: w.itemId, quantity: 1, itemLevel: 5 });
       added++;
@@ -233,13 +233,13 @@ export function claimCalamityStarterChest(
     return {
       state,
       ok: false,
-      message: 'All 6 Calamity Khmer weapons are already in your Container!',
+      message: 'All 6 Khmer Mythic Arsenal weapons are already in your Container!',
     };
   }
   return {
     state: { ...state, inventory: nextInv },
     ok: true,
-    message: `🎁 Opened Calamity Arsenal Test Chest — added ${added} signature Khmer weapon(s) to Container!`,
+    message: `🎁 Opened Khmer Mythic Arsenal Test Chest — added ${added} signature weapon(s) to Container!`,
   };
 }
 
@@ -249,7 +249,7 @@ export interface ShimmerTransmuteRecipe {
   id: string;
   name: string;
   khmerName: string;
-  inputItemIds: string[]; // Any matching item satisfies the recipe (e.g. raw Durian OR Durian Feast)
+  inputItemIds: string[];
   inputLabel: string;
   inputQty: number;
   rewardKind: 'blessing' | 'boss_swap' | 'weapon';
@@ -260,7 +260,6 @@ export interface ShimmerTransmuteRecipe {
 }
 
 export const SHIMMER_RECIPES: ShimmerTransmuteRecipe[] = [
-  // 1. Permanent Fruit Blessings (1× per character, persisted in cloud save!)
   {
     id: 'shimmer_golden_durian_hp',
     name: 'Golden Durian Vitality Blessing',
@@ -270,7 +269,7 @@ export const SHIMMER_RECIPES: ShimmerTransmuteRecipe[] = [
     inputQty: 1,
     rewardKind: 'blessing',
     blessingId: 'blessing_durian_hp',
-    description: 'Permanent Fruit Blessing (1× per character): +20 Max HP forever across all Dungeons!',
+    description: 'Permanent Fruit Blessing (1× per character): +20 Max HP forever across all Boss Caverns!',
   },
   {
     id: 'shimmer_pink_lotus_luck',
@@ -294,7 +293,6 @@ export const SHIMMER_RECIPES: ShimmerTransmuteRecipe[] = [
     blessingId: 'blessing_sandstone_ward',
     description: 'Permanent Blessing: +5 Defense permanently!',
   },
-  // 2. Duplicate Boss Drop Cycling (Eliminate bad RNG!)
   {
     id: 'shimmer_swap_frog_to_boots',
     name: 'Cycle Boss Drop: Frog Crown → Dash Boots',

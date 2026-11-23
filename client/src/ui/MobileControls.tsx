@@ -68,7 +68,7 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
         className="pointer-events-auto w-28 h-28 rounded-full bg-amber-950/55 border-[3px] border-amber-200/80 backdrop-blur-sm relative flex items-center justify-center touch-none shadow-xl"
       >
         <div
-          className="w-11 h-11 rounded-full stardew-btn"
+          className="w-11 h-11 rounded-full phum-btn"
           style={{ transform: `translate(${knob.x}px, ${knob.y}px)` }}
         />
       </div>
@@ -76,7 +76,7 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
       <div className="pointer-events-auto flex items-end gap-2">
         {zone === 'dungeon' ? (
           <div className="flex flex-col items-end gap-2">
-            {bossHud?.difficulty === 'calamity' && (bossHud.focusPct >= 100 || bossHud.furyPct >= 100) && (
+            {bossHud?.difficulty === 'mythic' && (bossHud.focusPct >= 100 || bossHud.furyPct >= 100) && (
               <div className="flex items-center gap-2">
                 {bossHud.focusPct >= 100 && !bossHud.focusActive && (
                   <button
@@ -121,7 +121,7 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
               <button
                 type="button"
                 onPointerDown={() => EventBus.emit('input:dash')}
-                className="w-14 h-14 rounded-full stardew-btn font-display font-bold text-xs"
+                className="w-14 h-14 rounded-full phum-btn font-display font-bold text-xs"
               >
                 DASH
               </button>
@@ -155,7 +155,7 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
             <button
               type="button"
               onPointerDown={() => EventBus.emit('input:interact')}
-              className="w-24 h-24 rounded-full stardew-btn font-display font-bold text-xs leading-tight whitespace-pre-line"
+              className="w-24 h-24 rounded-full phum-btn font-display font-bold text-xs leading-tight whitespace-pre-line"
             >
               {'FARM /\nINTERACT'}
             </button>
@@ -164,7 +164,7 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
           <button
             type="button"
             onPointerDown={() => EventBus.emit('input:interact')}
-            className={`w-24 h-24 rounded-full stardew-btn font-display font-bold text-xs leading-tight whitespace-pre-line ${
+            className={`w-24 h-24 rounded-full phum-btn font-display font-bold text-xs leading-tight whitespace-pre-line ${
               nearPortal ? 'ring-4 ring-yellow-300 animate-pulse' : ''
             }`}
           >

@@ -8,8 +8,8 @@ export interface PlayerDamageInput {
   skillPct?: number;     // e.g. 0.10 = +10%
   armorPct?: number;
   snackBuffPct?: number;
-  weaponPrefix?: string | null; // Terraria-style weapon prefix (Legendary/Unreal/Mythical/etc.)
-  armorPrefix?: string | null;  // Terraria-style accessory prefix (Menacing/Lucky/Warding/etc.)
+  weaponPrefix?: string | null; // Blacksmith weapon prefix (Legendary/Unreal/Mythical/etc.)
+  armorPrefix?: string | null;  // Blacksmith accessory prefix (Menacing/Lucky/Warding/etc.)
   evolvingBossClears?: number;  // Unique Bestiary boss clears for Evolving Blade (+15% each)
   enemyDefense?: number;
   armorPen?: number;
@@ -17,7 +17,7 @@ export interface PlayerDamageInput {
   critChance?: number;   // 0..1
   critMultiplier?: number; // Default 1.75 (boosted by talents like Amplified Precision)
   isCritOverride?: boolean;
-  focusActive?: boolean; // Calamity Focus burst = 2.20x
+  focusActive?: boolean; // Mythic Focus burst = 2.20x
   rng?: () => number;    // Injectable deterministic RNG for testing
 }
 
@@ -32,14 +32,14 @@ export interface DamageTakenInput {
 const DEFENSE_MODE_MULTIPLIER: Record<DifficultyMode, number> = {
   normal: 0.5,
   expert: 0.75,
-  calamity: 1.0,
+  mythic: 1.0,
   death: 1.0,
 };
 
 const BOSS_DIFFICULTY_MULTIPLIER: Record<DifficultyMode, number> = {
   normal: 1.0,
   expert: 1.5,
-  calamity: 1.9,
+  mythic: 1.9,
   death: 2.3,
 };
 
@@ -62,7 +62,7 @@ export function getEvolvingBladeMultiplier(uniqueBossClears: number): number {
 }
 
 /**
- * Computes combined live deltas from equipped Terraria-style Weapon & Accessory prefixes.
+ * Computes combined live deltas from equipped Blacksmith Weapon & Accessory prefixes.
  */
 export function computeReforgeDeltas(
   weaponPrefix?: string | null,
@@ -146,7 +146,7 @@ export function calculatePlayerDamage(input: PlayerDamageInput): CombatHitResult
 }
 
 /**
- * Calamity Diminishing Damage Reduction (DR):
+ * Diminishing Damage Reduction (DR):
  * EffectiveDR = 1 - (1 / (1 + RawDR))
  * Reference: docs/GDD_SYSTEMS_SKILLS_AND_BALANCE.md §4.3
  */
@@ -158,7 +158,7 @@ export function calculateEffectiveDR(rawDR: number): number {
 /**
  * Player Defense & Damage Taken Formula:
  * DamageTaken = max(1, (BossAttack - ((CurrentDef + ReforgeDef) * D_mode)) * (1 - EffectiveDR))
- * D_mode: Normal = 0.50, Expert = 0.75, Calamity/Death = 1.00
+ * D_mode: Normal = 0.50, Expert = 0.75, Mythic/Death = 1.00
  * Reference: docs/GDD_SYSTEMS_SKILLS_AND_BALANCE.md §4.3
  */
 export function calculateDamageTaken(input: DamageTakenInput): number {
@@ -174,7 +174,7 @@ export function calculateDamageTaken(input: DamageTakenInput): number {
 /**
  * Co-op Boss HP Scaling Formula:
  * BossHP_party = BossHP_solo * (1 + 0.65 * (PartySize - 1)) * M_diff
- * PartySize: 1..4 | M_diff: Normal 1.0, Expert 1.5, Calamity 1.9, Death 2.3
+ * PartySize: 1..4 | M_diff: Normal 1.0, Expert 1.5, Mythic 1.9, Death 2.3
  * Reference: docs/GDD_SYSTEMS_SKILLS_AND_BALANCE.md §4.4
  */
 export function calculateCoopBossHp(

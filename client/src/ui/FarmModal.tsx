@@ -145,7 +145,7 @@ export const FarmModal: React.FC<FarmModalProps> = ({
             <button
               type="button"
               onClick={() => onBuySupply('fertilizer', 1)}
-              className="stardew-btn px-3 py-1.5 rounded-xl font-display font-bold text-xs inline-flex items-center gap-1"
+              className="phum-btn px-3 py-1.5 rounded-xl font-display font-bold text-xs inline-flex items-center gap-1"
             >
               <Coins className="w-3.5 h-3.5 text-amber-700" /> Buy ({FERTILIZER_COST}c)
             </button>
@@ -188,14 +188,14 @@ export const FarmModal: React.FC<FarmModalProps> = ({
                       <button
                         type="button"
                         onClick={() => onBuySupply(crop.seedItemId, 1)}
-                        className="stardew-btn px-2.5 py-1 rounded-lg font-bold text-[11px]"
+                        className="phum-btn px-2.5 py-1 rounded-lg font-bold text-[11px]"
                       >
                         +1 ({crop.seedCost}c)
                       </button>
                       <button
                         type="button"
                         onClick={() => onBuySupply(crop.seedItemId, 5)}
-                        className="stardew-btn px-2.5 py-1 rounded-lg font-bold text-[11px]"
+                        className="phum-btn px-2.5 py-1 rounded-lg font-bold text-[11px]"
                       >
                         +5 ({crop.seedCost * 5}c)
                       </button>
@@ -267,7 +267,7 @@ export const FarmModal: React.FC<FarmModalProps> = ({
                       <button
                         type="button"
                         onClick={() => onHarvestTree(idx)}
-                        className="w-full stardew-btn py-1 rounded-lg font-bold text-[11px]"
+                        className="w-full phum-btn py-1 rounded-lg font-bold text-[11px]"
                       >
                         Harvest {def.outputQuantity}× {FARM_ITEMS[def.outputItemId]?.name}
                       </button>
@@ -301,7 +301,7 @@ export const FarmModal: React.FC<FarmModalProps> = ({
                       <button
                         type="button"
                         onClick={() => onCollectLivestock(idx)}
-                        className="w-full stardew-btn py-1 rounded-lg font-bold text-[11px]"
+                        className="w-full phum-btn py-1 rounded-lg font-bold text-[11px]"
                       >
                         Collect {FARM_ITEMS[def.outputItemId]?.name}
                         {def.bonusItemId ? ' + Fertilizer' : ''}
@@ -326,7 +326,7 @@ export const FarmModal: React.FC<FarmModalProps> = ({
                 <button
                   type="button"
                   onClick={() => onBuyTree(t.id)}
-                  className="stardew-btn px-2.5 py-1.5 rounded-lg font-bold text-[11px] shrink-0"
+                  className="phum-btn px-2.5 py-1.5 rounded-lg font-bold text-[11px] shrink-0"
                 >
                   {t.costCoins.toLocaleString()}c
                 </button>
@@ -343,7 +343,7 @@ export const FarmModal: React.FC<FarmModalProps> = ({
                 <button
                   type="button"
                   onClick={() => onBuyLivestock(l.id)}
-                  className="stardew-btn px-2.5 py-1.5 rounded-lg font-bold text-[11px] shrink-0"
+                  className="phum-btn px-2.5 py-1.5 rounded-lg font-bold text-[11px] shrink-0"
                 >
                   {l.costCoins.toLocaleString()}c
                 </button>
@@ -404,7 +404,7 @@ export const FarmModal: React.FC<FarmModalProps> = ({
                         <button
                           type="button"
                           onClick={() => onCollectMachine(idx)}
-                          className="w-full stardew-btn py-1.5 rounded-xl font-display font-bold text-xs"
+                          className="w-full phum-btn py-1.5 rounded-xl font-display font-bold text-xs"
                         >
                           Collect {outMeta?.name} → Container
                         </button>
@@ -453,7 +453,7 @@ export const FarmModal: React.FC<FarmModalProps> = ({
                   <button
                     type="button"
                     onClick={() => onBuyMachine(m.id)}
-                    className="stardew-btn px-2.5 py-1.5 rounded-lg font-bold text-[11px] shrink-0"
+                    className="phum-btn px-2.5 py-1.5 rounded-lg font-bold text-[11px] shrink-0"
                   >
                     {m.costCoins}c
                   </button>

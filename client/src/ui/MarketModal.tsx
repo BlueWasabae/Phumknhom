@@ -136,7 +136,7 @@ export const MarketModal: React.FC<MarketModalProps> = ({
             type="button"
             disabled={loading}
             onClick={() => void refreshMarket()}
-            className="stardew-btn px-2.5 py-1 rounded-lg font-display font-bold text-[11px] inline-flex items-center gap-1"
+            className="phum-btn px-2.5 py-1 rounded-lg font-display font-bold text-[11px] inline-flex items-center gap-1"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
           </button>
@@ -207,7 +207,7 @@ export const MarketModal: React.FC<MarketModalProps> = ({
                             setBusyId(null);
                             await refreshMarket();
                           }}
-                          className="stardew-btn px-3 py-1.5 rounded-lg font-display font-bold text-[11px] disabled:opacity-45"
+                          className="phum-btn px-3 py-1.5 rounded-lg font-display font-bold text-[11px] disabled:opacity-45"
                         >
                           Buy
                         </button>
@@ -296,7 +296,7 @@ export const MarketModal: React.FC<MarketModalProps> = ({
                   <button
                     type="submit"
                     disabled={busyId === 'create'}
-                    className="stardew-btn px-4 py-1.5 rounded-xl font-display font-bold text-xs"
+                    className="phum-btn px-4 py-1.5 rounded-xl font-display font-bold text-xs"
                   >
                     Post Listing
                   </button>

@@ -11,7 +11,7 @@ interface NativeDialogProps {
 }
 
 /**
- * Reusable warm-wood Stardew/Avatar World modal backed by native <dialog>.
+ * Reusable warm-wood Phum Khnhom village modal backed by native <dialog>.
  * Uses showModal() + closedby="any" + pointerdown/pointerup bounding-box fallback.
  */
 export const NativeDialog: React.FC<NativeDialogProps> = ({
@@ -76,8 +76,8 @@ export const NativeDialog: React.FC<NativeDialogProps> = ({
       {...({ closedby: 'any' } as Record<string, string>)}
       className="m-auto rounded-2xl overflow-visible shadow-2xl"
     >
-      <div className={`${maxWidthClass} max-h-[88dvh] stardew-panel rounded-2xl overflow-hidden flex flex-col`}>
-        <div className="px-4 py-3 stardew-wood flex items-center justify-between gap-2 shrink-0">
+      <div className={`${maxWidthClass} max-h-[88dvh] phum-panel rounded-2xl overflow-hidden flex flex-col`}>
+        <div className="px-4 py-3 phum-wood flex items-center justify-between gap-2 shrink-0">
           <div className="min-w-0">
             <h2 id={titleId} className="font-display font-bold text-base text-amber-100 truncate">
               {title}

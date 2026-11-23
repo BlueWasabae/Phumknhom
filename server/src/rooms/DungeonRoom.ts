@@ -11,7 +11,7 @@ const BOSS_SOLO_HP: Record<string, number> = {
 const DIFFICULTY_MULT: Record<string, number> = {
   normal: 1.0,
   expert: 1.5,
-  calamity: 1.9,
+  mythic: 1.9,
   death: 2.3,
 };
 
@@ -44,7 +44,7 @@ export class DungeonRoom extends Room<DungeonState> {
         : 'sdech_kongkaeb';
     const difficulty =
       options?.difficulty === 'expert' ||
-      options?.difficulty === 'calamity' ||
+      options?.difficulty === 'mythic' ||
       options?.difficulty === 'death'
         ? options.difficulty
         : 'normal';

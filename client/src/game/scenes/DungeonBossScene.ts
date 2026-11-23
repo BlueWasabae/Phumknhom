@@ -18,10 +18,10 @@ import {
 } from '@shared/skillTrees';
 import { KHMER_BOSSES, rollBossLoot, type RolledBossLoot } from '@shared/khmerBosses';
 import {
-  CALAMITY_WEAPONS,
+  KHMER_ARSENAL_WEAPONS,
   getPreahKhanBiomeBonus,
   getUniqueBossClearsCount,
-} from '../../data/calamityWeapons';
+} from '../../data/khmerArsenal';
 import { awardSkillXp } from '../systems/SkillManager';
 import { soundManager } from '../systems/SoundManager';
 import { travelManager } from '../systems/TravelAndPylons';
@@ -118,11 +118,11 @@ export class DungeonBossScene extends Phaser.Scene {
   private arenaStations = {
     heartLantern: true,
     sacredCampfire: true,
-    bastStatue: false,
+    angkorWard: false,
   };
   private lastStationHealAt = 0;
 
-  // 5-Class Combat & Calamity Weapon Mechanics
+  // 5-Class Combat & Khmer Mythic Arsenal Mechanics
   private projectiles: SpawnedProjectile[] = [];
   private tossedCoins: TossedGoldCoin[] = [];
   private yantSigils: Phaser.GameObjects.Container[] = [];
@@ -136,7 +136,7 @@ export class DungeonBossScene extends Phaser.Scene {
   private lastMeterBroadcast = 0;
   private lastBossHudBroadcast = 0;
 
-  // Calamity Focus (Adrenaline) & Fury (Rage) + Defense Damage
+  // Mythic Focus & Fury Gauges + Defense Damage
   private focusPct = 0;
   private focusActiveUntil = 0;
   private furyPct = 0;
@@ -217,7 +217,7 @@ export class DungeonBossScene extends Phaser.Scene {
   }
 
   create(): void {
-    // Terraria / Calamity Mode: Side-Scrolling 2D (gravity = 800)
+    // Side-Scrolling Boss Cavern Mode: 2D Platformer (gravity = 800)
     this.physics.world.gravity.y = 800;
     this.physics.world.setBounds(0, 0, ARENA_W, ARENA_H);
     soundManager.playBgm('boss');
@@ -518,7 +518,7 @@ export class DungeonBossScene extends Phaser.Scene {
         420,
         154,
         '[I] Class · [1/2/3] Snacks · Space/W Jump · Shift/L Dash · J/Click Attack' +
-          (this.difficulty === 'calamity' ? ' · [F] Focus · [R] Fury' : ''),
+          (this.difficulty === 'mythic' ? ' · [F] Focus · [R] Fury' : ''),
         {
           fontFamily: 'Kantumruy Pro, sans-serif',
           fontSize: '12px',
@@ -704,7 +704,7 @@ export class DungeonBossScene extends Phaser.Scene {
    */
   private buildArenaBuffStationsAndShimmerSpring(): void {
     const stations: Array<{
-      key: 'heartLantern' | 'sacredCampfire' | 'bastStatue';
+      key: 'heartLantern' | 'sacredCampfire' | 'angkorWard';
       x: number;
       y: number;
       label: string;
@@ -712,7 +712,7 @@ export class DungeonBossScene extends Phaser.Scene {
     }> = [
       { key: 'heartLantern', x: 460, y: 474, label: '❤️ HEART LANTERN (+3 HP/s)', glowTint: 0xf43f5e },
       { key: 'sacredCampfire', x: 780, y: FLOOR_Y - 12, label: '🔥 CAMPFIRE (+2 HP/s)', glowTint: 0xf97316 },
-      { key: 'bastStatue', x: 1120, y: 456, label: '🗿 ANGKOR WARD (+6 DEF)', glowTint: 0x38bdf8 },
+      { key: 'angkorWard', x: 1120, y: 456, label: '🗿 ANGKOR WARD (+6 DEF)', glowTint: 0x38bdf8 },
     ];
 
     stations.forEach((st) => {
@@ -897,28 +897,28 @@ export class DungeonBossScene extends Phaser.Scene {
     });
   }
 
-  // ==================== CALAMITY FOCUS & FURY GAUGES ====================
+  // ==================== MYTHIC FOCUS & FURY GAUGES ====================
   private activateFocusBurst(): void {
-    if (this.difficulty !== 'calamity' || this.playerDefeated) return;
+    if (this.difficulty !== 'mythic' || this.playerDefeated) return;
     const now = this.time.now;
     if (this.focusPct < 100 || now < this.focusActiveUntil) return;
     this.focusPct = 0;
     this.focusActiveUntil = now + 5000;
     this.cameras.main.shake(110, 0.005);
     this.spawnFloatingText(this.player.x, this.player.y - 52, '⚡ FOCUS BURST (+120% DMG)!', '#22d3ee', '18px');
-    EventBus.emit('ui:toast', { text: '⚡ CALAMITY FOCUS ACTIVATED! +120% Damage for 5 seconds!' });
+    EventBus.emit('ui:toast', { text: '⚡ MYTHIC FOCUS ACTIVATED! +120% Damage for 5 seconds!' });
     this.broadcastBossHud();
   }
 
   private activateFuryBurst(): void {
-    if (this.difficulty !== 'calamity' || this.playerDefeated) return;
+    if (this.difficulty !== 'mythic' || this.playerDefeated) return;
     const now = this.time.now;
     if (this.furyPct < 100 || now < this.furyActiveUntil) return;
     this.furyPct = 0;
     this.furyActiveUntil = now + 7000;
     this.cameras.main.shake(110, 0.005);
     this.spawnFloatingText(this.player.x, this.player.y - 52, '🔥 FURY (+40% SPD / +25% CRIT)!', '#fb7185', '17px');
-    EventBus.emit('ui:toast', { text: '🔥 CALAMITY FURY ACTIVATED! +40% Attack Speed & +25% Crit for 7s!' });
+    EventBus.emit('ui:toast', { text: '🔥 MYTHIC FURY ACTIVATED! +40% Attack Speed & +25% Crit for 7s!' });
     this.broadcastBossHud();
   }
 
@@ -1141,8 +1141,8 @@ export class DungeonBossScene extends Phaser.Scene {
       return;
     }
     const shimmerDef = (this.player.state.shimmerBlessings ?? []).includes('blessing_sandstone_ward') ? 5 : 0;
-    const bastDef = this.arenaStations.bastStatue ? 6 : 0;
-    const totalDefense = this.player.state.defense + shimmerDef + bastDef;
+    const wardDef = this.arenaStations.angkorWard ? 6 : 0;
+    const totalDefense = this.player.state.defense + shimmerDef + wardDef;
     const effectiveDefense =
       now < this.defenseCrackedUntil
         ? Math.max(0, Math.round(totalDefense * 0.75))
@@ -1160,8 +1160,8 @@ export class DungeonBossScene extends Phaser.Scene {
     this.damageTakenThisFight += dmg;
     this.consecutiveMeleeHits = 0;
 
-    // Calamity rules: taking a hit resets Focus to 0, charges Fury, and cracks Defense for 3s!
-    if (this.difficulty === 'calamity') {
+    // Mythic rules: taking a hit resets Focus to 0, charges Fury, and cracks Defense for 3s!
+    if (this.difficulty === 'mythic') {
       this.focusPct = 0;
       this.focusActiveUntil = 0;
       this.furyPct = Math.min(100, this.furyPct + 26);
@@ -1279,7 +1279,7 @@ export class DungeonBossScene extends Phaser.Scene {
   }
 
   /**
-   * Secondary Calamity Weapon Action (Right-Click / [Q] / Touch Secondary Button):
+   * Secondary Khmer Mythic Arsenal Action (Right-Click / [Q] / Touch Secondary Button):
    * - Preah Khan of the 8 Biomes: Raises 0.35s golden Parry Guard -> negates damage & charges Reality Rip!
    * - Crossbow of the Golden Riel: Flicks spinning Gold Coin in an arc (up to 3 airborne coins!).
    */
@@ -1324,7 +1324,7 @@ export class DungeonBossScene extends Phaser.Scene {
   }
 
   /**
-   * Triggers Ultrakill-style Golden Riel Coin Trick-Shot chain across all airborne coins straight into the boss!
+   * Triggers Golden Riel Coin Trick-Shot chain across all airborne coins straight into the boss!
    */
   private triggerGoldenRielCoinChain(dir: number): boolean {
     if (this.tossedCoins.length === 0 || !this.bossCtrl.alive) return false;
@@ -1601,7 +1601,7 @@ export class DungeonBossScene extends Phaser.Scene {
     const isEvolving =
       weapon.id === 'weapon_evolving_angkor_blade' ||
       weapon.id === 'weapon_evolving_angkor_relic' ||
-      CALAMITY_WEAPONS[weapon.id]?.specialKind === 'evolving_angkor_blade';
+      KHMER_ARSENAL_WEAPONS[weapon.id]?.specialKind === 'evolving_angkor_blade';
     const evolvingClears = isEvolving ? getUniqueBossClearsCount(this.player.state) : 0;
 
     // Pass weaponPrefix, armorPrefix & evolvingBossClears directly into @shared/balanceFormulas.ts!
@@ -1991,8 +1991,8 @@ export class DungeonBossScene extends Phaser.Scene {
 
     const bridge = computeVillageToDungeonBridge(this.player.state, Date.now(), this.consecutiveMeleeHits);
 
-    // Calamity Focus (fills when taking 0 damage) & Fury (fills when fighting close to boss)
-    if (this.difficulty === 'calamity' && this.bossCtrl.alive && !this.playerDefeated) {
+    // Mythic Focus (fills when taking 0 damage) & Fury (fills when fighting close to boss)
+    if (this.difficulty === 'mythic' && this.bossCtrl.alive && !this.playerDefeated) {
       if (time >= this.focusActiveUntil && this.focusPct < 100) {
         this.focusPct = Math.min(100, this.focusPct + dt * 5.8);
       }
@@ -2270,7 +2270,7 @@ export class DungeonBossScene extends Phaser.Scene {
       }
     }
 
-    // Periodic Boss HUD & Calamity Gauge refresh
+    // Periodic Boss HUD & Mythic Gauge refresh
     if (time - this.lastBossHudBroadcast > 140) {
       this.lastBossHudBroadcast = time;
       this.broadcastBossHud();

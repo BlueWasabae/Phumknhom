@@ -182,7 +182,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 onClose();
                 onOpenInventory();
               }}
-              className="stardew-btn px-3 py-1.5 rounded-xl font-display font-bold text-xs"
+              className="phum-btn px-3 py-1.5 rounded-xl font-display font-bold text-xs"
             >
               Open Wardrobe / Bag →
             </button>
