@@ -1,5 +1,10 @@
 import Phaser from 'phaser';
-import { INITIAL_PLAYER_STATE, type PlayerState } from '@shared/types';
+import {
+  INITIAL_PLAYER_STATE,
+  type BossId,
+  type DifficultyMode,
+  type PlayerState,
+} from '@shared/types';
 import { computeVillageToDungeonBridge } from '@shared/skillTrees';
 import { EventBus, type JoystickVector } from '../EventBus';
 import { Player } from '../entities/Player';
@@ -114,6 +119,9 @@ export class OverworldScene extends Phaser.Scene {
       }),
       EventBus.on('player:stateSync', (nextState) => {
         this.player.syncPlayerState(nextState);
+      }),
+      EventBus.on('dungeon:enterRequest', ({ bossId, difficulty }) => {
+        this.enterDungeon(bossId, difficulty);
       }),
       EventBus.on('input:interact', () => {
         this.tryInteractNearest();
@@ -418,9 +426,9 @@ export class OverworldScene extends Phaser.Scene {
       x: 745,
       y: 260,
       radius: 58,
-      label: 'Press [E] or Tap JOIN → Challenge Yeak Thmor (Ancient Cavern)',
+      label: 'Press [E] or Tap JOIN → Choose Khmer Boss & Difficulty (Normal/Expert/Calamity)',
       isDungeonPortal: true,
-      onInteract: () => this.enterDungeon(),
+      onInteract: () => EventBus.emit('ui:openModal', { modal: 'modeSelector' }),
     });
   }
 
@@ -478,16 +486,25 @@ export class OverworldScene extends Phaser.Scene {
     });
   }
 
-  private enterDungeon(): void {
+  private enterDungeon(bossId: BossId = 'sdech_kongkaeb', difficulty: DifficultyMode = 'normal'): void {
     if (this.transitioning) return;
     this.transitioning = true;
     this.cameras.main.fadeOut(220, 8, 10, 20);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
       this.scene.start('DungeonBossScene', {
+        bossId,
+        difficulty,
         playerState: {
           ...this.player.state,
           zone: 'dungeon',
+          difficulty,
           weapon: { ...this.player.state.weapon },
+          loadout: { ...this.player.state.loadout },
+          currencies: { ...this.player.state.currencies },
+          lifeStats: { ...this.player.state.lifeStats },
+          activeBuffs: [...this.player.state.activeBuffs],
+          quickSnackSlots: [...this.player.state.quickSnackSlots],
+          clearedBosses: [...this.player.state.clearedBosses],
         },
       });
     });

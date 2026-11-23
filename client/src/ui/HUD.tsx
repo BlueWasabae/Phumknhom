@@ -31,7 +31,7 @@ import {
   Swords,
   User,
 } from 'lucide-react';
-import { EventBus, type ClassMeterPayload, type FarmToolMode } from '../game/EventBus';
+import { EventBus, type BossHudPayload, type ClassMeterPayload, type FarmToolMode } from '../game/EventBus';
 import { NativeDialog } from './NativeDialog';
 
 interface HUDProps {
@@ -43,6 +43,7 @@ interface HUDProps {
   onToggleTouchUi: () => void;
   lastHit: CombatHitResult | null;
   classMeter: ClassMeterPayload;
+  bossHud: BossHudPayload | null;
   selectedCropId: string;
   farmToolMode: FarmToolMode;
   onSelectFarmSeed: (cropId: string, toolMode: FarmToolMode) => void;
@@ -67,6 +68,7 @@ export const HUD: React.FC<HUDProps> = ({
   onToggleTouchUi,
   lastHit,
   classMeter,
+  bossHud,
   selectedCropId,
   farmToolMode,
   onSelectFarmSeed,
@@ -428,53 +430,151 @@ export const HUD: React.FC<HUDProps> = ({
           </div>
         )}
 
-        {/* DUNGEON CLASS & SPECIAL MECHANIC METER */}
+        {/* DUNGEON BOSS HEALTH BAR, CLASS METER & CALAMITY FOCUS/FURY GAUGES */}
         {zone === 'dungeon' && (
-          <div className="flex justify-center w-full">
-            <div className="pointer-events-auto stardew-panel px-3 py-1 rounded-full flex items-center gap-2.5 text-[11px] font-display font-bold">
-              <span
-                className="px-2 py-0.5 rounded-full text-amber-50"
-                style={{ backgroundColor: activeClassDef.badgeBg }}
-              >
-                {activeClassDef.khmerName} · {player.weapon.name}
-              </span>
-
-              {player.activeClass === 'shadow' && (
-                <div className="flex items-center gap-1.5">
-                  <span className="text-purple-900">Stealth</span>
-                  <div className="w-24 h-2.5 rounded-full bg-purple-950/25 border border-purple-900 overflow-hidden">
-                    <div
-                      className={`h-full transition-all ${
-                        classMeter.stealthPct >= 100
-                          ? 'bg-gradient-to-r from-purple-600 via-fuchsia-400 to-purple-600 animate-pulse'
-                          : 'bg-purple-600'
+          <div className="flex flex-col items-center gap-1.5 w-full">
+            {/* Sleek Top-Center Boss Health Bar */}
+            {bossHud && bossHud.active && (
+              <div className="pointer-events-auto w-[min(94vw,520px)] bg-slate-950/90 border-2 border-amber-500/80 rounded-2xl px-3 py-1.5 shadow-xl">
+                <div className="flex items-center justify-between gap-2 text-[11px] font-display font-bold mb-1">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-amber-300 truncate">
+                      {bossHud.khmerName} · {bossHud.englishName}
+                    </span>
+                    <span
+                      className={`px-1.5 py-0.2 rounded text-[9px] uppercase shrink-0 ${
+                        bossHud.phase === 2
+                          ? 'bg-red-600 text-white animate-pulse'
+                          : 'bg-amber-700 text-amber-100'
                       }`}
-                      style={{ width: `${classMeter.stealthPct}%` }}
-                    />
+                    >
+                      {bossHud.phase === 2 ? 'P2 ENRAGED' : 'P1'}
+                    </span>
+                    <span className="px-1.5 py-0.2 rounded bg-purple-800 text-purple-100 text-[9px] uppercase shrink-0">
+                      {bossHud.difficulty}
+                    </span>
                   </div>
-                  <span className={classMeter.stealthPct >= 100 ? 'text-purple-700 animate-pulse' : 'text-amber-900'}>
-                    {classMeter.stealthPct >= 100 ? 'STRIKE READY!' : `${classMeter.stealthPct}%`}
-                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0 text-amber-100">
+                    {bossHud.bossId === 'sdech_kongkaeb' && bossHud.damageTakenThisFight === 0 && (
+                      <span className="px-1.5 py-0.2 rounded bg-yellow-400 text-amber-950 text-[9px] font-bold">
+                        ★ NO-HIT
+                      </span>
+                    )}
+                    <span className="font-mono text-[10px]">
+                      {bossHud.hp.toLocaleString()} / {bossHud.maxHp.toLocaleString()} (
+                      {Math.ceil((bossHud.hp / Math.max(1, bossHud.maxHp)) * 100)}%)
+                    </span>
+                  </div>
                 </div>
-              )}
+                <div className="w-full h-3 rounded-full bg-slate-800 border border-amber-500/40 overflow-hidden relative">
+                  <div
+                    className={`h-full transition-all duration-150 ${
+                      bossHud.phase === 2
+                        ? 'bg-gradient-to-r from-red-700 via-orange-500 to-yellow-400'
+                        : 'bg-gradient-to-r from-rose-700 via-red-500 to-amber-500'
+                    }`}
+                    style={{
+                      width: `${Math.max(0, Math.min(100, (bossHud.hp / Math.max(1, bossHud.maxHp)) * 100))}%`,
+                    }}
+                  />
+                  {/* 50% Phase 2 Threshold Marker */}
+                  <div className="absolute top-0 bottom-0 left-1/2 w-0.5 bg-amber-200/70" />
+                </div>
+              </div>
+            )}
 
-              {player.activeClass === 'mystic' && (
-                <span className="text-amber-800">
-                  Yant Sigils: {'✦'.repeat(classMeter.yantStacks)}
-                  {'✧'.repeat(Math.max(0, 3 - classMeter.yantStacks))} ({classMeter.yantStacks}/3)
+            {/* Class Meter + Calamity Focus / Fury Gauges */}
+            <div className="flex flex-wrap items-center justify-center gap-1.5">
+              <div className="pointer-events-auto stardew-panel px-3 py-1 rounded-full flex items-center gap-2.5 text-[11px] font-display font-bold">
+                <span
+                  className="px-2 py-0.5 rounded-full text-amber-50"
+                  style={{ backgroundColor: activeClassDef.badgeBg }}
+                >
+                  {activeClassDef.khmerName} · {player.weapon.name}
                 </span>
-              )}
 
-              {player.activeClass === 'lbokator' && (
-                <span className="text-orange-800">Next Stance: {stanceLabel}</span>
-              )}
+                {player.activeClass === 'shadow' && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-purple-900">Stealth</span>
+                    <div className="w-20 h-2.5 rounded-full bg-purple-950/25 border border-purple-900 overflow-hidden">
+                      <div
+                        className={`h-full transition-all ${
+                          classMeter.stealthPct >= 100
+                            ? 'bg-gradient-to-r from-purple-600 via-fuchsia-400 to-purple-600 animate-pulse'
+                            : 'bg-purple-600'
+                        }`}
+                        style={{ width: `${classMeter.stealthPct}%` }}
+                      />
+                    </div>
+                    <span className={classMeter.stealthPct >= 100 ? 'text-purple-700 animate-pulse' : 'text-amber-900'}>
+                      {classMeter.stealthPct >= 100 ? 'READY!' : `${classMeter.stealthPct}%`}
+                    </span>
+                  </div>
+                )}
 
-              {player.activeClass === 'tamer' && (
-                <span className="text-emerald-800">Spirit Pact Active</span>
-              )}
+                {player.activeClass === 'mystic' && (
+                  <span className="text-amber-800">
+                    Yant: {'✦'.repeat(classMeter.yantStacks)}
+                    {'✧'.repeat(Math.max(0, 3 - classMeter.yantStacks))}
+                  </span>
+                )}
 
-              {player.activeClass === 'archer' && (
-                <span className="text-emerald-800">Elemental Quiver · Shift = Backflip Shot</span>
+                {player.activeClass === 'lbokator' && (
+                  <span className="text-orange-800">Stance: {stanceLabel}</span>
+                )}
+
+                {player.activeClass === 'tamer' && (
+                  <span className="text-emerald-800">Spirit Pact</span>
+                )}
+
+                {player.activeClass === 'archer' && (
+                  <span className="text-emerald-800">Quiver · Shift = Backflip</span>
+                )}
+              </div>
+
+              {/* Calamity Focus (Adrenaline) & Fury (Rage) Gauges */}
+              {bossHud && bossHud.difficulty === 'calamity' && (
+                <div className="pointer-events-auto bg-slate-950/90 border-2 border-purple-500/80 rounded-full px-2.5 py-1 flex items-center gap-2 text-[10px] font-display font-bold text-white shadow">
+                  <button
+                    type="button"
+                    disabled={!bossHud.focusActive && bossHud.focusPct < 100}
+                    onClick={() => EventBus.emit('input:focus')}
+                    className={`flex items-center gap-1 px-2 py-0.5 rounded-full border transition ${
+                      bossHud.focusActive
+                        ? 'bg-cyan-400 text-slate-950 border-white animate-pulse'
+                        : bossHud.focusPct >= 100
+                        ? 'bg-cyan-500 hover:bg-cyan-400 text-slate-950 border-cyan-200 animate-pulse cursor-pointer'
+                        : 'bg-slate-800 text-cyan-200 border-cyan-700/50'
+                    }`}
+                    title="Focus (Adrenaline) [F]: +120% Damage for 5s! Resets on taking a hit."
+                  >
+                    <span>FOCUS [F]</span>
+                    <span className="font-mono">{bossHud.focusActive ? 'ACTIVE!' : `${bossHud.focusPct}%`}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={!bossHud.furyActive && bossHud.furyPct < 100}
+                    onClick={() => EventBus.emit('input:fury')}
+                    className={`flex items-center gap-1 px-2 py-0.5 rounded-full border transition ${
+                      bossHud.furyActive
+                        ? 'bg-red-500 text-white border-yellow-300 animate-pulse'
+                        : bossHud.furyPct >= 100
+                        ? 'bg-rose-600 hover:bg-rose-500 text-white border-rose-200 animate-pulse cursor-pointer'
+                        : 'bg-slate-800 text-rose-200 border-rose-700/50'
+                    }`}
+                    title="Fury (Rage) [R]: +40% Attack Speed & +25% Crit for 7s!"
+                  >
+                    <span>FURY [R]</span>
+                    <span className="font-mono">{bossHud.furyActive ? 'ACTIVE!' : `${bossHud.furyPct}%`}</span>
+                  </button>
+
+                  {bossHud.defenseCracked && (
+                    <span className="px-1.5 py-0.5 rounded-full bg-orange-600 text-white text-[9px] animate-pulse">
+                      DEF CRACKED
+                    </span>
+                  )}
+                </div>
               )}
             </div>
           </div>

@@ -219,6 +219,93 @@ export class BootScene extends Phaser.Scene {
         tex.refresh();
       }
     }
+
+    // Crisp pixel-art fallback for Boss #1: Sdech Kongkaeb (King Frog)
+    // Automatically skipped if a custom boss_sdech_kongkaeb.png is loaded.
+    if (!this.textures.exists('boss_sdech_kongkaeb')) {
+      const tex = this.textures.createCanvas('boss_sdech_kongkaeb', 96, 84);
+      if (tex) {
+        const ctx = tex.getContext();
+        ctx.imageSmoothingEnabled = false;
+        // Back webbed feet
+        ctx.fillStyle = '#14532d';
+        ctx.fillRect(10, 68, 22, 10);
+        ctx.fillRect(64, 68, 22, 10);
+        // Chunky haunches
+        ctx.fillStyle = '#15803d';
+        ctx.fillRect(12, 44, 20, 26);
+        ctx.fillRect(64, 44, 20, 26);
+        // Main bulbous frog torso
+        ctx.fillStyle = '#16a34a';
+        ctx.fillRect(18, 28, 60, 44);
+        ctx.fillStyle = '#22c55e';
+        ctx.fillRect(22, 32, 52, 34);
+        // Muddy spots & warts
+        ctx.fillStyle = '#14532d';
+        ctx.fillRect(24, 36, 8, 6);
+        ctx.fillRect(62, 38, 10, 6);
+        ctx.fillRect(28, 52, 6, 6);
+        ctx.fillRect(60, 54, 8, 6);
+        // Inflatable cream-gold throat pouch & belly
+        ctx.fillStyle = '#fef08a';
+        ctx.fillRect(30, 48, 36, 20);
+        ctx.fillStyle = '#fde047';
+        ctx.fillRect(34, 52, 28, 14);
+        // Wide grumpy king mouth
+        ctx.fillStyle = '#7f1d1d';
+        ctx.fillRect(24, 44, 48, 4);
+        ctx.fillStyle = '#f472b6';
+        ctx.fillRect(42, 45, 12, 3);
+        // Bulging eyes
+        ctx.fillStyle = '#15803d';
+        ctx.fillRect(22, 16, 18, 16);
+        ctx.fillRect(56, 16, 18, 16);
+        ctx.fillStyle = '#fef08a';
+        ctx.fillRect(25, 19, 12, 10);
+        ctx.fillRect(59, 19, 12, 10);
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(29, 21, 5, 6);
+        ctx.fillRect(62, 21, 5, 6);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(30, 21, 2, 2);
+        ctx.fillRect(63, 21, 2, 2);
+        // Golden Angkor Frog Crown
+        ctx.fillStyle = '#facc15';
+        ctx.fillRect(34, 14, 28, 8);
+        ctx.fillRect(34, 8, 6, 6);
+        ctx.fillRect(45, 4, 6, 10);
+        ctx.fillRect(56, 8, 6, 6);
+        ctx.fillStyle = '#ef4444';
+        ctx.fillRect(46, 15, 4, 5);
+        // Dark crisp pixel outline accents
+        ctx.strokeStyle = '#052e16';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(18, 28, 60, 44);
+        tex.refresh();
+      }
+    }
+
+    // Glowing Treasure Bag sprite for Boss loot drops
+    if (!this.textures.exists('boss_treasure_bag')) {
+      const tex = this.textures.createCanvas('boss_treasure_bag', 36, 36);
+      if (tex) {
+        const ctx = tex.getContext();
+        ctx.imageSmoothingEnabled = false;
+        ctx.fillStyle = '#7c2d12';
+        ctx.fillRect(8, 12, 20, 20);
+        ctx.fillStyle = '#b45309';
+        ctx.fillRect(10, 14, 16, 16);
+        ctx.fillStyle = '#facc15';
+        ctx.fillRect(10, 10, 16, 4);
+        ctx.fillRect(15, 16, 6, 8);
+        ctx.fillStyle = '#fef08a';
+        ctx.fillRect(12, 6, 12, 5);
+        ctx.strokeStyle = '#451a03';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(8, 12, 20, 20);
+        tex.refresh();
+      }
+    }
   }
 
   private registerAnimations(): void {

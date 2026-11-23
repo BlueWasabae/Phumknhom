@@ -17,7 +17,7 @@ Check off each phase only after testing on **both Desktop and Mobile browsers** 
 - [x] **Phase 4 — Shops, Street Snack Cart & 12-Skill Foundation**
   - Clothing Boutique, Street Snack Cart (`Num Pang`, `Kafé`, `Skewers`, `Coconut Water`), and Village-to-Dungeon stat bridge.
   - Implement `/shared/src/balanceFormulas.ts` and the 12-Skill XP/Talent framework.
-- [ ] **Phase 5 — Terraria/Calamity Combat & First Bosses**
+- [x] **Phase 5 — Terraria/Calamity Combat & First Bosses**
   - 5 Class weapon types, Dash/Double-Jump, Quick-Slot snack healing, Focus/Fury gauges, and Normal/Expert/Calamity toggles.
   - Build Boss #1 (*Sdech Kongkaeb — King Frog*) & Boss #5 (*Yeak Thmor — Stone Yaksha*) with Treasure Bags, cracked secret walls, and the No-Hit *Golden Frying Pan* Easter egg.
 - [ ] **Phase 6 — Online Multiplayer Plaza (Colyseus)**

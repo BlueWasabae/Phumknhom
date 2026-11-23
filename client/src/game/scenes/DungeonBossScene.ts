@@ -1,18 +1,32 @@
 import Phaser from 'phaser';
-import { INITIAL_PLAYER_STATE, type PlayerState } from '@shared/types';
-import { calculatePlayerDamage, getXpForNextLevel } from '@shared/balanceFormulas';
-import { CLASS_TO_COMBAT_SKILL, computeVillageToDungeonBridge } from '@shared/skillTrees';
+import {
+  INITIAL_PLAYER_STATE,
+  type BossId,
+  type DifficultyMode,
+  type InventoryItem,
+  type PlayerState,
+} from '@shared/types';
+import {
+  calculateDamageTaken,
+  calculatePlayerDamage,
+  getXpForNextLevel,
+} from '@shared/balanceFormulas';
+import {
+  CLASS_TO_COMBAT_SKILL,
+  computeVillageToDungeonBridge,
+  hasTalent,
+} from '@shared/skillTrees';
+import { KHMER_BOSSES, rollBossLoot, type RolledBossLoot } from '@shared/khmerBosses';
 import { awardSkillXp } from '../systems/SkillManager';
 import { EventBus, type JoystickVector } from '../EventBus';
 import { Player } from '../entities/Player';
+import { BossController } from '../entities/BossController';
 import { ClassCombatVFX, type SpawnedProjectile } from '../animations/ClassCombatVFX';
 
 const ARENA_W = 1800;
 const ARENA_H = 720;
 const FLOOR_Y = 620;
-const BOSS_SPAWN_X = 1390;
-const BOSS_SPAWN_Y = FLOOR_Y - 104;
-const BOSS_MAX_HP = 360;
+const BOSS_SPAWN_X = 1360;
 const EXIT_PORTAL_X = 118;
 const EXIT_PORTAL_Y = FLOOR_Y - 78;
 
@@ -23,9 +37,36 @@ interface DustMote {
   phase: number;
 }
 
+interface SecretWallState {
+  x: number;
+  y: number;
+  hitsRemaining: number;
+  broken: boolean;
+  chestClaimed: boolean;
+  wallRect: Phaser.GameObjects.Rectangle;
+  crackLines: Phaser.GameObjects.Graphics;
+  shimmer: Phaser.GameObjects.Arc;
+  chestSprite?: Phaser.GameObjects.Image;
+  chestLabel?: Phaser.GameObjects.Text;
+}
+
+interface LootBagDrop {
+  x: number;
+  y: number;
+  sprite: Phaser.GameObjects.Image;
+  glow: Phaser.GameObjects.Arc;
+  label: Phaser.GameObjects.Text;
+  rolled: RolledBossLoot;
+  claimed: boolean;
+}
+
 export class DungeonBossScene extends Phaser.Scene {
   private initialState: PlayerState = { ...INITIAL_PLAYER_STATE };
+  private bossId: BossId = 'sdech_kongkaeb';
+  private difficulty: DifficultyMode = 'normal';
+
   private player!: Player;
+  private bossCtrl!: BossController;
   private vfx!: ClassCombatVFX;
   private promptText!: Phaser.GameObjects.Text;
 
@@ -33,28 +74,36 @@ export class DungeonBossScene extends Phaser.Scene {
   private elevatedPlatforms!: Phaser.Physics.Arcade.StaticGroup;
   private dustMotes: DustMote[] = [];
 
-  // Custom Khmer Boss: Yeak Thmor (Stone Yaksha)
-  private boss!: Phaser.GameObjects.Image;
-  private bossShadow!: Phaser.GameObjects.Image;
-  private bossBreatheTween?: Phaser.Tweens.Tween;
-  private bossHp = BOSS_MAX_HP;
-  private bossAlive = true;
-  private bossBarBg!: Phaser.GameObjects.Rectangle;
-  private bossBarFill!: Phaser.GameObjects.Rectangle;
-  private bossLabel!: Phaser.GameObjects.Text;
+  // Cracked Secret Wall & Boss Treasure Bag Drop
+  private secretWall!: SecretWallState;
+  private lootBag: LootBagDrop | null = null;
 
-  // 5-Class Combat Systems
+  // 5-Class Combat & Calamity Gauges
   private projectiles: SpawnedProjectile[] = [];
   private yantSigils: Phaser.GameObjects.Container[] = [];
-  private lbokatorStance = 1; // 1=Lion, 2=Crocodile, 3=Hanuman
+  private lbokatorStance = 1;
   private consecutiveMeleeHits = 0;
-  private stealthPct = 0;     // 0..100 for Shadow Hunter
+  private stealthPct = 0;
   private lastAttackAt = 0;
   private lastMeterBroadcast = 0;
+  private lastBossHudBroadcast = 0;
+
+  // Calamity Focus (Adrenaline) & Fury (Rage) + Defense Damage
+  private focusPct = 0;
+  private focusActiveUntil = 0;
+  private furyPct = 0;
+  private furyActiveUntil = 0;
+  private defenseCrackedUntil = 0;
+  private damageTakenThisFight = 0;
+  private cheatDeathUsed = false;
+  private playerDefeated = false;
 
   // Platformer & Controls
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
-  private keys!: Record<'A' | 'D' | 'W' | 'E' | 'J' | 'L' | 'SHIFT' | 'SPACE', Phaser.Input.Keyboard.Key>;
+  private keys!: Record<
+    'A' | 'D' | 'W' | 'E' | 'J' | 'L' | 'F' | 'R' | 'SHIFT' | 'SPACE',
+    Phaser.Input.Keyboard.Key
+  >;
   private joystick: JoystickVector = { x: 0, y: 0 };
   private jumpsUsed = 0;
   private dashActiveUntil = 0;
@@ -70,19 +119,24 @@ export class DungeonBossScene extends Phaser.Scene {
     super('DungeonBossScene');
   }
 
-  init(data?: { playerState?: PlayerState }): void {
+  init(data?: { playerState?: PlayerState; bossId?: BossId; difficulty?: DifficultyMode }): void {
+    this.bossId = data?.bossId ?? 'sdech_kongkaeb';
+    this.difficulty = data?.difficulty ?? data?.playerState?.difficulty ?? 'normal';
     this.initialState = data?.playerState
       ? {
           ...data.playerState,
           zone: 'dungeon',
+          difficulty: this.difficulty,
           weapon: { ...data.playerState.weapon },
           loadout: { ...data.playerState.loadout },
           currencies: { ...data.playerState.currencies },
           lifeStats: { ...data.playerState.lifeStats },
+          activeBuffs: [...data.playerState.activeBuffs],
+          quickSnackSlots: [...data.playerState.quickSnackSlots],
+          clearedBosses: [...data.playerState.clearedBosses],
         }
-      : { ...INITIAL_PLAYER_STATE, zone: 'dungeon' };
-    this.bossHp = BOSS_MAX_HP;
-    this.bossAlive = true;
+      : { ...INITIAL_PLAYER_STATE, zone: 'dungeon', difficulty: this.difficulty };
+
     this.jumpsUsed = 0;
     this.nearExitSent = false;
     this.transitioning = false;
@@ -93,6 +147,15 @@ export class DungeonBossScene extends Phaser.Scene {
     this.lbokatorStance = 1;
     this.consecutiveMeleeHits = 0;
     this.stealthPct = 0;
+    this.focusPct = 0;
+    this.focusActiveUntil = 0;
+    this.furyPct = 0;
+    this.furyActiveUntil = 0;
+    this.defenseCrackedUntil = 0;
+    this.damageTakenThisFight = 0;
+    this.cheatDeathUsed = false;
+    this.playerDefeated = false;
+    this.lootBag = null;
   }
 
   create(): void {
@@ -104,9 +167,15 @@ export class DungeonBossScene extends Phaser.Scene {
     this.drawParallaxCavernAndAtmosphere();
     this.buildArenaPlatforms();
     this.buildExitPortal();
-    this.buildYeakThmorBoss();
+    this.buildCrackedSecretWall();
 
-    this.player = new Player(this, 240, FLOOR_Y - 46, this.initialState, 'dungeon');
+    this.player = new Player(this, 280, FLOOR_Y - 46, this.initialState, 'dungeon');
+    // Ensure HP starts clamped cleanly to effectiveMaxHp (or full if coming from defeat)
+    const startBridge = computeVillageToDungeonBridge(this.player.state);
+    if (this.player.state.hp <= 0) {
+      this.player.state.hp = startBridge.effectiveMaxHp;
+    }
+
     this.physics.add.collider(this.player.sprite, this.solidFloor);
     this.physics.add.collider(
       this.player.sprite,
@@ -117,6 +186,28 @@ export class DungeonBossScene extends Phaser.Scene {
         const plat = platObj as Phaser.GameObjects.Rectangle;
         const body = p.body as Phaser.Physics.Arcade.Body;
         return body.velocity.y >= 0 && body.bottom <= plat.y - plat.height / 2 + 14;
+      }
+    );
+
+    this.bossCtrl = new BossController(
+      this,
+      this.bossId,
+      this.difficulty,
+      BOSS_SPAWN_X,
+      FLOOR_Y,
+      200,
+      ARENA_W - 110,
+      {
+        onHitPlayer: (rawAtk, label, pullDir) => this.handlePlayerHit(rawAtk, label, pullDir),
+        onFloatingText: (x, y, text, color, fontSize) =>
+          this.spawnFloatingText(x, y, text, color, fontSize ?? '16px'),
+        onPhaseChange: () => {
+          EventBus.emit('ui:toast', {
+            text: `${this.bossCtrl.def.khmerName} entered PHASE 2! Watch the new telegraphs!`,
+          });
+          this.broadcastBossHud();
+        },
+        onDefeated: () => this.handleBossDefeated(),
       }
     );
 
@@ -139,13 +230,13 @@ export class DungeonBossScene extends Phaser.Scene {
     this.cameras.main.fadeIn(240, 8, 10, 20);
 
     this.cursors = this.input.keyboard!.createCursorKeys();
-    this.keys = this.input.keyboard!.addKeys('A,D,W,E,J,L,SHIFT,SPACE') as Record<
-      'A' | 'D' | 'W' | 'E' | 'J' | 'L' | 'SHIFT' | 'SPACE',
+    this.keys = this.input.keyboard!.addKeys('A,D,W,E,J,L,F,R,SHIFT,SPACE') as Record<
+      'A' | 'D' | 'W' | 'E' | 'J' | 'L' | 'F' | 'R' | 'SHIFT' | 'SPACE',
       Phaser.Input.Keyboard.Key
     >;
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      if (pointer.leftButtonDown()) {
+      if (pointer.leftButtonDown() && !this.playerDefeated) {
         this.performClassAttack();
       }
     });
@@ -174,51 +265,85 @@ export class DungeonBossScene extends Phaser.Scene {
       EventBus.on('input:jump', () => this.performJump()),
       EventBus.on('input:attack', () => this.performClassAttack()),
       EventBus.on('input:dash', () => this.performClassDash()),
+      EventBus.on('input:focus', () => this.activateFocusBurst()),
+      EventBus.on('input:fury', () => this.activateFuryBurst()),
+      EventBus.on('input:rematch', () => this.restartCurrentBoss()),
       EventBus.on('input:exitDungeon', () => this.returnToOverworld()),
       EventBus.on('input:interact', () => {
-        if (this.isNearExitPortal()) this.returnToOverworld();
+        if (this.lootBag && !this.lootBag.claimed) {
+          this.claimBossLootBag();
+        } else if (this.secretWall.broken && !this.secretWall.chestClaimed) {
+          this.claimSecretRelicChest();
+        } else if (this.isNearExitPortal()) {
+          this.returnToOverworld();
+        }
       })
     );
 
+    EventBus.emit('dungeon:outcome', null);
     EventBus.emit('scene:ready', { zone: 'dungeon' });
-    EventBus.emit('player:state', this.player.state);
+    this.emitPlayerState();
     EventBus.emit('portal:proximity', { nearPortal: false, label: '', targetZone: 'overworld' });
     this.broadcastClassMeter();
+    this.broadcastBossHud();
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.unsubs.forEach((u) => u());
       this.unsubs = [];
       this.clearYantSigils();
+      this.bossCtrl.destroy();
       this.player.destroy();
+      EventBus.emit('boss:hudUpdate', {
+        active: false,
+        bossId: this.bossId,
+        khmerName: '',
+        englishName: '',
+        hp: 0,
+        maxHp: 1,
+        phase: 1,
+        difficulty: this.difficulty,
+        stageLabel: '',
+        focusPct: 0,
+        focusActive: false,
+        furyPct: 0,
+        furyActive: false,
+        defenseCracked: false,
+        damageTakenThisFight: 0,
+      });
     });
   }
 
   private drawParallaxCavernAndAtmosphere(): void {
+    const isFrog = this.bossId === 'sdech_kongkaeb';
     this.add
       .tileSprite(ARENA_W / 2, ARENA_H / 2, ARENA_W, ARENA_H, 'lf_sky')
       .setTileScale(2.8, 2.8)
-      .setTint(0x202744)
+      .setTint(isFrog ? 0x16342a : 0x202744)
       .setScrollFactor(0.1)
       .setDepth(0);
 
     this.add
       .tileSprite(ARENA_W / 2, 405, ARENA_W, 256, 'lf_parallax_far')
       .setTileScale(2.2, 2.2)
-      .setTint(0x25354f)
+      .setTint(isFrog ? 0x1d4235 : 0x25354f)
       .setScrollFactor(0.2)
       .setDepth(2);
 
     this.add
       .tileSprite(ARENA_W / 2, 445, ARENA_W, 256, 'lf_parallax_mid')
       .setTileScale(2.2, 2.2)
-      .setTint(0x1a263a)
+      .setTint(isFrog ? 0x163026 : 0x1a263a)
       .setScrollFactor(0.5)
       .setDepth(4);
 
     const vineXs = [210, 390, 540, 720, 890, 1080, 1290, 1510, 1680];
     vineXs.forEach((vx, idx) => {
       const tex = idx % 2 === 0 ? 'lf_vine_green' : 'lf_vine_purple';
-      const vine = this.add.image(vx, 85 + (idx % 3) * 18, tex).setScale(2.3).setOrigin(0.5, 0).setDepth(7);
+      const vine = this.add
+        .image(vx, 85 + (idx % 3) * 18, tex)
+        .setScale(2.3)
+        .setOrigin(0.5, 0)
+        .setDepth(7);
       this.tweens.add({
         targets: vine,
         angle: idx % 2 === 0 ? 3 : -3,
@@ -251,7 +376,6 @@ export class DungeonBossScene extends Phaser.Scene {
     for (const mx of [310, 620, 970, 1280, 1650]) {
       this.add.image(mx, FLOOR_Y - 16, 'lf_mushroom').setScale(1.7).setDepth(16);
     }
-    this.add.image(1460, 336, 'lf_chest').setScale(1.7).setDepth(16);
     this.add.image(560, FLOOR_Y - 26, 'lf_boulder').setScale(1.4).setTint(0x64748b).setDepth(8);
 
     for (let i = 0; i < 28; i++) {
@@ -270,8 +394,9 @@ export class DungeonBossScene extends Phaser.Scene {
       });
     }
 
+    const bossDef = KHMER_BOSSES[this.bossId];
     this.add
-      .text(420, 130, 'ANCIENT CAVERN · 5 KHMER CLASSES COMBAT ARENA', {
+      .text(420, 128, `${bossDef.biomeName.toUpperCase()} · ${this.difficulty.toUpperCase()} MODE`, {
         fontFamily: 'Fredoka, sans-serif',
         fontSize: '18px',
         fontStyle: 'bold',
@@ -281,11 +406,17 @@ export class DungeonBossScene extends Phaser.Scene {
       })
       .setDepth(12);
     this.add
-      .text(420, 156, '[I] Swap Class · [K] Skills · [1/2/3] Eat Snack · Space/W Jump · Shift/L Dash · J/Click Attack', {
-        fontFamily: 'Kantumruy Pro, sans-serif',
-        fontSize: '12px',
-        color: '#cbd5e1',
-      })
+      .text(
+        420,
+        154,
+        '[I] Class · [1/2/3] Snacks · Space/W Jump · Shift/L Dash · J/Click Attack' +
+          (this.difficulty === 'calamity' ? ' · [F] Focus · [R] Fury' : ''),
+        {
+          fontFamily: 'Kantumruy Pro, sans-serif',
+          fontSize: '12px',
+          color: '#cbd5e1',
+        }
+      )
       .setDepth(12);
   }
 
@@ -351,50 +482,161 @@ export class DungeonBossScene extends Phaser.Scene {
       .setDepth(24);
   }
 
-  private buildYeakThmorBoss(): void {
-    this.bossShadow = this.add
-      .image(BOSS_SPAWN_X, FLOOR_Y - 2, 'soft_shadow')
-      .setDisplaySize(172, 30)
-      .setDepth(40);
+  /**
+   * Cracked Secret Wall (docs/GDD_CONTENT_AND_ECONOMY.md §4):
+   * 1 subtle shimmering cracked sandstone wall; hitting it 3 times reveals a Relic Chest (+Coins & Gold)!
+   */
+  private buildCrackedSecretWall(): void {
+    const wx = 780;
+    const wy = 352;
+    const hasTracker = hasTalent(this.initialState.skills, 'foraging', 'forage_tracker');
 
-    this.boss = this.add
-      .image(BOSS_SPAWN_X, FLOOR_Y, 'boss_yeak_thmor')
-      .setOrigin(0.5, 0.96)
-      .setScale(1.45)
-      .setDepth(42);
+    const wallRect = this.add
+      .rectangle(wx, wy, 56, 62, 0x57534e, 0.96)
+      .setStrokeStyle(2.5, hasTracker ? 0xfacc15 : 0x78716c)
+      .setDepth(18);
 
-    this.bossBreatheTween = this.tweens.add({
-      targets: this.boss,
-      scaleY: 1.5,
-      scaleX: 1.42,
-      y: FLOOR_Y - 4,
-      duration: 1050,
+    const crackLines = this.add.graphics().setDepth(19);
+    crackLines.lineStyle(2, 0x1c1917, 0.95);
+    crackLines.beginPath();
+    crackLines.moveTo(wx - 16, wy - 20);
+    crackLines.lineTo(wx - 2, wy - 4);
+    crackLines.lineTo(wx - 10, wy + 16);
+    crackLines.moveTo(wx - 2, wy - 4);
+    crackLines.lineTo(wx + 15, wy + 8);
+    crackLines.strokePath();
+
+    const shimmer = this.add
+      .circle(wx, wy, hasTracker ? 24 : 14, 0xfef08a, hasTracker ? 0.36 : 0.2)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(20);
+    this.tweens.add({
+      targets: shimmer,
+      alpha: hasTracker ? 0.65 : 0.05,
+      scale: 1.45,
+      duration: 950,
       yoyo: true,
       repeat: -1,
-      ease: 'Sine.easeInOut',
     });
 
-    this.bossLabel = this.add
-      .text(BOSS_SPAWN_X, BOSS_SPAWN_Y - 118, 'យក្សថ្ម · Yeak Thmor (Stone Yaksha)', {
-        fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
-        fontSize: '14px',
+    this.secretWall = {
+      x: wx,
+      y: wy,
+      hitsRemaining: 3,
+      broken: false,
+      chestClaimed: false,
+      wallRect,
+      crackLines,
+      shimmer,
+    };
+  }
+
+  private damageSecretWall(): void {
+    if (this.secretWall.broken) return;
+    this.secretWall.hitsRemaining -= 1;
+    this.cameras.main.shake(70, 0.004);
+    this.tweens.add({
+      targets: this.secretWall.wallRect,
+      x: this.secretWall.x + 5,
+      duration: 45,
+      yoyo: true,
+    });
+
+    if (this.secretWall.hitsRemaining > 0) {
+      this.spawnFloatingText(
+        this.secretWall.x,
+        this.secretWall.y - 36,
+        `CRACK! (${3 - this.secretWall.hitsRemaining}/3)`,
+        '#fde047',
+        '14px'
+      );
+      return;
+    }
+
+    // Shatter secret wall -> reveal Relic Chest!
+    this.secretWall.broken = true;
+    this.secretWall.wallRect.destroy();
+    this.secretWall.crackLines.destroy();
+    this.secretWall.shimmer.destroy();
+
+    const chest = this.add
+      .image(this.secretWall.x, this.secretWall.y + 12, 'lf_chest')
+      .setScale(1.8)
+      .setDepth(22)
+      .setInteractive({ useHandCursor: true });
+    chest.on('pointerdown', () => this.claimSecretRelicChest());
+
+    const label = this.add
+      .text(this.secretWall.x, this.secretWall.y - 26, 'SECRET RELIC CHEST!', {
+        fontFamily: 'Fredoka, sans-serif',
+        fontSize: '12px',
         fontStyle: 'bold',
         color: '#fde047',
-        stroke: '#0f172a',
-        strokeThickness: 4,
+        backgroundColor: 'rgba(15, 23, 42, 0.88)',
+        padding: { x: 6, y: 2 },
       })
-      .setOrigin(0.5, 1)
-      .setDepth(46);
+      .setOrigin(0.5)
+      .setDepth(24);
 
-    this.bossBarBg = this.add
-      .rectangle(BOSS_SPAWN_X, BOSS_SPAWN_Y - 104, 148, 12, 0x0f172a)
-      .setStrokeStyle(2, 0xf59e0b)
-      .setDepth(46);
+    this.secretWall.chestSprite = chest;
+    this.secretWall.chestLabel = label;
 
-    this.bossBarFill = this.add
-      .rectangle(BOSS_SPAWN_X - 71, BOSS_SPAWN_Y - 104, 142, 7, 0xef4444)
-      .setOrigin(0, 0.5)
-      .setDepth(47);
+    this.spawnFloatingText(this.secretWall.x, this.secretWall.y - 46, 'SECRET CHAMBER OPENED!', '#facc15', '17px');
+    EventBus.emit('ui:toast', { text: '✨ Cracked Secret Wall shattered! Walk over or click the Relic Chest!' });
+  }
+
+  private claimSecretRelicChest(): void {
+    if (!this.secretWall.broken || this.secretWall.chestClaimed) return;
+    this.secretWall.chestClaimed = true;
+    this.secretWall.chestSprite?.destroy();
+    this.secretWall.chestLabel?.destroy();
+
+    const bonusCoins = 160;
+    const bonusGold = Math.random() < 0.45 ? 2 : 1;
+    this.player.state.coins += bonusCoins;
+    this.player.state.currencies.coins = this.player.state.coins;
+    this.player.state.currencies.gold += bonusGold;
+
+    // Award Mining XP for cracking the secret stone wall!
+    const mineRes = awardSkillXp(this.player.state, 'mining', 35, true);
+    this.player.state = mineRes.state;
+    this.emitPlayerState();
+
+    this.spawnFloatingText(
+      this.secretWall.x,
+      this.secretWall.y - 24,
+      `+${bonusCoins} Coins · +${bonusGold} Gold!`,
+      '#fde047',
+      '18px'
+    );
+    EventBus.emit('ui:toast', {
+      text: `🏆 Secret Relic Chest looted: +${bonusCoins} Coins & +${bonusGold} Gold (+35 Mining XP)!`,
+    });
+  }
+
+  // ==================== CALAMITY FOCUS & FURY GAUGES ====================
+  private activateFocusBurst(): void {
+    if (this.difficulty !== 'calamity' || this.playerDefeated) return;
+    const now = this.time.now;
+    if (this.focusPct < 100 || now < this.focusActiveUntil) return;
+    this.focusPct = 0;
+    this.focusActiveUntil = now + 5000;
+    this.cameras.main.shake(110, 0.005);
+    this.spawnFloatingText(this.player.x, this.player.y - 52, '⚡ FOCUS BURST (+120% DMG)!', '#22d3ee', '18px');
+    EventBus.emit('ui:toast', { text: '⚡ CALAMITY FOCUS ACTIVATED! +120% Damage for 5 seconds!' });
+    this.broadcastBossHud();
+  }
+
+  private activateFuryBurst(): void {
+    if (this.difficulty !== 'calamity' || this.playerDefeated) return;
+    const now = this.time.now;
+    if (this.furyPct < 100 || now < this.furyActiveUntil) return;
+    this.furyPct = 0;
+    this.furyActiveUntil = now + 7000;
+    this.cameras.main.shake(110, 0.005);
+    this.spawnFloatingText(this.player.x, this.player.y - 52, '🔥 FURY (+40% SPD / +25% CRIT)!', '#fb7185', '17px');
+    EventBus.emit('ui:toast', { text: '🔥 CALAMITY FURY ACTIVATED! +40% Attack Speed & +25% Crit for 7s!' });
+    this.broadcastBossHud();
   }
 
   private clearYantSigils(): void {
@@ -411,8 +653,124 @@ export class DungeonBossScene extends Phaser.Scene {
     });
   }
 
+  private broadcastBossHud(): void {
+    const now = this.time.now;
+    EventBus.emit('boss:hudUpdate', {
+      active: this.bossCtrl.alive,
+      bossId: this.bossId,
+      khmerName: this.bossCtrl.def.khmerName,
+      englishName: this.bossCtrl.def.englishName,
+      hp: this.bossCtrl.hp,
+      maxHp: this.bossCtrl.maxHp,
+      phase: this.bossCtrl.phase,
+      difficulty: this.difficulty,
+      stageLabel: this.bossCtrl.getStageLabel(),
+      focusPct: Math.round(this.focusPct),
+      focusActive: now < this.focusActiveUntil,
+      furyPct: Math.round(this.furyPct),
+      furyActive: now < this.furyActiveUntil,
+      defenseCracked: now < this.defenseCrackedUntil,
+      damageTakenThisFight: this.damageTakenThisFight,
+    });
+  }
+
+  private emitPlayerState(): void {
+    EventBus.emit('player:state', {
+      ...this.player.state,
+      weapon: { ...this.player.state.weapon },
+      loadout: { ...this.player.state.loadout },
+      currencies: { ...this.player.state.currencies },
+      lifeStats: { ...this.player.state.lifeStats },
+      activeBuffs: [...this.player.state.activeBuffs],
+      quickSnackSlots: [...this.player.state.quickSnackSlots],
+      clearedBosses: [...this.player.state.clearedBosses],
+    });
+  }
+
+  // ==================== PLAYER DAMAGE TAKEN & DEFEAT ====================
+  private handlePlayerHit(rawBossAttack: number, label: string, pullDir?: number): void {
+    const now = this.time.now;
+    if (this.playerDefeated || this.transitioning || now < this.invulnerableUntil || !this.bossCtrl.alive) {
+      return;
+    }
+
+    const bridge = computeVillageToDungeonBridge(this.player.state, Date.now(), this.consecutiveMeleeHits);
+    const effectiveDefense =
+      now < this.defenseCrackedUntil
+        ? Math.max(0, Math.round(this.player.state.defense * 0.75))
+        : this.player.state.defense;
+
+    const dmg = calculateDamageTaken({
+      bossAttack: rawBossAttack,
+      currentDefense: effectiveDefense,
+      rawDR: bridge.rawDRBonus,
+      difficulty: this.difficulty,
+    });
+
+    this.invulnerableUntil = now + 950;
+    this.damageTakenThisFight += dmg;
+    this.consecutiveMeleeHits = 0;
+
+    // Calamity rules: taking a hit resets Focus to 0, charges Fury, and cracks Defense for 3s!
+    if (this.difficulty === 'calamity') {
+      this.focusPct = 0;
+      this.focusActiveUntil = 0;
+      this.furyPct = Math.min(100, this.furyPct + 26);
+      this.defenseCrackedUntil = now + 3000;
+    }
+
+    this.player.state.hp = Math.max(0, this.player.state.hp - dmg);
+    this.player.paperDoll.flashWhite(150);
+    this.cameras.main.shake(120, 0.006);
+
+    if (pullDir) {
+      this.player.body.setVelocityX(pullDir * 310);
+      this.player.body.setVelocityY(-180);
+    } else {
+      const knock = this.player.x < this.bossCtrl.x ? -1 : 1;
+      this.player.body.setVelocityX(knock * 220);
+      this.player.body.setVelocityY(-190);
+    }
+
+    this.spawnFloatingText(this.player.x, this.player.y - 38, `-${dmg} (${label})`, '#f87171', '15px');
+
+    // Vitality -> Cheat Death talent (once per boss fight survive lethal hit at 15% HP!)
+    if (
+      this.player.state.hp <= 0 &&
+      !this.cheatDeathUsed &&
+      hasTalent(this.player.state.skills, 'vitality', 'vit_cheat_death')
+    ) {
+      this.cheatDeathUsed = true;
+      this.player.state.hp = Math.max(15, Math.round(bridge.effectiveMaxHp * 0.15));
+      this.invulnerableUntil = now + 1800;
+      this.spawnFloatingText(this.player.x, this.player.y - 62, 'CHEAT DEATH SAVED YOU!', '#fde047', '17px');
+      EventBus.emit('ui:toast', { text: '❤️ Vitality Cheat Death triggered — survived at 15% HP!' });
+    }
+
+    this.emitPlayerState();
+    this.broadcastBossHud();
+
+    if (this.player.state.hp <= 0) {
+      this.playerDefeated = true;
+      this.player.body.setVelocity(0, 0);
+      this.bossCtrl.clearHazards();
+      EventBus.emit('dungeon:outcome', {
+        outcome: 'defeat',
+        bossId: this.bossId,
+        bossName: `${this.bossCtrl.def.khmerName} (${this.bossCtrl.def.englishName})`,
+        difficulty: this.difficulty,
+        noHit: false,
+        easterEggUnlocked: false,
+        coins: 0,
+        gold: 0,
+        lootLabels: [],
+      });
+    }
+  }
+
+  // ==================== PLAYER CONTROLS & 5-CLASS COMBAT ====================
   private performJump(): void {
-    if (this.transitioning) return;
+    if (this.transitioning || this.playerDefeated) return;
     const bridge = computeVillageToDungeonBridge(this.player.state, Date.now(), this.consecutiveMeleeHits);
     const jumpMult = 1 + bridge.jumpPowerBonusPct;
     const onGround = this.player.body.blocked.down || this.player.body.touching.down;
@@ -426,28 +784,23 @@ export class DungeonBossScene extends Phaser.Scene {
     }
   }
 
-  /**
-   * 5-Class Distinct Dash Abilities
-   */
   private performClassDash(): void {
     const now = this.time.now;
-    if (now < this.dashCooldownUntil || this.transitioning) return;
+    if (now < this.dashCooldownUntil || this.transitioning || this.playerDefeated) return;
 
     const bridge = computeVillageToDungeonBridge(this.player.state, Date.now(), this.consecutiveMeleeHits);
     const cls = this.player.state.activeClass;
     const dir = this.player.facingRight ? 1 : -1;
     this.dashCooldownUntil = now + Math.round(920 * bridge.dashCooldownMult);
     this.dashActiveUntil = now + 200;
-    this.invulnerableUntil = now + 380;
+    this.invulnerableUntil = Math.max(this.invulnerableUntil, now + 420);
 
     if (cls === 'archer') {
-      // Divine Archer: Acrobatic backflip firing 1 quick arrow mid-air!
       this.player.body.setVelocityX(-dir * 420);
       this.player.body.setVelocityY(-280);
       this.projectiles.push(this.vfx.spawnArcherArrow(this.player.x, this.player.y - 8, dir, 1.15));
       this.spawnFloatingText(this.player.x, this.player.y - 36, 'Backflip Shot!', '#4ade80', '14px');
     } else if (cls === 'mystic') {
-      // Achar Mystic: Blink-teleport dissolving into golden lotus petals
       const fromX = this.player.x;
       const fromY = this.player.y;
       const toX = Phaser.Math.Clamp(fromX + dir * 165, 60, ARENA_W - 60);
@@ -455,7 +808,6 @@ export class DungeonBossScene extends Phaser.Scene {
       this.vfx.playMysticLotusBlink(fromX, fromY, toX, fromY - 6);
       this.spawnFloatingText(toX, fromY - 36, 'Lotus Blink!', '#facc15', '14px');
     } else if (cls === 'shadow') {
-      // Shadow Hunter: Smoke-puff vanish leaving 0.4s shadow afterimage decoy
       this.vfx.playShadowDecoyDash(this.player.x, this.player.y);
       this.player.body.setVelocityX(dir * 690);
       this.player.body.setVelocityY(-40);
@@ -463,13 +815,11 @@ export class DungeonBossScene extends Phaser.Scene {
       this.spawnFloatingText(this.player.x, this.player.y - 36, 'Smoke Vanish!', '#c084fc', '14px');
       this.broadcastClassMeter();
     } else if (cls === 'tamer') {
-      // Barami Spirit Tamer: Spirit silhouette phase dash
       this.player.body.setVelocityX(dir * 610);
       this.player.body.setVelocityY(-45);
       this.player.paperDoll.setAlpha(0.5);
       this.spawnFloatingText(this.player.x, this.player.y - 36, 'Spirit Phase!', '#34d399', '14px');
     } else {
-      // Lbokator Warrior: Forward shoulder-roll leaving golden dust sparks
       this.player.body.setVelocityX(dir * 640);
       this.player.body.setVelocityY(-45);
       this.vfx.playLbokatorDashDust(this.player.x, this.player.y);
@@ -478,17 +828,15 @@ export class DungeonBossScene extends Phaser.Scene {
     }
   }
 
-  /**
-   * 5-Class Distinct Combat Attacks
-   */
   private performClassAttack(): void {
     const now = this.time.now;
-    if (now < this.attackCooldownUntil || this.transitioning) return;
+    if (now < this.attackCooldownUntil || this.transitioning || this.playerDefeated) return;
 
     const weapon = this.player.state.weapon;
     const cls = this.player.state.activeClass;
     const bridge = computeVillageToDungeonBridge(this.player.state, Date.now(), this.consecutiveMeleeHits);
-    const cooldownMs = Math.round(weapon.attackCooldownMs / Math.max(0.5, bridge.castSpeedMult));
+    const furySpeedMult = now < this.furyActiveUntil ? 1.4 : 1;
+    const cooldownMs = Math.round(weapon.attackCooldownMs / Math.max(0.5, bridge.castSpeedMult * furySpeedMult));
     this.attackCooldownUntil = now + cooldownMs;
     this.attackAnimUntil = now + 185;
     this.lastAttackAt = now;
@@ -508,18 +856,15 @@ export class DungeonBossScene extends Phaser.Scene {
     if (cls === 'tamer') {
       this.vfx.playKramaWhipSnap(this.player.x, this.player.y, dir);
       const whipBox = new Phaser.Geom.Rectangle(this.player.x + (dir > 0 ? 0 : -118), this.player.y - 44, 118, 88);
-      if (this.bossAlive && Phaser.Geom.Intersects.RectangleToRectangle(whipBox, this.boss.getBounds())) {
-        this.damageYeakThmor(dir, { bonusMult: 1, tag: 'Krama Mark!' });
-      }
-      // Command Pet companion to strike Yeak Thmor immediately
-      if (this.bossAlive) {
+      this.checkMeleeBoxHits(whipBox, dir, { bonusMult: 1, tag: 'Krama Mark!' });
+      if (this.bossCtrl.alive) {
         this.player.pet.trySpiritAutoAttack(
           now,
-          this.boss.x,
-          this.boss.y - 90,
+          this.bossCtrl.x,
+          this.bossCtrl.y - 90,
           () => {
-            if (this.bossAlive) {
-              this.damageYeakThmor(dir, {
+            if (this.bossCtrl.alive) {
+              this.damageBoss(dir, {
                 bonusMult: 0.72 * (1 + bridge.petDamageBonusPct),
                 tag: 'Spirit Bolt',
               });
@@ -540,42 +885,89 @@ export class DungeonBossScene extends Phaser.Scene {
 
       this.vfx.playShadowTwinSlash(this.player.x, this.player.y, dir, isShadowStrike);
       const slashBox = new Phaser.Geom.Rectangle(this.player.x + dir * 46 - 52, this.player.y - 46, 104, 92);
-      if (this.bossAlive && Phaser.Geom.Intersects.RectangleToRectangle(slashBox, this.boss.getBounds())) {
-        this.damageYeakThmor(dir, {
-          bonusMult: isShadowStrike ? 1.55 : 1,
-          guaranteedCrit: isShadowStrike,
-          tag: isShadowStrike ? 'SHADOW STRIKE!' : undefined,
-        });
-      }
+      this.checkMeleeBoxHits(slashBox, dir, {
+        bonusMult: isShadowStrike ? 1.55 : 1,
+        guaranteedCrit: isShadowStrike,
+        tag: isShadowStrike ? 'SHADOW STRIKE!' : undefined,
+      });
       return;
     }
 
-    // Default: Lbokator Warrior 3-Hit Animal-Stance Combo (Lion -> Crocodile -> Hanuman)
+    // Lbokator Warrior 3-Hit Animal-Stance Combo (also used by Golden Frying Pan & Stone Club!)
     const stance = this.lbokatorStance;
     this.vfx.playLbokatorSlash(this.player.x, this.player.y, dir, stance);
     const swingBox = new Phaser.Geom.Rectangle(this.player.x + dir * 50 - 54, this.player.y - 48, 108, 96);
-    if (this.bossAlive && Phaser.Geom.Intersects.RectangleToRectangle(swingBox, this.boss.getBounds())) {
-      const stanceLabel = stance === 3 ? 'HANUMAN SLAM!' : stance === 2 ? 'CROCODILE PIERCE' : undefined;
-      this.damageYeakThmor(dir, {
-        bonusMult: stance === 3 ? 1.35 : 1,
-        extraArmorPen: stance === 2 ? 6 : 0,
-        tag: stanceLabel,
-      });
-    }
+    const isGoldenPan = weapon.id === 'weapon_golden_pan';
+    const stanceLabel = isGoldenPan
+      ? 'BONK!'
+      : stance === 3
+      ? 'HANUMAN SLAM!'
+      : stance === 2
+      ? 'CROCODILE PIERCE'
+      : undefined;
+    this.checkMeleeBoxHits(swingBox, dir, {
+      bonusMult: stance === 3 ? 1.35 : 1,
+      extraArmorPen: stance === 2 ? 6 : 0,
+      tag: stanceLabel,
+    });
     this.lbokatorStance = stance >= 3 ? 1 : stance + 1;
     this.broadcastClassMeter();
   }
 
-  private damageYeakThmor(
+  private checkMeleeBoxHits(
+    box: Phaser.Geom.Rectangle,
+    dir: number,
+    opts: { bonusMult?: number; guaranteedCrit?: boolean; extraArmorPen?: number; tag?: string }
+  ): void {
+    // 1. Check Cracked Secret Wall
+    if (!this.secretWall.broken) {
+      const wallBounds = this.secretWall.wallRect.getBounds();
+      if (Phaser.Geom.Intersects.RectangleToRectangle(box, wallBounds)) {
+        this.damageSecretWall();
+      }
+    }
+
+    // 2. Check Killable Boss Mini-Mobs (King Frog Tadpoles)
+    for (const h of this.bossCtrl.hazards) {
+      if (h.kind === 'tadpole' && h.alive) {
+        const hBox = new Phaser.Geom.Rectangle(h.x - 18, h.y - 18, 36, 36);
+        if (Phaser.Geom.Intersects.RectangleToRectangle(box, hBox)) {
+          this.damageTadpole(h, 65);
+        }
+      }
+    }
+
+    // 3. Check Boss
+    if (this.bossCtrl.alive && Phaser.Geom.Intersects.RectangleToRectangle(box, this.bossCtrl.getBounds())) {
+      this.damageBoss(dir, opts);
+    }
+  }
+
+  private damageTadpole(h: (typeof this.bossCtrl.hazards)[number], dmg: number): void {
+    h.hp = (h.hp ?? 100) - dmg;
+    this.spawnFloatingText(h.x, h.y - 16, `${dmg}`, '#86efac', '13px');
+    if (h.hp <= 0) {
+      h.alive = false;
+      h.sprite.destroy();
+      this.furyPct = Math.min(100, this.furyPct + 12);
+      this.spawnFloatingText(h.x, h.y - 26, 'Tadpole KO!', '#fde047', '14px');
+    }
+  }
+
+  private damageBoss(
     knockDir: number,
     opts: { bonusMult?: number; guaranteedCrit?: boolean; extraArmorPen?: number; tag?: string } = {}
   ): void {
+    if (!this.bossCtrl.alive) return;
     if (this.player.state.activeClass === 'lbokator') {
       this.consecutiveMeleeHits = Math.min(10, this.consecutiveMeleeHits + 1);
     }
 
+    const now = this.time.now;
     const { weapon, armorDamagePct } = this.player.state;
     const bridge = computeVillageToDungeonBridge(this.player.state, Date.now(), this.consecutiveMeleeHits);
+    const focusActive = now < this.focusActiveUntil;
+    const furyActive = now < this.furyActiveUntil;
 
     const hit = calculatePlayerDamage({
       weaponBase: weapon.baseDamage * (opts.bonusMult ?? 1),
@@ -584,84 +976,72 @@ export class DungeonBossScene extends Phaser.Scene {
       skillPct: bridge.classSkillDamagePct,
       armorPct: armorDamagePct,
       snackBuffPct: bridge.snackAttackPct,
-      enemyDefense: 8,
+      enemyDefense: this.bossCtrl.def.defense,
       armorPen: weapon.armorPen + (opts.extraArmorPen ?? 0),
-      bossDR: 0.05,
-      critChance: bridge.effectiveCritChance,
+      bossDR: this.bossCtrl.def.bossDR,
+      critChance: Math.min(0.95, bridge.effectiveCritChance + (furyActive ? 0.25 : 0)),
       critMultiplier: bridge.critMultiplier,
       isCritOverride: opts.guaranteedCrit ? true : undefined,
+      focusActive,
     });
 
     let totalDamage = hit.finalDamage;
 
-    // Cross-world Farming -> Dungeon Synergy: Botanical Venom poison proc!
+    // Cross-world Farming -> Botanical Venom poison proc
     if (bridge.botanicalVenomChance > 0 && Math.random() < bridge.botanicalVenomChance) {
-      const venomDmg = Math.max(4, Math.round(hit.finalDamage * bridge.botanicalVenomPowerPct));
+      const venomDmg = Math.max(5, Math.round(hit.finalDamage * bridge.botanicalVenomPowerPct));
       totalDamage += venomDmg;
       this.spawnFloatingText(
-        this.boss.x + (Math.random() - 0.5) * 44,
-        this.boss.y - 168,
+        this.bossCtrl.x + (Math.random() - 0.5) * 44,
+        this.bossCtrl.y - 168,
         `☠ VENOM +${venomDmg}`,
         '#4ade80',
         '14px'
       );
     }
 
-    // Melee Synergy: Seething Blade lifesteal
+    // Melee Seething Blade lifesteal
     if (bridge.seethingLifestealChance > 0 && Math.random() < bridge.seethingLifestealChance) {
       const heal = Math.max(3, Math.round(bridge.effectiveMaxHp * 0.03));
       this.player.state.hp = Math.min(bridge.effectiveMaxHp, this.player.state.hp + heal);
       this.spawnFloatingText(this.player.x, this.player.y - 44, `+${heal} HP`, '#34d399', '13px');
     }
 
-    // Award live combat XP to equipped Khmer class skill (melee/ranged/magic/summoning/rogue)
+    // Live Combat Class Skill XP
     const combatSkillId = CLASS_TO_COMBAT_SKILL[this.player.state.activeClass];
-    const hitSkillXp = hit.isCrit ? 14 : 9;
-    const skillRes = awardSkillXp(this.player.state, combatSkillId, hitSkillXp, true);
+    const skillRes = awardSkillXp(this.player.state, combatSkillId, hit.isCrit ? 14 : 9, true);
     this.player.state = skillRes.state;
-    if (skillRes.leveledUp) {
-      this.spawnFloatingText(
-        this.player.x,
-        this.player.y - 62,
-        `${combatSkillId.toUpperCase()} Lv.${skillRes.newLevel}!`,
-        '#fde047',
-        '15px'
-      );
-      if (this.cache.audio.exists('sfx_levelup')) {
-        this.sound.play('sfx_levelup', { volume: 0.28 });
-      }
+    if (skillRes.leveledUp && this.cache.audio.exists('sfx_levelup')) {
+      this.sound.play('sfx_levelup', { volume: 0.28 });
     }
 
-    this.bossHp = Math.max(0, this.bossHp - totalDamage);
-
-    this.boss.setTintFill(0xffffff);
-    this.tweens.add({
-      targets: this.boss,
-      x: BOSS_SPAWN_X + knockDir * 10,
-      duration: 60,
-      yoyo: true,
-      ease: 'Quad.easeOut',
-    });
-    this.time.delayedCall(95, () => {
-      if (this.bossAlive) this.boss.clearTint();
-    });
-
-    const label = opts.tag
+    const isGoldenPan = weapon.id === 'weapon_golden_pan';
+    const label = isGoldenPan
+      ? `BONK! ${hit.finalDamage}${hit.isCrit ? '!' : ''}`
+      : opts.tag
       ? `${opts.tag} ${hit.finalDamage}${hit.isCrit ? '!' : ''}`
       : hit.isCrit
       ? `${hit.finalDamage}! CRIT`
       : `${hit.finalDamage}`;
 
     this.spawnFloatingText(
-      this.boss.x + (Math.random() - 0.5) * 62,
-      this.boss.y - 140,
+      this.bossCtrl.x + (Math.random() - 0.5) * 62,
+      this.bossCtrl.y - 140,
       label,
-      opts.guaranteedCrit ? '#e879f9' : hit.isCrit ? '#facc15' : '#ffffff',
-      hit.isCrit || opts.tag ? '22px' : '16px'
+      isGoldenPan
+        ? '#fde047'
+        : focusActive
+        ? '#22d3ee'
+        : opts.guaranteedCrit
+        ? '#e879f9'
+        : hit.isCrit
+        ? '#facc15'
+        : '#ffffff',
+      isGoldenPan || hit.isCrit || opts.tag ? '22px' : '16px'
     );
 
-    if (hit.isCrit) {
-      this.cameras.main.shake(105, 0.006);
+    if (hit.isCrit || focusActive) {
+      this.cameras.main.shake(95, 0.0055);
       this.physics.world.pause();
       window.setTimeout(() => {
         if (this.scene.isActive('DungeonBossScene')) {
@@ -670,90 +1050,196 @@ export class DungeonBossScene extends Phaser.Scene {
       }, 40);
     }
 
-    EventBus.emit('player:state', {
-      ...this.player.state,
-      weapon: { ...this.player.state.weapon },
-      loadout: { ...this.player.state.loadout },
-      currencies: { ...this.player.state.currencies },
-      lifeStats: { ...this.player.state.lifeStats },
-      activeBuffs: [...this.player.state.activeBuffs],
-      quickSnackSlots: [...this.player.state.quickSnackSlots],
-    });
-    EventBus.emit('combat:hit', { hit, dummyHp: this.bossHp, dummyMaxHp: BOSS_MAX_HP });
-
-    if (this.bossHp <= 0) {
-      this.defeatAndRespawnBoss();
-    }
+    this.bossCtrl.takeDamage(totalDamage, knockDir, hit.isCrit || focusActive);
+    this.emitPlayerState();
+    this.broadcastBossHud();
+    EventBus.emit('combat:hit', { hit, dummyHp: this.bossCtrl.hp, dummyMaxHp: this.bossCtrl.maxHp });
   }
 
   private addMysticYantStack(dir: number): void {
-    if (!this.bossAlive) return;
-    const sigil = this.vfx.createFloatingYantSigil(this.boss.x, this.boss.y, this.yantSigils.length);
+    if (!this.bossCtrl.alive) return;
+    const sigil = this.vfx.createFloatingYantSigil(this.bossCtrl.x, this.bossCtrl.y, this.yantSigils.length);
     this.yantSigils.push(sigil);
 
     if (this.yantSigils.length >= 3) {
       this.clearYantSigils();
-      this.vfx.playYantDetonationBeam(this.boss.x, FLOOR_Y);
-      this.damageYeakThmor(dir, { bonusMult: 2.2, guaranteedCrit: true, tag: 'YANT DETONATION!' });
+      this.vfx.playYantDetonationBeam(this.bossCtrl.x, FLOOR_Y);
+      this.damageBoss(dir, { bonusMult: 2.2, guaranteedCrit: true, tag: 'YANT DETONATION!' });
     }
     this.broadcastClassMeter();
   }
 
-  private defeatAndRespawnBoss(): void {
-    this.bossAlive = false;
+  // ==================== BOSS DEFEAT, TREASURE BAG & NO-HIT EASTER EGG ====================
+  private handleBossDefeated(): void {
     this.clearYantSigils();
-    this.bossBreatheTween?.pause();
-    this.boss.setVisible(false);
-    this.bossShadow.setVisible(false);
-    this.bossBarBg.setVisible(false);
-    this.bossBarFill.setVisible(false);
-    this.bossLabel.setText('Yeak Thmor Vanquished! Respawning in 3s...').setColor('#fbbf24');
+    const def = this.bossCtrl.def;
+    const isFirstClear = !this.player.state.clearedBosses.includes(def.id);
+    const noHitKill = this.damageTakenThisFight === 0;
+    const rolled = rollBossLoot(def.id, this.difficulty, isFirstClear, noHitKill);
 
-    this.player.state.coins += 75;
-    this.player.state.currencies.coins = this.player.state.coins;
-    this.player.state.xp += 60;
+    if (isFirstClear) {
+      this.player.state.clearedBosses = [...this.player.state.clearedBosses, def.id];
+    }
 
-    // Award Vitality XP on defeating enemy / boss!
-    const vitRes = awardSkillXp(this.player.state, 'vitality', 45, true);
+    // Immediate Vitality & Character XP
+    this.player.state.xp += def.charXp;
+    const vitRes = awardSkillXp(this.player.state, 'vitality', def.vitalityXp, true);
     this.player.state = vitRes.state;
-
-    let leveledUp = vitRes.leveledUp;
     while (this.player.state.xp >= getXpForNextLevel(this.player.state.level)) {
       this.player.state.xp -= getXpForNextLevel(this.player.state.level);
       this.player.state.level += 1;
       this.player.state.maxHp += 15;
-      const nextBridge = computeVillageToDungeonBridge(this.player.state);
-      this.player.state.hp = nextBridge.effectiveMaxHp;
-      leveledUp = true;
-      this.spawnFloatingText(this.player.x, this.player.y - 54, `LEVEL UP! Lv.${this.player.state.level}`, '#fde047', '18px');
+      const nb = computeVillageToDungeonBridge(this.player.state);
+      this.player.state.hp = nb.effectiveMaxHp;
     }
-    if (leveledUp && this.cache.audio.exists('sfx_levelup')) {
-      this.sound.play('sfx_levelup', { volume: 0.35 });
+    if (this.cache.audio.exists('sfx_levelup')) {
+      this.sound.play('sfx_levelup', { volume: 0.38 });
     }
-    EventBus.emit('player:state', {
-      ...this.player.state,
-      weapon: { ...this.player.state.weapon },
-      loadout: { ...this.player.state.loadout },
-      currencies: { ...this.player.state.currencies },
-      lifeStats: { ...this.player.state.lifeStats },
-      activeBuffs: [...this.player.state.activeBuffs],
-      quickSnackSlots: [...this.player.state.quickSnackSlots],
-    });
-    this.spawnFloatingText(BOSS_SPAWN_X, BOSS_SPAWN_Y - 54, '+75 Coins · +60 XP · +45 Vitality XP', '#4ade80', '15px');
+    this.emitPlayerState();
+    this.broadcastBossHud();
 
-    this.time.delayedCall(3000, () => {
-      if (!this.scene.isActive('DungeonBossScene')) return;
-      this.bossHp = BOSS_MAX_HP;
-      this.bossAlive = true;
-      this.boss.setPosition(BOSS_SPAWN_X, FLOOR_Y);
-      this.boss.clearTint();
-      this.boss.setVisible(true);
-      this.bossShadow.setVisible(true);
-      this.bossBarBg.setVisible(true);
-      this.bossBarFill.setVisible(true);
-      this.bossBreatheTween?.resume();
-      this.bossLabel.setText('យក្សថ្ម · Yeak Thmor (Stone Yaksha)').setColor('#fde047');
-      this.spawnFloatingText(BOSS_SPAWN_X, BOSS_SPAWN_Y - 70, 'Yeak Thmor Awakens!', '#fde047', '15px');
+    // Spawn Clickable / Walk-Over Boss Treasure Bag or Loot Chest
+    const bagX = Phaser.Math.Clamp(this.bossCtrl.x, 380, ARENA_W - 220);
+    const bagY = FLOOR_Y - 26;
+    const glow = this.add
+      .circle(bagX, bagY, 34, rolled.easterEggUnlocked ? 0xfacc15 : 0xa855f7, 0.32)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(44);
+    const bagSprite = this.add
+      .image(bagX, bagY, rolled.isTreasureBag ? 'boss_treasure_bag' : 'lf_chest')
+      .setScale(rolled.isTreasureBag ? 1.55 : 1.75)
+      .setDepth(45)
+      .setInteractive({ useHandCursor: true });
+    bagSprite.on('pointerdown', () => this.claimBossLootBag());
+
+    this.tweens.add({
+      targets: [bagSprite, glow],
+      y: bagY - 10,
+      duration: 620,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    const bagLabel = this.add
+      .text(
+        bagX,
+        bagY - 40,
+        rolled.isTreasureBag ? '★ BOSS TREASURE BAG (Walk / Click)' : 'BOSS LOOT CHEST (Walk / Click)',
+        {
+          fontFamily: 'Fredoka, sans-serif',
+          fontSize: '13px',
+          fontStyle: 'bold',
+          color: '#fde047',
+          backgroundColor: 'rgba(15, 23, 42, 0.9)',
+          padding: { x: 8, y: 3 },
+        }
+      )
+      .setOrigin(0.5)
+      .setDepth(48);
+
+    this.lootBag = {
+      x: bagX,
+      y: bagY,
+      sprite: bagSprite,
+      glow,
+      label: bagLabel,
+      rolled,
+      claimed: false,
+    };
+
+    if (rolled.easterEggUnlocked) {
+      EventBus.emit('ui:toast', {
+        text: '🏆 EASTER EGG UNLOCKED! No-Hit King Frog → The Golden Frying Pan is inside the Boss Loot!',
+      });
+    } else {
+      EventBus.emit('ui:toast', {
+        text: `🎉 ${def.khmerName} VANQUISHED! Walk over or click the ${rolled.isTreasureBag ? 'Boss Treasure Bag' : 'Loot Chest'}!`,
+      });
+    }
+  }
+
+  private addItemToInventory(
+    inv: InventoryItem[],
+    itemId: string,
+    qty: number,
+    isEquipment?: boolean
+  ): { nextInv: InventoryItem[]; duplicateBonusCoins: number } {
+    const next = inv.map((i) => ({ ...i }));
+    const existing = next.find((i) => i.itemId === itemId);
+    if (isEquipment && existing) {
+      return { nextInv: next, duplicateBonusCoins: 180 };
+    }
+    if (existing) {
+      existing.quantity += qty;
+    } else {
+      next.push({ itemId, quantity: qty, itemLevel: 1, quality: 'normal' });
+    }
+    return { nextInv: next, duplicateBonusCoins: 0 };
+  }
+
+  private claimBossLootBag(): void {
+    if (!this.lootBag || this.lootBag.claimed) return;
+    this.lootBag.claimed = true;
+    const { rolled, x, y } = this.lootBag;
+    this.lootBag.sprite.destroy();
+    this.lootBag.glow.destroy();
+    this.lootBag.label.destroy();
+
+    let extraDupCoins = 0;
+    let nextInv = this.player.state.inventory;
+    const lootLabels: string[] = [];
+
+    for (const item of rolled.items) {
+      const res = this.addItemToInventory(nextInv, item.itemId, item.quantity, item.isEquipment);
+      nextInv = res.nextInv;
+      extraDupCoins += res.duplicateBonusCoins;
+      lootLabels.push(
+        res.duplicateBonusCoins > 0
+          ? `${item.label} (Owned → +${res.duplicateBonusCoins}c)`
+          : `${item.quantity > 1 ? `${item.quantity}× ` : ''}${item.label}`
+      );
+    }
+
+    const totalCoins = rolled.coins + extraDupCoins;
+    this.player.state.inventory = nextInv;
+    this.player.state.coins += totalCoins;
+    this.player.state.currencies.coins = this.player.state.coins;
+    this.player.state.currencies.gold += rolled.gold;
+    this.emitPlayerState();
+
+    this.spawnFloatingText(
+      x,
+      y - 34,
+      `+${totalCoins} Coins${rolled.gold > 0 ? ` · +${rolled.gold} Gold` : ''}`,
+      '#fde047',
+      '18px'
+    );
+
+    EventBus.emit('dungeon:outcome', {
+      outcome: 'victory',
+      bossId: this.bossId,
+      bossName: `${this.bossCtrl.def.khmerName} (${this.bossCtrl.def.englishName})`,
+      difficulty: this.difficulty,
+      noHit: this.damageTakenThisFight === 0,
+      easterEggUnlocked: rolled.easterEggUnlocked,
+      coins: totalCoins,
+      gold: rolled.gold,
+      lootLabels,
+    });
+  }
+
+  private restartCurrentBoss(): void {
+    if (this.transitioning) return;
+    this.transitioning = true;
+    const bridge = computeVillageToDungeonBridge(this.player.state);
+    this.scene.restart({
+      bossId: this.bossId,
+      difficulty: this.difficulty,
+      playerState: {
+        ...this.player.state,
+        hp: bridge.effectiveMaxHp,
+      },
     });
   }
 
@@ -786,16 +1272,26 @@ export class DungeonBossScene extends Phaser.Scene {
   private returnToOverworld(): void {
     if (this.transitioning) return;
     this.transitioning = true;
+    EventBus.emit('dungeon:outcome', null);
+
+    // Restore HP cleanly on defeat or safe return
+    const bridge = computeVillageToDungeonBridge(this.player.state);
+    const restoredHp = this.playerDefeated ? bridge.effectiveMaxHp : Math.max(1, this.player.state.hp);
+
     this.cameras.main.fadeOut(220, 8, 12, 20);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
       this.scene.start('OverworldScene', {
         playerState: {
           ...this.player.state,
           zone: 'overworld',
+          hp: restoredHp,
           weapon: { ...this.player.state.weapon },
           loadout: { ...this.player.state.loadout },
           currencies: { ...this.player.state.currencies },
           lifeStats: { ...this.player.state.lifeStats },
+          activeBuffs: [...this.player.state.activeBuffs],
+          quickSnackSlots: [...this.player.state.quickSnackSlots],
+          clearedBosses: [...this.player.state.clearedBosses],
         },
       });
     });
@@ -810,7 +1306,18 @@ export class DungeonBossScene extends Phaser.Scene {
 
     const bridge = computeVillageToDungeonBridge(this.player.state, Date.now(), this.consecutiveMeleeHits);
 
-    // Shadow Hunter passive Stealth Meter recharge (turns 45% purple mist at 100%)
+    // Calamity Focus (fills when taking 0 damage) & Fury (fills when fighting close to boss)
+    if (this.difficulty === 'calamity' && this.bossCtrl.alive && !this.playerDefeated) {
+      if (time >= this.focusActiveUntil && this.focusPct < 100) {
+        this.focusPct = Math.min(100, this.focusPct + dt * 5.8);
+      }
+      const distToBoss = Phaser.Math.Distance.Between(this.player.x, this.player.y, this.bossCtrl.x, this.bossCtrl.y);
+      if (time >= this.furyActiveUntil && distToBoss < 320 && this.furyPct < 100) {
+        this.furyPct = Math.min(100, this.furyPct + dt * 5.2);
+      }
+    }
+
+    // Shadow Hunter Stealth recharge
     const isShadow = this.player.state.activeClass === 'shadow';
     if (isShadow && time - this.lastAttackAt > 450 && this.stealthPct < 100) {
       this.stealthPct = Math.min(100, this.stealthPct + dt * 32 * (1 + bridge.stealthRateBonusPct));
@@ -828,15 +1335,15 @@ export class DungeonBossScene extends Phaser.Scene {
       this.player.paperDoll.setAlpha(1);
     }
 
-    // Barami Spirit Tamer passive companion auto-attack in Dungeon
-    if (this.player.state.activeClass === 'tamer' && this.bossAlive) {
+    // Barami Spirit Tamer passive companion auto-attack
+    if (this.player.state.activeClass === 'tamer' && this.bossCtrl.alive && !this.playerDefeated) {
       this.player.pet.trySpiritAutoAttack(
         time,
-        this.boss.x,
-        this.boss.y - 90,
+        this.bossCtrl.x,
+        this.bossCtrl.y - 90,
         () => {
-          if (this.bossAlive) {
-            this.damageYeakThmor(this.player.facingRight ? 1 : -1, {
+          if (this.bossCtrl.alive) {
+            this.damageBoss(this.player.facingRight ? 1 : -1, {
               bonusMult: 0.6 * (1 + bridge.petDamageBonusPct),
               tag: 'Pet Spirit',
             });
@@ -847,7 +1354,7 @@ export class DungeonBossScene extends Phaser.Scene {
       );
     }
 
-    if (time > this.dashActiveUntil && !this.transitioning) {
+    if (!this.playerDefeated && time > this.dashActiveUntil && !this.transitioning) {
       let moveX = this.joystick.x;
       if (!typing) {
         if (this.cursors.left.isDown || this.keys.A.isDown) moveX -= 1;
@@ -865,6 +1372,12 @@ export class DungeonBossScene extends Phaser.Scene {
         }
         if (Phaser.Input.Keyboard.JustDown(this.keys.J)) {
           this.performClassAttack();
+        }
+        if (Phaser.Input.Keyboard.JustDown(this.keys.F)) {
+          this.activateFocusBurst();
+        }
+        if (Phaser.Input.Keyboard.JustDown(this.keys.R)) {
+          this.activateFuryBurst();
         }
         if (Phaser.Input.Keyboard.JustDown(this.keys.E) && this.isNearExitPortal()) {
           this.returnToOverworld();
@@ -892,46 +1405,88 @@ export class DungeonBossScene extends Phaser.Scene {
 
     this.player.syncVisuals(time, onGround);
 
-    // Update Archer Arrows & Mystic Orbs
+    // Update Multi-Phase Boss AI & Hazards
+    const playerBounds = new Phaser.Geom.Rectangle(this.player.x - 16, this.player.y - 26, 32, 48);
+    if (!this.playerDefeated) {
+      this.bossCtrl.update(time, delta, this.player.x, this.player.y, playerBounds);
+    }
+
+    // Walk-over auto-pickup for Secret Relic Chest & Boss Treasure Bag
+    if (
+      this.secretWall.broken &&
+      !this.secretWall.chestClaimed &&
+      Phaser.Math.Distance.Between(this.player.x, this.player.y, this.secretWall.x, this.secretWall.y) < 52
+    ) {
+      this.claimSecretRelicChest();
+    }
+    if (
+      this.lootBag &&
+      !this.lootBag.claimed &&
+      Phaser.Math.Distance.Between(this.player.x, this.player.y, this.lootBag.x, this.lootBag.y) < 56
+    ) {
+      this.claimBossLootBag();
+    }
+
+    // Update Projectiles (Divine Archer Arrows & Achar Mystic Orbs)
+    const bossBounds = this.bossCtrl.getBounds();
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const p = this.projectiles[i];
       p.node.x += p.vx * dt;
       p.node.y += p.vy * dt;
 
-      let consumed = time > p.expiresAt || p.node.x < 20 || p.node.x > ARENA_W - 20;
-      if (!consumed && this.bossAlive) {
-        const bounds = this.boss.getBounds();
-        if (Phaser.Geom.Rectangle.Contains(bounds, p.node.x, p.node.y)) {
-          consumed = true;
-          this.vfx.playImpactSparks(p.node.x, p.node.y, p.colorHex);
-          const dir = p.vx >= 0 ? 1 : -1;
-          this.damageYeakThmor(dir, { bonusMult: p.damageScale });
-          if (p.kind === 'mystic_orb') {
-            this.addMysticYantStack(dir);
+      let hitSomething = false;
+      const pBox = new Phaser.Geom.Rectangle(p.node.x - 14, p.node.y - 14, 28, 28);
+
+      // Secret Wall hit check
+      if (!this.secretWall.broken && Phaser.Geom.Intersects.RectangleToRectangle(pBox, this.secretWall.wallRect.getBounds())) {
+        this.damageSecretWall();
+        hitSomething = true;
+      }
+
+      // Tadpole hit check
+      if (!hitSomething) {
+        for (const h of this.bossCtrl.hazards) {
+          if (h.kind === 'tadpole' && h.alive) {
+            const hBox = new Phaser.Geom.Rectangle(h.x - 18, h.y - 18, 36, 36);
+            if (Phaser.Geom.Intersects.RectangleToRectangle(pBox, hBox)) {
+              this.damageTadpole(h, 65);
+              hitSomething = true;
+              break;
+            }
           }
         }
       }
-      if (consumed) {
+
+      // Boss hit check
+      if (!hitSomething && this.bossCtrl.alive && Phaser.Geom.Intersects.RectangleToRectangle(pBox, bossBounds)) {
+        const hitDir = p.vx >= 0 ? 1 : -1;
+        this.vfx.playImpactSparks(p.node.x, p.node.y, p.colorHex);
+        if (p.kind === 'arrow') {
+          this.damageBoss(hitDir, { bonusMult: p.damageScale });
+        } else {
+          this.damageBoss(hitDir, { bonusMult: p.damageScale });
+          this.addMysticYantStack(hitDir);
+        }
+        hitSomething = true;
+      }
+
+      if (hitSomething || time >= p.expiresAt || p.node.x < 0 || p.node.x > ARENA_W) {
         p.node.destroy();
         this.projectiles.splice(i, 1);
       }
     }
 
+    // Floating cavern dust motes
     for (const m of this.dustMotes) {
       m.sprite.x += m.speedX * dt;
-      if (m.sprite.x > ARENA_W) m.sprite.x = 0;
-      m.sprite.y = m.baseY + Math.sin(time / 900 + m.phase) * 14;
+      m.sprite.y = m.baseY + Math.sin(time / 700 + m.phase) * 14;
+      if (m.sprite.x > ARENA_W + 10) m.sprite.x = -10;
     }
 
-    if (this.bossAlive) {
-      const ratio = Math.max(0, this.bossHp / BOSS_MAX_HP);
-      this.bossShadow.setPosition(this.boss.x, FLOOR_Y - 2);
-      this.bossBarBg.setPosition(this.boss.x, BOSS_SPAWN_Y - 104);
-      this.bossBarFill.setPosition(this.boss.x - 71, BOSS_SPAWN_Y - 104);
-      this.bossBarFill.width = 142 * ratio;
-      this.bossLabel.setPosition(this.boss.x, BOSS_SPAWN_Y - 118);
-    } else {
-      this.bossLabel.setPosition(BOSS_SPAWN_X, BOSS_SPAWN_Y - 118);
+    // Periodic Boss HUD & Calamity Gauge refresh
+    if (time - this.lastBossHudBroadcast > 140) {
+      this.lastBossHudBroadcast = time;
+      this.broadcastBossHud();
     }
 
     const nearExit = this.isNearExitPortal();
@@ -940,7 +1495,7 @@ export class DungeonBossScene extends Phaser.Scene {
       this.nearExitSent = nearExit;
       EventBus.emit('portal:proximity', {
         nearPortal: nearExit,
-        label: nearExit ? 'EXIT' : '',
+        label: nearExit ? 'EXIT TO VILLAGE' : '',
         targetZone: 'overworld',
       });
     }

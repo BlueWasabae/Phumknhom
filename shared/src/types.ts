@@ -2,6 +2,14 @@ export type ZoneType = 'overworld' | 'dungeon' | 'farm';
 
 export type DifficultyMode = 'normal' | 'expert' | 'calamity' | 'death';
 
+export type BossId = 'sdech_kongkaeb' | 'yeak_thmor';
+
+export type BossRigType =
+  | 'QuadrupedHopperRig'
+  | 'HumanoidRig'
+  | 'FloaterRig'
+  | 'MultiSegmentWormRig';
+
 export type EmoteSymbol = '👋' | '😄' | '❤️' | '🔥';
 
 export type KhmerClassId = 'lbokator' | 'archer' | 'mystic' | 'tamer' | 'shadow';
@@ -183,6 +191,7 @@ export interface PlayerState {
   skills: SkillProfile;
   activeBuffs: ActiveSnackBuff[];
   quickSnackSlots: [string | null, string | null, string | null];
+  clearedBosses: BossId[];
   skillDamagePct: number;
   armorDamagePct: number;
   snackBuffPct: number;
@@ -398,6 +407,7 @@ export const INITIAL_PLAYER_STATE: PlayerState = {
   skills: createInitialSkillProfile(),
   activeBuffs: [],
   quickSnackSlots: ['snack_num_pang', 'snack_kafe', 'snack_pepper_skewer'],
+  clearedBosses: [],
   skillDamagePct: 0.025,
   armorDamagePct: 0.04,
   snackBuffPct: 0,

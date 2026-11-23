@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   INITIAL_PLAYER_STATE,
+  type BossId,
   type ChatMessage,
   type CombatHitResult,
+  type DifficultyMode,
   type EquipSlot,
   type EquippedLoadout,
   type PlayerState,
@@ -42,7 +44,9 @@ import { respecAllSkills, unlockSkillTalent } from './game/systems/SkillManager'
 import { launchPhaserGame } from './game/config';
 import {
   EventBus,
+  type BossHudPayload,
   type ClassMeterPayload,
+  type DungeonOutcomePayload,
   type FarmToolMode,
   type SkillXpToastPayload,
 } from './game/EventBus';
@@ -54,6 +58,7 @@ import { InventoryModal } from './ui/InventoryModal';
 import { FarmModal, type FarmModalTab } from './ui/FarmModal';
 import { ShopModal, type ShopMode } from './ui/ShopModal';
 import { SkillTreeModal } from './ui/SkillTreeModal';
+import { ModeSelectorModal } from './ui/ModeSelectorModal';
 
 type ActiveModalType =
   | null
@@ -62,7 +67,8 @@ type ActiveModalType =
   | 'farm'
   | 'snackShop'
   | 'fashionShop'
-  | 'skills';
+  | 'skills'
+  | 'modeSelector';
 
 interface FloatingXpBanner extends SkillXpToastPayload {
   uid: number;
@@ -92,6 +98,8 @@ export const App: React.FC = () => {
   const [selectedCropId, setSelectedCropId] = useState('trakuon');
   const [farmToolMode, setFarmToolMode] = useState<FarmToolMode>('smart');
   const [lastHit, setLastHit] = useState<CombatHitResult | null>(null);
+  const [bossHud, setBossHud] = useState<BossHudPayload | null>(null);
+  const [dungeonOutcome, setDungeonOutcome] = useState<DungeonOutcomePayload | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [xpBanners, setXpBanners] = useState<FloatingXpBanner[]>([]);
   const [classMeter, setClassMeter] = useState<ClassMeterPayload>({
@@ -104,7 +112,7 @@ export const App: React.FC = () => {
     {
       id: 'sys-welcome',
       sender: 'Phum Guide',
-      text: 'Phase 4 live! Visit the NUM PANG CART, FASHION SHOP, press [K] for 12-Skill Talents, or press [1/2/3] to eat Street Snacks!',
+      text: 'Phase 5 live! Walk to the ANGKOR DUNGEON PORTAL (top-right) to choose King Frog or Stone Yaksha in Normal, Expert, or Calamity mode!',
       timestamp: Date.now(),
     },
   ]);
@@ -258,6 +266,10 @@ export const App: React.FC = () => {
       EventBus.on('scene:ready', ({ zone: nextZone }) => {
         setZone(nextZone);
         setNearPortal(false);
+        if (nextZone !== 'dungeon') {
+          setBossHud(null);
+          setDungeonOutcome(null);
+        }
       }),
       EventBus.on('player:state', (nextPlayer) => {
         setPlayer(nextPlayer);
@@ -270,6 +282,12 @@ export const App: React.FC = () => {
       }),
       EventBus.on('combat:classMeter', (meter) => {
         setClassMeter(meter);
+      }),
+      EventBus.on('boss:hudUpdate', (payload) => {
+        setBossHud(payload);
+      }),
+      EventBus.on('dungeon:outcome', (outcome) => {
+        setDungeonOutcome(outcome);
       }),
       EventBus.on('skill:xpGained', (payload) => {
         const uid = xpUid++;
@@ -319,6 +337,7 @@ export const App: React.FC = () => {
         onToggleTouchUi={() => setTouchUiEnabled((v) => !v)}
         lastHit={lastHit}
         classMeter={classMeter}
+        bossHud={bossHud}
         selectedCropId={selectedCropId}
         farmToolMode={farmToolMode}
         onSelectFarmSeed={handleSelectFarmSeed}
@@ -375,7 +394,105 @@ export const App: React.FC = () => {
         visible={touchUiEnabled}
         zone={zone}
         nearPortal={nearPortal}
+        bossHud={bossHud}
       />
+
+      <ModeSelectorModal
+        open={activeModal === 'modeSelector'}
+        player={player}
+        onClose={() => setActiveModal(null)}
+        onEnterDungeon={(bossId: BossId, difficulty: DifficultyMode) => {
+          setActiveModal(null);
+          EventBus.emit('dungeon:enterRequest', { bossId, difficulty });
+        }}
+      />
+
+      {/* Dungeon Victory / Defeat Overlay */}
+      {dungeonOutcome && zone === 'dungeon' && (
+        <div className="fixed inset-0 z-30 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="stardew-panel w-[min(92vw,440px)] rounded-2xl p-5 text-center space-y-3 shadow-2xl">
+            {dungeonOutcome.outcome === 'victory' ? (
+              <>
+                <div className="font-display font-bold text-2xl text-amber-900">
+                  🏆 VICTORY!
+                </div>
+                <div className="text-xs font-bold text-amber-950">
+                  {dungeonOutcome.bossName} · {dungeonOutcome.difficulty.toUpperCase()}
+                </div>
+                {dungeonOutcome.easterEggUnlocked && (
+                  <div className="p-2.5 rounded-xl bg-gradient-to-r from-yellow-200 via-amber-100 to-yellow-200 border-2 border-amber-600 text-amber-950 font-display font-bold text-xs animate-pulse">
+                    ✨ EASTER EGG UNLOCKED! No-Hit Victory → The Golden Frying Pan (40% Crit · BONK!) added to Container!
+                  </div>
+                )}
+                <div className="p-3 rounded-xl bg-amber-50 border border-amber-900/30 text-xs text-amber-950 space-y-1">
+                  <div className="font-display font-bold">
+                    +{dungeonOutcome.coins.toLocaleString()} Coins
+                    {dungeonOutcome.gold > 0 ? ` · +${dungeonOutcome.gold} Gold` : ''}
+                  </div>
+                  {dungeonOutcome.lootLabels.length > 0 && (
+                    <div className="text-[11px] text-emerald-900 font-semibold">
+                      Loot: {dungeonOutcome.lootLabels.join(' · ')}
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2 justify-center pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDungeonOutcome(null);
+                      EventBus.emit('input:rematch');
+                    }}
+                    className="stardew-btn px-4 py-2 rounded-xl font-display font-bold text-xs"
+                  >
+                    Fight Again
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDungeonOutcome(null);
+                      EventBus.emit('input:exitDungeon');
+                    }}
+                    className="px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white border-2 border-emerald-950 font-display font-bold text-xs"
+                  >
+                    Return to Village
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="font-display font-bold text-2xl text-rose-800">
+                  💀 DEFEATED
+                </div>
+                <p className="text-xs text-amber-950 leading-relaxed">
+                  You fell against <strong>{dungeonOutcome.bossName}</strong>. No items were lost — rest in Phum Village, stock up on Street Snacks, and try again!
+                </p>
+                <div className="flex flex-wrap gap-2 justify-center pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDungeonOutcome(null);
+                      EventBus.emit('input:rematch');
+                    }}
+                    className="stardew-btn px-4 py-2 rounded-xl font-display font-bold text-xs"
+                  >
+                    Retry Boss (Full HP)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDungeonOutcome(null);
+                      EventBus.emit('input:exitDungeon');
+                    }}
+                    className="px-4 py-2 rounded-xl bg-rose-700 hover:bg-rose-600 text-white border-2 border-rose-950 font-display font-bold text-xs"
+                  >
+                    Defeated — Return to Village
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       <ProfileModal
         open={activeModal === 'profile'}

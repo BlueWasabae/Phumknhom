@@ -1,17 +1,19 @@
 import React, { useRef, useState } from 'react';
 import type { ZoneType } from '@shared/types';
-import { EventBus } from '../game/EventBus';
+import { EventBus, type BossHudPayload } from '../game/EventBus';
 
 interface MobileControlsProps {
   visible: boolean;
   zone: ZoneType;
   nearPortal: boolean;
+  bossHud?: BossHudPayload | null;
 }
 
 export const MobileControls: React.FC<MobileControlsProps> = ({
   visible,
   zone,
   nearPortal,
+  bossHud,
 }) => {
   const padRef = useRef<HTMLDivElement>(null);
   const activePointerId = useRef<number | null>(null);
@@ -72,6 +74,28 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
       <div className="pointer-events-auto flex items-end gap-2">
         {zone === 'dungeon' ? (
           <div className="flex flex-col items-end gap-2">
+            {bossHud?.difficulty === 'calamity' && (bossHud.focusPct >= 100 || bossHud.furyPct >= 100) && (
+              <div className="flex items-center gap-2">
+                {bossHud.focusPct >= 100 && !bossHud.focusActive && (
+                  <button
+                    type="button"
+                    onPointerDown={() => EventBus.emit('input:focus')}
+                    className="px-3.5 py-2 rounded-full bg-cyan-400 border-[3px] border-cyan-950 text-slate-950 font-display font-bold text-xs shadow-xl animate-pulse active:scale-95"
+                  >
+                    ⚡ FOCUS
+                  </button>
+                )}
+                {bossHud.furyPct >= 100 && !bossHud.furyActive && (
+                  <button
+                    type="button"
+                    onPointerDown={() => EventBus.emit('input:fury')}
+                    className="px-3.5 py-2 rounded-full bg-rose-600 border-[3px] border-amber-300 text-white font-display font-bold text-xs shadow-xl animate-pulse active:scale-95"
+                  >
+                    🔥 FURY
+                  </button>
+                )}
+              </div>
+            )}
             {nearPortal && (
               <button
                 type="button"

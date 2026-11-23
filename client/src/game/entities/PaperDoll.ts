@@ -447,6 +447,37 @@ export function drawSinglePaperDollLayer(
         ctx.strokeStyle = outline;
         ctx.lineWidth = 1;
         ctx.strokeRect(0, -14, 6, 20);
+      } else if (w.styleVariant === 'golden_pan') {
+        // Secret No-Hit Relic: The Golden Frying Pan!
+        ctx.fillStyle = '#78350f';
+        ctx.fillRect(-1.5, -6, 3, 12);
+        ctx.fillStyle = w.primaryColor;
+        ctx.strokeStyle = '#92400e';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(0, -13, 8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = w.accentColor;
+        ctx.beginPath();
+        ctx.arc(-2, -15, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (w.styleVariant === 'stone_club') {
+        // Heavy Stone Club (Dambong Thmor)
+        ctx.fillStyle = '#57534e';
+        ctx.strokeStyle = outline;
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(-2, 6);
+        ctx.lineTo(-5, -18);
+        ctx.lineTo(5, -18);
+        ctx.lineTo(2, 6);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = w.accentColor;
+        ctx.fillRect(-4, -14, 8, 3);
+        ctx.fillRect(-3.5, -7, 7, 2.5);
       } else if (w.styleVariant === 'kambet') {
         // Curved Shadow Hunter Knife
         ctx.fillStyle = w.primaryColor;

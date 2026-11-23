@@ -1,5 +1,7 @@
 import type {
+  BossId,
   CombatHitResult,
+  DifficultyMode,
   EmoteSymbol,
   EquippedLoadout,
   KhmerClassId,
@@ -38,6 +40,36 @@ export interface SkillXpToastPayload {
   talentPointGained: boolean;
 }
 
+export interface BossHudPayload {
+  active: boolean;
+  bossId: BossId;
+  khmerName: string;
+  englishName: string;
+  hp: number;
+  maxHp: number;
+  phase: 1 | 2;
+  difficulty: DifficultyMode;
+  stageLabel: string;
+  focusPct: number;
+  focusActive: boolean;
+  furyPct: number;
+  furyActive: boolean;
+  defenseCracked: boolean;
+  damageTakenThisFight: number;
+}
+
+export interface DungeonOutcomePayload {
+  outcome: 'victory' | 'defeat';
+  bossId: BossId;
+  bossName: string;
+  difficulty: DifficultyMode;
+  noHit: boolean;
+  easterEggUnlocked: boolean;
+  coins: number;
+  gold: number;
+  lootLabels: string[];
+}
+
 export interface EventMap {
   'scene:ready': { zone: ZoneType };
   'player:state': PlayerState;
@@ -55,15 +87,29 @@ export interface EventMap {
   'portal:proximity': PortalProximityPayload;
   'combat:hit': { hit: CombatHitResult; dummyHp: number; dummyMaxHp: number };
   'combat:classMeter': ClassMeterPayload;
+  'boss:hudUpdate': BossHudPayload;
+  'dungeon:enterRequest': { bossId: BossId; difficulty: DifficultyMode };
+  'dungeon:outcome': DungeonOutcomePayload | null;
   'mobile:joystick': JoystickVector;
   'input:interact': void;
   'input:jump': void;
   'input:attack': void;
   'input:dash': void;
+  'input:focus': void;
+  'input:fury': void;
+  'input:rematch': void;
   'input:exitDungeon': void;
   'input:exitFarm': void;
   'ui:openModal': {
-    modal: 'profile' | 'inventory' | 'wardrobe' | 'farm' | 'snackShop' | 'fashionShop' | 'skills';
+    modal:
+      | 'profile'
+      | 'inventory'
+      | 'wardrobe'
+      | 'farm'
+      | 'snackShop'
+      | 'fashionShop'
+      | 'skills'
+      | 'modeSelector';
     farmTab?: 'seeds' | 'livestock' | 'artisan';
     shopTab?: 'primary' | 'secondary';
   };
