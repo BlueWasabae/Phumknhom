@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { INITIAL_PLAYER_STATE, type PlayerState } from '@shared/types';
 import { EventBus, type JoystickVector } from '../EventBus';
-import { OverheadBubble } from '../OverheadBubble';
+import { Player } from '../entities/Player';
 
 const MAP_W = 1600;
 const MAP_H = 1200;
@@ -16,10 +16,8 @@ interface LandmarkZone {
 }
 
 export class OverworldScene extends Phaser.Scene {
-  private playerState: PlayerState = { ...INITIAL_PLAYER_STATE };
-  private player!: Phaser.Physics.Arcade.Sprite;
-  private nameTag!: Phaser.GameObjects.Text;
-  private bubble!: OverheadBubble;
+  private initialState: PlayerState = { ...INITIAL_PLAYER_STATE };
+  private player!: Player;
   private promptText!: Phaser.GameObjects.Text;
   private colliders!: Phaser.Physics.Arcade.StaticGroup;
 
@@ -28,7 +26,6 @@ export class OverworldScene extends Phaser.Scene {
   private joystick: JoystickVector = { x: 0, y: 0 };
   private landmarks: LandmarkZone[] = [];
   private nearPortalSent = false;
-  private facingLeft = false;
   private transitioning = false;
   private unsubs: Array<() => void> = [];
 
@@ -36,8 +33,8 @@ export class OverworldScene extends Phaser.Scene {
     super('OverworldScene');
   }
 
-  init(data?: { playerState?: PlayerState; spawnX?: number; spawnY?: number }): void {
-    this.playerState = data?.playerState
+  init(data?: { playerState?: PlayerState }): void {
+    this.initialState = data?.playerState
       ? { ...data.playerState, zone: 'overworld', weapon: { ...data.playerState.weapon } }
       : { ...INITIAL_PLAYER_STATE, zone: 'overworld', weapon: { ...INITIAL_PLAYER_STATE.weapon } };
     this.landmarks = [];
@@ -51,17 +48,14 @@ export class OverworldScene extends Phaser.Scene {
     this.physics.world.gravity.y = 0;
     this.physics.world.setBounds(0, 0, MAP_W, MAP_H);
 
-    // Tiled lush green grass ground
     this.add.tileSprite(MAP_W / 2, MAP_H / 2, MAP_W, MAP_H, 'tile_grass').setDepth(0);
 
-    // Warm Village Square cobblestone & dirt roads
     const roads = this.add.graphics().setDepth(2);
     roads.fillStyle(0xdec08b, 1);
     roads.fillRoundedRect(210, 540, 1180, 120, 26);
     roads.fillRoundedRect(740, 220, 130, 760, 26);
     roads.lineStyle(5, 0xb89358, 1);
     roads.strokeRoundedRect(210, 540, 1180, 120, 26);
-    // Central Village Square plaza circle
     roads.fillStyle(0xfef3c7, 0.92);
     roads.fillCircle(805, 600, 145);
     roads.lineStyle(5, 0xd97706, 0.8);
@@ -71,25 +65,8 @@ export class OverworldScene extends Phaser.Scene {
     this.buildLandmarks();
     this.buildBorderTrees();
 
-    // Spawn player in Village Square
-    this.player = this.physics.add.sprite(805, 640, 'player_chibi', 0);
-    this.player.setCollideWorldBounds(true);
-    this.player.setSize(24, 16).setOffset(16, 42); // Foot collider for natural 2.5D Y-sorting
-    this.physics.add.collider(this.player, this.colliders);
-
-    this.nameTag = this.add
-      .text(this.player.x, this.player.y + 28, this.playerState.name, {
-        fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
-        fontSize: '13px',
-        fontStyle: 'bold',
-        color: '#ffffff',
-        stroke: '#1e1b4b',
-        strokeThickness: 3,
-      })
-      .setOrigin(0.5, 0)
-      .setDepth(2500);
-
-    this.bubble = new OverheadBubble(this);
+    this.player = new Player(this, 805, 640, this.initialState, 'overworld');
+    this.physics.add.collider(this.player.sprite, this.colliders);
 
     this.promptText = this.add
       .text(0, 0, '', {
@@ -105,7 +82,7 @@ export class OverworldScene extends Phaser.Scene {
       .setVisible(false);
 
     this.cameras.main.setBounds(0, 0, MAP_W, MAP_H);
-    this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
+    this.cameras.main.startFollow(this.player.sprite, true, 0.12, 0.12);
     this.cameras.main.fadeIn(240, 10, 14, 24);
 
     this.cursors = this.input.keyboard!.createCursorKeys();
@@ -114,16 +91,15 @@ export class OverworldScene extends Phaser.Scene {
       Phaser.Input.Keyboard.Key
     >;
 
-    // Wire EventBus listeners (cleaned up cleanly on SHUTDOWN)
     this.unsubs.push(
       EventBus.on('mobile:joystick', (vec) => {
         this.joystick = vec;
       }),
       EventBus.on('player:chat', ({ text }) => {
-        this.bubble.showSpeech(text, 4500);
+        this.player.showSpeechBubble(text, 4500);
       }),
       EventBus.on('player:emote', ({ emoji }) => {
-        this.bubble.showEmote(emoji, 3000);
+        this.player.showEmote(emoji, 3000);
       }),
       EventBus.on('input:interact', () => {
         this.tryInteractNearest();
@@ -131,13 +107,13 @@ export class OverworldScene extends Phaser.Scene {
     );
 
     EventBus.emit('scene:ready', { zone: 'overworld' });
-    EventBus.emit('player:state', this.playerState);
+    EventBus.emit('player:state', this.player.state);
     EventBus.emit('portal:proximity', { nearPortal: false, label: '', targetZone: 'dungeon' });
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.unsubs.forEach((u) => u());
       this.unsubs = [];
-      this.bubble.destroy();
+      this.player.destroy();
     });
   }
 
@@ -217,7 +193,7 @@ export class OverworldScene extends Phaser.Scene {
       onInteract: () => EventBus.emit('ui:toast', { text: 'FASHION SHOP — Modular Paper-Doll outfits arrive in Phase 2!' }),
     });
 
-    // 5. Glowing DUNGEON PORTAL + Animated Yellow Downward "JOIN" Arrow (Top-Right)
+    // 5. Glowing DUNGEON PORTAL + Floating Yellow Downward "JOIN" Arrow (Top-Right)
     this.addSolidProp('portal_dungeon', 1240, 300, 84, 24, 'DUNGEON PORTAL');
     const joinArrow = this.add.image(1240, 155, 'join_arrow').setDepth(450);
     this.tweens.add({
@@ -257,9 +233,9 @@ export class OverworldScene extends Phaser.Scene {
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
       this.scene.start('DungeonBossScene', {
         playerState: {
-          ...this.playerState,
+          ...this.player.state,
           zone: 'dungeon',
-          weapon: { ...this.playerState.weapon },
+          weapon: { ...this.player.state.weapon },
         },
       });
     });
@@ -306,26 +282,20 @@ export class OverworldScene extends Phaser.Scene {
     }
 
     const len = Math.hypot(vx, vy);
-    const body = this.player.body as Phaser.Physics.Arcade.Body;
+    let frame = 0;
     if (len > 0.1) {
       const speed = 235;
       const nx = vx / Math.max(1, len);
       const ny = vy / Math.max(1, len);
-      body.setVelocity(nx * speed, ny * speed);
-      if (Math.abs(nx) > 0.08) this.facingLeft = nx < 0;
-      this.player.setFrame(Math.floor(time / 145) % 2 === 0 ? 1 : 2);
+      this.player.body.setVelocity(nx * speed, ny * speed);
+      if (Math.abs(nx) > 0.08) this.player.facingRight = nx > 0;
+      frame = Math.floor(time / 145) % 2 === 0 ? 1 : 2;
     } else {
-      body.setVelocity(0, 0);
-      this.player.setFrame(0);
+      this.player.body.setVelocity(0, 0);
     }
 
-    this.player.setFlipX(this.facingLeft);
-    // True 2.5D Y-sorting: character walks cleanly behind & in front of trees and stalls
-    this.player.setDepth(this.player.y + 20);
-    this.nameTag.setPosition(this.player.x, this.player.y + 26);
-    this.bubble.update(this.player.x, this.player.y, -34);
+    this.player.syncVisuals(time, frame);
 
-    // Portal & Landmark proximity prompt
     const nearest = this.findNearestLandmark();
     if (nearest) {
       this.promptText.setPosition(nearest.x, nearest.y - 60);

@@ -6,11 +6,11 @@ import {
   type PlayerState,
   type ZoneType,
 } from '@shared/types';
-import { createPhaserGame } from './game/PhaserGame';
+import { launchPhaserGame } from './game/config';
 import { EventBus } from './game/EventBus';
-import { HUD } from './components/HUD';
-import { ChatOverlay } from './components/ChatOverlay';
-import { MobileControls } from './components/MobileControls';
+import { HUD } from './ui/HUD';
+import { ChatOverlay } from './ui/ChatOverlay';
+import { MobileControls } from './ui/MobileControls';
 
 export const App: React.FC = () => {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -34,16 +34,14 @@ export const App: React.FC = () => {
     },
   ]);
 
-  // Auto-enable mobile touch controls on touchscreens
   useEffect(() => {
     const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     if (isTouch) setTouchUiEnabled(true);
   }, []);
 
-  // Mount Phaser 3 engine & subscribe to EventBus cleanly
   useEffect(() => {
     if (!mountRef.current) return;
-    const { destroy } = createPhaserGame(mountRef.current);
+    const { destroy } = launchPhaserGame(mountRef.current);
 
     let toastTimer: number | null = null;
     const unsubs = [
@@ -76,10 +74,8 @@ export const App: React.FC = () => {
 
   return (
     <div className="relative w-full h-dvh overflow-hidden bg-slate-950">
-      {/* Phaser 3 Canvas Mount */}
       <div ref={mountRef} className="w-full h-full" />
 
-      {/* Avatar World-Inspired HUD */}
       <HUD
         player={player}
         zone={zone}
@@ -90,7 +86,6 @@ export const App: React.FC = () => {
         lastHit={lastHit}
       />
 
-      {/* Overhead Speech Bubble Chat Input & History */}
       <ChatOverlay
         open={chatOpen}
         playerName={player.name}
@@ -98,14 +93,12 @@ export const App: React.FC = () => {
         onAddMessage={(msg) => setMessages((prev) => [...prev.slice(-39), msg])}
       />
 
-      {/* Responsive Virtual Thumbstick & Context Action Buttons */}
       <MobileControls
         visible={touchUiEnabled}
         zone={zone}
         nearPortal={nearPortal}
       />
 
-      {/* Toast Feedback Pill */}
       {toast && (
         <div className="pointer-events-none fixed bottom-20 left-1/2 -translate-x-1/2 z-40 px-4 py-1.5 rounded-full bg-slate-900/95 border border-amber-400/70 text-amber-200 font-display font-bold text-xs shadow-xl">
           {toast}

@@ -3,11 +3,8 @@ import { BootScene } from './scenes/BootScene';
 import { OverworldScene } from './scenes/OverworldScene';
 import { DungeonBossScene } from './scenes/DungeonBossScene';
 
-export function createPhaserGame(parent: HTMLElement): {
-  game: Phaser.Game;
-  destroy: () => void;
-} {
-  const game = new Phaser.Game({
+export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameConfig {
+  return {
     type: Phaser.AUTO,
     parent,
     width: parent.clientWidth || window.innerWidth,
@@ -27,8 +24,14 @@ export function createPhaserGame(parent: HTMLElement): {
       },
     },
     scene: [BootScene, OverworldScene, DungeonBossScene],
-  });
+  };
+}
 
+export function launchPhaserGame(parent: HTMLElement): {
+  game: Phaser.Game;
+  destroy: () => void;
+} {
+  const game = new Phaser.Game(createGameConfig(parent));
   return {
     game,
     destroy: () => {
