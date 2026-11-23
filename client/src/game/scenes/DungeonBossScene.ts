@@ -8,10 +8,10 @@ const ARENA_W = 1800;
 const ARENA_H = 720;
 const FLOOR_Y = 620;
 const DUMMY_SPAWN_X = 1380;
-const DUMMY_SPAWN_Y = FLOOR_Y - 40;
+const DUMMY_SPAWN_Y = FLOOR_Y - 36;
 const DUMMY_MAX_HP = 180;
-const EXIT_PORTAL_X = 115;
-const EXIT_PORTAL_Y = FLOOR_Y - 58;
+const EXIT_PORTAL_X = 118;
+const EXIT_PORTAL_Y = FLOOR_Y - 68;
 
 export class DungeonBossScene extends Phaser.Scene {
   private initialState: PlayerState = { ...INITIAL_PLAYER_STATE };
@@ -20,9 +20,12 @@ export class DungeonBossScene extends Phaser.Scene {
 
   private solidFloor!: Phaser.Physics.Arcade.StaticGroup;
   private elevatedPlatforms!: Phaser.Physics.Arcade.StaticGroup;
+  private parallaxFar!: Phaser.GameObjects.TileSprite;
+  private parallaxMid!: Phaser.GameObjects.TileSprite;
 
-  // Training Slime Dummy
+  // Training Slime Dummy (Ninja Adventure Slime sprite)
   private dummy!: Phaser.Physics.Arcade.Sprite;
+  private dummyShadow!: Phaser.GameObjects.Image;
   private dummyHp = DUMMY_MAX_HP;
   private dummyAlive = true;
   private dummyBarBg!: Phaser.GameObjects.Rectangle;
@@ -60,7 +63,7 @@ export class DungeonBossScene extends Phaser.Scene {
   }
 
   create(): void {
-    // Terraria / Calamity Mode: Side-Scrolling 2D with gravity = 800
+    // Terraria / Calamity Mode: Side-Scrolling 2D (gravity = 800)
     this.physics.world.gravity.y = 800;
     this.physics.world.setBounds(0, 0, ARENA_W, ARENA_H);
 
@@ -69,7 +72,7 @@ export class DungeonBossScene extends Phaser.Scene {
     this.buildExitPortal();
     this.buildTrainingDummy();
 
-    this.player = new Player(this, 240, FLOOR_Y - 52, this.initialState, 'dungeon');
+    this.player = new Player(this, 240, FLOOR_Y - 46, this.initialState, 'dungeon');
     this.physics.add.collider(this.player.sprite, this.solidFloor);
     // One-way jump-through collision for the 4 elevated platforms
     this.physics.add.collider(
@@ -85,7 +88,7 @@ export class DungeonBossScene extends Phaser.Scene {
     );
 
     this.promptText = this.add
-      .text(EXIT_PORTAL_X, EXIT_PORTAL_Y - 78, 'Press [E] or Tap EXIT → Return to Phum Village', {
+      .text(EXIT_PORTAL_X + 20, EXIT_PORTAL_Y - 94, 'Press [E] or Tap EXIT → Return to Phum Village', {
         fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
         fontSize: '13px',
         fontStyle: 'bold',
@@ -144,28 +147,44 @@ export class DungeonBossScene extends Phaser.Scene {
   }
 
   private drawParallaxCavern(): void {
-    const far = this.add.graphics().setScrollFactor(0.25).setDepth(0);
-    far.fillGradientStyle(0x0b1020, 0x0b1020, 0x1e1b4b, 0x2e1065, 1);
-    far.fillRect(0, 0, ARENA_W, ARENA_H);
-    far.fillStyle(0x1e293b, 0.7);
-    for (let x = 40; x < 1200; x += 150) {
-      far.fillTriangle(x, 0, x + 36, 120 + (x % 60), x + 72, 0);
-    }
+    // 1. Legacy Fantasy Twilight Sky backdrop (desaturated indigo tint per Animation Bible §3)
+    this.add
+      .tileSprite(ARENA_W / 2, ARENA_H / 2, ARENA_W, ARENA_H, 'lf_sky')
+      .setTileScale(2.8, 2.8)
+      .setTint(0x283056)
+      .setScrollFactor(0.1)
+      .setDepth(0);
 
-    const mid = this.add.graphics().setScrollFactor(0.55).setDepth(2);
-    for (let x = 130; x < 1600; x += 250) {
-      mid.fillStyle(0x1e293b, 0.85);
-      mid.fillRect(x, 90, 56, 540);
-      mid.fillStyle(0x334155, 0.85);
-      mid.fillRect(x - 8, 90, 72, 22);
-      mid.fillStyle(0xf59e0b, 0.22);
-      mid.fillCircle(x + 28, 280, 38);
-      mid.fillStyle(0xf97316, 0.95);
-      mid.fillCircle(x + 28, 280, 7);
+    // 2. Far Parallax Cavern Silhouette Layer
+    this.parallaxFar = this.add
+      .tileSprite(ARENA_W / 2, 410, ARENA_W, 256, 'lf_parallax_far')
+      .setTileScale(2.1, 2.1)
+      .setTint(0x24344d)
+      .setScrollFactor(0.28)
+      .setDepth(2);
+
+    // 3. Mid Parallax Dark Forest-Cave Layer
+    this.parallaxMid = this.add
+      .tileSprite(ARENA_W / 2, 445, ARENA_W, 256, 'lf_parallax_mid')
+      .setTileScale(2.1, 2.1)
+      .setTint(0x1b263b)
+      .setScrollFactor(0.55)
+      .setDepth(4);
+
+    // 4. Atmospheric Legacy Fantasy Stone Monoliths, Glowing Mushrooms & Chest Props
+    const monolithXs = [360, 740, 1140, 1580];
+    for (const mx of monolithXs) {
+      this.add.image(mx, FLOOR_Y - 68, 'lf_pillar').setScale(1.6).setTint(0x64748b).setDepth(6);
     }
+    const mushrooms = [310, 620, 970, 1280, 1650];
+    for (const mx of mushrooms) {
+      this.add.image(mx, FLOOR_Y - 16, 'lf_mushroom').setScale(1.7).setDepth(16);
+    }
+    this.add.image(1460, 336, 'lf_chest').setScale(1.7).setDepth(16);
+    this.add.image(560, FLOOR_Y - 26, 'lf_boulder').setScale(1.4).setTint(0x64748b).setDepth(8);
 
     this.add
-      .text(440, 125, 'ANCIENT CAVERN · PHASE 1 COMBAT ARENA', {
+      .text(440, 130, 'ANCIENT CAVERN · PHASE 1 COMBAT ARENA', {
         fontFamily: 'Fredoka, sans-serif',
         fontSize: '18px',
         fontStyle: 'bold',
@@ -173,70 +192,83 @@ export class DungeonBossScene extends Phaser.Scene {
         stroke: '#0f172a',
         strokeThickness: 4,
       })
-      .setDepth(5);
+      .setDepth(8);
     this.add
-      .text(440, 152, 'A/D Move  ·  Space/W Double Jump  ·  Shift/K Dash  ·  J/Click Sword Swing', {
+      .text(440, 156, 'A/D Move  ·  Space/W Double Jump  ·  Shift/K Dash  ·  J/Click Sword Swing', {
         fontFamily: 'Kantumruy Pro, sans-serif',
         fontSize: '12px',
         color: '#cbd5e1',
       })
-      .setDepth(5);
+      .setDepth(8);
   }
 
   private buildArenaPlatforms(): void {
     this.solidFloor = this.physics.add.staticGroup();
     this.elevatedPlatforms = this.physics.add.staticGroup();
 
-    this.add.tileSprite(ARENA_W / 2, FLOOR_Y + 50, ARENA_W, 100, 'tile_stone').setDepth(10);
+    // Legacy Fantasy dark rocky cave ground + mossy top strip
+    this.add.tileSprite(ARENA_W / 2, FLOOR_Y + 52, ARENA_W, 108, 'lf_cave_floor').setTileScale(1.8, 1.8).setDepth(10);
+    this.add.tileSprite(ARENA_W / 2, FLOOR_Y + 10, ARENA_W, 34, 'lf_moss_top').setTileScale(1.8, 1.4).setDepth(11);
     const floorCollider = this.add.rectangle(ARENA_W / 2, FLOOR_Y + 50, ARENA_W, 100, 0x000000, 0);
     this.solidFloor.add(floorCollider);
 
-    // 4 Elevated Platforms at varying heights
-    const platforms = [
-      { x: 460, y: 500, w: 220 },
-      { x: 780, y: 395, w: 240 },
-      { x: 1120, y: 485, w: 220 },
-      { x: 1460, y: 365, w: 230 },
+    // 4 Elevated One-Way Platforms at varying heights (Legacy Fantasy Stone & Timber Platforms)
+    const platforms: Array<{ x: number; y: number; w: number; tex: 'lf_plat_stone' | 'lf_plat_wood' }> = [
+      { x: 460, y: 500, w: 224, tex: 'lf_plat_stone' },
+      { x: 780, y: 395, w: 240, tex: 'lf_plat_wood' },
+      { x: 1120, y: 485, w: 224, tex: 'lf_plat_stone' },
+      { x: 1460, y: 365, w: 240, tex: 'lf_plat_wood' },
     ];
     for (const p of platforms) {
-      const rect = this.add
-        .rectangle(p.x, p.y, p.w, 18, 0x475569)
-        .setStrokeStyle(3, 0xf59e0b)
-        .setDepth(14);
-      this.elevatedPlatforms.add(rect);
+      this.add.tileSprite(p.x, p.y, p.w, 26, p.tex).setTileScale(1.6, 1.5).setDepth(14);
+      const collider = this.add.rectangle(p.x, p.y, p.w, 18, 0x000000, 0);
+      this.elevatedPlatforms.add(collider);
     }
   }
 
   private buildExitPortal(): void {
-    this.add.image(EXIT_PORTAL_X, EXIT_PORTAL_Y, 'portal_exit').setDepth(20);
-    const arrow = this.add.image(EXIT_PORTAL_X, EXIT_PORTAL_Y - 82, 'join_arrow').setDepth(24);
+    this.add.image(EXIT_PORTAL_X, EXIT_PORTAL_Y, 'lf_cave_entrance').setScale(1.2).setDepth(18);
+    const vortex = this.add.image(EXIT_PORTAL_X + 12, EXIT_PORTAL_Y + 8, 'portal_vortex').setTint(0x34d399).setScale(1.1).setDepth(20);
+    this.tweens.add({
+      targets: vortex,
+      alpha: 0.5,
+      scale: 1.25,
+      duration: 850,
+      yoyo: true,
+      repeat: -1,
+    });
+
+    const arrow = this.add.image(EXIT_PORTAL_X + 8, EXIT_PORTAL_Y - 102, 'join_arrow').setDepth(24);
     this.tweens.add({
       targets: arrow,
-      y: EXIT_PORTAL_Y - 94,
+      y: EXIT_PORTAL_Y - 114,
       duration: 560,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut',
     });
     this.add
-      .text(EXIT_PORTAL_X, EXIT_PORTAL_Y + 62, 'VILLAGE EXIT', {
+      .text(EXIT_PORTAL_X + 8, FLOOR_Y - 6, 'VILLAGE EXIT', {
         fontFamily: 'Fredoka, sans-serif',
         fontSize: '12px',
         fontStyle: 'bold',
         color: '#a7f3d0',
-        backgroundColor: 'rgba(15, 23, 42, 0.8)',
+        backgroundColor: 'rgba(15, 23, 42, 0.85)',
         padding: { x: 6, y: 2 },
       })
-      .setOrigin(0.5, 0)
-      .setDepth(22);
+      .setOrigin(0.5, 1)
+      .setDepth(24);
   }
 
   private buildTrainingDummy(): void {
-    this.dummy = this.physics.add.sprite(DUMMY_SPAWN_X, DUMMY_SPAWN_Y, 'slime_dummy');
+    this.dummyShadow = this.add.image(DUMMY_SPAWN_X, FLOOR_Y - 4, 'soft_shadow').setScale(1.3).setDepth(40);
+    this.dummy = this.physics.add.sprite(DUMMY_SPAWN_X, DUMMY_SPAWN_Y, 'slime_monster', 0);
+    this.dummy.setScale(3.5);
+    this.dummy.play('slime_bounce');
     this.dummy.setCollideWorldBounds(true);
     this.dummy.setDragX(520);
-    this.dummy.setBounce(0.15);
-    this.dummy.setSize(48, 44).setOffset(8, 8);
+    this.dummy.setBounce(0.18);
+    this.dummy.setSize(12, 12).setOffset(2, 4);
     this.dummy.setDepth(42);
     this.physics.add.collider(this.dummy, this.solidFloor);
 
@@ -268,10 +300,10 @@ export class DungeonBossScene extends Phaser.Scene {
     const onGround = this.player.body.blocked.down || this.player.body.touching.down;
     if (onGround) {
       this.jumpsUsed = 1;
-      this.player.body.setVelocityY(-490);
+      this.player.body.setVelocityY(-495);
     } else if (this.jumpsUsed < 2) {
       this.jumpsUsed = 2;
-      this.player.body.setVelocityY(-455);
+      this.player.body.setVelocityY(-460);
       this.spawnFloatingText(this.player.x, this.player.y - 26, 'Double Jump!', '#38bdf8', '13px');
     }
   }
@@ -301,26 +333,19 @@ export class DungeonBossScene extends Phaser.Scene {
 
     const dir = this.player.facingRight ? 1 : -1;
     const hitX = this.player.x + dir * 48;
-    const hitY = this.player.y - 4;
+    const hitY = this.player.y - 2;
 
-    const arc = this.add.graphics().setDepth(60);
-    arc.lineStyle(8, 0xfef08a, 0.9);
-    arc.beginPath();
-    if (this.player.facingRight) {
-      arc.arc(this.player.x + 12, hitY, 50, -Math.PI * 0.42, Math.PI * 0.42, false);
-    } else {
-      arc.arc(this.player.x - 12, hitY, 50, Math.PI * 0.58, Math.PI * 1.42, false);
-    }
-    arc.strokePath();
-    this.tweens.add({
-      targets: arc,
-      alpha: 0,
-      duration: 165,
-      onComplete: () => arc.destroy(),
-    });
+    // Real Ninja Adventure animated Curved Slash VFX sprite
+    const slash = this.add
+      .sprite(hitX, hitY, 'fx_slash', 0)
+      .setScale(2.6)
+      .setFlipX(dir < 0)
+      .setDepth(62);
+    slash.play('slash_curved');
+    slash.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => slash.destroy());
 
     if (this.dummyAlive) {
-      const swingBox = new Phaser.Geom.Rectangle(hitX - 46, hitY - 38, 92, 76);
+      const swingBox = new Phaser.Geom.Rectangle(hitX - 48, hitY - 38, 96, 76);
       if (Phaser.Geom.Intersects.RectangleToRectangle(swingBox, this.dummy.getBounds())) {
         this.hitTrainingDummy(dir);
       }
@@ -344,7 +369,7 @@ export class DungeonBossScene extends Phaser.Scene {
     });
 
     this.dummyHp = Math.max(0, this.dummyHp - hit.finalDamage);
-    this.dummy.setVelocity(knockDir * weapon.knockbackForce, -155);
+    this.dummy.setVelocity(knockDir * weapon.knockbackForce, -165);
     this.dummy.setTintFill(0xffffff);
     this.time.delayedCall(95, () => {
       if (this.dummyAlive) this.dummy.clearTint();
@@ -358,7 +383,7 @@ export class DungeonBossScene extends Phaser.Scene {
       hit.isCrit ? '22px' : '16px'
     );
 
-    // 40ms hit-stop impact juice on Crits (docs/GDD_KHMER_LORE_AND_ANIMATION.md §3)
+    // 40ms hit-stop impact juice on Crits
     if (hit.isCrit) {
       this.cameras.main.shake(95, 0.005);
       this.physics.world.pause();
@@ -379,18 +404,24 @@ export class DungeonBossScene extends Phaser.Scene {
   private defeatAndRespawnDummy(): void {
     this.dummyAlive = false;
     this.dummy.setVisible(false);
+    this.dummyShadow.setVisible(false);
     this.dummyBarBg.setVisible(false);
     this.dummyBarFill.setVisible(false);
     this.dummyLabel.setText('Respawning in 3s...').setColor('#fbbf24');
 
     this.player.state.coins += 25;
     this.player.state.xp += 30;
+    let leveledUp = false;
     while (this.player.state.xp >= getXpForNextLevel(this.player.state.level)) {
       this.player.state.xp -= getXpForNextLevel(this.player.state.level);
       this.player.state.level += 1;
       this.player.state.maxHp += 15;
       this.player.state.hp = this.player.state.maxHp;
+      leveledUp = true;
       this.spawnFloatingText(this.player.x, this.player.y - 54, `LEVEL UP! Lv.${this.player.state.level}`, '#fde047', '18px');
+    }
+    if (leveledUp && this.cache.audio.exists('sfx_levelup')) {
+      this.sound.play('sfx_levelup', { volume: 0.35 });
     }
     EventBus.emit('player:state', { ...this.player.state, weapon: { ...this.player.state.weapon } });
     this.spawnFloatingText(this.dummy.x, this.dummy.y - 54, '+25 Coins · +30 XP', '#4ade80', '14px');
@@ -403,6 +434,7 @@ export class DungeonBossScene extends Phaser.Scene {
       this.dummy.setVelocity(0, 0);
       this.dummy.clearTint();
       this.dummy.setVisible(true);
+      this.dummyShadow.setVisible(true);
       this.dummyBarBg.setVisible(true);
       this.dummyBarFill.setVisible(true);
       this.dummyLabel.setText('Training Slime Dummy').setColor('#86efac');
@@ -433,7 +465,7 @@ export class DungeonBossScene extends Phaser.Scene {
   }
 
   private isNearExitPortal(): boolean {
-    return Phaser.Math.Distance.Between(this.player.x, this.player.y, EXIT_PORTAL_X, EXIT_PORTAL_Y) < 92;
+    return Phaser.Math.Distance.Between(this.player.x, this.player.y, EXIT_PORTAL_X, EXIT_PORTAL_Y) < 105;
   }
 
   private returnToOverworld(): void {
@@ -489,22 +521,32 @@ export class DungeonBossScene extends Phaser.Scene {
 
       if (Math.abs(moveX) > 0.12) {
         const dir = moveX < 0 ? -1 : 1;
-        this.player.facingRight = dir > 0;
+        this.player.facing = dir > 0 ? 'right' : 'left';
         this.player.body.setVelocityX(dir * 270);
       } else {
         this.player.body.setVelocityX(0);
       }
     }
 
-    let frame = 0;
-    if (time < this.attackAnimUntil) frame = 4;
-    else if (!onGround) frame = 3;
-    else if (Math.abs(this.player.body.velocity.x) > 15) frame = Math.floor(time / 135) % 2 === 0 ? 1 : 2;
+    if (time < this.attackAnimUntil) {
+      this.player.playStateAnimation('attack');
+    } else if (!onGround) {
+      this.player.playStateAnimation('jump');
+    } else if (Math.abs(this.player.body.velocity.x) > 15) {
+      this.player.playStateAnimation('walk');
+    } else {
+      this.player.playStateAnimation('idle');
+    }
 
-    this.player.syncVisuals(time, frame);
+    this.player.syncVisuals(time, onGround);
+
+    // Subtle parallax scroll polish
+    this.parallaxFar.tilePositionX = this.cameras.main.scrollX * 0.15;
+    this.parallaxMid.tilePositionX = this.cameras.main.scrollX * 0.35;
 
     if (this.dummyAlive) {
       const ratio = Math.max(0, this.dummyHp / DUMMY_MAX_HP);
+      this.dummyShadow.setPosition(this.dummy.x, FLOOR_Y - 2);
       this.dummyBarBg.setPosition(this.dummy.x, this.dummy.y - 36);
       this.dummyBarFill.setPosition(this.dummy.x - 35, this.dummy.y - 36);
       this.dummyBarFill.width = 70 * ratio;

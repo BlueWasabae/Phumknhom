@@ -1,423 +1,229 @@
 import Phaser from 'phaser';
 import { INITIAL_PLAYER_STATE } from '@shared/types';
 
-function makeCanvas(
-  scene: Phaser.Scene,
-  key: string,
-  w: number,
-  h: number,
-  draw: (ctx: CanvasRenderingContext2D) => void
-): void {
-  if (scene.textures.exists(key)) return;
-  const tex = scene.textures.createCanvas(key, w, h);
-  if (!tex) return;
-  draw(tex.getContext());
-  tex.refresh();
-}
+const NA = '/assets/packs/ninja-adventure/Ninja Adventure - Asset Pack';
+const SV = '/assets/packs/serene-village/SERENE_VILLAGE_REVAMPED';
+const LF = '/assets/packs/legacy-fantasy/Legacy-Fantasy - High Forest 2.3';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
     super('BootScene');
   }
 
+  preload(): void {
+    // Loading bar
+    const { width, height } = this.scale;
+    const barBg = this.add.rectangle(width / 2, height / 2, 260, 14, 0x1e293b).setStrokeStyle(2, 0xf59e0b);
+    const barFill = this.add.rectangle(width / 2 - 126, height / 2, 0, 8, 0xfacc15).setOrigin(0, 0.5);
+    const label = this.add
+      .text(width / 2, height / 2 - 24, 'Loading ភូមិខ្ញុំ Pixel Art Packs...', {
+        fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
+        fontSize: '14px',
+        color: '#fef3c7',
+      })
+      .setOrigin(0.5);
+
+    this.load.on('progress', (p: number) => {
+      barFill.width = 252 * p;
+    });
+    this.load.once('complete', () => {
+      barBg.destroy();
+      barFill.destroy();
+      label.destroy();
+    });
+
+    // ---- 1. NINJA ADVENTURE PACK (Chibi Character, Slime, Slash VFX, Audio) ----
+    this.load.spritesheet('player_boy', `${NA}/Actor/Character/Boy/SpriteSheet.png`, {
+      frameWidth: 16,
+      frameHeight: 16,
+    });
+    this.load.spritesheet('slime_monster', `${NA}/Actor/Monster/Slime/Slime.png`, {
+      frameWidth: 16,
+      frameHeight: 16,
+    });
+    this.load.spritesheet('fx_slash', `${NA}/FX/Attack/SlashCurved/SpriteSheet.png`, {
+      frameWidth: 32,
+      frameHeight: 32,
+    });
+    this.load.image('icon_noodle', `${NA}/Items/Food/Noodle.png`);
+    this.load.image('icon_sword', `${NA}/Items/Weapons/BigSword/Sprite.png`);
+    this.load.audio('sfx_levelup', `${NA}/Audio/Jingles/LevelUp1.wav`);
+
+    // ---- 2. SERENE VILLAGE PACK (Stardew Grass/Paths, Houses, Trees, Campfire) ----
+    this.load.image('serene_atlas', `${SV}/Serene_Village_32x32.png`);
+    this.load.spritesheet('sv_campfire', `${SV}/Animated stuff/campfire_32x32.png`, {
+      frameWidth: 32,
+      frameHeight: 32,
+    });
+
+    // ---- 3. LEGACY FANTASY PACK (Parallax Cave/Forest, Platforms, Cave Entrance, Rocks) ----
+    this.load.image('lf_sky', `${LF}/Background/Background.png`);
+    this.load.image('lf_trees_bg', `${LF}/Trees/Background.png`);
+    this.load.image('lf_tiles', `${LF}/Assets/Tiles.png`);
+    this.load.image('lf_buildings', `${LF}/Assets/Buildings.png`);
+    this.load.image('lf_rocks', `${LF}/Assets/Props-Rocks.png`);
+  }
+
   create(): void {
-    this.generateChibiCharacter();
-    this.generateTilesAndProps();
-    this.generateDungeonAssets();
+    this.sliceAtlasSubTextures();
+    this.generateUiMarkers();
+    this.registerAnimations();
 
     this.scene.start('OverworldScene', {
       playerState: { ...INITIAL_PLAYER_STATE, weapon: { ...INITIAL_PLAYER_STATE.weapon } },
     });
   }
 
-  private generateChibiCharacter(): void {
-    const key = 'player_chibi';
-    if (this.textures.exists(key)) return;
-    const frameW = 56;
-    const frameH = 64;
-    const poses = ['idle', 'walk1', 'walk2', 'jump', 'attack'] as const;
-    const canvas = document.createElement('canvas');
-    canvas.width = frameW * poses.length;
-    canvas.height = frameH;
-    const ctx = canvas.getContext('2d')!;
+  /**
+   * Slices clean sub-textures out of the loaded Serene Village & Legacy Fantasy sheets
+   * so Phaser tileSprites & Y-sorted prop images render crisp pixel art without bleeding.
+   */
+  private cropToTexture(srcKey: string, dstKey: string, sx: number, sy: number, sw: number, sh: number): void {
+    if (this.textures.exists(dstKey) || !this.textures.exists(srcKey)) return;
+    const srcImg = this.textures.get(srcKey).getSourceImage() as HTMLImageElement | HTMLCanvasElement;
+    const canvasTex = this.textures.createCanvas(dstKey, sw, sh);
+    if (!canvasTex) return;
+    const ctx = canvasTex.getContext();
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(srcImg, sx, sy, sw, sh, 0, 0, sw, sh);
+    canvasTex.refresh();
+  }
 
-    poses.forEach((pose, idx) => {
-      const ox = idx * frameW + frameW / 2;
-      const oy = frameH - 8;
-      const bob = pose === 'walk1' ? -2 : pose === 'walk2' ? -1 : pose === 'jump' ? -5 : 0;
-      const leftLeg = pose === 'walk1' ? -3 : pose === 'walk2' ? 3 : 0;
-      const rightLeg = pose === 'walk1' ? 3 : pose === 'walk2' ? -3 : 0;
+  private sliceAtlasSubTextures(): void {
+    // Serene Village 32x32 grid (608x1440)
+    this.cropToTexture('serene_atlas', 'sv_grass', 96, 0, 32, 32);
+    this.cropToTexture('serene_atlas', 'sv_path', 192, 32, 32, 32);
+    this.cropToTexture('serene_atlas', 'sv_plaza_sand', 512, 128, 64, 64);
+    this.cropToTexture('serene_atlas', 'sv_flowers', 0, 96, 96, 96);
+    this.cropToTexture('serene_atlas', 'sv_sign_wood', 224, 416, 32, 32);
+    this.cropToTexture('serene_atlas', 'sv_fence_pen', 128, 480, 96, 96);
+    this.cropToTexture('serene_atlas', 'sv_flower_box', 128, 576, 96, 32);
+    this.cropToTexture('serene_atlas', 'sv_tree_green', 288, 384, 64, 96);
+    this.cropToTexture('serene_atlas', 'sv_tree_teal', 416, 384, 64, 96);
+    this.cropToTexture('serene_atlas', 'sv_house_red', 0, 672, 96, 128);
+    this.cropToTexture('serene_atlas', 'sv_house_green', 192, 928, 128, 128);
+    this.cropToTexture('serene_atlas', 'sv_house_blue', 192, 1184, 128, 128);
 
-      ctx.save();
-      ctx.translate(ox, oy);
+    // Legacy Fantasy High Forest 2.3 (400x400 Tiles/Buildings, 896x256 Trees BG, 288x336 Rocks)
+    this.cropToTexture('lf_trees_bg', 'lf_parallax_far', 352, 0, 320, 256);
+    this.cropToTexture('lf_trees_bg', 'lf_parallax_mid', 0, 0, 320, 256);
+    this.cropToTexture('lf_tiles', 'lf_cave_floor', 16, 96, 48, 64);
+    this.cropToTexture('lf_tiles', 'lf_moss_top', 16, 0, 48, 32);
+    this.cropToTexture('lf_tiles', 'lf_plat_wood', 80, 96, 48, 16);
+    this.cropToTexture('lf_tiles', 'lf_plat_stone', 176, 238, 48, 18);
+    this.cropToTexture('lf_tiles', 'lf_mushroom', 256, 246, 32, 26);
+    this.cropToTexture('lf_tiles', 'lf_chest', 288, 276, 32, 28);
+    this.cropToTexture('lf_buildings', 'lf_cave_entrance', 272, 208, 128, 160);
+    this.cropToTexture('lf_rocks', 'lf_pillar', 0, 166, 60, 90);
+    this.cropToTexture('lf_rocks', 'lf_boulder', 64, 32, 64, 48);
+  }
 
-      // Soft ground shadow
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
-      ctx.beginPath();
-      ctx.ellipse(0, 2, 13, 5, 0, 0, Math.PI * 2);
-      ctx.fill();
+  private generateUiMarkers(): void {
+    // Crisp Yellow Downward "JOIN" Arrow marker (Avatar World signature)
+    if (!this.textures.exists('join_arrow')) {
+      const tex = this.textures.createCanvas('join_arrow', 48, 52);
+      if (tex) {
+        const ctx = tex.getContext();
+        ctx.fillStyle = '#facc15';
+        ctx.strokeStyle = '#713f12';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(14, 4);
+        ctx.lineTo(34, 4);
+        ctx.lineTo(34, 24);
+        ctx.lineTo(44, 24);
+        ctx.lineTo(24, 48);
+        ctx.lineTo(4, 24);
+        ctx.lineTo(14, 24);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#451a03';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('JOIN', 24, 21);
+        tex.refresh();
+      }
+    }
 
-      // Legs & boots
-      ctx.fillStyle = '#1e293b';
-      ctx.fillRect(-7 + leftLeg, -12 + bob, 6, 12);
-      ctx.fillRect(1 + rightLeg, -12 + bob, 6, 12);
-      ctx.fillStyle = '#451a03';
-      ctx.fillRect(-7 + leftLeg, -4 + bob, 6, 4);
-      ctx.fillRect(1 + rightLeg, -4 + bob, 6, 4);
+    // Soft radial ground shadow under chibi characters & mobs
+    if (!this.textures.exists('soft_shadow')) {
+      const tex = this.textures.createCanvas('soft_shadow', 36, 14);
+      if (tex) {
+        const ctx = tex.getContext();
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.34)';
+        ctx.beginPath();
+        ctx.ellipse(18, 7, 15, 5.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        tex.refresh();
+      }
+    }
 
-      // Torso (vibrant Khmer Krama tunic)
-      ctx.fillStyle = '#2a1810';
-      ctx.fillRect(-10, -28 + bob, 20, 17);
-      ctx.fillStyle = '#ef4444';
-      ctx.fillRect(-8, -26 + bob, 16, 13);
-      ctx.fillStyle = '#fef3c7';
-      ctx.fillRect(-8, -24 + bob, 16, 3);
-      ctx.fillRect(-3, -24 + bob, 6, 8);
-
-      // Arms
-      ctx.fillStyle = '#f4c29f';
-      ctx.strokeStyle = '#2a1810';
-      ctx.lineWidth = 1.5;
-      ctx.fillRect(-13, -25 + bob, 4, 10);
-      ctx.strokeRect(-13, -25 + bob, 4, 10);
-      ctx.fillRect(9, -25 + bob + (pose === 'attack' ? -4 : 0), 4, 10);
-      ctx.strokeRect(9, -25 + bob + (pose === 'attack' ? -4 : 0), 4, 10);
-
-      // Sword held on right side
-      ctx.save();
-      ctx.translate(12, -18 + bob);
-      ctx.rotate(pose === 'attack' ? 1.15 : -0.35);
-      ctx.fillStyle = '#ca8a04';
-      ctx.fillRect(-4, -2, 8, 3);
-      ctx.fillStyle = '#e2e8f0';
-      ctx.strokeStyle = '#0f172a';
-      ctx.lineWidth = 1.2;
-      ctx.fillRect(-2, -18, 4, 16);
-      ctx.strokeRect(-2, -18, 4, 16);
-      ctx.restore();
-
-      // Big expressive Chibi head
-      ctx.fillStyle = '#f4c29f';
-      ctx.strokeStyle = '#2a1810';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.roundRect(-12, -48 + bob, 24, 21, 9);
-      ctx.fill();
-      ctx.stroke();
-
-      // Eyes (shifted slightly right so facing direction reads crisply)
-      ctx.fillStyle = '#18181b';
-      ctx.fillRect(-5, -39 + bob, 4, 5);
-      ctx.fillRect(4, -39 + bob, 4, 5);
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(-4, -38 + bob, 2, 2);
-      ctx.fillRect(5, -38 + bob, 2, 2);
-      // Cheek blush + smile
-      ctx.fillStyle = 'rgba(244, 114, 182, 0.5)';
-      ctx.fillRect(-8, -33 + bob, 4, 2);
-      ctx.fillRect(6, -33 + bob, 4, 2);
-      ctx.fillStyle = '#9a3412';
-      ctx.fillRect(0, -32 + bob, 4, 2);
-
-      // Hair
-      ctx.fillStyle = '#1e1b24';
-      ctx.beginPath();
-      ctx.roundRect(-13, -51 + bob, 26, 10, 5);
-      ctx.fill();
-
-      // Iconic Conical Farmer Hat
-      ctx.fillStyle = '#facc15';
-      ctx.strokeStyle = '#854d0e';
-      ctx.lineWidth = 1.8;
-      ctx.beginPath();
-      ctx.moveTo(-18, -46 + bob);
-      ctx.lineTo(0, -58 + bob);
-      ctx.lineTo(18, -46 + bob);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-
-      ctx.restore();
-    });
-
-    const tex = this.textures.addCanvas(key, canvas);
-    if (tex) {
-      for (let i = 0; i < poses.length; i++) {
-        tex.add(i, 0, i * frameW, 0, frameW, frameH);
+    // Glowing portal vortex overlay placed inside cave doorway
+    if (!this.textures.exists('portal_vortex')) {
+      const tex = this.textures.createCanvas('portal_vortex', 64, 80);
+      if (tex) {
+        const ctx = tex.getContext();
+        const grad = ctx.createRadialGradient(32, 42, 4, 32, 42, 30);
+        grad.addColorStop(0, 'rgba(245, 208, 254, 0.95)');
+        grad.addColorStop(0.55, 'rgba(147, 51, 234, 0.72)');
+        grad.addColorStop(1, 'rgba(30, 27, 75, 0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.ellipse(32, 42, 26, 36, 0, 0, Math.PI * 2);
+        ctx.fill();
+        tex.refresh();
       }
     }
   }
 
-  private generateTilesAndProps(): void {
-    // Lush village grass tile (64x64)
-    makeCanvas(this, 'tile_grass', 64, 64, (ctx) => {
-      ctx.fillStyle = '#4fb358';
-      ctx.fillRect(0, 0, 64, 64);
-      ctx.fillStyle = '#5ec467';
-      ctx.fillRect(4, 6, 12, 6);
-      ctx.fillRect(36, 22, 14, 6);
-      ctx.fillRect(14, 46, 12, 6);
-      ctx.fillStyle = '#3f9c48';
-      ctx.fillRect(24, 10, 4, 8);
-      ctx.fillRect(50, 42, 4, 8);
-      // Tiny village wildflower accents
-      ctx.fillStyle = '#fef08a';
-      ctx.fillRect(10, 28, 3, 3);
-      ctx.fillStyle = '#f472b6';
-      ctx.fillRect(46, 12, 3, 3);
-    });
-
-    // Dark cavern stone brick tile (64x64)
-    makeCanvas(this, 'tile_stone', 64, 64, (ctx) => {
-      ctx.fillStyle = '#242b3d';
-      ctx.fillRect(0, 0, 64, 64);
-      ctx.fillStyle = '#334155';
-      ctx.fillRect(2, 2, 28, 28);
-      ctx.fillRect(34, 2, 28, 28);
-      ctx.fillRect(2, 34, 14, 28);
-      ctx.fillRect(20, 34, 28, 28);
-      ctx.fillRect(52, 34, 10, 28);
-      ctx.fillStyle = '#475569';
-      ctx.fillRect(2, 2, 28, 4);
-      ctx.fillRect(34, 2, 28, 4);
-      ctx.fillRect(20, 34, 28, 4);
-    });
-
-    // Bouncing Yellow Downward "JOIN" Arrow
-    makeCanvas(this, 'join_arrow', 48, 52, (ctx) => {
-      ctx.fillStyle = '#facc15';
-      ctx.strokeStyle = '#713f12';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(14, 4);
-      ctx.lineTo(34, 4);
-      ctx.lineTo(34, 24);
-      ctx.lineTo(44, 24);
-      ctx.lineTo(24, 48);
-      ctx.lineTo(4, 24);
-      ctx.lineTo(14, 24);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = '#451a03';
-      ctx.font = 'bold 11px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('JOIN', 24, 21);
-    });
-
-    // AREA 0 Street Sign
-    makeCanvas(this, 'sign_area', 96, 76, (ctx) => {
-      ctx.fillStyle = 'rgba(0,0,0,0.22)';
-      ctx.beginPath();
-      ctx.ellipse(48, 70, 22, 6, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#78350f';
-      ctx.fillRect(43, 36, 10, 34);
-      ctx.fillStyle = '#1d4ed8';
-      ctx.strokeStyle = '#fef9c3';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.roundRect(6, 6, 84, 34, 7);
-      ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 15px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('AREA 0', 48, 28);
-    });
-
-    // FARM Wooden Gate
-    makeCanvas(this, 'gate_farm', 140, 96, (ctx) => {
-      ctx.fillStyle = 'rgba(0,0,0,0.24)';
-      ctx.fillRect(12, 84, 116, 8);
-      ctx.fillStyle = '#92400e';
-      ctx.strokeStyle = '#451a03';
-      ctx.lineWidth = 3;
-      ctx.fillRect(14, 26, 16, 62);
-      ctx.strokeRect(14, 26, 16, 62);
-      ctx.fillRect(110, 26, 16, 62);
-      ctx.strokeRect(110, 26, 16, 62);
-      ctx.fillRect(8, 10, 124, 26);
-      ctx.strokeRect(8, 10, 124, 26);
-      ctx.fillStyle = '#fef3c7';
-      ctx.font = 'bold 16px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('FARM', 70, 29);
-    });
-
-    // SNACK CART Wooden Stall
-    makeCanvas(this, 'stall_snack', 132, 104, (ctx) => {
-      ctx.fillStyle = 'rgba(0,0,0,0.25)';
-      ctx.beginPath();
-      ctx.ellipse(66, 94, 54, 10, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#b45309';
-      ctx.strokeStyle = '#451a03';
-      ctx.lineWidth = 2.5;
-      ctx.fillRect(16, 52, 100, 36);
-      ctx.strokeRect(16, 52, 100, 36);
-      ctx.fillStyle = '#fef3c7';
-      ctx.fillRect(24, 38, 84, 16);
-      ctx.strokeRect(24, 38, 84, 16);
-      ctx.fillStyle = '#d97706';
-      ctx.fillRect(30, 42, 20, 8);
-      ctx.fillStyle = '#dc2626';
-      ctx.fillRect(58, 42, 20, 8);
-      ctx.fillStyle = '#16a34a';
-      ctx.fillRect(84, 41, 16, 9);
-      ctx.fillStyle = '#78350f';
-      ctx.fillRect(18, 22, 6, 30);
-      ctx.fillRect(108, 22, 6, 30);
-      for (let i = 0; i < 6; i++) {
-        ctx.fillStyle = i % 2 === 0 ? '#ef4444' : '#fef9c3';
-        ctx.fillRect(10 + i * 19, 8, 19, 18);
+  private registerAnimations(): void {
+    // Ninja Adventure Boy 4-dir animations (cols: 0=Down, 1=Up, 2=Left, 3=Right)
+    const walkDirs: Array<[string, number[]]> = [
+      ['boy_walk_down', [0, 4, 8, 12]],
+      ['boy_walk_up', [1, 5, 9, 13]],
+      ['boy_walk_left', [2, 6, 10, 14]],
+      ['boy_walk_right', [3, 7, 11, 15]],
+    ];
+    for (const [key, frames] of walkDirs) {
+      if (!this.anims.exists(key)) {
+        this.anims.create({
+          key,
+          frames: frames.map((frame) => ({ key: 'player_boy', frame })),
+          frameRate: 9,
+          repeat: -1,
+        });
       }
-      ctx.strokeStyle = '#7f1d1d';
-      ctx.strokeRect(10, 8, 114, 18);
-      ctx.fillStyle = '#1f2937';
-      ctx.beginPath();
-      ctx.arc(34, 88, 9, 0, Math.PI * 2);
-      ctx.arc(98, 88, 9, 0, Math.PI * 2);
-      ctx.fill();
-    });
+    }
 
-    // FASHION SHOP Booth
-    makeCanvas(this, 'stall_fashion', 152, 126, (ctx) => {
-      ctx.fillStyle = 'rgba(0,0,0,0.25)';
-      ctx.beginPath();
-      ctx.ellipse(76, 116, 66, 11, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#fdf2f8';
-      ctx.strokeStyle = '#831843';
-      ctx.lineWidth = 3;
-      ctx.fillRect(18, 48, 116, 68);
-      ctx.strokeRect(18, 48, 116, 68);
-      ctx.fillStyle = '#ec4899';
-      ctx.beginPath();
-      ctx.moveTo(8, 52);
-      ctx.lineTo(28, 18);
-      ctx.lineTo(124, 18);
-      ctx.lineTo(144, 52);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = '#facc15';
-      ctx.fillRect(28, 12, 96, 8);
-      ctx.fillStyle = '#38bdf8';
-      ctx.fillRect(28, 64, 30, 26);
-      ctx.strokeRect(28, 64, 30, 26);
-      ctx.fillRect(94, 64, 30, 26);
-      ctx.strokeRect(94, 64, 30, 26);
-      ctx.fillStyle = '#9d174d';
-      ctx.fillRect(64, 70, 24, 46);
-    });
+    // Slime idle bounce animation
+    if (!this.anims.exists('slime_bounce')) {
+      this.anims.create({
+        key: 'slime_bounce',
+        frames: [0, 4, 8, 12].map((frame) => ({ key: 'slime_monster', frame })),
+        frameRate: 6,
+        repeat: -1,
+      });
+    }
 
-    // Lush Tropical Village Tree
-    makeCanvas(this, 'tree_lush', 92, 116, (ctx) => {
-      ctx.fillStyle = 'rgba(0,0,0,0.24)';
-      ctx.beginPath();
-      ctx.ellipse(46, 108, 28, 9, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#78350f';
-      ctx.strokeStyle = '#451a03';
-      ctx.lineWidth = 2.5;
-      ctx.fillRect(38, 58, 16, 50);
-      ctx.strokeRect(38, 58, 16, 50);
-      ctx.fillStyle = '#15803d';
-      ctx.beginPath();
-      ctx.arc(46, 44, 34, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#22c55e';
-      ctx.beginPath();
-      ctx.arc(34, 38, 22, 0, Math.PI * 2);
-      ctx.arc(58, 40, 22, 0, Math.PI * 2);
-      ctx.arc(46, 26, 20, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#facc15';
-      ctx.beginPath();
-      ctx.arc(36, 44, 4, 0, Math.PI * 2);
-      ctx.arc(56, 36, 4, 0, Math.PI * 2);
-      ctx.fill();
-    });
-  }
+    // Sword slash curved VFX
+    if (!this.anims.exists('slash_curved')) {
+      this.anims.create({
+        key: 'slash_curved',
+        frames: [0, 1, 2, 3].map((frame) => ({ key: 'fx_slash', frame })),
+        frameRate: 20,
+        repeat: 0,
+      });
+    }
 
-  private generateDungeonAssets(): void {
-    // Glowing Violet Dungeon Portal
-    makeCanvas(this, 'portal_dungeon', 112, 134, (ctx) => {
-      ctx.fillStyle = '#475569';
-      ctx.strokeStyle = '#0f172a';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.roundRect(12, 16, 88, 112, [44, 44, 6, 6]);
-      ctx.fill();
-      ctx.stroke();
-      const grad = ctx.createRadialGradient(56, 74, 6, 56, 74, 38);
-      grad.addColorStop(0, '#f5d0fe');
-      grad.addColorStop(0.5, '#9333ea');
-      grad.addColorStop(1, '#1e1b4b');
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.ellipse(56, 74, 30, 44, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#facc15';
-      ctx.beginPath();
-      ctx.moveTo(44, 18);
-      ctx.lineTo(56, 3);
-      ctx.lineTo(68, 18);
-      ctx.closePath();
-      ctx.fill();
-    });
-
-    // Emerald Village Exit Portal
-    makeCanvas(this, 'portal_exit', 96, 120, (ctx) => {
-      ctx.fillStyle = '#334155';
-      ctx.strokeStyle = '#0f172a';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.roundRect(10, 14, 76, 100, [38, 38, 6, 6]);
-      ctx.fill();
-      ctx.stroke();
-      const grad = ctx.createRadialGradient(48, 66, 6, 48, 66, 34);
-      grad.addColorStop(0, '#d1fae5');
-      grad.addColorStop(0.55, '#10b981');
-      grad.addColorStop(1, '#064e3b');
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.ellipse(48, 66, 26, 38, 0, 0, Math.PI * 2);
-      ctx.fill();
-    });
-
-    // Practice Slime Dummy (bouncy emerald slime with target band)
-    makeCanvas(this, 'slime_dummy', 64, 56, (ctx) => {
-      ctx.fillStyle = 'rgba(0,0,0,0.28)';
-      ctx.beginPath();
-      ctx.ellipse(32, 50, 24, 6, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#22c55e';
-      ctx.strokeStyle = '#14532d';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(8, 46);
-      ctx.quadraticCurveTo(8, 10, 32, 10);
-      ctx.quadraticCurveTo(56, 10, 56, 46);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-      // Gloss highlight
-      ctx.fillStyle = 'rgba(255,255,255,0.45)';
-      ctx.beginPath();
-      ctx.ellipse(22, 22, 7, 4, -0.4, 0, Math.PI * 2);
-      ctx.fill();
-      // Cute determined eyes
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(21, 28, 5, 7);
-      ctx.fillRect(38, 28, 5, 7);
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(22, 29, 2, 2);
-      ctx.fillRect(39, 29, 2, 2);
-      // Training headband
-      ctx.fillStyle = '#ef4444';
-      ctx.fillRect(14, 17, 36, 4);
-    });
+    // Serene Village animated campfire
+    if (!this.anims.exists('campfire_burn')) {
+      this.anims.create({
+        key: 'campfire_burn',
+        frames: [0, 1, 2, 3].map((frame) => ({ key: 'sv_campfire', frame })),
+        frameRate: 7,
+        repeat: -1,
+      });
+    }
   }
 }

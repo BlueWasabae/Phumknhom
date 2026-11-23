@@ -16,6 +16,9 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
+    watch: {
+      ignored: ['**/*.crdownload', '**/*.part', '**/*.tmp', '**/public/assets/packs/**'],
+    },
     fs: {
       allow: [path.resolve(__dirname, '..')],
     },

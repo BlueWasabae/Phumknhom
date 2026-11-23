@@ -11,10 +11,13 @@ export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameCon
     height: parent.clientHeight || window.innerHeight,
     backgroundColor: '#0f172a',
     pixelArt: true,
+    roundPixels: true,
     antialias: false,
     scale: {
       mode: Phaser.Scale.RESIZE,
       autoCenter: Phaser.Scale.CENTER_BOTH,
+      width: '100%',
+      height: '100%',
     },
     physics: {
       default: 'arcade',

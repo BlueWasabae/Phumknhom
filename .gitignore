@@ -2,6 +2,9 @@ node_modules/
 dist/
 .env
 .env.*
+.asset-archives/
+client/public/assets/packs/
+*.zip
 *.log
 .DS_Store
 Thumbs.db

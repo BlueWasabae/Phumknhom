@@ -44,28 +44,39 @@ export class OverworldScene extends Phaser.Scene {
   }
 
   create(): void {
-    // Stardew / Avatar World Mode: Top-Down 2D with gravity = 0
+    // Stardew / Avatar World Mode: Top-Down 2.5D (gravity = 0)
     this.physics.world.gravity.y = 0;
     this.physics.world.setBounds(0, 0, MAP_W, MAP_H);
 
-    this.add.tileSprite(MAP_W / 2, MAP_H / 2, MAP_W, MAP_H, 'tile_grass').setDepth(0);
+    // 1. Lush Serene Village tiled grass ground
+    this.add
+      .tileSprite(MAP_W / 2, MAP_H / 2, MAP_W, MAP_H, 'sv_grass')
+      .setTileScale(2, 2)
+      .setDepth(0);
 
-    const roads = this.add.graphics().setDepth(2);
-    roads.fillStyle(0xdec08b, 1);
-    roads.fillRoundedRect(210, 540, 1180, 120, 26);
-    roads.fillRoundedRect(740, 220, 130, 760, 26);
-    roads.lineStyle(5, 0xb89358, 1);
-    roads.strokeRoundedRect(210, 540, 1180, 120, 26);
-    roads.fillStyle(0xfef3c7, 0.92);
-    roads.fillCircle(805, 600, 145);
-    roads.lineStyle(5, 0xd97706, 0.8);
-    roads.strokeCircle(805, 600, 145);
+    // 2. Cozy dirt roads & central sand plaza square (Serene Village textures)
+    this.add.tileSprite(800, 610, 1140, 108, 'sv_path').setTileScale(2, 2).setDepth(2);
+    this.add.tileSprite(800, 580, 116, 760, 'sv_path').setTileScale(2, 2).setDepth(2);
+    this.add.tileSprite(800, 610, 280, 240, 'sv_plaza_sand').setTileScale(1.5, 1.5).setDepth(3);
+
+    // Decorative wildflower meadows around the village
+    const flowerSpots = [
+      [310, 480], [1050, 460], [560, 820], [1160, 820], [640, 320],
+    ];
+    for (const [fx, fy] of flowerSpots) {
+      this.add.image(fx, fy, 'sv_flowers').setScale(1.5).setDepth(4).setAlpha(0.9);
+    }
+
+    // Animated Village Square Campfire
+    const fire = this.add.sprite(800, 595, 'sv_campfire', 0).setScale(2).setDepth(595);
+    fire.play('campfire_burn');
 
     this.colliders = this.physics.add.staticGroup();
     this.buildLandmarks();
-    this.buildBorderTrees();
+    this.buildVillageTreesAndFlowers();
 
-    this.player = new Player(this, 805, 640, this.initialState, 'overworld');
+    // Real animated Ninja Adventure chibi player + soft shadow
+    this.player = new Player(this, 800, 665, this.initialState, 'overworld');
     this.physics.add.collider(this.player.sprite, this.colliders);
 
     this.promptText = this.add
@@ -121,15 +132,18 @@ export class OverworldScene extends Phaser.Scene {
     texture: string,
     x: number,
     y: number,
+    scale: number,
     bodyW: number,
     bodyH: number,
     label?: string
   ): Phaser.GameObjects.Image {
-    const img = this.add.image(x, y, texture).setOrigin(0.5, 0.9);
+    const img = this.add.image(x, y, texture).setOrigin(0.5, 0.9).setScale(scale);
     img.setDepth(y);
 
-    const colliderRect = this.add.rectangle(x, y - bodyH / 2, bodyW, bodyH, 0x000000, 0);
-    this.colliders.add(colliderRect);
+    if (bodyW > 0 && bodyH > 0) {
+      const colliderRect = this.add.rectangle(x, y - bodyH / 2, bodyW, bodyH, 0x000000, 0);
+      this.colliders.add(colliderRect);
+    }
 
     if (label) {
       this.add
@@ -138,67 +152,93 @@ export class OverworldScene extends Phaser.Scene {
           fontSize: '12px',
           fontStyle: 'bold',
           color: '#fef9c3',
-          backgroundColor: 'rgba(15, 23, 42, 0.8)',
+          backgroundColor: 'rgba(15, 23, 42, 0.82)',
           padding: { x: 8, y: 3 },
         })
         .setOrigin(0.5, 0)
-        .setDepth(y + 5);
+        .setDepth(y + 8);
     }
 
     return img;
   }
 
   private buildLandmarks(): void {
-    // 1. AREA 0 Street Sign
-    this.addSolidProp('sign_area', 640, 505, 36, 18);
+    // 1. AREA 0 Wooden Street Sign (Serene Village sign + crisp Avatar World badge)
+    this.addSolidProp('sv_sign_wood', 645, 535, 2, 34, 18);
+    this.add
+      .text(645, 476, 'AREA 0', {
+        fontFamily: 'Fredoka, sans-serif',
+        fontSize: '12px',
+        fontStyle: 'bold',
+        color: '#ffffff',
+        backgroundColor: '#1d4ed8',
+        padding: { x: 7, y: 3 },
+      })
+      .setOrigin(0.5)
+      .setDepth(545);
     this.landmarks.push({
-      x: 640,
-      y: 515,
+      x: 645,
+      y: 545,
       radius: 82,
-      label: 'AREA 0 Channel Sign (Online Channels arrive in Phase 6)',
+      label: 'AREA 0 Street Sign (Online Channels arrive in Phase 6)',
       isDungeonPortal: false,
       onInteract: () => EventBus.emit('ui:toast', { text: 'Phum Village • AREA 0 (Multiplayer sync unlocks in Phase 6)' }),
     });
 
-    // 2. FARM Wooden Gate (Top-Left)
-    this.addSolidProp('gate_farm', 360, 290, 112, 26, 'FARM GATE');
+    // 2. FARM Farmhouse & Wooden Fence Pen (Top-Left, Serene Village green-roof cottage)
+    this.addSolidProp('sv_house_green', 340, 315, 1.55, 168, 72, 'FARM GATE');
+    this.addSolidProp('sv_fence_pen', 520, 345, 1.35, 110, 64);
     this.landmarks.push({
-      x: 360,
-      y: 310,
-      radius: 96,
+      x: 340,
+      y: 340,
+      radius: 112,
       label: 'Personal Farm Gate (Stardew Farming unlocks in Phase 3)',
       isDungeonPortal: false,
       onInteract: () => EventBus.emit('ui:toast', { text: 'FARM Gate — Crop planting & timers arrive in Phase 3!' }),
     });
 
-    // 3. SNACK CART Stall (Center-Left)
-    this.addSolidProp('stall_snack', 470, 610, 108, 34, 'SNACK CART');
+    // 3. SNACK CART Cozy Red-Roof Stall + Ninja Adventure Noodle Emblem (Center-Left)
+    this.addSolidProp('sv_house_red', 435, 585, 1.5, 126, 62, 'SNACK CART');
+    this.add.image(435, 430, 'icon_noodle').setScale(2.5).setDepth(595);
+    this.add.image(435, 615, 'sv_flower_box').setScale(1.3).setDepth(615);
     this.landmarks.push({
-      x: 470,
-      y: 635,
-      radius: 95,
+      x: 435,
+      y: 615,
+      radius: 105,
       label: 'Khmer Street Snack Cart (Phase 4)',
       isDungeonPortal: false,
       onInteract: () => EventBus.emit('ui:toast', { text: 'SNACK CART — Num Pang & Iced Coffee buffs arrive in Phase 4!' }),
     });
 
-    // 4. FASHION SHOP Booth (Center-Right)
-    this.addSolidProp('stall_fashion', 1130, 615, 126, 42, 'FASHION SHOP');
+    // 4. FASHION SHOP Blue-Roof Boutique (Center-Right, Serene Village)
+    this.addSolidProp('sv_house_blue', 1170, 585, 1.55, 168, 72, 'FASHION SHOP');
+    this.add.image(1170, 618, 'sv_flower_box').setScale(1.3).setDepth(618);
     this.landmarks.push({
-      x: 1130,
-      y: 645,
-      radius: 100,
+      x: 1170,
+      y: 618,
+      radius: 110,
       label: 'Plaza Fashion Boutique (Phase 2 & 4)',
       isDungeonPortal: false,
       onInteract: () => EventBus.emit('ui:toast', { text: 'FASHION SHOP — Modular Paper-Doll outfits arrive in Phase 2!' }),
     });
 
-    // 5. Glowing DUNGEON PORTAL + Floating Yellow Downward "JOIN" Arrow (Top-Right)
-    this.addSolidProp('portal_dungeon', 1240, 300, 84, 24, 'DUNGEON PORTAL');
-    const joinArrow = this.add.image(1240, 155, 'join_arrow').setDepth(450);
+    // 5. Glowing DUNGEON PORTAL (Legacy Fantasy Cave Entrance + Vortex + Bouncing JOIN Arrow, Top-Right)
+    this.addSolidProp('lf_cave_entrance', 1245, 320, 1.35, 130, 54, 'DUNGEON PORTAL');
+    const vortex = this.add.image(1258, 250, 'portal_vortex').setScale(1.25).setDepth(322);
+    this.tweens.add({
+      targets: vortex,
+      alpha: 0.55,
+      scale: 1.4,
+      duration: 900,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    const joinArrow = this.add.image(1245, 125, 'join_arrow').setDepth(450);
     this.tweens.add({
       targets: joinArrow,
-      y: 140,
+      y: 110,
       duration: 560,
       yoyo: true,
       repeat: -1,
@@ -206,23 +246,24 @@ export class OverworldScene extends Phaser.Scene {
     });
 
     this.landmarks.push({
-      x: 1240,
-      y: 325,
-      radius: 108,
+      x: 1245,
+      y: 345,
+      radius: 118,
       label: 'Press [E] or Tap JOIN → Enter Ancient Cavern (Side-Scroll)',
       isDungeonPortal: true,
       onInteract: () => this.enterDungeon(),
     });
   }
 
-  private buildBorderTrees(): void {
-    const spots: Array<[number, number]> = [
-      [140, 190], [180, 420], [150, 780], [220, 1020],
-      [560, 175], [980, 185], [1460, 210], [1460, 520],
-      [1450, 840], [1340, 1040], [980, 1030], [560, 1040],
+  private buildVillageTreesAndFlowers(): void {
+    const trees: Array<[number, number, 'sv_tree_green' | 'sv_tree_teal']> = [
+      [130, 210, 'sv_tree_green'], [145, 450, 'sv_tree_teal'], [140, 770, 'sv_tree_green'],
+      [220, 1020, 'sv_tree_teal'], [540, 1015, 'sv_tree_green'], [960, 1020, 'sv_tree_teal'],
+      [1310, 1010, 'sv_tree_green'], [1465, 810, 'sv_tree_teal'], [1470, 500, 'sv_tree_green'],
+      [1465, 220, 'sv_tree_teal'], [985, 200, 'sv_tree_green'], [670, 195, 'sv_tree_teal'],
     ];
-    for (const [tx, ty] of spots) {
-      this.addSolidProp('tree_lush', tx, ty, 38, 22);
+    for (const [tx, ty, tex] of trees) {
+      this.addSolidProp(tex, tx, ty, 1.5, 44, 24);
     }
   }
 
@@ -259,7 +300,7 @@ export class OverworldScene extends Phaser.Scene {
     if (lm) {
       lm.onInteract();
     } else {
-      EventBus.emit('ui:toast', { text: 'Walk closer to the Dungeon Portal (top-right) or a Village landmark!' });
+      EventBus.emit('ui:toast', { text: 'Walk closer to the Dungeon Portal (top-right) or a Village building!' });
     }
   }
 
@@ -282,23 +323,28 @@ export class OverworldScene extends Phaser.Scene {
     }
 
     const len = Math.hypot(vx, vy);
-    let frame = 0;
     if (len > 0.1) {
       const speed = 235;
       const nx = vx / Math.max(1, len);
       const ny = vy / Math.max(1, len);
       this.player.body.setVelocity(nx * speed, ny * speed);
-      if (Math.abs(nx) > 0.08) this.player.facingRight = nx > 0;
-      frame = Math.floor(time / 145) % 2 === 0 ? 1 : 2;
+
+      if (Math.abs(nx) >= Math.abs(ny)) {
+        this.player.facing = nx < 0 ? 'left' : 'right';
+      } else {
+        this.player.facing = ny < 0 ? 'up' : 'down';
+      }
+      this.player.playStateAnimation('walk');
     } else {
       this.player.body.setVelocity(0, 0);
+      this.player.playStateAnimation('idle');
     }
 
-    this.player.syncVisuals(time, frame);
+    this.player.syncVisuals(time, true);
 
     const nearest = this.findNearestLandmark();
     if (nearest) {
-      this.promptText.setPosition(nearest.x, nearest.y - 60);
+      this.promptText.setPosition(nearest.x, nearest.y - 70);
       this.promptText.setText(nearest.label).setVisible(true);
     } else {
       this.promptText.setVisible(false);
