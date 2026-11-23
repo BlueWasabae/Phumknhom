@@ -13,24 +13,26 @@ interface ServerModifierDef {
 }
 
 const WEAPON_POOL: ServerModifierDef[] = [
-  { id: 'legendary', name: 'Legendary', khmerName: 'រឿងព្រេង', category: 'weapon', tier: 'mythic', colorHex: '#facc15', weight: 6, summary: '+18% DMG · +6% Crit · +10% Speed' },
-  { id: 'mythical', name: 'Mythical', khmerName: 'ទេពនិម្មិត', category: 'weapon', tier: 'mythic', colorHex: '#e879f9', weight: 6, summary: '+16% DMG · +7% Crit · +8% Speed' },
-  { id: 'unreal', name: 'Unreal', khmerName: 'អស្ចារ្យហួស', category: 'weapon', tier: 'mythic', colorHex: '#38bdf8', weight: 7, summary: '+15% DMG · +8% Crit · +9% Speed' },
-  { id: 'godly', name: 'Godly', khmerName: 'ទេវតា', category: 'weapon', tier: 'epic', colorHex: '#fb923c', weight: 12, summary: '+14% DMG · +5% Crit' },
-  { id: 'demonic', name: 'Demonic', khmerName: 'យក្សកំណាច', category: 'weapon', tier: 'epic', colorHex: '#f43f5e', weight: 14, summary: '+15% DMG · +4% Crit' },
-  { id: 'ruthless', name: 'Ruthless', khmerName: 'កាចសាហាវ', category: 'weapon', tier: 'good', colorHex: '#4ade80', weight: 16, summary: '+17% DMG · -4% Speed' },
-  { id: 'keen', name: 'Keen', khmerName: 'មុតស្រួច', category: 'weapon', tier: 'good', colorHex: '#a3e635', weight: 18, summary: '+6% DMG · +5% Crit · +4% Speed' },
-  { id: 'shoddy', name: 'Shoddy', khmerName: 'ទ្រុឌទ្រោម', category: 'weapon', tier: 'bad', colorHex: '#94a3b8', weight: 13, summary: '-8% DMG (Reforge again!)' },
-  { id: 'broken', name: 'Broken', khmerName: 'បែកបាក់', category: 'weapon', tier: 'bad', colorHex: '#64748b', weight: 8, summary: '-15% DMG · -2% Crit (Reforge!)' },
+  { id: 'legendary', name: 'Legendary', khmerName: 'រឿងព្រេង', category: 'weapon', tier: 'mythic', colorHex: '#facc15', weight: 6, summary: '+15% Melee Dmg · +10% Speed · +5% Crit · +10% Size' },
+  { id: 'mythical', name: 'Mythical', khmerName: 'ទេពនិម្មិត', category: 'weapon', tier: 'mythic', colorHex: '#e879f9', weight: 6, summary: '+15% Magic Dmg · +10% Speed · +5% Crit' },
+  { id: 'unreal', name: 'Unreal', khmerName: 'អស្ចារ្យហួស', category: 'weapon', tier: 'mythic', colorHex: '#38bdf8', weight: 7, summary: '+15% Ranged Dmg · +10% Speed · +5% Crit' },
+  { id: 'godly', name: 'Godly', khmerName: 'ទេវតា', category: 'weapon', tier: 'epic', colorHex: '#fb923c', weight: 11, summary: '+15% Dmg · +5% Crit' },
+  { id: 'demonic', name: 'Demonic', khmerName: 'យក្សកំណាច', category: 'weapon', tier: 'epic', colorHex: '#f43f5e', weight: 12, summary: '+15% Dmg · +4% Crit' },
+  { id: 'superior', name: 'Superior', khmerName: 'ឆ្នើមឧត្តម', category: 'weapon', tier: 'good', colorHex: '#4ade80', weight: 15, summary: '+10% Dmg · +3% Crit' },
+  { id: 'ruthless', name: 'Ruthless', khmerName: 'កាចសាហាវ', category: 'weapon', tier: 'good', colorHex: '#22c55e', weight: 13, summary: '+17% Dmg · -4% Speed' },
+  { id: 'keen', name: 'Keen', khmerName: 'មុតស្រួច', category: 'weapon', tier: 'common', colorHex: '#a3e635', weight: 16, summary: '+5% Crit' },
+  { id: 'shoddy', name: 'Shoddy', khmerName: 'ទ្រុឌទ្រោម', category: 'weapon', tier: 'bad', colorHex: '#94a3b8', weight: 8, summary: '-8% Dmg (Reforge!)' },
+  { id: 'broken', name: 'Broken', khmerName: 'បែកបាក់', category: 'weapon', tier: 'bad', colorHex: '#64748b', weight: 6, summary: '-15% Dmg (Reforge!)' },
 ];
 
 const ARMOR_POOL: ServerModifierDef[] = [
-  { id: 'warding', name: 'Warding', khmerName: 'ការពាររឹងមាំ', category: 'armor', tier: 'mythic', colorHex: '#38bdf8', weight: 12, summary: '+6 DEF · +20 Max HP' },
-  { id: 'menacing', name: 'Menacing', khmerName: 'គំរាមកំហែង', category: 'armor', tier: 'mythic', colorHex: '#f43f5e', weight: 12, summary: '+8% DMG · +2% Crit · +1 DEF' },
-  { id: 'lucky', name: 'Lucky', khmerName: 'សំណាងល្អ', category: 'armor', tier: 'epic', colorHex: '#facc15', weight: 15, summary: '+7% Crit · +2 DEF' },
-  { id: 'quick', name: 'Quick', khmerName: 'រហ័សរហួន', category: 'armor', tier: 'epic', colorHex: '#34d399', weight: 18, summary: '+10% Attack Speed · +1 DEF' },
-  { id: 'armored', name: 'Armored', khmerName: 'ក្រោះដែក', category: 'armor', tier: 'good', colorHex: '#a3e635', weight: 22, summary: '+4 DEF · +10 Max HP' },
-  { id: 'arcane', name: 'Arcane', khmerName: 'មន្តអាគម', category: 'armor', tier: 'good', colorHex: '#c084fc', weight: 21, summary: '+4% DMG · +3% Crit · +10 HP' },
+  { id: 'warding', name: 'Warding', khmerName: 'ការពាររឹងមាំ', category: 'armor', tier: 'mythic', colorHex: '#38bdf8', weight: 12, summary: '+4 Def' },
+  { id: 'menacing', name: 'Menacing', khmerName: 'គំរាមកំហែង', category: 'armor', tier: 'mythic', colorHex: '#f43f5e', weight: 12, summary: '+4% All Damage' },
+  { id: 'lucky', name: 'Lucky', khmerName: 'សំណាងល្អ', category: 'armor', tier: 'epic', colorHex: '#facc15', weight: 14, summary: '+4% Crit' },
+  { id: 'quick', name: 'Quick', khmerName: 'រហ័សរហួន', category: 'armor', tier: 'epic', colorHex: '#34d399', weight: 16, summary: '+4% Move Speed' },
+  { id: 'armored', name: 'Armored', khmerName: 'ក្រោះដែក', category: 'armor', tier: 'good', colorHex: '#a3e635', weight: 15, summary: '+3 Def' },
+  { id: 'guarding', name: 'Guarding', khmerName: 'ការពារខ្លួន', category: 'armor', tier: 'good', colorHex: '#86efac', weight: 16, summary: '+2 Def' },
+  { id: 'hard', name: 'Hard', khmerName: 'រឹងមាំ', category: 'armor', tier: 'common', colorHex: '#cbd5e1', weight: 15, summary: '+1 Def' },
 ];
 
 const REFORGE_COST = { weapon: 350, armor: 280 } as const;
@@ -115,9 +117,12 @@ export function createReforgeAndBankRouter(): express.Router {
       currentPrefix?: string | null;
       walletCoins?: number;
       playerName?: string;
+      itemTierPower?: number;
     };
     const category = body.category === 'armor' ? 'armor' : 'weapon';
-    const costCoins = REFORGE_COST[category];
+    const tierPower = Math.max(1, Math.min(20, Math.floor(Number(body.itemTierPower ?? 1))));
+    const baseCost = REFORGE_COST[category];
+    const costCoins = Math.round((baseCost * (1 + (tierPower - 1) * 0.08)) / 10) * 10;
     const wallet = Math.max(0, Math.floor(Number(body.walletCoins ?? 0)));
 
     if (wallet < costCoins) {

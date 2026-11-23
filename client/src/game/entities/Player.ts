@@ -5,12 +5,14 @@ import { Pet } from './Pet';
 
 export type FacingDirection = PaperDollFacing;
 
+const WALK_FRAMES: PaperDollPose[] = ['walk1', 'walk2', 'walk3', 'walk4'];
+
 /**
  * Unified Player entity hosting:
  * - Invisible Arcade Physics body (foot collider in Overworld, full platformer body in Dungeon)
- * - 8-layer modular chibi PaperDoll Container
+ * - 8-layer modular 16-bit chibi PaperDoll Container with 4-frame walk, squash-and-stretch jump/land & weapon grip
  * - Companion Pet entity (with bobbing follow & Barami Spirit Tamer dungeon auto-attack)
- * - Soft oval ground shadow, nameplate, 4.5s overhead speech bubble, and 3s floating emote
+ * - Soft dark oval ground shadow, nameplate, 4.5s overhead speech bubble, and 3s floating emote
  */
 export class Player {
   public readonly sprite: Phaser.Physics.Arcade.Sprite;
@@ -24,6 +26,11 @@ export class Player {
   private scene: Phaser.Scene;
   private zone: ZoneType;
   private uiScale: number;
+  private baseDollScale: number;
+  private squashX = 1;
+  private squashY = 1;
+  private wasOnGround = true;
+
   private nameTag: Phaser.GameObjects.Text;
   private bubbleBg: Phaser.GameObjects.Graphics;
   private bubbleText: Phaser.GameObjects.Text;
@@ -53,7 +60,6 @@ export class Player {
     this.facing = zone === 'dungeon' ? 'right' : 'down';
     this.uiScale = zone === 'overworld' ? 0.44 : 1;
 
-    // Invisible physics anchor sprite carrying the Arcade body
     this.sprite = scene.physics.add.sprite(x, y, 'player_boy', 0);
     this.sprite.setVisible(false);
     this.sprite.setCollideWorldBounds(true);
@@ -67,16 +73,17 @@ export class Player {
     }
     this.body = this.sprite.body as Phaser.Physics.Arcade.Body;
 
-    // Soft elliptical ground shadow
+    // Soft dark oval ground shadow directly beneath boots
     this.shadow = scene.add
-      .image(x, y + (zone === 'overworld' ? 8 : 20), 'soft_shadow')
-      .setScale(zone === 'overworld' ? 0.36 : 0.78)
+      .image(x, y + (zone === 'overworld' ? 8 : 21), 'soft_shadow')
+      .setScale(zone === 'overworld' ? 0.36 : 0.82, zone === 'overworld' ? 0.24 : 0.48)
+      .setAlpha(0.75)
       .setDepth(zone === 'overworld' ? y + 6 : 48);
 
-    // 8-Layer Modular Chibi Paper-Doll
-    const dollScale = zone === 'overworld' ? 0.42 : 0.96;
+    // 8-Layer Modular 16-Bit Chibi Paper-Doll
+    this.baseDollScale = zone === 'overworld' ? 0.45 : 1.02;
     this.paperDoll = new PaperDoll(scene, x, y, this.state.loadout, `pd_${zone}`);
-    this.paperDoll.setScale(dollScale);
+    this.paperDoll.setScale(this.baseDollScale);
     if (zone === 'dungeon') {
       this.paperDoll.setDepth(50);
     }
@@ -134,6 +141,14 @@ export class Player {
 
   get facingRight(): boolean {
     return this.facing !== 'left';
+  }
+
+  /**
+   * Triggers crisp elastic squash-and-stretch (e.g. jump stretch or land/attack squash)
+   */
+  public triggerSquash(sx: number, sy: number): void {
+    this.squashX = sx;
+    this.squashY = sy;
   }
 
   public applyLoadoutUpdate(loadout: EquippedLoadout, nextState: PlayerState): void {
@@ -203,11 +218,14 @@ export class Player {
     this.emoteExpiresAt = this.scene.time.now + durationMs;
   }
 
-  public playStateAnimation(mode: 'idle' | 'walk' | 'jump' | 'attack'): void {
+  public playStateAnimation(mode: 'idle' | 'walk' | 'jump' | 'attack' | 'parry'): void {
     if (mode === 'walk') {
-      this.currentPose = Math.floor(this.scene.time.now / 150) % 2 === 0 ? 'walk1' : 'walk2';
+      const frameIdx = Math.floor(this.scene.time.now / 115) % WALK_FRAMES.length;
+      this.currentPose = WALK_FRAMES[frameIdx];
     } else if (mode === 'attack') {
       this.currentPose = 'attack';
+    } else if (mode === 'parry') {
+      this.currentPose = 'parry';
     } else if (mode === 'jump') {
       this.currentPose = 'jump';
     } else {
@@ -216,28 +234,45 @@ export class Player {
   }
 
   public syncVisuals(time: number, onGround = true): void {
-    const dollOffsetY = this.zone === 'overworld' ? 8 : 20;
+    // Automatic squash-and-stretch on landing in side-scrolling Dungeon arenas!
+    if (this.zone === 'dungeon') {
+      if (!this.wasOnGround && onGround) {
+        this.triggerSquash(1.22, 0.8);
+      } else if (this.wasOnGround && !onGround && this.body.velocity.y < -80) {
+        this.triggerSquash(0.84, 1.2);
+      }
+      this.wasOnGround = onGround;
+    }
+
+    // Smooth elastic spring return to (1, 1)
+    this.squashX += (1 - this.squashX) * 0.22;
+    this.squashY += (1 - this.squashY) * 0.22;
+    this.paperDoll.setScale(this.baseDollScale * this.squashX, this.baseDollScale * this.squashY);
+
+    const dollOffsetY = this.zone === 'overworld' ? 8 : 21;
     this.paperDoll.setPosition(this.sprite.x, this.sprite.y + dollOffsetY);
     this.paperDoll.setPoseAndFacing(this.currentPose, this.facing, time);
 
     if (this.zone === 'overworld') {
       const depth = this.sprite.y + 9;
       this.paperDoll.setDepth(depth);
-      this.shadow.setPosition(this.sprite.x, this.sprite.y + 8).setDepth(depth - 1);
+      this.shadow
+        .setPosition(this.sprite.x, this.sprite.y + 8)
+        .setDepth(depth - 1);
       this.nameTag.setPosition(this.sprite.x, this.sprite.y + 11);
     } else {
       this.paperDoll.setDepth(50);
       this.shadow
-        .setPosition(this.sprite.x, this.sprite.y + 21)
+        .setPosition(this.sprite.x, this.sprite.y + 22)
         .setDepth(48)
-        .setScale(onGround ? 0.78 : 0.45)
-        .setAlpha(onGround ? 0.92 : 0.35);
-      this.nameTag.setPosition(this.sprite.x, this.sprite.y + 25);
+        .setScale(onGround ? 0.82 * this.squashX : 0.46, onGround ? 0.48 : 0.28)
+        .setAlpha(onGround ? 0.82 : 0.34);
+      this.nameTag.setPosition(this.sprite.x, this.sprite.y + 26);
     }
 
     this.pet.update(time, this.sprite.x, this.sprite.y, this.facingRight);
 
-    const offsetY = this.zone === 'overworld' ? -16 : -34;
+    const offsetY = this.zone === 'overworld' ? -16 : -36;
     const s = this.uiScale;
 
     if (this.bubbleExpiresAt > 0) {

@@ -514,6 +514,7 @@ export async function reforgeItemApi(
     currentPrefix?: string | null;
     walletCoins: number;
     playerName: string;
+    itemTierPower?: number;
   }
 ): Promise<
   | {

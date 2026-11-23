@@ -6,6 +6,7 @@ import {
   type SkillId,
   type SkillProfile,
 } from './types';
+import { computeReforgeDeltas } from './balanceFormulas';
 export { createInitialSkillProfile };
 
 export type SkillCategory = 'life' | 'combat';
@@ -486,7 +487,9 @@ export interface VillageToDungeonBridgeStats {
   botanicalVenomChance: number;   // Farming cross-world synergy
   botanicalVenomPowerPct: number; // +0.2% per Farming Lv
   seethingLifestealChance: number;// Melee lifesteal talent
-  castSpeedMult: number;          // Arcane Frenzy talent
+  castSpeedMult: number;          // Arcane Frenzy + Weapon/Accessory Reforge Speed
+  effectiveDefense: number;       // Base Defense + Warding/Guarding/Hard + Shimmer Ward
+  weaponSizeMult: number;         // 1.0 + Legendary (+10%) / Superior (+5%)
 }
 
 /**
@@ -565,9 +568,20 @@ export function computeVillageToDungeonBridge(
   if (hasTalent(player.skills, 'magic', 'magic_barrier')) rawDRBonus += 0.1;
   if (hasTalent(player.skills, 'vitality', 'vit_ancients')) rawDRBonus += 0.12;
 
+  const reforge = computeReforgeDeltas(player.weaponPrefix, player.armorPrefix);
+  const shimmer = player.shimmerBlessings ?? [];
+  const shimmerHpBonus =
+    (shimmer.includes('blessing_durian_hp') ? 20 : 0) +
+    (shimmer.includes('blessing_vital_crystal') ? 25 : 0);
+  const shimmerLuckCrit =
+    (shimmer.includes('blessing_pink_lotus_luck') ? 0.05 : 0) +
+    (shimmer.includes('blessing_lotus_luck') ? 0.05 : 0);
+  const shimmerDefBonus = shimmer.includes('blessing_sandstone_ward') ? 5 : 0;
+
   const foragingLv = skills.foraging?.level ?? 1;
   const rogueLv = skills.rogue?.level ?? 1;
-  let moveSpeedBonusPct = snackMoveSpeedPct + (foragingLv - 1) * 0.003 + (rogueLv - 1) * 0.001;
+  let moveSpeedBonusPct =
+    snackMoveSpeedPct + (foragingLv - 1) * 0.003 + (rogueLv - 1) * 0.001 + reforge.moveSpeedPct;
   let jumpPowerBonusPct = snackJumpPowerPct;
   if (hasTalent(player.skills, 'foraging', 'forage_stride')) moveSpeedBonusPct += 0.1;
   if (hasTalent(player.skills, 'rogue', 'rogue_toes')) {
@@ -575,9 +589,9 @@ export function computeVillageToDungeonBridge(
     jumpPowerBonusPct += 0.1;
   }
 
-  // Vitality & Summoning Max HP bonuses + Healthy + Snack Max HP %
+  // Vitality & Summoning Max HP bonuses + Reforge + Permanent Shimmer Fruit Blessings
   const vitalityLv = skills.vitality?.level ?? 1;
-  let flatHpBonus = (vitalityLv - 1) * 2;
+  let flatHpBonus = (vitalityLv - 1) * 2 + reforge.maxHpFlat + shimmerHpBonus;
   if (hasTalent(player.skills, 'vitality', 'vit_stayin_alive')) flatHpBonus += 25;
   if (player.loadout.pet && hasTalent(player.skills, 'summoning', 'summon_tough_gang')) {
     flatHpBonus += 30;
@@ -589,8 +603,16 @@ export function computeVillageToDungeonBridge(
   );
   const effectiveCritChance = Math.min(
     0.95,
-    player.weapon.critChance + happyCritBonus + snackCritBonus + talentCritBonus
+    player.weapon.critChance +
+      happyCritBonus +
+      snackCritBonus +
+      talentCritBonus +
+      reforge.critBonus +
+      shimmerLuckCrit
   );
+  const effectiveDefense = Math.max(0, player.defense + reforge.defenseFlat + shimmerDefBonus);
+  const baseCastMult =
+    player.activeClass === 'mystic' && hasTalent(player.skills, 'magic', 'magic_frenzy') ? 1.15 : 1;
 
   const farmingLv = skills.farming?.level ?? 1;
   return {
@@ -619,7 +641,8 @@ export function computeVillageToDungeonBridge(
     botanicalVenomPowerPct: 0.22 + farmingLv * 0.002,
     seethingLifestealChance:
       player.activeClass === 'lbokator' && hasTalent(player.skills, 'melee', 'melee_seething') ? 0.1 : 0,
-    castSpeedMult:
-      player.activeClass === 'mystic' && hasTalent(player.skills, 'magic', 'magic_frenzy') ? 1.15 : 1,
+    castSpeedMult: Math.max(0.65, baseCastMult + reforge.attackSpeedPct),
+    effectiveDefense,
+    weaponSizeMult: 1 + reforge.sizePct,
   };
 }

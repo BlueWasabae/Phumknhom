@@ -774,29 +774,81 @@ export class OverworldScene extends Phaser.Scene {
       onInteract: () => EventBus.emit('ui:openModal', { modal: 'reforge', reforgeTab: 'bank' }),
     });
 
-    // 12. VILLAGE BLACKSMITH FORGE (North-East Plaza Lane)
+    // 12. VILLAGE BLACKSMITH FORGE + MASTER SOMNANG BLACKSMITH NPC (North-East Plaza Lane)
     const forgeImg = this.addBuildingOrProp({
       texture: 'blacksmith_anvil',
-      x: 604,
+      x: 598,
       y: 286,
       scale: 0.95,
       shadowW: 44,
       shadowH: 12,
       bodyW: 34,
       bodyH: 18,
-      label: 'BLACKSMITH REFORGE',
+      label: 'BLACKSMITH · REFORGE',
       joinArrowY: 236,
     });
     forgeImg.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
       EventBus.emit('ui:openModal', { modal: 'reforge', reforgeTab: 'reforge' });
     });
+
+    const blacksmithNpc = this.addBuildingOrProp({
+      texture: 'npc_blacksmith',
+      x: 632,
+      y: 290,
+      scale: 0.88,
+      shadowW: 26,
+      shadowH: 8,
+    });
+    this.tweens.add({
+      targets: blacksmithNpc,
+      y: 288,
+      duration: 520,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+    blacksmithNpc.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+      EventBus.emit('ui:openModal', { modal: 'reforge', reforgeTab: 'reforge' });
+    });
     this.landmarks.push({
-      x: 604,
+      x: 614,
       y: 292,
-      radius: 46,
-      label: 'Press [E] or Click → Blacksmith Prefix Reforging & Apsara Shimmer',
+      radius: 52,
+      label: 'Press [E] or Click → Master Somnang Blacksmith (Reforge & Calamity Arsenal)',
       isDungeonPortal: false,
       onInteract: () => EventBus.emit('ui:openModal', { modal: 'reforge', reforgeTab: 'reforge' }),
+    });
+
+    // 12B. SACRED APSARA SHIMMER SPRING (Cavern Edge beside Angkor Dungeon Portal!)
+    const shimmerGlow = this.add
+      .image(822, 238, 'torch_glow')
+      .setTint(0xc084fc)
+      .setScale(0.76)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(2140)
+      .setAlpha(0.55);
+    this.glowLights.push(shimmerGlow);
+    const shimmerSpringImg = this.addBuildingOrProp({
+      texture: 'shimmer_spring',
+      x: 822,
+      y: 256,
+      scale: 0.92,
+      shadowW: 54,
+      shadowH: 14,
+      label: 'APSARA SHIMMER SPRING',
+      joinArrowY: 214,
+    });
+    shimmerSpringImg.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+      soundManager.playSfx('magic');
+      EventBus.emit('ui:openModal', { modal: 'reforge', reforgeTab: 'shimmer' });
+    });
+    this.landmarks.push({
+      x: 822,
+      y: 258,
+      radius: 46,
+      label: 'Press [E] or Click → Sacred Apsara Shimmer Spring (Blessings & Boss Drop Cycle)',
+      isDungeonPortal: false,
+      onInteract: () => EventBus.emit('ui:openModal', { modal: 'reforge', reforgeTab: 'shimmer' }),
     });
 
     // 13. PHUM NIGHT CLUB (East Plaza — Tien Len & Ouk Chaktrang!)

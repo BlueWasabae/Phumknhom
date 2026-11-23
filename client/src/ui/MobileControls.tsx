@@ -7,6 +7,7 @@ interface MobileControlsProps {
   zone: ZoneType;
   nearPortal: boolean;
   bossHud?: BossHudPayload | null;
+  equippedWeaponId?: string | null;
 }
 
 export const MobileControls: React.FC<MobileControlsProps> = ({
@@ -14,6 +15,7 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
   zone,
   nearPortal,
   bossHud,
+  equippedWeaponId,
 }) => {
   const padRef = useRef<HTMLDivElement>(null);
   const activePointerId = useRef<number | null>(null);
@@ -106,6 +108,16 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
               </button>
             )}
             <div className="flex items-end gap-2">
+              {(equippedWeaponId === 'weapon_preah_khan' ||
+                equippedWeaponId === 'weapon_golden_riel_shot') && (
+                <button
+                  type="button"
+                  onPointerDown={() => EventBus.emit('input:secondary')}
+                  className="w-14 h-14 rounded-full bg-gradient-to-b from-amber-300 to-yellow-500 border-[3px] border-amber-950 text-amber-950 font-display font-bold text-[10px] leading-tight shadow-lg active:scale-95"
+                >
+                  {equippedWeaponId === 'weapon_preah_khan' ? '🛡️\nPARRY' : '🪙\nCOIN'}
+                </button>
+              )}
               <button
                 type="button"
                 onPointerDown={() => EventBus.emit('input:dash')}

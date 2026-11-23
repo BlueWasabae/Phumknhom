@@ -811,6 +811,78 @@ export class BootScene extends Phaser.Scene {
         tex.refresh();
       }
     }
+
+    if (!this.textures.exists('npc_blacksmith')) {
+      const tex = this.textures.createCanvas('npc_blacksmith', 34, 44);
+      if (tex) {
+        const ctx = tex.getContext();
+        ctx.imageSmoothingEnabled = false;
+        // Boots & leather apron
+        ctx.fillStyle = '#2b1b17';
+        ctx.fillRect(9, 24, 16, 18);
+        ctx.fillStyle = '#5c3317';
+        ctx.fillRect(10, 24, 14, 14);
+        ctx.fillStyle = '#78350f';
+        ctx.fillRect(11, 25, 12, 10);
+        // Muscular arms + skin head
+        ctx.fillStyle = '#2b1b17';
+        ctx.fillRect(9, 8, 16, 15);
+        ctx.fillStyle = '#d99a6c';
+        ctx.fillRect(10, 9, 14, 13);
+        ctx.fillRect(6, 22, 4, 9);
+        ctx.fillRect(24, 20, 4, 9);
+        // Red Krama blacksmith bandana & expressive eyes
+        ctx.fillStyle = '#dc2626';
+        ctx.fillRect(9, 9, 16, 4);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(11, 9, 3, 2);
+        ctx.fillRect(17, 9, 3, 2);
+        ctx.fillStyle = '#18181b';
+        ctx.fillRect(13, 15, 2, 3);
+        ctx.fillRect(19, 15, 2, 3);
+        // Iron Blacksmith Hammer in right hand
+        ctx.fillStyle = '#78350f';
+        ctx.fillRect(26, 12, 3, 14);
+        ctx.fillStyle = '#475569';
+        ctx.fillRect(22, 9, 10, 5);
+        ctx.fillStyle = '#cbd5e1';
+        ctx.fillRect(23, 10, 8, 2);
+        tex.refresh();
+      }
+    }
+
+    if (!this.textures.exists('shimmer_spring')) {
+      const tex = this.textures.createCanvas('shimmer_spring', 64, 42);
+      if (tex) {
+        const ctx = tex.getContext();
+        ctx.imageSmoothingEnabled = false;
+        // Carved Angkor sandstone spring rim
+        ctx.fillStyle = '#57534e';
+        ctx.beginPath();
+        ctx.ellipse(32, 24, 30, 15, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#a8a29e';
+        ctx.beginPath();
+        ctx.ellipse(32, 22, 26, 12, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // Iridescent rainbow Apsara Shimmer liquid
+        const grad = ctx.createLinearGradient(10, 14, 54, 30);
+        grad.addColorStop(0, '#c084fc');
+        grad.addColorStop(0.35, '#38bdf8');
+        grad.addColorStop(0.7, '#f472b6');
+        grad.addColorStop(1, '#fde047');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.ellipse(32, 22, 22, 9, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // Sparkle pixels
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(22, 19, 3, 2);
+        ctx.fillRect(36, 23, 3, 2);
+        ctx.fillRect(30, 16, 2, 2);
+        tex.refresh();
+      }
+    }
   }
 
   private registerAnimations(): void {

@@ -15,7 +15,7 @@ import {
 import { KHMER_CLASSES } from '@shared/khmerClasses';
 import { computeVillageToDungeonBridge } from '@shared/skillTrees';
 import {
-  REFORGE_COST_COINS,
+  getScaledReforgeCost,
   rollReforgeModifier,
   type ReforgeCategory,
 } from '@shared/reforgeModifiers';
@@ -54,7 +54,11 @@ import {
   purchaseDiamondShopItem,
   togglePlazaMount,
 } from './data/diamondStore';
-import { applyShimmerTransmute } from './data/calamityWeapons';
+import {
+  applyShimmerTransmute,
+  claimCalamityStarterChest,
+  craftCalamityWeapon,
+} from './data/calamityWeapons';
 import {
   payBusFare,
   unlockBiomeAndPylon,
@@ -607,13 +611,14 @@ export const App: React.FC = () => {
   const handleReforge = useCallback(
     async (category: ReforgeCategory) => {
       const cur = playerRef.current;
-      const cost = REFORGE_COST_COINS[category];
+      const cost = getScaledReforgeCost(category, cur.level);
       const currentPrefix = category === 'weapon' ? cur.weaponPrefix : cur.armorPrefix;
       const apiRes = await reforgeItemApi(authSessionRef.current, {
         category,
         currentPrefix,
         walletCoins: cur.currencies.coins,
         playerName: cur.name,
+        itemTierPower: cur.level,
       });
 
       const mod = apiRes.ok ? apiRes.modifier : rollReforgeModifier(category, currentPrefix);
@@ -623,6 +628,7 @@ export const App: React.FC = () => {
         return;
       }
 
+      soundManager.playSfx('hit');
       soundManager.playSfx(mod.tier === 'mythic' ? 'level_up' : 'coin');
       if (mod.tier === 'mythic') {
         EventBus.emit('ticker:push', {
@@ -1181,6 +1187,7 @@ export const App: React.FC = () => {
         zone={zone}
         nearPortal={nearPortal}
         bossHud={bossHud}
+        equippedWeaponId={player.weapon.id}
       />
 
       <ModeSelectorModal
@@ -1293,6 +1300,21 @@ export const App: React.FC = () => {
           })
         }
         onBankAction={handleBankAction}
+        onCraftCalamityWeapon={(itemId) =>
+          runStateAction((s) => {
+            const res = craftCalamityWeapon(s, itemId);
+            if (res.ok) soundManager.playSfx('level_up');
+            return res;
+          })
+        }
+        onClaimStarterChest={() =>
+          runStateAction((s) => {
+            const res = claimCalamityStarterChest(s);
+            if (res.ok) soundManager.playSfx('level_up');
+            return res;
+          })
+        }
+        onEquipWeapon={handleEquipItem}
       />
 
       <ClubGamesModal

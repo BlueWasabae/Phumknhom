@@ -1,4 +1,5 @@
 import type { CombatHitResult, DifficultyMode } from './types';
+import { getReforgeModifier } from './reforgeModifiers';
 
 export interface PlayerDamageInput {
   weaponBase: number;
@@ -7,6 +8,9 @@ export interface PlayerDamageInput {
   skillPct?: number;     // e.g. 0.10 = +10%
   armorPct?: number;
   snackBuffPct?: number;
+  weaponPrefix?: string | null; // Terraria-style weapon prefix (Legendary/Unreal/Mythical/etc.)
+  armorPrefix?: string | null;  // Terraria-style accessory prefix (Menacing/Lucky/Warding/etc.)
+  evolvingBossClears?: number;  // Unique Bestiary boss clears for Evolving Blade (+15% each)
   enemyDefense?: number;
   armorPen?: number;
   bossDR?: number;       // 0..0.95
@@ -20,6 +24,7 @@ export interface PlayerDamageInput {
 export interface DamageTakenInput {
   bossAttack: number;
   currentDefense: number;
+  armorPrefix?: string | null;
   rawDR?: number;
   difficulty?: DifficultyMode;
 }
@@ -49,8 +54,44 @@ export function getXpForNextLevel(level: number): number {
 }
 
 /**
- * 4-Step Player Offensive Damage Formula with ±8% variance:
- * 1. RawDmg   = (WeaponBase * (1 + 0.06 * UpgradeLv) + FlatBonuses) * (1 + SkillPct + ArmorPct + SnackBuffPct)
+ * Evolving Blade of Angkor (+15% base damage & +10% slash size per unique Bestiary boss defeated).
+ */
+export function getEvolvingBladeMultiplier(uniqueBossClears: number): number {
+  const clears = Math.max(0, Math.min(10, Math.floor(uniqueBossClears)));
+  return 1 + clears * 0.15;
+}
+
+/**
+ * Computes combined live deltas from equipped Terraria-style Weapon & Accessory prefixes.
+ */
+export function computeReforgeDeltas(
+  weaponPrefix?: string | null,
+  armorPrefix?: string | null
+): {
+  damagePct: number;
+  critBonus: number;
+  attackSpeedPct: number;
+  moveSpeedPct: number;
+  sizePct: number;
+  defenseFlat: number;
+  maxHpFlat: number;
+} {
+  const w = getReforgeModifier('weapon', weaponPrefix);
+  const a = getReforgeModifier('armor', armorPrefix);
+  return {
+    damagePct: (w?.damagePct ?? 0) + (a?.damagePct ?? 0),
+    critBonus: (w?.critBonus ?? 0) + (a?.critBonus ?? 0),
+    attackSpeedPct: (w?.speedPct ?? 0) + (a?.speedPct ?? 0),
+    moveSpeedPct: (w?.moveSpeedPct ?? 0) + (a?.moveSpeedPct ?? 0),
+    sizePct: w?.sizePct ?? 0,
+    defenseFlat: (w?.defenseFlat ?? 0) + (a?.defenseFlat ?? 0),
+    maxHpFlat: (w?.maxHpFlat ?? 0) + (a?.maxHpFlat ?? 0),
+  };
+}
+
+/**
+ * 4-Step Player Offensive Damage Formula with Reforge Prefixes, Evolving Scaling & ±8% variance:
+ * 1. RawDmg   = (WeaponBase * EvolvingMult * (1 + 0.06 * UpgradeLv) + FlatBonuses) * (1 + SkillPct + ArmorPct + SnackBuffPct + ReforgeDmgPct)
  * 2. AfterDef = max(1, RawDmg - max(0, (EnemyDef - ArmorPen) * 0.5))
  * 3. FinalDmg = AfterDef * (1 - BossDR) * CritMult * FocusMult * Variance(0.92..1.08)
  * Reference: docs/GDD_SYSTEMS_SKILLS_AND_BALANCE.md §4.2
@@ -65,11 +106,18 @@ export function calculatePlayerDamage(input: PlayerDamageInput): CombatHitResult
   const enemyDefense = Math.max(0, input.enemyDefense ?? 0);
   const armorPen = Math.max(0, input.armorPen ?? 0);
   const bossDR = Math.max(0, Math.min(0.95, input.bossDR ?? 0));
-  const critChance = Math.max(0, Math.min(1, input.critChance ?? 0.05));
+
+  const reforge = computeReforgeDeltas(input.weaponPrefix, input.armorPrefix);
+  const evolvingMult =
+    typeof input.evolvingBossClears === 'number' && input.evolvingBossClears > 0
+      ? getEvolvingBladeMultiplier(input.evolvingBossClears)
+      : 1;
+
+  const critChance = Math.max(0, Math.min(1, (input.critChance ?? 0.05) + reforge.critBonus));
+  const totalPct = Math.max(-0.5, skillPct + armorPct + snackBuffPct + reforge.damagePct);
 
   const rawDamage =
-    (input.weaponBase * (1 + 0.06 * upgradeLv) + flatBonuses) *
-    (1 + skillPct + armorPct + snackBuffPct);
+    (input.weaponBase * evolvingMult * (1 + 0.06 * upgradeLv) + flatBonuses) * (1 + totalPct);
 
   const defenseMitigation = Math.max(0, (enemyDefense - armorPen) * 0.5);
   const afterDefense = Math.max(1, rawDamage - defenseMitigation);
@@ -109,15 +157,17 @@ export function calculateEffectiveDR(rawDR: number): number {
 
 /**
  * Player Defense & Damage Taken Formula:
- * DamageTaken = max(1, (BossAttack - (CurrentDef * D_mode)) * (1 - EffectiveDR))
+ * DamageTaken = max(1, (BossAttack - ((CurrentDef + ReforgeDef) * D_mode)) * (1 - EffectiveDR))
  * D_mode: Normal = 0.50, Expert = 0.75, Calamity/Death = 1.00
  * Reference: docs/GDD_SYSTEMS_SKILLS_AND_BALANCE.md §4.3
  */
 export function calculateDamageTaken(input: DamageTakenInput): number {
   const difficulty = input.difficulty ?? 'normal';
   const dMode = DEFENSE_MODE_MULTIPLIER[difficulty];
+  const reforge = computeReforgeDeltas(null, input.armorPrefix);
+  const effectiveDef = input.currentDefense + reforge.defenseFlat;
   const effectiveDR = calculateEffectiveDR(input.rawDR ?? 0);
-  const mitigated = (input.bossAttack - input.currentDefense * dMode) * (1 - effectiveDR);
+  const mitigated = (input.bossAttack - effectiveDef * dMode) * (1 - effectiveDR);
   return Math.max(1, Math.round(mitigated));
 }
 

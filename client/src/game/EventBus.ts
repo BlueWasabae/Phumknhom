@@ -183,6 +183,7 @@ export interface EventMap {
   'input:interact': void;
   'input:jump': void;
   'input:attack': void;
+  'input:secondary': void;
   'input:dash': void;
   'input:focus': void;
   'input:fury': void;

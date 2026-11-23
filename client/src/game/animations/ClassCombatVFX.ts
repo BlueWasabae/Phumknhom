@@ -6,8 +6,15 @@ export interface SpawnedProjectile {
   vy: number;
   damageScale: number;
   colorHex: number;
-  kind: 'arrow' | 'mystic_orb' | 'riel_coin';
+  kind: 'arrow' | 'mystic_orb' | 'riel_coin' | 'evolving_wave';
   ricochetsLeft?: number;
+  expiresAt: number;
+}
+
+export interface TossedGoldCoin {
+  node: Phaser.GameObjects.Container;
+  vx: number;
+  vy: number;
   expiresAt: number;
 }
 
@@ -458,6 +465,241 @@ export class ClassCombatVFX {
         onComplete: () => {
           beam.destroy();
           core.destroy();
+        },
+      });
+    });
+  }
+
+  /**
+   * 1. Preah Khan 0.35s Golden Parry Guard Dome & Successful Counter Shockwave
+   */
+  public playPreahKhanParryGuard(x: number, y: number, dir: number): void {
+    const shield = this.scene.add
+      .arc(x + dir * 24, y - 4, 34, -75, 75, false, 0xfacc15, 0.42)
+      .setStrokeStyle(4, 0xfef9c3, 1)
+      .setScale(dir, 1)
+      .setDepth(70);
+    this.scene.tweens.add({
+      targets: shield,
+      alpha: 0.15,
+      scaleX: dir * 1.15,
+      scaleY: 1.15,
+      duration: 350,
+      onComplete: () => shield.destroy(),
+    });
+  }
+
+  public playPreahKhanParrySuccess(x: number, y: number): void {
+    const ring = this.scene.add
+      .circle(x, y - 6, 20, 0xfacc15, 0.5)
+      .setStrokeStyle(5, 0xffffff, 1)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(75);
+    this.scene.cameras.main.flash(140, 250, 204, 21);
+    this.scene.cameras.main.shake(120, 0.007);
+    this.scene.tweens.add({
+      targets: ring,
+      scale: 4.5,
+      alpha: 0,
+      duration: 320,
+      ease: 'Cubic.easeOut',
+      onComplete: () => ring.destroy(),
+    });
+  }
+
+  /**
+   * 2. Crossbow of the Golden Riel: Flicked Gold Coin Arc + Blinding Golden Lightning Ricochet Chain
+   */
+  public spawnTossedGoldCoin(x: number, y: number, dir: number): TossedGoldCoin {
+    const container = this.scene.add.container(x + dir * 22, y - 24).setDepth(68);
+    const halo = this.scene.add.circle(0, 0, 15, 0xfacc15, 0.32).setBlendMode(Phaser.BlendModes.ADD);
+    const coin = this.scene.add.circle(0, 0, 9, 0xfacc15, 1).setStrokeStyle(2.5, 0x78350f);
+    const gleam = this.scene.add.rectangle(0, 0, 5, 5, 0xffffff, 1);
+    container.add([halo, coin, gleam]);
+    this.scene.tweens.add({
+      targets: coin,
+      scaleX: 0.28,
+      duration: 85,
+      yoyo: true,
+      repeat: -1,
+    });
+    return {
+      node: container,
+      vx: dir * 195 + (Math.random() - 0.5) * 40,
+      vy: -365,
+      expiresAt: this.scene.time.now + 2400,
+    };
+  }
+
+  public playCoinRicochetLightning(points: Array<{ x: number; y: number }>): void {
+    if (points.length < 2) return;
+    const gOuter = this.scene.add.graphics().setBlendMode(Phaser.BlendModes.ADD).setDepth(74);
+    const gCore = this.scene.add.graphics().setBlendMode(Phaser.BlendModes.ADD).setDepth(75);
+    gOuter.lineStyle(12, 0xfacc15, 0.85);
+    gCore.lineStyle(4, 0xffffff, 1);
+
+    gOuter.beginPath();
+    gCore.beginPath();
+    gOuter.moveTo(points[0].x, points[0].y);
+    gCore.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i++) {
+      const p0 = points[i - 1];
+      const p1 = points[i];
+      const mx = (p0.x + p1.x) / 2 + (Math.random() - 0.5) * 18;
+      const my = (p0.y + p1.y) / 2 + (Math.random() - 0.5) * 18;
+      gOuter.lineTo(mx, my);
+      gCore.lineTo(mx, my);
+      gOuter.lineTo(p1.x, p1.y);
+      gCore.lineTo(p1.x, p1.y);
+
+      const flash = this.scene.add
+        .circle(p1.x, p1.y, 18, 0xfef08a, 0.9)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(76);
+      this.scene.tweens.add({
+        targets: flash,
+        scale: 2.8,
+        alpha: 0,
+        duration: 240,
+        onComplete: () => flash.destroy(),
+      });
+    }
+    gOuter.strokePath();
+    gCore.strokePath();
+
+    this.scene.cameras.main.flash(110, 254, 240, 138);
+    this.scene.cameras.main.shake(150, 0.008);
+    this.scene.tweens.add({
+      targets: [gOuter, gCore],
+      alpha: 0,
+      duration: 290,
+      onComplete: () => {
+        gOuter.destroy();
+        gCore.destroy();
+      },
+    });
+  }
+
+  /**
+   * 3. Evolving Blade of Angkor: Golden Yant Wave Projectile scaled by unique Bestiary clears
+   */
+  public spawnEvolvingYantWave(x: number, y: number, dir: number, scaleMult = 1): SpawnedProjectile {
+    const container = this.scene.add.container(x + dir * 32, y - 6).setDepth(64);
+    const arc = this.scene.add
+      .arc(0, 0, 22 * scaleMult, -65, 65, false, 0xfacc15, 0.72)
+      .setStrokeStyle(3, 0xffffff, 0.95)
+      .setScale(dir, 1);
+    const rune = this.scene.add.rectangle(-dir * 6, 0, 10, 10, 0xfef08a, 0.9).setAngle(45);
+    container.add([arc, rune]);
+
+    return {
+      node: container,
+      vx: dir * 560,
+      vy: 0,
+      damageScale: 0.65 * scaleMult,
+      colorHex: 0xfacc15,
+      kind: 'evolving_wave',
+      expiresAt: this.scene.time.now + 1050,
+    };
+  }
+
+  /**
+   * 4. Tome of Fractured Yant: 3 Off-Screen Golden Light-Blades slashing in at crisscrossing angles!
+   */
+  public playFracturedYantCrisscross(targetX: number, targetY: number): void {
+    const angles = [-36, 32, -8];
+    angles.forEach((deg, idx) => {
+      const blade = this.scene.add
+        .rectangle(targetX, targetY, 540, 14, 0xfacc15, 0.85)
+        .setStrokeStyle(3, 0xffffff, 1)
+        .setAngle(deg)
+        .setScale(0.15, 1)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(72);
+      this.scene.tweens.add({
+        targets: blade,
+        scaleX: 1.35,
+        scaleY: 0.12,
+        alpha: 0,
+        delay: idx * 65,
+        duration: 280,
+        ease: 'Cubic.easeOut',
+        onComplete: () => blade.destroy(),
+      });
+    });
+  }
+
+  /**
+   * 5. Frost Fang of Singha: Glacial Stealth Strike X-Slice + Ice Shards
+   */
+  public playFrostFangStealthSlice(x: number, y: number, dir: number): void {
+    const cx = x + dir * 52;
+    const cy = y - 6;
+    const g = this.scene.add.graphics().setBlendMode(Phaser.BlendModes.ADD).setDepth(70);
+    g.lineStyle(8, 0x38bdf8, 0.95);
+    g.beginPath();
+    g.moveTo(cx - 42, cy - 36);
+    g.lineTo(cx + 42, cy + 36);
+    g.moveTo(cx + 42, cy - 36);
+    g.lineTo(cx - 42, cy + 36);
+    g.strokePath();
+    g.lineStyle(3, 0xe0f2fe, 1);
+    g.strokePath();
+
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      const shard = this.scene.add.rectangle(cx, cy, 10, 4, 0xbae6fd, 0.95).setRotation(a).setDepth(71);
+      this.scene.tweens.add({
+        targets: shard,
+        x: cx + Math.cos(a) * 58,
+        y: cy + Math.sin(a) * 58,
+        alpha: 0,
+        duration: 280,
+        onComplete: () => shard.destroy(),
+      });
+    }
+    this.scene.tweens.add({
+      targets: g,
+      alpha: 0,
+      duration: 260,
+      onComplete: () => g.destroy(),
+    });
+  }
+
+  /**
+   * 6. Hanuman Spirit Banner: 3 Fast Golden Monkey-Warrior Spirits Dash-Slashing in V-Formation!
+   */
+  public playHanumanSpiritFormation(
+    fromX: number,
+    fromY: number,
+    targetX: number,
+    targetY: number,
+    onEachStrike: (index: number) => void
+  ): void {
+    const offsets = [
+      { ox: -22, oy: -42 },
+      { ox: 0, oy: 0 },
+      { ox: -22, oy: 42 },
+    ];
+    offsets.forEach((off, idx) => {
+      const spirit = this.scene.add.container(fromX + off.ox, fromY + off.oy).setDepth(68);
+      const aura = this.scene.add.circle(0, 0, 14, 0xfacc15, 0.42).setBlendMode(Phaser.BlendModes.ADD);
+      const body = this.scene.add.rectangle(0, 0, 14, 16, 0xfde047, 0.95).setStrokeStyle(2, 0xb45309);
+      const crown = this.scene.add.triangle(0, -11, -6, 4, 0, -6, 6, 4, 0xdc2626);
+      spirit.add([aura, body, crown]);
+
+      const dashDir = targetX >= fromX ? 1 : -1;
+      this.scene.tweens.add({
+        targets: spirit,
+        x: targetX + dashDir * 72,
+        y: targetY + off.oy * 0.45,
+        delay: idx * 75,
+        duration: 240,
+        ease: 'Cubic.easeIn',
+        onComplete: () => {
+          onEachStrike(idx);
+          this.playImpactSparks(targetX, targetY + off.oy * 0.35, 0xfacc15);
+          spirit.destroy();
         },
       });
     });

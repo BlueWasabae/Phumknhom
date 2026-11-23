@@ -17,11 +17,10 @@ import {
   hasTalent,
 } from '@shared/skillTrees';
 import { KHMER_BOSSES, rollBossLoot, type RolledBossLoot } from '@shared/khmerBosses';
-import { getReforgeModifier } from '@shared/reforgeModifiers';
 import {
   CALAMITY_WEAPONS,
-  getEvolvingRelicMultiplier,
   getPreahKhanBiomeBonus,
+  getUniqueBossClearsCount,
 } from '../../data/calamityWeapons';
 import { awardSkillXp } from '../systems/SkillManager';
 import { soundManager } from '../systems/SoundManager';
@@ -31,7 +30,11 @@ import { Player } from '../entities/Player';
 import { PaperDoll, type PaperDollPose } from '../entities/PaperDoll';
 import { Pet } from '../entities/Pet';
 import { BossController } from '../entities/BossController';
-import { ClassCombatVFX, type SpawnedProjectile } from '../animations/ClassCombatVFX';
+import {
+  ClassCombatVFX,
+  type SpawnedProjectile,
+  type TossedGoldCoin,
+} from '../animations/ClassCombatVFX';
 import {
   parseAppearance,
   roomClient,
@@ -119,9 +122,13 @@ export class DungeonBossScene extends Phaser.Scene {
   };
   private lastStationHealAt = 0;
 
-  // 5-Class Combat & Calamity Gauges
+  // 5-Class Combat & Calamity Weapon Mechanics
   private projectiles: SpawnedProjectile[] = [];
+  private tossedCoins: TossedGoldCoin[] = [];
   private yantSigils: Phaser.GameObjects.Container[] = [];
+  private parryActiveUntil = 0;
+  private parryCooldownUntil = 0;
+  private realityRipCharged = false;
   private lbokatorStance = 1;
   private consecutiveMeleeHits = 0;
   private stealthPct = 0;
@@ -142,7 +149,7 @@ export class DungeonBossScene extends Phaser.Scene {
   // Platformer & Controls
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keys!: Record<
-    'A' | 'D' | 'W' | 'E' | 'J' | 'L' | 'F' | 'R' | 'SHIFT' | 'SPACE',
+    'A' | 'D' | 'W' | 'E' | 'J' | 'L' | 'F' | 'Q' | 'R' | 'SHIFT' | 'SPACE',
     Phaser.Input.Keyboard.Key
   >;
   private joystick: JoystickVector = { x: 0, y: 0 };
@@ -284,16 +291,56 @@ export class DungeonBossScene extends Phaser.Scene {
     this.cameras.main.fadeIn(240, 8, 10, 20);
 
     this.cursors = this.input.keyboard!.createCursorKeys();
-    this.keys = this.input.keyboard!.addKeys('A,D,W,E,J,L,F,R,SHIFT,SPACE') as Record<
-      'A' | 'D' | 'W' | 'E' | 'J' | 'L' | 'F' | 'R' | 'SHIFT' | 'SPACE',
+    this.keys = this.input.keyboard!.addKeys('A,D,W,E,J,L,F,Q,R,SHIFT,SPACE') as Record<
+      'A' | 'D' | 'W' | 'E' | 'J' | 'L' | 'F' | 'Q' | 'R' | 'SHIFT' | 'SPACE',
       Phaser.Input.Keyboard.Key
     >;
 
+    // Enable crisp Right-Click for Preah Khan Parry & Golden Riel Coin Toss without browser menu popup
+    this.input.mouse?.disableContextMenu();
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      if (pointer.leftButtonDown() && !this.playerDefeated) {
+      if (this.playerDefeated) return;
+      if (pointer.rightButtonDown()) {
+        this.performSecondaryWeaponAction();
+      } else if (pointer.leftButtonDown()) {
         this.performClassAttack();
       }
     });
+
+    // Glowing Apsara Shimmer Spring in the safe left cavern alcove (click to open Shimmer Tab!)
+    const shimmerPool = this.add
+      .ellipse(240, FLOOR_Y - 6, 76, 18, 0xc084fc, 0.72)
+      .setStrokeStyle(2.5, 0x67e8f9, 0.95)
+      .setDepth(28)
+      .setInteractive({ useHandCursor: true });
+    this.tweens.add({
+      targets: shimmerPool,
+      alpha: 0.42,
+      scaleX: 1.08,
+      duration: 950,
+      yoyo: true,
+      repeat: -1,
+    });
+    shimmerPool.on('pointerdown', () => {
+      soundManager.playSfx('magic');
+      EventBus.emit('ui:openModal', { modal: 'reforge', reforgeTab: 'shimmer' });
+    });
+    this.add
+      .text(240, FLOOR_Y - 26, '✨ APSARA SHIMMER SPRING', {
+        fontFamily: 'Fredoka, sans-serif',
+        fontSize: '10px',
+        fontStyle: 'bold',
+        color: '#f0abfc',
+        backgroundColor: 'rgba(15,23,42,0.85)',
+        padding: { x: 6, y: 2 },
+      })
+      .setOrigin(0.5)
+      .setDepth(30);
+
+    this.tossedCoins = [];
+    this.parryActiveUntil = 0;
+    this.parryCooldownUntil = 0;
+    this.realityRipCharged = false;
 
     this.unsubs.push(
       EventBus.on('mobile:joystick', (vec) => {
@@ -318,6 +365,7 @@ export class DungeonBossScene extends Phaser.Scene {
       }),
       EventBus.on('input:jump', () => this.performJump()),
       EventBus.on('input:attack', () => this.performClassAttack()),
+      EventBus.on('input:secondary', () => this.performSecondaryWeaponAction()),
       EventBus.on('input:dash', () => this.performClassDash()),
       EventBus.on('input:focus', () => this.activateFocusBurst()),
       EventBus.on('input:fury', () => this.activateFuryBurst()),
@@ -1035,6 +1083,18 @@ export class DungeonBossScene extends Phaser.Scene {
       return;
     }
 
+    // 1. Preah Khan 0.35s Golden Parry Window — Negates ALL damage & charges Reality Rip!
+    if (now < this.parryActiveUntil) {
+      this.parryActiveUntil = 0;
+      this.realityRipCharged = true;
+      this.invulnerableUntil = now + 650;
+      soundManager.playSfx('level_up');
+      this.vfx.playPreahKhanParrySuccess(this.player.x, this.player.y);
+      this.spawnFloatingText(this.player.x, this.player.y - 54, '🛡️ PARRY! REALITY RIP CHARGED!', '#fde047', '17px');
+      EventBus.emit('ui:toast', { text: '🛡️ PARRIED! Next Preah Khan strike unleashes REALITY RIP!' });
+      return;
+    }
+
     const bridge = computeVillageToDungeonBridge(this.player.state, Date.now(), this.consecutiveMeleeHits);
 
     // Coconut Water Anti-Venom Counter (negates Shadow Naga poison pools & venom spits!)
@@ -1044,10 +1104,9 @@ export class DungeonBossScene extends Phaser.Scene {
       this.spawnFloatingText(this.player.x, this.player.y - 44, '🥥 ANTI-VENOM IMMUNE!', '#67e8f9', '15px');
       return;
     }
-    const armorReforge = getReforgeModifier('armor', this.player.state.armorPrefix);
     const shimmerDef = (this.player.state.shimmerBlessings ?? []).includes('blessing_sandstone_ward') ? 5 : 0;
     const bastDef = this.arenaStations.bastStatue ? 6 : 0;
-    const totalDefense = this.player.state.defense + (armorReforge?.defenseFlat ?? 0) + shimmerDef + bastDef;
+    const totalDefense = this.player.state.defense + shimmerDef + bastDef;
     const effectiveDefense =
       now < this.defenseCrackedUntil
         ? Math.max(0, Math.round(totalDefense * 0.75))
@@ -1056,6 +1115,7 @@ export class DungeonBossScene extends Phaser.Scene {
     const dmg = calculateDamageTaken({
       bossAttack: rawBossAttack,
       currentDefense: effectiveDefense,
+      armorPrefix: this.player.state.armorPrefix,
       rawDR: bridge.rawDRBonus,
       difficulty: this.difficulty,
     });
@@ -1182,6 +1242,79 @@ export class DungeonBossScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Secondary Calamity Weapon Action (Right-Click / [Q] / Touch Secondary Button):
+   * - Preah Khan of the 8 Biomes: Raises 0.35s golden Parry Guard -> negates damage & charges Reality Rip!
+   * - Crossbow of the Golden Riel: Flicks spinning Gold Coin in an arc (up to 3 airborne coins!).
+   */
+  private performSecondaryWeaponAction(): void {
+    const now = this.time.now;
+    if (this.transitioning || this.playerDefeated) return;
+    const weaponId = this.player.state.weapon.id;
+    const dir = this.player.facingRight ? 1 : -1;
+
+    if (weaponId === 'weapon_preah_khan') {
+      if (now < this.parryCooldownUntil) return;
+      this.parryActiveUntil = now + 350;
+      this.parryCooldownUntil = now + 1050;
+      soundManager.playSfx('magic');
+      this.player.triggerSquash(0.92, 1.08);
+      this.vfx.playPreahKhanParryGuard(this.player.x, this.player.y, dir);
+      this.spawnFloatingText(this.player.x, this.player.y - 40, '🛡️ PARRY GUARD', '#fde047', '13px');
+      return;
+    }
+
+    if (weaponId === 'weapon_golden_riel_shot') {
+      if (this.tossedCoins.length >= 3) {
+        EventBus.emit('ui:toast', { text: '🪙 Max 3 Golden Riel Coins in the air — SHOOT them now!' });
+        return;
+      }
+      soundManager.playSfx('coin');
+      const coin = this.vfx.spawnTossedGoldCoin(this.player.x, this.player.y, dir);
+      this.tossedCoins.push(coin);
+      this.spawnFloatingText(
+        this.player.x + dir * 18,
+        this.player.y - 42,
+        `🪙 COIN ×${this.tossedCoins.length}`,
+        '#facc15',
+        '13px'
+      );
+      return;
+    }
+
+    EventBus.emit('ui:toast', {
+      text: 'Tip: Right-Click / [Q] triggers Parry (Preah Khan) or Coin Toss (Golden Riel Crossbow)!',
+    });
+  }
+
+  /**
+   * Triggers Ultrakill-style Golden Riel Coin Trick-Shot chain across all airborne coins straight into the boss!
+   */
+  private triggerGoldenRielCoinChain(dir: number): boolean {
+    if (this.tossedCoins.length === 0 || !this.bossCtrl.alive) return false;
+    const count = this.tossedCoins.length;
+    const chainPoints: Array<{ x: number; y: number }> = [
+      { x: this.player.x + dir * 18, y: this.player.y - 10 },
+    ];
+    for (const c of this.tossedCoins) {
+      chainPoints.push({ x: c.node.x, y: c.node.y });
+      c.node.destroy();
+    }
+    this.tossedCoins = [];
+    chainPoints.push({ x: this.bossCtrl.x, y: this.bossCtrl.y - 84 });
+
+    soundManager.playSfx('crit');
+    soundManager.playSfx('coin');
+    this.vfx.playCoinRicochetLightning(chainPoints);
+    const mult = count >= 3 ? 3.4 : count === 2 ? 2.6 : 1.9;
+    this.damageBoss(dir, {
+      bonusMult: mult,
+      guaranteedCrit: true,
+      tag: count >= 2 ? `⚡ ${count}× COIN SUPER-CRIT!` : '⚡ COIN TRICK-SHOT!',
+    });
+    return true;
+  }
+
   private performClassAttack(): void {
     const now = this.time.now;
     if (now < this.attackCooldownUntil || this.transitioning || this.playerDefeated) return;
@@ -1194,6 +1327,7 @@ export class DungeonBossScene extends Phaser.Scene {
     this.attackCooldownUntil = now + cooldownMs;
     this.attackAnimUntil = now + 185;
     this.lastAttackAt = now;
+    this.player.triggerSquash(1.12, 0.92);
 
     const dir = this.player.facingRight ? 1 : -1;
     if (roomClient.isInCoopDungeon) {
@@ -1202,6 +1336,10 @@ export class DungeonBossScene extends Phaser.Scene {
 
     if (cls === 'archer') {
       if (weapon.id === 'weapon_golden_riel_shot') {
+        // If player flicked Gold Coin(s) mid-air, shooting triggers guaranteed 100% Super-Crit lightning chain!
+        if (this.triggerGoldenRielCoinChain(dir)) {
+          return;
+        }
         soundManager.playSfx('coin');
         this.projectiles.push(this.vfx.spawnGoldenRielCoin(this.player.x, this.player.y, dir, 1.05, 2));
       } else {
@@ -1218,6 +1356,20 @@ export class DungeonBossScene extends Phaser.Scene {
     }
 
     if (cls === 'tamer') {
+      if (weapon.id === 'weapon_hanuman_banner') {
+        soundManager.playSfx('magic');
+        const targetX = this.bossCtrl.alive ? this.bossCtrl.x : this.player.x + dir * 240;
+        const targetY = this.bossCtrl.alive ? this.bossCtrl.y - 84 : this.player.y - 10;
+        this.vfx.playHanumanSpiritFormation(this.player.x, this.player.y - 12, targetX, targetY, (idx) => {
+          if (this.bossCtrl.alive) {
+            this.damageBoss(dir, {
+              bonusMult: 0.56 * (1 + bridge.petDamageBonusPct),
+              tag: idx === 1 ? '🐒 HANUMAN FORMATION!' : undefined,
+            });
+          }
+        });
+        return;
+      }
       soundManager.playSfx('krama');
       this.vfx.playKramaWhipSnap(this.player.x, this.player.y, dir);
       const whipBox = new Phaser.Geom.Rectangle(this.player.x + (dir > 0 ? 0 : -118), this.player.y - 44, 118, 88);
@@ -1249,17 +1401,25 @@ export class DungeonBossScene extends Phaser.Scene {
       this.broadcastClassMeter();
 
       soundManager.playSfx('swing');
-      if (isShadowStrike && weapon.id === 'weapon_reality_rip_blade') {
+      const isFrostFang = weapon.id === 'weapon_frost_fang_singha';
+      if (isShadowStrike && isFrostFang) {
+        this.vfx.playFrostFangStealthSlice(this.player.x, this.player.y, dir);
+      } else if (isShadowStrike && weapon.id === 'weapon_reality_rip_blade') {
         this.vfx.playParryRealityRip(this.player.x + dir * 80, this.player.y - 12);
       } else {
         this.vfx.playShadowTwinSlash(this.player.x, this.player.y, dir, isShadowStrike);
       }
-      const slashBox = new Phaser.Geom.Rectangle(this.player.x + dir * 46 - 52, this.player.y - 46, 104, 92);
+      const rangeScale = bridge.weaponSizeMult;
+      const slashW = Math.round((isFrostFang ? 94 : 104) * rangeScale);
+      const slashBox = new Phaser.Geom.Rectangle(this.player.x + dir * 44 - slashW / 2, this.player.y - 46, slashW, 92);
       this.checkMeleeBoxHits(slashBox, dir, {
         bonusMult: isShadowStrike ? (weapon.id === 'weapon_reality_rip_blade' ? 1.9 : 1.55) : 1,
         guaranteedCrit: isShadowStrike,
+        frostTruePctHp: isShadowStrike && isFrostFang ? 0.03 : 0,
         tag: isShadowStrike
-          ? weapon.id === 'weapon_reality_rip_blade'
+          ? isFrostFang
+            ? '❄️ SINGHA 3% HP SLICE!'
+            : weapon.id === 'weapon_reality_rip_blade'
             ? 'REALITY RIP!'
             : 'SHADOW STRIKE!'
           : undefined,
@@ -1267,20 +1427,55 @@ export class DungeonBossScene extends Phaser.Scene {
       return;
     }
 
-    // Lbokator Warrior 3-Hit Animal-Stance Combo (also supports 8-Biome Preah Khan & Golden Frying Pan!)
+    // Lbokator Warrior 3-Hit Animal-Stance Combo (Preah Khan Parry Reality-Rip, Evolving Blade of Angkor, Golden Pan!)
     const stance = this.lbokatorStance;
-    soundManager.playSfx('swing');
     const isPreahKhan = weapon.id === 'weapon_preah_khan';
+    const isEvolvingBlade = weapon.id === 'weapon_evolving_angkor_blade';
+    const uniqueClears = getUniqueBossClearsCount(this.player.state);
+
+    // Preah Khan charged Reality Rip counter-slash!
+    if (isPreahKhan && this.realityRipCharged) {
+      this.realityRipCharged = false;
+      soundManager.playSfx('crit');
+      const ripX = this.bossCtrl.alive ? this.bossCtrl.x : this.player.x + dir * 130;
+      const ripY = this.bossCtrl.alive ? this.bossCtrl.y - 80 : this.player.y - 14;
+      this.vfx.playParryRealityRip(ripX, ripY);
+      if (this.bossCtrl.alive) {
+        this.damageBoss(dir, {
+          bonusMult: 2.8,
+          guaranteedCrit: true,
+          extraArmorPen: 12,
+          tag: '⚡ REALITY RIP!',
+        });
+      }
+      return;
+    }
+
+    soundManager.playSfx('swing');
     const preahBonus = isPreahKhan ? getPreahKhanBiomeBonus(this.player.state.activeBiome) : null;
+    const sizeMult = bridge.weaponSizeMult * (isEvolvingBlade ? 1 + Math.min(0.6, uniqueClears * 0.1) : 1);
+
     if (isPreahKhan && preahBonus) {
       this.vfx.playPreahKhanBiomeSlash(this.player.x, this.player.y, dir, preahBonus.colorHex);
     } else {
       this.vfx.playLbokatorSlash(this.player.x, this.player.y, dir, stance);
     }
-    const swingBox = new Phaser.Geom.Rectangle(this.player.x + dir * 50 - 54, this.player.y - 48, 108, 96);
+
+    // Evolving Blade of Angkor fires golden Yant wave projectile once >= 1 Boss is defeated!
+    if (isEvolvingBlade) {
+      this.projectiles.push(
+        this.vfx.spawnEvolvingYantWave(this.player.x, this.player.y, dir, 1 + uniqueClears * 0.1)
+      );
+    }
+
+    const boxW = Math.round(108 * sizeMult);
+    const boxH = Math.round(96 * sizeMult);
+    const swingBox = new Phaser.Geom.Rectangle(this.player.x + dir * 50 - boxW / 2, this.player.y - boxH / 2, boxW, boxH);
     const isGoldenPan = weapon.id === 'weapon_golden_pan';
     const stanceLabel = isGoldenPan
       ? 'BONK!'
+      : isEvolvingBlade && uniqueClears > 0
+      ? `ANGKOR LV.${uniqueClears}`
       : isPreahKhan && preahBonus
       ? `${preahBonus.elementName.toUpperCase()}!`
       : stance === 3
@@ -1290,7 +1485,8 @@ export class DungeonBossScene extends Phaser.Scene {
       : undefined;
     this.checkMeleeBoxHits(swingBox, dir, {
       bonusMult: (stance === 3 ? 1.35 : 1) * (1 + (preahBonus?.bonusDmgPct ?? 0)),
-      extraArmorPen: stance === 2 ? 6 : 0,
+      extraArmorPen: (stance === 2 ? 6 : 0) + (preahBonus?.passiveKind === 'armor_shred' ? 10 : 0),
+      preahPassive: preahBonus?.passiveKind,
       tag: stanceLabel,
     });
     this.lbokatorStance = stance >= 3 ? 1 : stance + 1;
@@ -1300,7 +1496,14 @@ export class DungeonBossScene extends Phaser.Scene {
   private checkMeleeBoxHits(
     box: Phaser.Geom.Rectangle,
     dir: number,
-    opts: { bonusMult?: number; guaranteedCrit?: boolean; extraArmorPen?: number; tag?: string }
+    opts: {
+      bonusMult?: number;
+      guaranteedCrit?: boolean;
+      extraArmorPen?: number;
+      frostTruePctHp?: number;
+      preahPassive?: 'healing_wind' | 'explosive_fire' | 'armor_shred' | 'celestial';
+      tag?: string;
+    }
   ): void {
     // 1. Check Cracked Secret Wall
     if (!this.secretWall.broken) {
@@ -1339,7 +1542,14 @@ export class DungeonBossScene extends Phaser.Scene {
 
   private damageBoss(
     knockDir: number,
-    opts: { bonusMult?: number; guaranteedCrit?: boolean; extraArmorPen?: number; tag?: string } = {}
+    opts: {
+      bonusMult?: number;
+      guaranteedCrit?: boolean;
+      extraArmorPen?: number;
+      frostTruePctHp?: number;
+      preahPassive?: 'healing_wind' | 'explosive_fire' | 'armor_shred' | 'celestial';
+      tag?: string;
+    } = {}
   ): void {
     if (!this.bossCtrl.alive) return;
     if (this.player.state.activeClass === 'lbokator') {
@@ -1351,38 +1561,54 @@ export class DungeonBossScene extends Phaser.Scene {
     const bridge = computeVillageToDungeonBridge(this.player.state, Date.now(), this.consecutiveMeleeHits);
     const focusActive = now < this.focusActiveUntil;
     const furyActive = now < this.furyActiveUntil;
-    const wReforge = getReforgeModifier('weapon', this.player.state.weaponPrefix);
-    const aReforge = getReforgeModifier('armor', this.player.state.armorPrefix);
-    const shimmerCrit = (this.player.state.shimmerBlessings ?? []).includes('blessing_lotus_luck') ? 0.05 : 0;
-    const evolvingMult =
-      CALAMITY_WEAPONS[weapon.id]?.specialKind === 'evolving_angkor_relic'
-        ? getEvolvingRelicMultiplier(this.player.state)
-        : 1;
+    const isEvolving =
+      weapon.id === 'weapon_evolving_angkor_blade' ||
+      weapon.id === 'weapon_evolving_angkor_relic' ||
+      CALAMITY_WEAPONS[weapon.id]?.specialKind === 'evolving_angkor_blade';
+    const evolvingClears = isEvolving ? getUniqueBossClearsCount(this.player.state) : 0;
 
+    // Pass weaponPrefix, armorPrefix & evolvingBossClears directly into @shared/balanceFormulas.ts!
     const hit = calculatePlayerDamage({
-      weaponBase: weapon.baseDamage * (opts.bonusMult ?? 1) * evolvingMult,
+      weaponBase: weapon.baseDamage * (opts.bonusMult ?? 1),
       upgradeLevel: weapon.upgradeLevel,
       flatBonuses: bridge.flatDamageBonus,
-      skillPct: bridge.classSkillDamagePct + (wReforge?.damagePct ?? 0) + (aReforge?.damagePct ?? 0),
+      skillPct: bridge.classSkillDamagePct,
       armorPct: armorDamagePct,
       snackBuffPct: bridge.snackAttackPct,
+      weaponPrefix: this.player.state.weaponPrefix,
+      armorPrefix: this.player.state.armorPrefix,
+      evolvingBossClears: evolvingClears,
       enemyDefense: this.bossCtrl.def.defense,
       armorPen: weapon.armorPen + (opts.extraArmorPen ?? 0),
       bossDR: this.bossCtrl.def.bossDR,
-      critChance: Math.min(
-        0.95,
-        bridge.effectiveCritChance +
-          (furyActive ? 0.25 : 0) +
-          (wReforge?.critBonus ?? 0) +
-          (aReforge?.critBonus ?? 0) +
-          shimmerCrit
-      ),
+      critChance: Math.min(0.95, bridge.effectiveCritChance + (furyActive ? 0.25 : 0)),
       critMultiplier: bridge.critMultiplier,
       isCritOverride: opts.guaranteedCrit ? true : undefined,
       focusActive,
     });
 
     let totalDamage = hit.finalDamage;
+
+    // Frost Fang of Singha Stealth Strike: flat 3% of boss's remaining HP ignoring armor (capped fairly at 450)!
+    if (opts.frostTruePctHp && opts.frostTruePctHp > 0) {
+      const trueSlice = Math.min(450, Math.max(20, Math.round(this.bossCtrl.hp * opts.frostTruePctHp)));
+      totalDamage += trueSlice;
+      this.spawnFloatingText(
+        this.bossCtrl.x,
+        this.bossCtrl.y - 178,
+        `❄️ TRUE ICE +${trueSlice}`,
+        '#38bdf8',
+        '16px'
+      );
+    }
+
+    // Preah Khan Biome Passives (Healing Wind +4 HP, Explosive Fire sparks)
+    if (opts.preahPassive === 'healing_wind') {
+      this.player.state.hp = Math.min(bridge.effectiveMaxHp, this.player.state.hp + 4);
+      this.spawnFloatingText(this.player.x, this.player.y - 46, '+4 HP 🍃', '#4ade80', '13px');
+    } else if (opts.preahPassive === 'explosive_fire') {
+      this.vfx.playImpactSparks(this.bossCtrl.x, this.bossCtrl.y - 80, 0xf97316);
+    }
 
     // Cross-world Farming -> Botanical Venom poison proc
     if (bridge.botanicalVenomChance > 0 && Math.random() < bridge.botanicalVenomChance) {
@@ -1798,6 +2024,9 @@ export class DungeonBossScene extends Phaser.Scene {
         if (Phaser.Input.Keyboard.JustDown(this.keys.F)) {
           this.activateFocusBurst();
         }
+        if (Phaser.Input.Keyboard.JustDown(this.keys.Q)) {
+          this.performSecondaryWeaponAction();
+        }
         if (Phaser.Input.Keyboard.JustDown(this.keys.R)) {
           this.activateFuryBurst();
         }
@@ -1815,7 +2044,9 @@ export class DungeonBossScene extends Phaser.Scene {
       }
     }
 
-    if (time < this.attackAnimUntil) {
+    if (time < this.parryActiveUntil) {
+      this.player.playStateAnimation('parry');
+    } else if (time < this.attackAnimUntil) {
       this.player.playStateAnimation('attack');
     } else if (!onGround) {
       this.player.playStateAnimation('jump');
@@ -1888,7 +2119,19 @@ export class DungeonBossScene extends Phaser.Scene {
       this.claimBossLootBag();
     }
 
-    // Update Projectiles (Divine Archer Arrows & Achar Mystic Orbs)
+    // Update Airborne Golden Riel Tossed Coins (gravity arc for Trick-Shot!)
+    for (let i = this.tossedCoins.length - 1; i >= 0; i--) {
+      const c = this.tossedCoins[i];
+      c.vy += 620 * dt;
+      c.node.x += c.vx * dt;
+      c.node.y += c.vy * dt;
+      if (time >= c.expiresAt || c.node.y >= FLOOR_Y - 8) {
+        c.node.destroy();
+        this.tossedCoins.splice(i, 1);
+      }
+    }
+
+    // Update Projectiles (Arrows, Riel Coins, Evolving Yant Waves & Fractured Yant Orbs)
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const p = this.projectiles[i];
       p.node.x += p.vx * dt;
@@ -1938,11 +2181,28 @@ export class DungeonBossScene extends Phaser.Scene {
           } else {
             hitSomething = true;
           }
-        } else if (p.kind === 'arrow') {
-          this.damageBoss(hitDir, { bonusMult: p.damageScale });
+        } else if (p.kind === 'arrow' || p.kind === 'evolving_wave') {
+          this.damageBoss(hitDir, {
+            bonusMult: p.damageScale,
+            tag: p.kind === 'evolving_wave' ? '✨ YANT WAVE!' : undefined,
+          });
           hitSomething = true;
         } else {
           this.damageBoss(hitDir, { bonusMult: p.damageScale });
+          // Tome of Fractured Yant: every magic bolt hit triggers 3 extra golden off-screen crisscrossing light-blades!
+          if (this.player.state.weapon.id === 'weapon_fractured_yant_tome') {
+            this.vfx.playFracturedYantCrisscross(this.bossCtrl.x, this.bossCtrl.y - 84);
+            for (let b = 0; b < 3; b++) {
+              this.time.delayedCall(75 * (b + 1), () => {
+                if (this.bossCtrl.alive) {
+                  this.damageBoss(hitDir, {
+                    bonusMult: 0.36,
+                    tag: b === 2 ? '✨ FRACTURED YANT ×3!' : undefined,
+                  });
+                }
+              });
+            }
+          }
           this.addMysticYantStack(hitDir);
           hitSomething = true;
         }
