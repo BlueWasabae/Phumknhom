@@ -31,7 +31,8 @@ export class RemotePlayerEntity {
   private hitZone: Phaser.GameObjects.Rectangle;
   private shadow: Phaser.GameObjects.Image;
   private paperDoll: PaperDoll;
-  private pet: Pet;
+  private pet: Pet | null = null;
+  private safePrefix: string;
   private nameTag: Phaser.GameObjects.Text;
   private bubbleBg: Phaser.GameObjects.Graphics;
   private bubbleText: Phaser.GameObjects.Text;
@@ -58,14 +59,14 @@ export class RemotePlayerEntity {
     this.appearanceJson = snapshot.appearanceJson;
     this.loadout = parseAppearance(snapshot.appearanceJson);
 
-    const safePrefix = `rem_${snapshot.sessionId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 12)}`;
+    this.safePrefix = `rem_${snapshot.sessionId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 12)}`;
 
     this.shadow = scene.add
       .image(this.x, this.y + 8, 'soft_shadow')
       .setScale(0.36)
       .setDepth(this.y + 6);
 
-    this.paperDoll = new PaperDoll(scene, this.x, this.y + 8, this.loadout, `${safePrefix}_pd`);
+    this.paperDoll = new PaperDoll(scene, this.x, this.y + 8, this.loadout, `${this.safePrefix}_pd`);
     this.paperDoll.setScale(0.42);
 
     // Interactive Tap-on-Player hit box (works on both PC click and Mobile touch!)
@@ -85,7 +86,7 @@ export class RemotePlayerEntity {
       });
     });
 
-    this.pet = new Pet(scene, this.x - 16, this.y, this.loadout.pet, 'overworld', `${safePrefix}_pet`);
+    this.syncPetInstance(this.loadout.pet);
 
     this.nameTag = scene.add
       .text(this.x, this.y + 11, this.name, {
@@ -126,6 +127,19 @@ export class RemotePlayerEntity {
       .setVisible(false);
   }
 
+  private syncPetInstance(petId: string | null): void {
+    if (!petId) {
+      this.pet?.destroy();
+      this.pet = null;
+      return;
+    }
+    if (!this.pet) {
+      this.pet = new Pet(this.scene, this.x - 16, this.y, petId, 'overworld', `${this.safePrefix}_pet`);
+    } else {
+      this.pet.setPet(petId);
+    }
+  }
+
   public applySnapshot(snapshot: RemotePlayerSnapshot): void {
     this.targetX = snapshot.x;
     this.targetY = snapshot.y;
@@ -145,7 +159,7 @@ export class RemotePlayerEntity {
       this.appearanceJson = snapshot.appearanceJson;
       this.loadout = parseAppearance(snapshot.appearanceJson);
       this.paperDoll.setLoadout(this.loadout);
-      this.pet.setPet(this.loadout.pet);
+      this.syncPetInstance(this.loadout.pet);
     }
   }
 
@@ -193,7 +207,7 @@ export class RemotePlayerEntity {
     this.nameTag.setPosition(this.x, this.y + 11);
 
     const facingRight = this.facing !== 'left';
-    this.pet.update(time, this.x, this.y, facingRight);
+    this.pet?.update(time, this.x, this.y, facingRight);
 
     const s = this.uiScale;
     const offsetY = -16;
@@ -248,7 +262,8 @@ export class RemotePlayerEntity {
   public destroy(): void {
     this.hitZone.destroy();
     this.paperDoll.destroy();
-    this.pet.destroy();
+    this.pet?.destroy();
+    this.pet = null;
     this.shadow.destroy();
     this.nameTag.destroy();
     this.bubbleBg.destroy();

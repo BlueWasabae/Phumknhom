@@ -19,7 +19,7 @@ export class Player {
   public readonly body: Phaser.Physics.Arcade.Body;
   public readonly shadow: Phaser.GameObjects.Image;
   public readonly paperDoll: PaperDoll;
-  public readonly pet: Pet;
+  public pet: Pet | null = null;
   public state: PlayerState;
   public facing: FacingDirection = 'down';
 
@@ -88,8 +88,8 @@ export class Player {
       this.paperDoll.setDepth(50);
     }
 
-    // Companion Pet Entity
-    this.pet = new Pet(scene, x - 20, y, this.state.loadout.pet, zone, `pet_${zone}`);
+    // Companion Pet Entity — NEVER instantiate when loadout.pet is null!
+    this.syncPetInstance(this.state.loadout.pet);
 
     // Nameplate + Overhead Speech Bubble + Emote
     this.nameTag = scene.add
@@ -151,6 +151,19 @@ export class Player {
     this.squashY = sy;
   }
 
+  private syncPetInstance(petId: string | null): void {
+    if (!petId) {
+      this.pet?.destroy();
+      this.pet = null;
+      return;
+    }
+    if (!this.pet) {
+      this.pet = new Pet(this.scene, this.sprite.x - 20, this.sprite.y, petId, this.zone, `pet_${this.zone}`);
+    } else {
+      this.pet.setPet(petId);
+    }
+  }
+
   public applyLoadoutUpdate(loadout: EquippedLoadout, nextState: PlayerState): void {
     if (this.state.name !== nextState.name) {
       this.nameTag.setText(nextState.name);
@@ -167,7 +180,7 @@ export class Player {
       quickSnackSlots: [...nextState.quickSnackSlots],
     };
     this.paperDoll.setLoadout(loadout);
-    this.pet.setPet(loadout.pet);
+    this.syncPetInstance(loadout.pet);
   }
 
   public syncPlayerState(nextState: PlayerState): void {
@@ -201,7 +214,7 @@ export class Player {
 
     if (loadoutChanged) {
       this.paperDoll.setLoadout(this.state.loadout);
-      this.pet.setPet(this.state.loadout.pet);
+      this.syncPetInstance(this.state.loadout.pet);
     }
   }
 
@@ -270,7 +283,7 @@ export class Player {
       this.nameTag.setPosition(this.sprite.x, this.sprite.y + 26);
     }
 
-    this.pet.update(time, this.sprite.x, this.sprite.y, this.facingRight);
+    this.pet?.update(time, this.sprite.x, this.sprite.y, this.facingRight);
 
     const offsetY = this.zone === 'overworld' ? -16 : -36;
     const s = this.uiScale;
@@ -324,7 +337,8 @@ export class Player {
 
   public destroy(): void {
     this.paperDoll.destroy();
-    this.pet.destroy();
+    this.pet?.destroy();
+    this.pet = null;
     this.shadow.destroy();
     this.nameTag.destroy();
     this.bubbleBg.destroy();

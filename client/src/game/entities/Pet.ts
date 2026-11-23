@@ -102,10 +102,75 @@ export function drawPetToCanvas(
 }
 
 /**
+ * Summons a temporary Barami Spirit Tamer combat spirit strike when the player has
+ * NO equipped cosmetic pet (`equipped.pet === null`), keeping Krama Whip 100% playable
+ * without ever spawning or instantiating a permanent default Pet entity.
+ */
+export function summonTemporaryCombatSpirit(
+  scene: Phaser.Scene,
+  ownerX: number,
+  ownerY: number,
+  ownerFacingRight: boolean,
+  targetX: number,
+  targetY: number,
+  onImpact: () => void
+): boolean {
+  const originX = ownerX + (ownerFacingRight ? 28 : -28);
+  const originY = ownerY - 20;
+  if (Phaser.Math.Distance.Between(originX, originY, targetX, targetY) > 540) return false;
+
+  if (scene.textures.exists('pet_spirit')) {
+    const tempSpirit = scene.add
+      .sprite(originX, originY, 'pet_spirit', 0)
+      .setScale(2.0)
+      .setTint(0x34d399)
+      .setAlpha(0.92)
+      .setFlipX(!ownerFacingRight)
+      .setDepth(63);
+    if (scene.anims.exists('pet_spirit_idle')) {
+      tempSpirit.play('pet_spirit_idle');
+    }
+    scene.tweens.add({
+      targets: tempSpirit,
+      y: originY - 14,
+      alpha: 0,
+      duration: 420,
+      ease: 'Quad.easeOut',
+      onComplete: () => tempSpirit.destroy(),
+    });
+  }
+
+  const orb = scene.add
+    .circle(originX, originY - 6, 8, 0x10b981, 0.95)
+    .setStrokeStyle(2, 0xfef08a)
+    .setDepth(64);
+
+  scene.tweens.add({
+    targets: orb,
+    x: targetX,
+    y: targetY,
+    duration: 240,
+    ease: 'Quad.easeIn',
+    onComplete: () => {
+      const ring = scene.add.circle(targetX, targetY, 10, 0x10b981, 0.45).setDepth(65);
+      scene.tweens.add({
+        targets: ring,
+        scale: 2.6,
+        alpha: 0,
+        duration: 200,
+        onComplete: () => ring.destroy(),
+      });
+      orb.destroy();
+      onImpact();
+    },
+  });
+
+  return true;
+}
+
+/**
  * Companion Pet entity rendered using REAL animated Ninja Adventure animal & spirit sprites.
- * - Spawns ZERO sprites or shadows when `petId` is `null` (pets must be bought & equipped!).
- * - For Barami Spirit Tamer (`Krama Whip`), `trySpiritAutoAttack(..., allowTemporarySpirit = true)`
- *   summons a brief temporary glowing combat spirit while attacking even if no cosmetic pet is equipped.
+ * Only instantiated when the player has bought & equipped a pet (`equipped.pet !== null`).
  */
 export class Pet {
   private scene: Phaser.Scene;

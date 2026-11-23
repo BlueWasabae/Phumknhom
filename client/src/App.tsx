@@ -74,6 +74,7 @@ import {
   fetchFriends,
   reforgeItemApi,
   sandboxTopUpApi,
+  sanitizeLegacyLocalStoragePets,
   saveAccountProfile,
   sendFriendRequestApi,
   type AuthSession,
@@ -901,6 +902,7 @@ export const App: React.FC = () => {
   );
 
   useEffect(() => {
+    sanitizeLegacyLocalStoragePets();
     const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     if (isTouch) setTouchUiEnabled(true);
   }, []);

@@ -197,6 +197,7 @@ export class PaperDoll extends Phaser.GameObjects.Container {
       .sprite(0, 0, this.currentSheet, 0)
       .setOrigin(0.5, 0.94)
       .setScale(2.5);
+    console.log(`[PaperDoll] Loaded sprite key: ${this.currentSheet}`);
 
     // Real Ninja Adventure Weapon Sprite positioned at character's hand
     this.weaponSprite = scene.add
@@ -221,6 +222,7 @@ export class PaperDoll extends Phaser.GameObjects.Container {
     if (nextSheet !== this.currentSheet && this.scene.textures.exists(nextSheet)) {
       this.currentSheet = nextSheet;
       this.heroSprite.setTexture(nextSheet, frameIndexFor(this.currentPose, this.currentFacing));
+      console.log(`[PaperDoll] Loaded sprite key: ${this.currentSheet}`);
     }
 
     // Real held weapon sprite

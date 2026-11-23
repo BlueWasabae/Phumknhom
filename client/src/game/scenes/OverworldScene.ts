@@ -57,9 +57,17 @@ export class OverworldScene extends Phaser.Scene {
   }
 
   init(data?: { playerState?: PlayerState; spawnX?: number; spawnY?: number; goldenFlash?: boolean }): void {
-    this.initialState = data?.playerState
-      ? { ...data.playerState, zone: 'overworld', weapon: { ...data.playerState.weapon } }
-      : { ...INITIAL_PLAYER_STATE, zone: 'overworld', weapon: { ...INITIAL_PLAYER_STATE.weapon } };
+    const rawState = data?.playerState
+      ? { ...data.playerState, zone: 'overworld' as const, weapon: { ...data.playerState.weapon }, loadout: { ...data.playerState.loadout } }
+      : { ...INITIAL_PLAYER_STATE, zone: 'overworld' as const, weapon: { ...INITIAL_PLAYER_STATE.weapon }, loadout: { ...INITIAL_PLAYER_STATE.loadout } };
+    // Never spawn unowned/legacy starter pets (e.g. mini_naga) unless owned in inventory
+    if (rawState.loadout.pet) {
+      const ownsPet = rawState.inventory.some((i) => i.itemId === rawState.loadout.pet && i.quantity > 0);
+      if (!ownsPet || rawState.loadout.pet === 'mini_naga') {
+        rawState.loadout.pet = null;
+      }
+    }
+    this.initialState = rawState;
     this.spawnX = typeof data?.spawnX === 'number' ? data.spawnX : 480;
     this.spawnY = typeof data?.spawnY === 'number' ? data.spawnY : 405;
     this.arrivalGoldenFlash = Boolean(data?.goldenFlash);
@@ -649,7 +657,8 @@ export class OverworldScene extends Phaser.Scene {
       onInteract: () => EventBus.emit('ui:openModal', { modal: 'pagoda' }),
     });
 
-    // 7. CENTRAL PLAZA LUCKY WHEEL STALL (Real Ninja Adventure Festival Stall!)
+    // 7. CENTRAL PLAZA LUCKY WHEEL STALL (Real Ninja Adventure Festival Stall + Goods + Spinning Wheel!)
+    this.add.image(590, 468, 'market_goods_b').setScale(1.15).setDepth(470);
     this.addBuildingOrProp({
       texture: 'lucky_wheel_kiosk',
       x: 590,
@@ -660,8 +669,18 @@ export class OverworldScene extends Phaser.Scene {
       bodyW: 40,
       bodyH: 18,
       label: 'LUCKY WHEEL',
-      joinArrowY: 422,
+      joinArrowY: 408,
     });
+    const luckyWheelProp = this.add
+      .sprite(590, 444, 'na_wheel_prop', 0)
+      .setScale(0.42)
+      .setTint(0xfde047)
+      .setDepth(476)
+      .setInteractive({ useHandCursor: true });
+    if (this.anims.exists('lucky_wheel_spin')) {
+      luckyWheelProp.play('lucky_wheel_spin');
+    }
+    luckyWheelProp.on('pointerdown', () => EventBus.emit('ui:openModal', { modal: 'luckyWheel' }));
     this.landmarks.push({
       x: 590,
       y: 478,
@@ -671,7 +690,8 @@ export class OverworldScene extends Phaser.Scene {
       onInteract: () => EventBus.emit('ui:openModal', { modal: 'luckyWheel' }),
     });
 
-    // 8. VILLAGE PLAYER MARKET STALL (Real Ninja Adventure Market Awning Stall!)
+    // 8. VILLAGE PLAYER MARKET STALL (Real Ninja Adventure Market Awning Stall + Produce Crates!)
+    this.add.image(715, 468, 'market_goods_a').setScale(1.15).setDepth(470);
     this.addBuildingOrProp({
       texture: 'market_board',
       x: 715,
@@ -693,14 +713,8 @@ export class OverworldScene extends Phaser.Scene {
       onInteract: () => EventBus.emit('ui:openModal', { modal: 'market' }),
     });
 
-    // 9. RIVERSIDE PIER & FISHING POND (Real Serene Village Wooden Pier!)
-    const pondGfx = this.add.graphics().setDepth(3);
-    pondGfx.fillStyle(0x0369a1, 0.92);
-    pondGfx.fillEllipse(215, 515, 168, 92);
-    pondGfx.fillStyle(0x0ea5e9, 0.72);
-    pondGfx.fillEllipse(215, 512, 146, 74);
-    pondGfx.lineStyle(2, 0x7dd3fc, 0.5);
-    pondGfx.strokeEllipse(215, 510, 108, 48);
+    // 9. RIVERSIDE PIER & FISHING POND (Real Serene Village Pixel-Art Bordered Pond + Wooden Pier!)
+    this.add.image(210, 514, 'sv_pond').setDisplaySize(164, 96).setDepth(3);
 
     const pondCol = this.add.rectangle(195, 522, 110, 52, 0x000000, 0);
     this.colliders.add(pondCol);
@@ -726,7 +740,7 @@ export class OverworldScene extends Phaser.Scene {
 
     // ==================== EXPANSION LANDMARKS: BUS STOP, ATM, CLUB, BLACKSMITH & PYLON SHRINE ====================
 
-    // 10. VILLAGE EXPRESS BUS STOP (Real Ninja Adventure Wooden Lantern Signpost)
+    // 10. VILLAGE EXPRESS BUS STOP (Real Ninja Adventure Wooden Shelter Signpost + Waiting Bench!)
     const busStop = this.addBuildingOrProp({
       texture: 'bus_stop_sign',
       x: 342,
@@ -737,6 +751,8 @@ export class OverworldScene extends Phaser.Scene {
       label: 'EXPRESS BUS STOP',
       joinArrowY: 360,
     });
+    this.add.image(314, 404, 'soft_shadow').setDisplaySize(32, 9).setDepth(400);
+    this.add.image(314, 402, 'na_bench').setScale(0.76).setDepth(403);
     busStop.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
       EventBus.emit('ui:openModal', { modal: 'worldMap' });
     });
@@ -749,7 +765,7 @@ export class OverworldScene extends Phaser.Scene {
       onInteract: () => EventBus.emit('ui:openModal', { modal: 'worldMap' }),
     });
 
-    // 11. VILLAGE ATM BANK VAULT (Real Stone Vault House!)
+    // 11. VILLAGE ATM BANK VAULT (Real Stone Vault House + Treasure Chest & Gold Coin Emblem!)
     const atmImg = this.addBuildingOrProp({
       texture: 'atm_kiosk',
       x: 368,
@@ -761,6 +777,8 @@ export class OverworldScene extends Phaser.Scene {
       bodyH: 20,
       label: 'ATM BANK VAULT',
     });
+    this.add.image(392, 304, 'na_chest').setScale(1.05).setOrigin(0.5, 0.9).setDepth(306);
+    this.add.image(368, 260, 'na_gold_coin').setScale(1.5).setDepth(310);
     atmImg.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
       EventBus.emit('ui:openModal', { modal: 'reforge', reforgeTab: 'bank' });
     });
@@ -773,7 +791,7 @@ export class OverworldScene extends Phaser.Scene {
       onInteract: () => EventBus.emit('ui:openModal', { modal: 'reforge', reforgeTab: 'bank' }),
     });
 
-    // 12. VILLAGE BLACKSMITH FORGE + MASTER SOMNANG NPC (Real Stone Furnace + Real Chibi Master Sprite!)
+    // 12. VILLAGE BLACKSMITH FORGE + REAL IRON ANVIL + MASTER SOMNANG NPC!
     const forgeImg = this.addBuildingOrProp({
       texture: 'blacksmith_anvil',
       x: 598,
@@ -786,6 +804,14 @@ export class OverworldScene extends Phaser.Scene {
       label: 'BLACKSMITH · REFORGE',
       joinArrowY: 230,
     });
+    this.add.image(574, 290, 'soft_shadow').setDisplaySize(18, 7).setDepth(286);
+    this.add
+      .image(574, 288, 'na_anvil')
+      .setScale(1.15)
+      .setOrigin(0.5, 0.9)
+      .setDepth(290)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => EventBus.emit('ui:openModal', { modal: 'reforge', reforgeTab: 'reforge' }));
     forgeImg.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
       EventBus.emit('ui:openModal', { modal: 'reforge', reforgeTab: 'reforge' });
     });
@@ -889,12 +915,10 @@ export class OverworldScene extends Phaser.Scene {
       onInteract: () => this.enterClub(),
     });
 
-    // 14. GREEN PARK: REAL GOLDEN SHRINE GATE + REAL CARVED STONE PYLON SHRINE!
-    const parkGfx = this.add.graphics().setDepth(3);
-    parkGfx.fillStyle(0x15803d, 0.42);
-    parkGfx.fillEllipse(464, 514, 184, 78);
-    parkGfx.lineStyle(1.5, 0x86efac, 0.72);
-    parkGfx.strokeEllipse(464, 514, 174, 68);
+    // 14. GREEN PARK: REAL GOLDEN SHRINE GATE + REAL CARVED STONE PYLON SHRINE + FLOWER BEDS!
+    this.add.image(422, 534, 'sv_blossoms').setScale(0.95).setDepth(4);
+    this.add.image(502, 534, 'sv_blossoms').setScale(0.95).setDepth(4);
+    this.add.image(462, 480, 'sv_flower_box').setScale(0.95).setDepth(480);
 
     // 14A. Golden Blessing Shrine Gate (Real Ninja Adventure Red/Gold Torii Shrine!)
     const shrineGlow = this.add

@@ -9,6 +9,7 @@ import {
 } from '@shared/types';
 import { ALL_SKILL_IDS, computeVillageToDungeonBridge } from '@shared/skillTrees';
 import {
+  ITEM_CATALOG,
   buildWeaponStatsFromItem,
   computeLoadoutDefenseAndHp,
   computeStylishScore,
@@ -128,6 +129,46 @@ export function serializePlayerStateForSave(state: PlayerState): SavedProfilePay
   };
 }
 
+const LEGACY_STARTER_PET_IDS = new Set(['mini_naga', 'pet_mini_naga']);
+
+/**
+ * Strips any legacy default starter pet (e.g. 'mini_naga' / 'pet_mini_naga') or unowned pet
+ * from existing localStorage saves on boot so pets only appear when explicitly bought & equipped.
+ */
+export function sanitizeLegacyLocalStoragePets(): void {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i);
+      if (!key || !/phum|khnhom|save|player/i.test(key)) continue;
+      const raw = window.localStorage.getItem(key);
+      if (!raw || !raw.startsWith('{')) continue;
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      let mutated = false;
+      const inv = Array.isArray(parsed.inventory)
+        ? (parsed.inventory as Array<{ itemId?: string; quantity?: number }>)
+        : [];
+      const loadout = (parsed.loadout ?? parsed.equipped) as Record<string, unknown> | undefined;
+      if (loadout && typeof loadout === 'object') {
+        const currentPet = (loadout.pet ?? loadout.petId) as string | null | undefined;
+        if (currentPet) {
+          const owned = inv.some((it) => it.itemId === currentPet && (it.quantity ?? 0) > 0);
+          if (LEGACY_STARTER_PET_IDS.has(currentPet) || !owned || !ITEM_CATALOG[currentPet]) {
+            if ('pet' in loadout) loadout.pet = null;
+            if ('petId' in loadout) loadout.petId = null;
+            mutated = true;
+          }
+        }
+      }
+      if (mutated) {
+        window.localStorage.setItem(key, JSON.stringify(parsed));
+      }
+    }
+  } catch {
+    // Ignore malformed non-JSON localStorage entries
+  }
+}
+
 /**
  * Safely merges a saved DB profile with current schema defaults so
  * currencies, equipped paper-doll, 12-skill RPG profile, and real-timestamp
@@ -140,10 +181,26 @@ export function hydratePlayerStateFromSave(
   const baseFarm = createInitialFarmState();
   const baseSkills = createInitialSkillProfile();
 
+  const rawInventory =
+    Array.isArray(saved?.inventory) && saved.inventory.length > 0
+      ? saved.inventory.map((i) => ({ ...i }))
+      : INITIAL_PLAYER_STATE.inventory.map((i) => ({ ...i }));
+  if (!rawInventory.some((i) => i.itemId === 'tool_magic_mirror')) {
+    rawInventory.push({ itemId: 'tool_magic_mirror', quantity: 1, itemLevel: 1, quality: 'normal' });
+  }
+  const inventory = rawInventory;
+
   const loadout: EquippedLoadout = {
     ...DEFAULT_LOADOUT,
     ...(saved?.loadout ?? {}),
   };
+  // Pets are buyable-only: clear legacy default starter pets or any pet not owned in inventory
+  if (loadout.pet) {
+    const ownsPet = inventory.some((it) => it.itemId === loadout.pet && it.quantity > 0);
+    if (!ownsPet || !ITEM_CATALOG[loadout.pet] || loadout.pet === 'mini_naga') {
+      loadout.pet = null;
+    }
+  }
 
   const mergedSkills = { ...baseSkills.skills };
   if (saved?.skills?.skills) {
@@ -180,15 +237,6 @@ export function hydratePlayerStateFromSave(
           machines: Array.isArray(savedFarm.machines) ? savedFarm.machines : baseFarm.machines,
         }
       : baseFarm;
-
-  const rawInventory =
-    Array.isArray(saved?.inventory) && saved.inventory.length > 0
-      ? saved.inventory.map((i) => ({ ...i }))
-      : INITIAL_PLAYER_STATE.inventory.map((i) => ({ ...i }));
-  if (!rawInventory.some((i) => i.itemId === 'tool_magic_mirror')) {
-    rawInventory.push({ itemId: 'tool_magic_mirror', quantity: 1, itemLevel: 1, quality: 'normal' });
-  }
-  const inventory = rawInventory;
 
   const provisional: PlayerState = {
     ...INITIAL_PLAYER_STATE,

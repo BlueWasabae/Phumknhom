@@ -28,7 +28,7 @@ import { travelManager } from '../systems/TravelAndPylons';
 import { EventBus, type JoystickVector } from '../EventBus';
 import { Player } from '../entities/Player';
 import { PaperDoll, type PaperDollPose } from '../entities/PaperDoll';
-import { Pet } from '../entities/Pet';
+import { Pet, summonTemporaryCombatSpirit } from '../entities/Pet';
 import { BossController } from '../entities/BossController';
 import {
   ClassCombatVFX,
@@ -88,7 +88,7 @@ interface RemoteDungeonTeammate {
   pose: PaperDollPose;
   appearanceJson: string;
   paperDoll: PaperDoll;
-  pet: Pet;
+  pet: Pet | null;
   nameTag: Phaser.GameObjects.Text;
   hpBg: Phaser.GameObjects.Rectangle;
   hpFill: Phaser.GameObjects.Rectangle;
@@ -939,7 +939,7 @@ export class DungeonBossScene extends Phaser.Scene {
   private clearTeammates(): void {
     this.teammates.forEach((t) => {
       t.paperDoll.destroy();
-      t.pet.destroy();
+      t.pet?.destroy();
       t.nameTag.destroy();
       t.hpBg.destroy();
       t.hpFill.destroy();
@@ -973,7 +973,7 @@ export class DungeonBossScene extends Phaser.Scene {
           const t = this.teammates.get(sessionId);
           if (t) {
             t.paperDoll.destroy();
-            t.pet.destroy();
+            t.pet?.destroy();
             t.nameTag.destroy();
             t.hpBg.destroy();
             t.hpFill.destroy();
@@ -1030,7 +1030,15 @@ export class DungeonBossScene extends Phaser.Scene {
         existing.appearanceJson = snap.appearanceJson;
         const parsed = parseAppearance(snap.appearanceJson);
         existing.paperDoll.setLoadout(parsed);
-        existing.pet.setPet(parsed.pet);
+        if (!parsed.pet) {
+          existing.pet?.destroy();
+          existing.pet = null;
+        } else if (!existing.pet) {
+          const safePrefix = `coop_${snap.sessionId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 10)}`;
+          existing.pet = new Pet(this, existing.x - 32, existing.y, parsed.pet, 'dungeon', `${safePrefix}_pet`);
+        } else {
+          existing.pet.setPet(parsed.pet);
+        }
       }
       return;
     }
@@ -1039,7 +1047,9 @@ export class DungeonBossScene extends Phaser.Scene {
     const safePrefix = `coop_${snap.sessionId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 10)}`;
     const paperDoll = new PaperDoll(this, snap.x, snap.y + 20, loadout, `${safePrefix}_pd`);
     paperDoll.setScale(0.92).setDepth(49);
-    const pet = new Pet(this, snap.x - 32, snap.y, loadout.pet, 'dungeon', `${safePrefix}_pet`);
+    const pet = loadout.pet
+      ? new Pet(this, snap.x - 32, snap.y, loadout.pet, 'dungeon', `${safePrefix}_pet`)
+      : null;
     const nameTag = this.add
       .text(snap.x, snap.y + 26, snap.name, {
         fontFamily: 'Fredoka, sans-serif',
@@ -1411,22 +1421,35 @@ export class DungeonBossScene extends Phaser.Scene {
       const whipBox = new Phaser.Geom.Rectangle(this.player.x + (dir > 0 ? 0 : -118), this.player.y - 44, 118, 88);
       this.checkMeleeBoxHits(whipBox, dir, { bonusMult: 1, tag: 'Krama Mark!' });
       if (this.bossCtrl.alive) {
-        this.player.pet.trySpiritAutoAttack(
-          now,
-          this.bossCtrl.x,
-          this.bossCtrl.y - 90,
-          () => {
-            if (this.bossCtrl.alive) {
-              this.damageBoss(dir, {
-                bonusMult: 0.72 * (1 + bridge.petDamageBonusPct),
-                tag: this.player.state.loadout.pet ? 'Spirit Bolt' : 'Summoned Spirit!',
-              });
-            }
-          },
-          true,
-          bridge.petAttackSpeedMult,
-          true
-        );
+        const onSpiritHit = () => {
+          if (this.bossCtrl.alive) {
+            this.damageBoss(dir, {
+              bonusMult: 0.72 * (1 + bridge.petDamageBonusPct),
+              tag: this.player.state.loadout.pet ? 'Spirit Bolt' : 'Summoned Spirit!',
+            });
+          }
+        };
+        if (this.player.pet) {
+          this.player.pet.trySpiritAutoAttack(
+            now,
+            this.bossCtrl.x,
+            this.bossCtrl.y - 90,
+            onSpiritHit,
+            true,
+            bridge.petAttackSpeedMult,
+            true
+          );
+        } else {
+          summonTemporaryCombatSpirit(
+            this,
+            this.player.x,
+            this.player.y,
+            this.player.facingRight,
+            this.bossCtrl.x,
+            this.bossCtrl.y - 90,
+            onSpiritHit
+          );
+        }
       }
       return;
     }
@@ -2020,8 +2043,8 @@ export class DungeonBossScene extends Phaser.Scene {
       this.player.paperDoll.setAlpha(1);
     }
 
-    // Barami Spirit Tamer passive companion auto-attack
-    if (this.player.state.activeClass === 'tamer' && this.bossCtrl.alive && !this.playerDefeated) {
+    // Barami Spirit Tamer passive companion auto-attack (only when player owns & equips a Pet)
+    if (this.player.state.activeClass === 'tamer' && this.player.pet && this.bossCtrl.alive && !this.playerDefeated) {
       this.player.pet.trySpiritAutoAttack(
         time,
         this.bossCtrl.x,
@@ -2124,7 +2147,7 @@ export class DungeonBossScene extends Phaser.Scene {
       t.y = Phaser.Math.Linear(t.y, t.targetY, lerpA);
       t.paperDoll.setPosition(t.x, t.y + 20);
       t.paperDoll.setPoseAndFacing(t.pose, t.facing, time);
-      t.pet.update(time, t.x, t.y, t.facing === 'right');
+      t.pet?.update(time, t.x, t.y, t.facing === 'right');
       t.nameTag.setPosition(t.x, t.y + 26);
       t.hpBg.setPosition(t.x, t.y - 38);
       t.hpFill.setPosition(t.x - 19, t.y - 38);

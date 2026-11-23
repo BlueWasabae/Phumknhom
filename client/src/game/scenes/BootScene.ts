@@ -131,9 +131,16 @@ export class BootScene extends Phaser.Scene {
       frameHeight: 16,
     });
     this.load.image('na_elements', `${NA}/Backgrounds/Tilesets/TilesetElement.png`);
+    this.load.image('na_floor', `${NA}/Backgrounds/Tilesets/TilesetFloor.png`);
     this.load.image('na_houses', `${NA}/Backgrounds/Tilesets/TilesetHouse.png`);
     this.load.image('na_nature', `${NA}/Backgrounds/Tilesets/TilesetNature.png`);
     this.load.image('na_chest', `${NA}/Items/Treasure/BigTreasureChest.png`);
+    this.load.image('na_anvil', `${NA}/Items/Tool/Anvil.png`);
+    this.load.image('na_gold_coin', `${NA}/Items/Treasure/GoldCoin.png`);
+    this.load.spritesheet('na_wheel_prop', `${NA}/Backgrounds/Animated/MillPropeller/MillPropeller_A_64x64.png`, {
+      frameWidth: 64,
+      frameHeight: 64,
+    });
     this.load.image('na_heart', `${NA}/Items/Potion/Heart.png`);
     this.load.image('icon_noodle', `${NA}/Items/Food/Noodle.png`);
     this.load.audio('sfx_levelup', `${NA}/Audio/Jingles/LevelUp1.wav`);
@@ -226,39 +233,69 @@ export class BootScene extends Phaser.Scene {
   }
 
   private sliceAtlasSubTextures(): void {
-    // 1. Textured 48x48 Serene Village Meadow Grass (NO flat solid green square!)
+    // 1. Clean Lush 64x64 Serene Village Meadow Grass (NO flat solid green, NO white noise speckles!)
     if (!this.textures.exists('sv_grass') && this.textures.exists('serene_16')) {
       const svImg = this.textures.get('serene_16').getSourceImage() as HTMLImageElement;
       const naNature = this.textures.exists('na_nature')
         ? (this.textures.get('na_nature').getSourceImage() as HTMLImageElement)
         : null;
-      const tex = this.textures.createCanvas('sv_grass', 48, 48);
+      const tex = this.textures.createCanvas('sv_grass', 64, 64);
       if (tex) {
         const ctx = tex.getContext();
         ctx.imageSmoothingEnabled = false;
-        // Fill 3x3 base Serene Village grass tiles
-        for (let gy = 0; gy < 48; gy += 16) {
-          for (let gx = 0; gx < 48; gx += 16) {
+        // Fill 4x4 base Serene Village grass tiles
+        for (let gy = 0; gy < 64; gy += 16) {
+          for (let gx = 0; gx < 64; gx += 16) {
             ctx.drawImage(svImg, 48, 0, 16, 16, gx, gy, 16, 16);
           }
         }
-        // Layer authentic pixel-art grass tufts & clover from Serene Village & Ninja Adventure
-        ctx.drawImage(svImg, 0, 48, 16, 16, 4, 4, 16, 16);
-        ctx.drawImage(svImg, 16, 64, 16, 16, 26, 24, 16, 16);
+        // Subtle green pixel-art grass blades & clover (pure lush greens — zero white static)
         if (naNature) {
-          ctx.globalAlpha = 0.65;
-          ctx.drawImage(naNature, 48, 160, 16, 16, 28, 2, 12, 12);
-          ctx.drawImage(naNature, 64, 160, 16, 16, 6, 30, 12, 12);
+          ctx.globalAlpha = 0.55;
+          ctx.drawImage(naNature, 48, 160, 16, 16, 6, 8, 12, 12);
+          ctx.drawImage(naNature, 96, 160, 16, 16, 38, 28, 12, 12);
+          ctx.drawImage(naNature, 32, 176, 16, 16, 18, 46, 11, 11);
           ctx.globalAlpha = 1;
         }
         tex.refresh();
       }
     }
 
-    // 2. Serene Village Dirt Path (matching inner sandy-dirt tile, zero mismatched grass corners!)
-    this.cropToTexture('serene_16', 'sv_path', 256, 64, 32, 32);
-    this.cropToTexture('serene_16', 'sv_plaza_tile', 256, 64, 32, 32);
-    this.cropToTexture('serene_16', 'sv_flowers', 0, 48, 48, 48);
+    // 2. Clean Interior Dirt Road (Serene Village pure sand-dirt interior — ZERO green edges/nubs!)
+    if (!this.textures.exists('sv_path') && this.textures.exists('serene_16')) {
+      const svImg = this.textures.get('serene_16').getSourceImage() as HTMLImageElement;
+      const tex = this.textures.createCanvas('sv_path', 32, 32);
+      if (tex) {
+        const ctx = tex.getContext();
+        ctx.imageSmoothingEnabled = false;
+        for (let py = 0; py < 32; py += 16) {
+          for (let px = 0; px < 32; px += 16) {
+            ctx.drawImage(svImg, 272, 64, 16, 16, px, py, 16, 16);
+          }
+        }
+        // Subtle warm sandstone grain specks so the road feels organic and hand-pixelled
+        ctx.fillStyle = '#d4b262';
+        ctx.fillRect(5, 6, 2, 1);
+        ctx.fillRect(21, 14, 2, 1);
+        ctx.fillRect(11, 25, 2, 1);
+        ctx.fillStyle = '#f3e39a';
+        ctx.fillRect(18, 4, 2, 1);
+        ctx.fillRect(4, 21, 2, 1);
+        ctx.fillRect(26, 27, 2, 1);
+        tex.refresh();
+      }
+    }
+    // Clean interior stone courtyard tile (verified ZERO green/edge pixels!)
+    this.cropToTexture('na_floor', 'sv_plaza_tile', 200, 248, 16, 16);
+    // Real colorful pixel-art meadow flowers (sunflowers, clover, red tulips from TilesetNature!)
+    this.cropToTexture('na_nature', 'sv_flowers', 0, 176, 64, 16);
+    // Real pixel-art bordered village pond from Serene Village!
+    this.cropToTexture('serene_16', 'sv_pond', 176, 0, 48, 48);
+    // Real pixel-art flower cluster blossoms from Serene Village!
+    this.cropToTexture('serene_16', 'sv_blossoms', 32, 192, 64, 16);
+    // Real pixel-art crates & produce goods to sit under Market / Lucky Wheel awnings!
+    this.cropToTexture('na_houses', 'market_goods_a', 256, 224, 48, 24);
+    this.cropToTexture('na_houses', 'market_goods_b', 304, 224, 48, 24);
     this.cropToTexture('serene_16', 'sv_sign_wood', 112, 208, 16, 16);
     this.cropToTexture('serene_16', 'sv_fence_h', 80, 208, 32, 16);
     this.cropToTexture('serene_16', 'sv_fence_pen', 64, 240, 48, 48);
@@ -558,6 +595,14 @@ export class BootScene extends Phaser.Scene {
       this.anims.create({
         key: 'shimmer_ripple',
         frames: [0, 1, 2, 3].map((frame) => ({ key: 'na_water_purple', frame })),
+        frameRate: 5,
+        repeat: -1,
+      });
+    }
+    if (!this.anims.exists('lucky_wheel_spin')) {
+      this.anims.create({
+        key: 'lucky_wheel_spin',
+        frames: [0, 1, 2, 3].map((frame) => ({ key: 'na_wheel_prop', frame })),
         frameRate: 5,
         repeat: -1,
       });
