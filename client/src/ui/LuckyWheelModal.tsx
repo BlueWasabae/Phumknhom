@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { PlayerState } from '@shared/types';
 import { Coins, Sparkles, Star } from 'lucide-react';
 import { soundManager } from '../game/systems/SoundManager';
+import { hasFreeDailyCoinSpin } from '../data/diamondStore';
 import { NativeDialog } from './NativeDialog';
 
 export interface WheelPrize {
@@ -59,9 +60,10 @@ export const LuckyWheelModal: React.FC<LuckyWheelModalProps> = ({
 
   const prizes = tier === 'coin' ? COIN_PRIZES : GOLD_PRIZES;
   const pity = player.luckyWheelPity ?? 0;
+  const freeVipCoinSpin = tier === 'coin' && hasFreeDailyCoinSpin(player);
   const canAfford =
     tier === 'coin'
-      ? player.currencies.coins >= COIN_SPIN_COST
+      ? freeVipCoinSpin || player.currencies.coins >= COIN_SPIN_COST
       : player.currencies.gold >= GOLD_SPIN_COST;
 
   const triggerSpin = () => {
@@ -214,7 +216,9 @@ export const LuckyWheelModal: React.FC<LuckyWheelModalProps> = ({
               {spinning
                 ? 'Spinning...'
                 : tier === 'coin'
-                ? `Spin (${COIN_SPIN_COST.toLocaleString()} Coins)`
+                ? freeVipCoinSpin
+                  ? '👑 FREE VIP Daily Spin!'
+                  : `Spin (${COIN_SPIN_COST.toLocaleString()} Coins)`
                 : `Gold Spin (★ ${GOLD_SPIN_COST} Gold)`}
             </button>
           </div>

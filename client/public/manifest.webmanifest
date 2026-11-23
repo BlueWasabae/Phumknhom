@@ -1,0 +1,18 @@
+{
+  "name": "ភូមិខ្ញុំ • Phum Khnhom",
+  "short_name": "ភូមិខ្ញុំ",
+  "description": "Cozy Cambodian 2D Social Farming & Calamity Boss Raid RPG",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "/assets/khmer/buildings/khmer_stilt_house.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

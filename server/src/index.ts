@@ -12,6 +12,7 @@ import {
   createMarketListing,
   listMarketListings,
 } from './economy/marketService';
+import { createPaymentRouter } from './economy/paymentWebhook';
 import { presenceRegistry } from './presence';
 import {
   createFriendRequest,
@@ -25,11 +26,46 @@ import {
   type SavedPlayerProfile,
 } from './db/supabase';
 
-const PORT = Number(process.env.PORT ?? 2567);
+const PORT = Number(process.env.PORT) || 2567;
 const HOST = process.env.HOST ?? '0.0.0.0';
+const IS_PROD = process.env.NODE_ENV === 'production';
+
+const DEFAULT_ALLOWED_ORIGINS = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'https://www.bluexacedamy.space',
+  'https://bluexacedamy.space',
+];
+const EXTRA_ORIGINS = (process.env.CLIENT_ORIGIN || '')
+  .split(',')
+  .map((o) => o.trim().replace(/\/+$/, ''))
+  .filter(Boolean);
+const ALLOWED_ORIGIN_SET = new Set([...DEFAULT_ALLOWED_ORIGINS, ...EXTRA_ORIGINS]);
 
 const app = express();
-app.use(cors({ origin: true, credentials: true }));
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow server-to-server health checks, curl, webhooks (no Origin header)
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+      const normalized = origin.replace(/\/+$/, '');
+      if (ALLOWED_ORIGIN_SET.has(normalized)) {
+        callback(null, true);
+        return;
+      }
+      // Allow local LAN mobile testing during non-production development
+      if (!IS_PROD && /^http:\/\/(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)[\d.]+:5173$/.test(normalized)) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error(`CORS blocked origin: ${origin}`));
+    },
+    credentials: true,
+  })
+);
 app.use(express.json({ limit: '1mb' }));
 
 function extractBearerToken(req: express.Request): string | undefined {
@@ -42,6 +78,14 @@ function extractBearerToken(req: express.Request): string | undefined {
   }
   return undefined;
 }
+
+// Cloud Health Check Endpoint (Railway / Fly.io / Load Balancers)
+app.get('/health', (_req, res) => {
+  res.json({
+    status: 'ok',
+    uptime: process.uptime(),
+  });
+});
 
 app.get('/api/health', (_req, res) => {
   res.json({
@@ -355,6 +399,9 @@ app.post('/api/market/cancel', async (req, res) => {
   }
 });
 
+// ==================== PHASE 10 PAYMENTS & DIAMOND STORE WEBHOOKS ====================
+app.use('/api/payments', createPaymentRouter());
+
 const httpServer = http.createServer(app);
 const gameServer = new Server({
   transport: new WebSocketTransport({
@@ -368,5 +415,5 @@ gameServer.define('dungeon', DungeonRoom).filterBy(['partyId']);
 httpServer.listen(PORT, HOST, () => {
   console.log(`[ភូមិខ្ញុំ Colyseus] Village Plaza + Co-op Dungeon Server listening on ws://${HOST}:${PORT}`);
   console.log(`[ភូមិខ្ញុំ Colyseus] Persistence backend: ${getStorageMode().toUpperCase()}`);
-  console.log(`[ភូមិខ្ញុំ Colyseus] REST API ready: /api/areas, /api/auth/*, /api/save, /api/friends/*, /api/market/*`);
+  console.log(`[ភូមិខ្ញុំ Colyseus] REST API ready: /health, /api/areas, /api/auth/*, /api/save, /api/friends/*, /api/market/*, /api/payments/*`);
 });

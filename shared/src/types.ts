@@ -197,6 +197,11 @@ export interface PlayerState {
   bossDefeats: Record<string, number>;
   pagodaBundles: PagodaBundleProgress;
   luckyWheelPity: number;
+  villagePassUntil?: number | null;
+  extraBagSlots?: number;
+  ownedMounts?: string[];
+  activeMount?: string | null;
+  dailyFreeCoinSpinDate?: string | null;
   skillDamagePct: number;
   armorDamagePct: number;
   snackBuffPct: number;
@@ -416,6 +421,11 @@ export const INITIAL_PLAYER_STATE: PlayerState = {
   bossDefeats: {},
   pagodaBundles: {},
   luckyWheelPity: 0,
+  villagePassUntil: null,
+  extraBagSlots: 0,
+  ownedMounts: [],
+  activeMount: null,
+  dailyFreeCoinSpinDate: null,
   skillDamagePct: 0.025,
   armorDamagePct: 0.04,
   snackBuffPct: 0,

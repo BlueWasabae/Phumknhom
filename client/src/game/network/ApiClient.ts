@@ -58,13 +58,22 @@ export interface SavedProfilePayload {
   bossDefeats?: Record<string, number>;
   pagodaBundles: PlayerState['pagodaBundles'];
   luckyWheelPity: number;
+  villagePassUntil?: number | null;
+  extraBagSlots?: number;
+  ownedMounts?: string[];
+  activeMount?: string | null;
+  dailyFreeCoinSpinDate?: string | null;
   activeClass: PlayerState['activeClass'];
   weapon: PlayerState['weapon'];
   defense: number;
   areaChannel: number;
 }
 
-function getApiBase(): string {
+export function getApiBase(): string {
+  const envApi = (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '');
+  if (envApi) {
+    return envApi.endsWith('/api') ? envApi : `${envApi}/api`;
+  }
   const host = typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : 'localhost';
   const proto = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'https' : 'http';
   return `${proto}://${host}:2567/api`;
@@ -89,6 +98,11 @@ export function serializePlayerStateForSave(state: PlayerState): SavedProfilePay
     bossDefeats: { ...(state.bossDefeats ?? {}) },
     pagodaBundles: { ...(state.pagodaBundles ?? {}) },
     luckyWheelPity: state.luckyWheelPity ?? 0,
+    villagePassUntil: state.villagePassUntil ?? null,
+    extraBagSlots: state.extraBagSlots ?? 0,
+    ownedMounts: [...(state.ownedMounts ?? [])],
+    activeMount: state.activeMount ?? null,
+    dailyFreeCoinSpinDate: state.dailyFreeCoinSpinDate ?? null,
     activeClass: state.activeClass,
     weapon: { ...state.weapon },
     defense: state.defense,
@@ -196,6 +210,12 @@ export function hydratePlayerStateFromSave(
     pagodaBundles:
       saved?.pagodaBundles && typeof saved.pagodaBundles === 'object' ? saved.pagodaBundles : {},
     luckyWheelPity: typeof saved?.luckyWheelPity === 'number' ? saved.luckyWheelPity : 0,
+    villagePassUntil: typeof saved?.villagePassUntil === 'number' ? saved.villagePassUntil : null,
+    extraBagSlots: typeof saved?.extraBagSlots === 'number' ? saved.extraBagSlots : 0,
+    ownedMounts: Array.isArray(saved?.ownedMounts) ? saved.ownedMounts : [],
+    activeMount: typeof saved?.activeMount === 'string' ? saved.activeMount : null,
+    dailyFreeCoinSpinDate:
+      typeof saved?.dailyFreeCoinSpinDate === 'string' ? saved.dailyFreeCoinSpinDate : null,
   };
 
   const bridge = computeVillageToDungeonBridge(provisional);
@@ -423,4 +443,25 @@ export async function cancelMarketListingApi(
   );
   if (!res.ok) return res;
   return { ok: true, listing: res.data.listing };
+}
+
+export async function sandboxTopUpApi(
+  session: AuthSession | null,
+  sku: string
+): Promise<
+  | { ok: true; diamondsGranted: number; villagePassUntil: number | null; label: string }
+  | { ok: false; error: string }
+> {
+  const res = await postJson<{
+    diamondsGranted: number;
+    villagePassUntil: number | null;
+    label: string;
+  }>('/payments/sandbox-topup', { sku }, session?.token);
+  if (!res.ok) return res;
+  return {
+    ok: true,
+    diamondsGranted: res.data.diamondsGranted,
+    villagePassUntil: res.data.villagePassUntil,
+    label: res.data.label,
+  };
 }

@@ -21,8 +21,10 @@ import {
   BookOpen,
   Cloud,
   Coins,
+  Crown,
   FastForward,
   Gamepad2,
+  Gem,
   Heart,
   LogIn,
   Mail,
@@ -85,6 +87,7 @@ interface HUDProps {
   onOpenAuth: () => void;
   onOpenMarket: () => void;
   onOpenBestiary: () => void;
+  onOpenDiamondStore: () => void;
   onFastForwardFarm: () => void;
 }
 
@@ -120,6 +123,7 @@ export const HUD: React.FC<HUDProps> = ({
   onOpenAuth,
   onOpenMarket,
   onOpenBestiary,
+  onOpenDiamondStore,
   onFastForwardFarm,
 }) => {
   const [menuDropdownOpen, setMenuDropdownOpen] = useState(false);
@@ -292,6 +296,32 @@ export const HUD: React.FC<HUDProps> = ({
           <Coins className="w-3.5 h-3.5 text-amber-600 shrink-0" />
           {player.currencies.coins.toLocaleString()}
         </span>
+
+        {/* Compact Diamond Balance + Store Shortcut */}
+        <button
+          type="button"
+          onClick={() => {
+            soundManager.playSfx('click');
+            onOpenDiamondStore();
+          }}
+          title="Open Royal Diamond Store & Monthly Village Pass"
+          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-sky-100 hover:bg-sky-200 border border-sky-600/40 font-display font-bold text-sky-900 text-[11px] whitespace-nowrap transition cursor-pointer"
+        >
+          <Gem className="w-3 h-3 text-sky-600 shrink-0" />
+          <span>{player.currencies.diamonds.toLocaleString()}</span>
+          <span className="w-3.5 h-3.5 rounded-full bg-sky-600 text-white text-[10px] leading-none flex items-center justify-center font-bold">
+            +
+          </span>
+        </button>
+
+        {Boolean(player.villagePassUntil && player.villagePassUntil > now) && (
+          <span
+            title="Monthly Village Pass VIP Active (+15% Farm XP & Daily Free Spin)"
+            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-yellow-400 text-amber-950 border border-amber-900/60 font-display font-bold text-[9px] shrink-0"
+          >
+            <Crown className="w-2.5 h-2.5" /> VIP
+          </span>
+        )}
       </div>
     </div>
   );
@@ -452,6 +482,17 @@ export const HUD: React.FC<HUDProps> = ({
                       {saveStatus === 'saving' ? 'Saving...' : '☁ Saved'}
                     </span>
                   )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    soundManager.playSfx('click');
+                    setMenuDropdownOpen(false);
+                    onOpenDiamondStore();
+                  }}
+                  className="px-3 py-2 rounded-xl hover:bg-sky-100/90 text-left flex items-center gap-2 text-sky-950"
+                >
+                  <Gem className="w-4 h-4 text-sky-600" /> Diamond Store &amp; VIP Pass
                 </button>
                 <button
                   type="button"

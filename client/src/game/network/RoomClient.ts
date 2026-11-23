@@ -100,15 +100,22 @@ export function channelToAreaId(channel: number): string {
   return `AREA ${safe}`;
 }
 
-function getServerEndpoints(): { wsUrl: string; httpUrl: string } {
+export function getServerEndpoints(): { wsUrl: string; httpUrl: string } {
+  const envApi = (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '');
+  const envWs = (import.meta.env.VITE_WS_URL || '').trim().replace(/\/+$/, '');
+
   const host = typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : 'localhost';
   const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
-  const wsProto = isHttps ? 'wss' : 'ws';
-  const httpProto = isHttps ? 'https' : 'http';
-  return {
-    wsUrl: `${wsProto}://${host}:2567`,
-    httpUrl: `${httpProto}://${host}:2567`,
-  };
+  const defaultHttp = `${isHttps ? 'https' : 'http'}://${host}:2567`;
+  const defaultWs = `${isHttps ? 'wss' : 'ws'}://${host}:2567`;
+
+  const httpUrl = envApi || defaultHttp;
+  const derivedWsFromApi = envApi
+    ? envApi.replace(/^https:\/\//i, 'wss://').replace(/^http:\/\//i, 'ws://')
+    : defaultWs;
+  const wsUrl = envWs || derivedWsFromApi;
+
+  return { wsUrl, httpUrl };
 }
 
 function toSnapshot(raw: RawRemotePlayerSchema, key: string): RemotePlayerSnapshot {

@@ -43,12 +43,19 @@ import {
 import { respecAllSkills, unlockSkillTalent, awardSkillXp } from './game/systems/SkillManager';
 import { donateToPagodaAltar } from './data/pagodaBundles';
 import {
+  getTodayDateKey,
+  hasFreeDailyCoinSpin,
+  purchaseDiamondShopItem,
+  togglePlazaMount,
+} from './data/diamondStore';
+import {
   acceptFriendRequestApi,
   buyMarketListingApi,
   cancelMarketListingApi,
   createMarketListingApi,
   declineFriendRequestApi,
   fetchFriends,
+  sandboxTopUpApi,
   saveAccountProfile,
   sendFriendRequestApi,
   type AuthSession,
@@ -92,6 +99,7 @@ import {
 import { PagodaBundleModal } from './ui/PagodaBundleModal';
 import { MarketModal } from './ui/MarketModal';
 import { BestiaryModal } from './ui/BestiaryModal';
+import { DiamondStoreModal } from './ui/DiamondStoreModal';
 import { soundManager } from './game/systems/SoundManager';
 
 type ActiveModalType =
@@ -110,7 +118,8 @@ type ActiveModalType =
   | 'luckyWheel'
   | 'pagoda'
   | 'market'
-  | 'bestiary';
+  | 'bestiary'
+  | 'diamondStore';
 
 interface FloatingXpBanner extends SkillXpToastPayload {
   uid: number;
@@ -491,7 +500,8 @@ export const App: React.FC = () => {
   const handleLuckyWheelSpin = useCallback(
     (tier: 'coin' | 'gold', prize: WheelPrize) => {
       runStateAction((prev) => {
-        const coinCost = tier === 'coin' ? COIN_SPIN_COST : 0;
+        const useFreeVipSpin = tier === 'coin' && hasFreeDailyCoinSpin(prev);
+        const coinCost = tier === 'coin' ? (useFreeVipSpin ? 0 : COIN_SPIN_COST) : 0;
         const goldCost = tier === 'gold' ? GOLD_SPIN_COST : 0;
         if (prev.currencies.coins < coinCost || prev.currencies.gold < goldCost) {
           return { state: prev, ok: false, message: 'Not enough currency for this spin.' };
@@ -529,11 +539,36 @@ export const App: React.FC = () => {
             currencies: { ...prev.currencies, coins: nextCoins, gold: nextGold },
             inventory: nextInv,
             luckyWheelPity: nextPity,
+            dailyFreeCoinSpinDate: useFreeVipSpin ? getTodayDateKey() : prev.dailyFreeCoinSpinDate,
           },
           ok: true,
-          message: `🎡 Lucky Wheel Won: ${prize.label}${dupNote}`,
+          message: `🎡 ${useFreeVipSpin ? '👑 VIP Free Spin! ' : ''}Lucky Wheel Won: ${prize.label}${dupNote}`,
         };
       });
+    },
+    [runStateAction]
+  );
+
+  const handleSandboxTopUp = useCallback(
+    async (sku: string) => {
+      const res = await sandboxTopUpApi(authSessionRef.current, sku);
+      if (!res.ok) {
+        EventBus.emit('ui:toast', { text: res.error });
+        return;
+      }
+      soundManager.playSfx('level_up');
+      runStateAction((prev) => ({
+        state: {
+          ...prev,
+          currencies: {
+            ...prev.currencies,
+            diamonds: prev.currencies.diamonds + res.diamondsGranted,
+          },
+          villagePassUntil: res.villagePassUntil ?? prev.villagePassUntil ?? null,
+        },
+        ok: true,
+        message: `💎 Sandbox Top-Up Complete: ${res.label} (+${res.diamondsGranted} Diamonds)!`,
+      }));
     },
     [runStateAction]
   );
@@ -871,6 +906,7 @@ export const App: React.FC = () => {
         onOpenAuth={() => setActiveModal('auth')}
         onOpenMarket={() => setActiveModal('market')}
         onOpenBestiary={() => setActiveModal('bestiary')}
+        onOpenDiamondStore={() => setActiveModal('diamondStore')}
         onFastForwardFarm={() => runFarmAction((s) => fastForwardFarmTimers(s, 60))}
       />
 
@@ -942,6 +978,28 @@ export const App: React.FC = () => {
           setPreselectedBossId(bossId);
           setActiveModal('modeSelector');
         }}
+      />
+
+      <DiamondStoreModal
+        open={activeModal === 'diamondStore'}
+        player={player}
+        onClose={() => setActiveModal(null)}
+        onBuyShopItem={(shopId) =>
+          runStateAction((s) => {
+            const res = purchaseDiamondShopItem(s, shopId);
+            if (res.ok) soundManager.playSfx('coin');
+            return res;
+          })
+        }
+        onToggleMount={(mountId) =>
+          runStateAction((s) => {
+            const res = togglePlazaMount(s, mountId);
+            if (res.ok) soundManager.playSfx('click');
+            return res;
+          })
+        }
+        onEquipItem={handleEquipItem}
+        onSandboxTopUp={handleSandboxTopUp}
       />
 
       <AreaSwitcherModal

@@ -1691,18 +1691,22 @@ export class DungeonBossScene extends Phaser.Scene {
       this.bossCtrl.update(time, delta, this.player.x, this.player.y, playerBounds);
     }
 
-    // Walk-over auto-pickup for Secret Relic Chest & Boss Treasure Bag
+    // Walk-over auto-pickup for Secret Relic Chest & Boss Treasure Bag (extended range with QoL Lucky White Kitten!)
+    const hasAutoLootKitten =
+      this.player.state.loadout.pet === 'pet_lucky_kitten' ||
+      this.player.state.inventory.some((i) => i.itemId === 'pet_lucky_kitten' && i.quantity > 0);
+    const lootRadius = hasAutoLootKitten ? 240 : 56;
     if (
       this.secretWall.broken &&
       !this.secretWall.chestClaimed &&
-      Phaser.Math.Distance.Between(this.player.x, this.player.y, this.secretWall.x, this.secretWall.y) < 52
+      Phaser.Math.Distance.Between(this.player.x, this.player.y, this.secretWall.x, this.secretWall.y) < lootRadius
     ) {
       this.claimSecretRelicChest();
     }
     if (
       this.lootBag &&
       !this.lootBag.claimed &&
-      Phaser.Math.Distance.Between(this.player.x, this.player.y, this.lootBag.x, this.lootBag.y) < 56
+      Phaser.Math.Distance.Between(this.player.x, this.player.y, this.lootBag.x, this.lootBag.y) < lootRadius
     ) {
       this.claimBossLootBag();
     }

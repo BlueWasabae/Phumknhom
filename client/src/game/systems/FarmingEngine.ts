@@ -52,7 +52,11 @@ function addFarmXpAndPlayerXp(
   charXpGain = 0,
   skillId: SkillId = 'farming'
 ): PlayerState {
-  const skillRes = awardSkillXp(state, skillId, skillXpGain, true);
+  // Monthly Village Pass grants +15% Farm XP!
+  const passActive = Boolean(state.villagePassUntil && state.villagePassUntil > Date.now());
+  const boostedSkillXp =
+    skillId === 'farming' && passActive ? Math.ceil(skillXpGain * 1.15) : skillXpGain;
+  const skillRes = awardSkillXp(state, skillId, boostedSkillXp, true);
   let nextState = skillRes.state;
 
   let level = nextState.level;

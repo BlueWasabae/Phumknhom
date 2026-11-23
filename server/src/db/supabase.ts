@@ -30,6 +30,11 @@ export interface SavedPlayerProfile {
   bossDefeats?: Record<string, number>;
   pagodaBundles?: Record<string, string[]>;
   luckyWheelPity?: number;
+  villagePassUntil?: number | null;
+  extraBagSlots?: number;
+  ownedMounts?: string[];
+  activeMount?: string | null;
+  dailyFreeCoinSpinDate?: string | null;
   activeClass?: string;
   weapon?: Record<string, unknown>;
   defense?: number;
@@ -136,6 +141,58 @@ export async function creditPlayerCoins(playerId: string, deltaCoins: number): P
     row.updated_at = new Date().toISOString();
     writeLocalDb(db);
   }
+}
+
+export async function creditPlayerDiamonds(
+  playerId: string,
+  deltaDiamonds: number,
+  activateVillagePassDays = 0
+): Promise<{ ok: boolean; newDiamonds?: number; villagePassUntil?: number | null }> {
+  const gain = Math.max(0, Math.floor(deltaDiamonds));
+  const now = Date.now();
+  const passDurationMs = activateVillagePassDays > 0 ? activateVillagePassDays * 24 * 60 * 60 * 1000 : 0;
+
+  if (supabaseClient) {
+    const { data } = await supabaseClient
+      .from('players')
+      .select('diamonds, meta_json')
+      .eq('id', playerId)
+      .maybeSingle();
+    if (!data) return { ok: false };
+    const nextDiamonds = (typeof data.diamonds === 'number' ? data.diamonds : 0) + gain;
+    const meta = (data.meta_json && typeof data.meta_json === 'object' ? data.meta_json : {}) as Record<string, unknown>;
+    const existingUntil = typeof meta.villagePassUntil === 'number' ? meta.villagePassUntil : 0;
+    const nextUntil =
+      passDurationMs > 0 ? Math.max(now, existingUntil) + passDurationMs : existingUntil || null;
+
+    await supabaseClient
+      .from('players')
+      .update({
+        diamonds: nextDiamonds,
+        meta_json: { ...meta, villagePassUntil: nextUntil },
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', playerId);
+
+    return { ok: true, newDiamonds: nextDiamonds, villagePassUntil: nextUntil };
+  }
+
+  const db = readLocalDb();
+  const row = db.players.find((p) => p.id === playerId);
+  if (!row) return { ok: false };
+
+  row.diamonds = (row.diamonds ?? 0) + gain;
+  const meta = row.meta_json && typeof row.meta_json === 'object' ? { ...row.meta_json } : {};
+  const existingUntil = typeof meta.villagePassUntil === 'number' ? meta.villagePassUntil : 0;
+  const nextUntil =
+    passDurationMs > 0 ? Math.max(now, existingUntil) + passDurationMs : existingUntil || null;
+  if (passDurationMs > 0) {
+    meta.villagePassUntil = nextUntil;
+  }
+  row.meta_json = meta;
+  row.updated_at = new Date().toISOString();
+  writeLocalDb(db);
+  return { ok: true, newDiamonds: row.diamonds, villagePassUntil: nextUntil };
 }
 
 // ==================== CRYPTO & AUTH TOKENS ====================
@@ -286,6 +343,12 @@ function rowToSavedProfile(row: {
         ? (meta.pagodaBundles as Record<string, string[]>)
         : {},
     luckyWheelPity: typeof meta.luckyWheelPity === 'number' ? meta.luckyWheelPity : 0,
+    villagePassUntil: typeof meta.villagePassUntil === 'number' ? meta.villagePassUntil : null,
+    extraBagSlots: typeof meta.extraBagSlots === 'number' ? meta.extraBagSlots : 0,
+    ownedMounts: Array.isArray(meta.ownedMounts) ? (meta.ownedMounts as string[]) : [],
+    activeMount: typeof meta.activeMount === 'string' ? meta.activeMount : null,
+    dailyFreeCoinSpinDate:
+      typeof meta.dailyFreeCoinSpinDate === 'string' ? meta.dailyFreeCoinSpinDate : null,
     activeClass: typeof meta.activeClass === 'string' ? meta.activeClass : undefined,
     weapon: typeof meta.weapon === 'object' && meta.weapon ? (meta.weapon as Record<string, unknown>) : undefined,
     defense: typeof meta.defense === 'number' ? meta.defense : undefined,
@@ -330,6 +393,11 @@ export async function registerPlayer(
     bossDefeats: starterProfile?.bossDefeats ?? {},
     pagodaBundles: starterProfile?.pagodaBundles ?? {},
     luckyWheelPity: starterProfile?.luckyWheelPity ?? 0,
+    villagePassUntil: starterProfile?.villagePassUntil ?? null,
+    extraBagSlots: starterProfile?.extraBagSlots ?? 0,
+    ownedMounts: starterProfile?.ownedMounts ?? [],
+    activeMount: starterProfile?.activeMount ?? null,
+    dailyFreeCoinSpinDate: starterProfile?.dailyFreeCoinSpinDate ?? null,
     activeClass: starterProfile?.activeClass,
     weapon: starterProfile?.weapon,
     defense: starterProfile?.defense,
@@ -539,6 +607,11 @@ export async function savePlayerProfile(
     bossDefeats: profile.bossDefeats ?? {},
     pagodaBundles: profile.pagodaBundles ?? {},
     luckyWheelPity: profile.luckyWheelPity ?? 0,
+    villagePassUntil: profile.villagePassUntil ?? null,
+    extraBagSlots: profile.extraBagSlots ?? 0,
+    ownedMounts: profile.ownedMounts ?? [],
+    activeMount: profile.activeMount ?? null,
+    dailyFreeCoinSpinDate: profile.dailyFreeCoinSpinDate ?? null,
     activeClass: profile.activeClass,
     weapon: profile.weapon,
     defense: profile.defense,

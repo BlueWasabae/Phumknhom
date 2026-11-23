@@ -202,7 +202,8 @@ export interface EventMap {
       | 'luckyWheel'
       | 'pagoda'
       | 'market'
-      | 'bestiary';
+      | 'bestiary'
+      | 'diamondStore';
     farmTab?: 'seeds' | 'livestock' | 'artisan';
     shopTab?: 'primary' | 'secondary';
     friendsTab?: 'friends' | 'inbox';

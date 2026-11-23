@@ -833,7 +833,8 @@ export class OverworldScene extends Phaser.Scene {
     const isMoving = len > 0.1;
     if (isMoving) {
       const bridge = computeVillageToDungeonBridge(this.player.state);
-      const speed = 115 * (1 + Math.min(0.45, bridge.moveSpeedBonusPct));
+      const mountMult = this.player.state.activeMount === 'mount_mini_tuk_tuk' ? 1.4 : 1.0;
+      const speed = 115 * (1 + Math.min(0.45, bridge.moveSpeedBonusPct)) * mountMult;
       const nx = vx / Math.max(1, len);
       const ny = vy / Math.max(1, len);
       this.player.body.setVelocity(nx * speed, ny * speed);
