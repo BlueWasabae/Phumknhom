@@ -230,6 +230,8 @@ export const HUD: React.FC<HUDProps> = ({
       ? 'Siem Reap'
       : player.cityServer === 'kampot'
       ? 'Kampot'
+      : player.cityServer === 'battambang'
+      ? 'Battambang'
       : 'Phnom Penh';
 
   const zonePill = (
@@ -359,7 +361,7 @@ export const HUD: React.FC<HUDProps> = ({
 
   return (
     <>
-      <div className="pointer-events-none fixed inset-x-0 top-0 z-20 w-full max-w-full box-border px-3 pt-2 flex flex-col gap-1.5">
+      <div className="pointer-events-none fixed inset-x-0 top-6 z-20 w-full max-w-full box-border px-3 pt-1.5 flex flex-col gap-1.5">
         <div className="w-full flex items-center justify-between gap-2 min-w-0">
           {/* TOP-LEFT */}
           <div className="pointer-events-auto flex items-center gap-1.5 shrink-0 relative">
@@ -376,10 +378,11 @@ export const HUD: React.FC<HUDProps> = ({
               type="button"
               onClick={onOpenWorldMap}
               aria-label="World Map (M)"
-              title="World Map, Bus Routes & Biome Pylons (M)"
-              className="stardew-btn p-2 rounded-xl shrink-0"
+              title="Fullscreen World Map, City Districts & Biome Pylons (M)"
+              className="stardew-btn px-2 py-1.5 rounded-xl font-display font-bold text-xs flex items-center gap-1 shrink-0"
             >
-              <MapIcon className="w-4 h-4 text-emerald-900" />
+              <MapIcon className="w-4 h-4 text-emerald-900 shrink-0" />
+              <span className="hidden sm:inline">Map</span>
             </button>
 
             <button

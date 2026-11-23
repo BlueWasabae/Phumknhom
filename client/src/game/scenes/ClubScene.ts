@@ -92,7 +92,25 @@ export class ClubScene extends Phaser.Scene {
         this.player.syncPlayerState(nextState);
       }),
       EventBus.on('travel:execute', (req) => {
-        if (req.targetZone === 'overworld') this.returnToOverworld();
+        if (this.transitioning) return;
+        soundManager.playSfx('magic');
+        this.cameras.main.flash(260, 250, 204, 21);
+        this.time.delayedCall(220, () => {
+          if (req.targetZone === 'farm') {
+            this.transitioning = true;
+            this.scene.start('FarmScene', { playerState: { ...this.player.state, zone: 'farm' } });
+          } else if (req.targetZone === 'dungeon') {
+            this.transitioning = true;
+            this.scene.start('DungeonBossScene', {
+              bossId: req.bossId ?? 'sdech_kongkaeb',
+              difficulty: req.difficulty ?? 'normal',
+              partyMode: 'solo',
+              playerState: { ...this.player.state, zone: 'dungeon' },
+            });
+          } else if (req.targetZone === 'overworld') {
+            this.returnToOverworld(req.spawnX, req.spawnY, true);
+          }
+        });
       }),
       EventBus.on('input:interact', () => this.tryInteractNearest())
     );
@@ -248,12 +266,15 @@ export class ClubScene extends Phaser.Scene {
     EventBus.emit('ui:openModal', { modal: 'clubGames', clubGame: 'tien_len' });
   }
 
-  private returnToOverworld(): void {
+  private returnToOverworld(spawnX?: number, spawnY?: number, goldenFlash = false): void {
     if (this.transitioning) return;
     this.transitioning = true;
     this.cameras.main.fadeOut(200, 10, 12, 22);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
       this.scene.start('OverworldScene', {
+        spawnX,
+        spawnY,
+        goldenFlash,
         playerState: { ...this.player.state, zone: 'overworld' },
       });
     });

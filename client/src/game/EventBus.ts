@@ -178,6 +178,7 @@ export interface EventMap {
   'dungeon:outcome': DungeonOutcomePayload | null;
   'travel:execute': TravelRequestPayload;
   'ticker:push': { text: string; category?: 'boss' | 'reforge' | 'weather' | 'club' | 'market' };
+  'shrine:pray': void;
   'mobile:joystick': JoystickVector;
   'input:interact': void;
   'input:jump': void;

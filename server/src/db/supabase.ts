@@ -35,6 +35,7 @@ export interface SavedPlayerProfile {
   ownedMounts?: string[];
   activeMount?: string | null;
   dailyFreeCoinSpinDate?: string | null;
+  lastShrinePrayerDate?: string | null;
   cityServer?: string;
   activeBiome?: string;
   discoveredBiomes?: string[];
@@ -203,6 +204,69 @@ export async function creditPlayerDiamonds(
   return { ok: true, newDiamonds: row.diamonds, villagePassUntil: nextUntil };
 }
 
+export async function getPlayerBankBalances(
+  playerId: string
+): Promise<{ walletCoins: number; bankCoins: number } | null> {
+  if (supabaseClient) {
+    const { data } = await supabaseClient
+      .from('players')
+      .select('coins, meta_json')
+      .eq('id', playerId)
+      .maybeSingle();
+    if (!data) return null;
+    const meta = (data.meta_json && typeof data.meta_json === 'object' ? data.meta_json : {}) as Record<string, unknown>;
+    return {
+      walletCoins: typeof data.coins === 'number' ? data.coins : 0,
+      bankCoins: typeof meta.bankCoins === 'number' ? meta.bankCoins : 0,
+    };
+  }
+  const db = readLocalDb();
+  const row = db.players.find((p) => p.id === playerId);
+  if (!row) return null;
+  return {
+    walletCoins: row.coins ?? 0,
+    bankCoins: typeof row.meta_json?.bankCoins === 'number' ? (row.meta_json.bankCoins as number) : 0,
+  };
+}
+
+export async function updatePlayerBankCoins(
+  playerId: string,
+  walletCoins: number,
+  bankCoins: number
+): Promise<boolean> {
+  const safeWallet = Math.max(0, Math.floor(walletCoins));
+  const safeBank = Math.max(0, Math.floor(bankCoins));
+  const nowIso = new Date().toISOString();
+
+  if (supabaseClient) {
+    const { data } = await supabaseClient
+      .from('players')
+      .select('meta_json')
+      .eq('id', playerId)
+      .maybeSingle();
+    if (!data) return false;
+    const meta = (data.meta_json && typeof data.meta_json === 'object' ? data.meta_json : {}) as Record<string, unknown>;
+    await supabaseClient
+      .from('players')
+      .update({
+        coins: safeWallet,
+        meta_json: { ...meta, bankCoins: safeBank },
+        updated_at: nowIso,
+      })
+      .eq('id', playerId);
+    return true;
+  }
+
+  const db = readLocalDb();
+  const row = db.players.find((p) => p.id === playerId);
+  if (!row) return false;
+  row.coins = safeWallet;
+  row.meta_json = { ...(row.meta_json || {}), bankCoins: safeBank };
+  row.updated_at = nowIso;
+  writeLocalDb(db);
+  return true;
+}
+
 // ==================== CRYPTO & AUTH TOKENS ====================
 
 function hashPassword(password: string): string {
@@ -357,14 +421,16 @@ function rowToSavedProfile(row: {
     activeMount: typeof meta.activeMount === 'string' ? meta.activeMount : null,
     dailyFreeCoinSpinDate:
       typeof meta.dailyFreeCoinSpinDate === 'string' ? meta.dailyFreeCoinSpinDate : null,
+    lastShrinePrayerDate:
+      typeof meta.lastShrinePrayerDate === 'string' ? meta.lastShrinePrayerDate : null,
     cityServer: typeof meta.cityServer === 'string' ? meta.cityServer : 'phnom_penh',
-    activeBiome: typeof meta.activeBiome === 'string' ? meta.activeBiome : 'phum_plaza',
+    activeBiome: typeof meta.activeBiome === 'string' ? meta.activeBiome : 'emerald_rice_valley',
     discoveredBiomes: Array.isArray(meta.discoveredBiomes)
       ? (meta.discoveredBiomes as string[])
-      : ['phum_plaza', 'emerald_rice_valley'],
+      : ['emerald_rice_valley'],
     unlockedPylons: Array.isArray(meta.unlockedPylons)
       ? (meta.unlockedPylons as string[])
-      : ['phum_plaza', 'emerald_rice_valley'],
+      : ['emerald_rice_valley'],
     bankCoins: typeof meta.bankCoins === 'number' ? meta.bankCoins : 500,
     weaponPrefix: typeof meta.weaponPrefix === 'string' ? meta.weaponPrefix : 'keen',
     armorPrefix: typeof meta.armorPrefix === 'string' ? meta.armorPrefix : 'armored',
@@ -418,10 +484,11 @@ export async function registerPlayer(
     ownedMounts: starterProfile?.ownedMounts ?? [],
     activeMount: starterProfile?.activeMount ?? null,
     dailyFreeCoinSpinDate: starterProfile?.dailyFreeCoinSpinDate ?? null,
+    lastShrinePrayerDate: starterProfile?.lastShrinePrayerDate ?? null,
     cityServer: starterProfile?.cityServer ?? 'phnom_penh',
-    activeBiome: starterProfile?.activeBiome ?? 'phum_plaza',
-    discoveredBiomes: starterProfile?.discoveredBiomes ?? ['phum_plaza', 'emerald_rice_valley'],
-    unlockedPylons: starterProfile?.unlockedPylons ?? ['phum_plaza', 'emerald_rice_valley'],
+    activeBiome: starterProfile?.activeBiome ?? 'emerald_rice_valley',
+    discoveredBiomes: starterProfile?.discoveredBiomes ?? ['emerald_rice_valley'],
+    unlockedPylons: starterProfile?.unlockedPylons ?? ['emerald_rice_valley'],
     bankCoins: starterProfile?.bankCoins ?? 500,
     weaponPrefix: starterProfile?.weaponPrefix ?? 'keen',
     armorPrefix: starterProfile?.armorPrefix ?? 'armored',
@@ -640,10 +707,11 @@ export async function savePlayerProfile(
     ownedMounts: profile.ownedMounts ?? [],
     activeMount: profile.activeMount ?? null,
     dailyFreeCoinSpinDate: profile.dailyFreeCoinSpinDate ?? null,
+    lastShrinePrayerDate: profile.lastShrinePrayerDate ?? null,
     cityServer: profile.cityServer ?? 'phnom_penh',
-    activeBiome: profile.activeBiome ?? 'phum_plaza',
-    discoveredBiomes: profile.discoveredBiomes ?? ['phum_plaza', 'emerald_rice_valley'],
-    unlockedPylons: profile.unlockedPylons ?? ['phum_plaza', 'emerald_rice_valley'],
+    activeBiome: profile.activeBiome ?? 'emerald_rice_valley',
+    discoveredBiomes: profile.discoveredBiomes ?? ['emerald_rice_valley'],
+    unlockedPylons: profile.unlockedPylons ?? ['emerald_rice_valley'],
     bankCoins: profile.bankCoins ?? 500,
     weaponPrefix: profile.weaponPrefix ?? 'keen',
     armorPrefix: profile.armorPrefix ?? 'armored',

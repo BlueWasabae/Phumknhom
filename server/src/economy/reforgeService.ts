@@ -44,22 +44,28 @@ export interface GlobalTickerEvent {
 
 const tickerEvents: GlobalTickerEvent[] = [
   {
-    id: 'tk_welcome',
-    text: '🌏 Welcome to ភូមិខ្ញុំ (Phum Khnhom) — Phnom Penh, Siem Reap & Kampot City Servers are LIVE!',
+    id: 'tk_monsoon',
+    text: '🌧️ Monsoon Rain forecast across Phnom Penh, Siem Reap, Kampot & Battambang — Personal Farms auto-watered!',
     category: 'weather',
     timestamp: Date.now() - 120_000,
   },
   {
-    id: 'tk_bus',
-    text: '🚌 Express Village Bus & 8-Biome Pylon Network open! Press [M] to open the World Map.',
-    category: 'market',
+    id: 'tk_boss',
+    text: '⚔️ Server Hero Sokha just defeated Yeak Thmor on Calamity Mode in Angkor Ruins!',
+    category: 'boss',
     timestamp: Date.now() - 80_000,
   },
   {
-    id: 'tk_club',
-    text: '🃏 Village Night Club is open! Challenge friends to Tien Len & Ouk Chaktrang inside Phum Plaza.',
-    category: 'club',
+    id: 'tk_shrine',
+    text: '✨ Visit the Golden Blessing Shrine in Green Park once per day for +250 Coins & +10% Luck (10m)!',
+    category: 'market',
     timestamp: Date.now() - 40_000,
+  },
+  {
+    id: 'tk_bus',
+    text: '🚌 Green Express Bus stops in Downtown Plaza every 25s — tap JOIN or press [M] to open the World Map!',
+    category: 'club',
+    timestamp: Date.now() - 15_000,
   },
 ];
 
@@ -133,52 +139,6 @@ export function createReforgeAndBankRouter(): express.Router {
       category,
       costCoins,
       modifier: rolled,
-    });
-  });
-
-  router.post('/bank/deposit', (req, res) => {
-    const body = req.body as { amount?: number; walletCoins?: number; bankCoins?: number };
-    const amount = Math.floor(Number(body.amount ?? 0));
-    const wallet = Math.max(0, Math.floor(Number(body.walletCoins ?? 0)));
-    const bank = Math.max(0, Math.floor(Number(body.bankCoins ?? 0)));
-
-    if (!Number.isFinite(amount) || amount <= 0) {
-      res.status(400).json({ error: 'Enter a valid positive Coin amount to deposit.' });
-      return;
-    }
-    if (amount > wallet) {
-      res.status(400).json({ error: `Not enough wallet Coins (have ${wallet.toLocaleString()}c).` });
-      return;
-    }
-
-    res.json({
-      ok: true,
-      walletCoins: wallet - amount,
-      bankCoins: bank + amount,
-      message: `🏧 Deposited ${amount.toLocaleString()} Coins into ATM Vault!`,
-    });
-  });
-
-  router.post('/bank/withdraw', (req, res) => {
-    const body = req.body as { amount?: number; walletCoins?: number; bankCoins?: number };
-    const amount = Math.floor(Number(body.amount ?? 0));
-    const wallet = Math.max(0, Math.floor(Number(body.walletCoins ?? 0)));
-    const bank = Math.max(0, Math.floor(Number(body.bankCoins ?? 0)));
-
-    if (!Number.isFinite(amount) || amount <= 0) {
-      res.status(400).json({ error: 'Enter a valid positive Coin amount to withdraw.' });
-      return;
-    }
-    if (amount > bank) {
-      res.status(400).json({ error: `ATM Vault only holds ${bank.toLocaleString()} Coins.` });
-      return;
-    }
-
-    res.json({
-      ok: true,
-      walletCoins: wallet + amount,
-      bankCoins: bank - amount,
-      message: `🏧 Withdrew ${amount.toLocaleString()} Coins from ATM Vault!`,
     });
   });
 

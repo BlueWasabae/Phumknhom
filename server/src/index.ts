@@ -14,6 +14,7 @@ import {
   listMarketListings,
 } from './economy/marketService';
 import { createReforgeAndBankRouter } from './economy/reforgeService';
+import { createBankRouter } from './economy/bankService';
 import { createPaymentRouter } from './economy/paymentWebhook';
 import { presenceRegistry } from './presence';
 import {
@@ -403,6 +404,7 @@ app.post('/api/market/cancel', async (req, res) => {
 
 // ==================== PHASE 10 PAYMENTS & EXPANSION REFORGE / BANK / TICKER ====================
 app.use('/api/payments', createPaymentRouter());
+app.use('/api/bank', createBankRouter());
 app.use('/api', createReforgeAndBankRouter());
 
 const httpServer = http.createServer(app);

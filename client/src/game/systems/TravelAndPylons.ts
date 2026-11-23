@@ -15,14 +15,16 @@ export interface TravelRequestPayload {
   biomeId?: BiomeId;
   bossId?: BossId;
   difficulty?: DifficultyMode;
+  spawnX?: number;
+  spawnY?: number;
 }
 
 /**
- * Travel & Pylon Network State Manager for ភូមិខ្ញុំ (Phum Khnhom):
- * - Animated Village Bus (board at Plaza Bus Stop -> arrive at District/Biome)
- * - Biome Pylon Teleport Network (instant free warp between unlocked Pylons)
- * - Magic Mirror (instant recall home to Central Plaza)
- * - Return Portal (bookmark Dungeon boss fight -> visit Village -> warp straight back!)
+ * Travel & Angkor Biome Pylon Network State Manager:
+ * - Animated Green Village Bus (25s loop & Bus Stop boarding)
+ * - Angkor Biome Pylons (golden teleport flash between unlocked districts & biomes)
+ * - Magic Mirror (instant recall straight back to Personal Farm / Home)
+ * - Return Portal (bookmark Dungeon boss arena -> visit Village -> jump straight back)
  */
 class TravelAndPylonsManager {
   private activeReturnPortal: ReturnPortalBookmark | null = null;
@@ -56,8 +58,8 @@ export function unlockBiomeAndPylon(
   const biome = WORLD_BIOMES[biomeId];
   if (!biome) return { state, ok: false, message: 'Unknown biome.' };
 
-  const discovered = new Set(state.discoveredBiomes ?? ['phum_plaza', 'emerald_rice_valley']);
-  const pylons = new Set(state.unlockedPylons ?? ['phum_plaza', 'emerald_rice_valley']);
+  const discovered = new Set(state.discoveredBiomes ?? ['emerald_rice_valley']);
+  const pylons = new Set(state.unlockedPylons ?? ['emerald_rice_valley']);
   if (discovered.has(biomeId) && pylons.has(biomeId)) {
     return { state, ok: false, message: `${biome.pylonName} is already unlocked!` };
   }
@@ -66,7 +68,7 @@ export function unlockBiomeAndPylon(
     return {
       state,
       ok: false,
-      message: `Need ${biome.unlockCostCoins.toLocaleString()} Coins to scout ${biome.name} & activate its Pylon.`,
+      message: `Need ${biome.unlockCostCoins.toLocaleString()} Coins to clear Fog-of-War & activate ${biome.pylonName}.`,
     };
   }
 
@@ -84,7 +86,7 @@ export function unlockBiomeAndPylon(
       unlockedPylons: Array.from(pylons),
     },
     ok: true,
-    message: `🗺️ Cleared Fog-of-War & Activated ${biome.pylonName}!`,
+    message: `🗺️ Fog-of-War cleared! Activated Angkor ${biome.pylonName}!`,
   };
 }
 
@@ -94,10 +96,10 @@ export function payBusFare(
   biomeId?: BiomeId
 ): { state: PlayerState; ok: boolean; message: string } {
   if (fareCoins > 0 && state.currencies.coins < fareCoins) {
-    return { state, ok: false, message: `Need ${fareCoins} Coins for the Village Bus fare.` };
+    return { state, ok: false, message: `Need ${fareCoins} Coins for the Green Village Bus fare.` };
   }
   const nextCoins = state.currencies.coins - fareCoins;
-  const discovered = new Set(state.discoveredBiomes ?? ['phum_plaza', 'emerald_rice_valley']);
+  const discovered = new Set(state.discoveredBiomes ?? ['emerald_rice_valley']);
   if (biomeId) discovered.add(biomeId);
 
   return {
@@ -105,10 +107,11 @@ export function payBusFare(
       ...state,
       coins: nextCoins,
       currencies: { ...state.currencies, coins: nextCoins },
-      activeBiome: biomeId ?? state.activeBiome ?? 'phum_plaza',
+      activeBiome: biomeId ?? state.activeBiome ?? 'emerald_rice_valley',
       discoveredBiomes: Array.from(discovered),
     },
     ok: true,
-    message: fareCoins > 0 ? `🚌 Boarded Village Express Bus (-${fareCoins}c)!` : '🚌 Boarded Free Village Shuttle!',
+    message:
+      fareCoins > 0 ? `🚌 Boarded Green Village Bus (-${fareCoins}c)!` : '🚌 Boarded Free Village Shuttle!',
   };
 }

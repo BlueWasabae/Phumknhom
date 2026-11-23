@@ -10,11 +10,13 @@ import { PaperDollPreview } from './PaperDollPreview';
 interface InventoryModalProps {
   open: boolean;
   player: PlayerState;
+  inActiveBossFight?: boolean;
   onClose: () => void;
   onEquip: (itemId: string) => void;
   onUnequip: (slot: EquipSlot) => void;
   onSellFarmItem: (itemId: string, quality: QualityTier, qty?: number) => void;
   onEatSnack?: (snackId: string) => void;
+  onUseMagicMirror?: () => void;
 }
 
 const WEARING_SLOTS: Array<{ slot: EquipSlot; label: string }> = [
@@ -41,11 +43,13 @@ type ContainerFilter = EquipSlot | 'all' | 'farm_goods' | 'snacks';
 export const InventoryModal: React.FC<InventoryModalProps> = ({
   open,
   player,
+  inActiveBossFight = false,
   onClose,
   onEquip,
   onUnequip,
   onSellFarmItem,
   onEatSnack,
+  onUseMagicMirror,
 }) => {
   const [tab, setTab] = useState<'wearing' | 'container'>('container');
   const [filterSlot, setFilterSlot] = useState<ContainerFilter>('all');
@@ -323,7 +327,21 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                     <div className="text-[11px] font-semibold text-amber-800">{selectedFarmDef.khmerName}</div>
                     <p className="text-[11px] text-amber-900/90 mt-1 leading-snug">{selectedFarmDef.description}</p>
                   </div>
-                  {selectedFarmDef.sellCoins && (
+                  {selectedFarmDef.id === 'tool_magic_mirror' && onUseMagicMirror ? (
+                    <button
+                      type="button"
+                      disabled={inActiveBossFight}
+                      onClick={() => {
+                        onClose();
+                        onUseMagicMirror();
+                      }}
+                      className="w-full py-2 rounded-xl bg-gradient-to-b from-amber-500 to-amber-700 hover:from-amber-400 hover:to-amber-600 text-white border border-amber-950 font-display font-bold text-xs disabled:opacity-45"
+                    >
+                      {inActiveBossFight
+                        ? '⚔️ Disabled During Boss Fight'
+                        : '🪞 Use Magic Mirror → Warp to Farm/Home'}
+                    </button>
+                  ) : selectedFarmDef.sellCoins ? (
                     <button
                       type="button"
                       onClick={() => onSellFarmItem(selectedFarmDef.id, selQuality, 1)}
@@ -336,7 +354,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                       ).toLocaleString()}
                       c)
                     </button>
-                  )}
+                  ) : null}
                 </>
               ) : selectedSnackDef && selectedEntry ? (
                 <>

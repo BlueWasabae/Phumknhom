@@ -63,7 +63,8 @@ export interface SavedProfilePayload {
   ownedMounts?: string[];
   activeMount?: string | null;
   dailyFreeCoinSpinDate?: string | null;
-  cityServer?: 'phnom_penh' | 'siem_reap' | 'kampot';
+  lastShrinePrayerDate?: string | null;
+  cityServer?: 'phnom_penh' | 'siem_reap' | 'kampot' | 'battambang';
   activeBiome?: string;
   discoveredBiomes?: string[];
   unlockedPylons?: string[];
@@ -111,10 +112,11 @@ export function serializePlayerStateForSave(state: PlayerState): SavedProfilePay
     ownedMounts: [...(state.ownedMounts ?? [])],
     activeMount: state.activeMount ?? null,
     dailyFreeCoinSpinDate: state.dailyFreeCoinSpinDate ?? null,
+    lastShrinePrayerDate: state.lastShrinePrayerDate ?? null,
     cityServer: state.cityServer ?? 'phnom_penh',
-    activeBiome: state.activeBiome ?? 'phum_plaza',
-    discoveredBiomes: [...(state.discoveredBiomes ?? ['phum_plaza', 'emerald_rice_valley'])],
-    unlockedPylons: [...(state.unlockedPylons ?? ['phum_plaza', 'emerald_rice_valley'])],
+    activeBiome: state.activeBiome ?? 'emerald_rice_valley',
+    discoveredBiomes: [...(state.discoveredBiomes ?? ['emerald_rice_valley'])],
+    unlockedPylons: [...(state.unlockedPylons ?? ['emerald_rice_valley'])],
     bankCoins: state.bankCoins ?? 500,
     weaponPrefix: state.weaponPrefix ?? 'keen',
     armorPrefix: state.armorPrefix ?? 'armored',
@@ -179,10 +181,14 @@ export function hydratePlayerStateFromSave(
         }
       : baseFarm;
 
-  const inventory =
+  const rawInventory =
     Array.isArray(saved?.inventory) && saved.inventory.length > 0
-      ? saved.inventory
+      ? saved.inventory.map((i) => ({ ...i }))
       : INITIAL_PLAYER_STATE.inventory.map((i) => ({ ...i }));
+  if (!rawInventory.some((i) => i.itemId === 'tool_magic_mirror')) {
+    rawInventory.push({ itemId: 'tool_magic_mirror', quantity: 1, itemLevel: 1, quality: 'normal' });
+  }
+  const inventory = rawInventory;
 
   const provisional: PlayerState = {
     ...INITIAL_PLAYER_STATE,
@@ -232,17 +238,21 @@ export function hydratePlayerStateFromSave(
     activeMount: typeof saved?.activeMount === 'string' ? saved.activeMount : null,
     dailyFreeCoinSpinDate:
       typeof saved?.dailyFreeCoinSpinDate === 'string' ? saved.dailyFreeCoinSpinDate : null,
+    lastShrinePrayerDate:
+      typeof saved?.lastShrinePrayerDate === 'string' ? saved.lastShrinePrayerDate : null,
     cityServer:
-      saved?.cityServer === 'siem_reap' || saved?.cityServer === 'kampot'
+      saved?.cityServer === 'siem_reap' ||
+      saved?.cityServer === 'kampot' ||
+      saved?.cityServer === 'battambang'
         ? saved.cityServer
         : 'phnom_penh',
-    activeBiome: typeof saved?.activeBiome === 'string' ? saved.activeBiome : 'phum_plaza',
+    activeBiome: typeof saved?.activeBiome === 'string' ? saved.activeBiome : 'emerald_rice_valley',
     discoveredBiomes: Array.isArray(saved?.discoveredBiomes)
       ? saved.discoveredBiomes
-      : ['phum_plaza', 'emerald_rice_valley'],
+      : ['emerald_rice_valley'],
     unlockedPylons: Array.isArray(saved?.unlockedPylons)
       ? saved.unlockedPylons
-      : ['phum_plaza', 'emerald_rice_valley'],
+      : ['emerald_rice_valley'],
     bankCoins: typeof saved?.bankCoins === 'number' ? saved.bankCoins : 500,
     weaponPrefix: typeof saved?.weaponPrefix === 'string' ? saved.weaponPrefix : 'keen',
     armorPrefix: typeof saved?.armorPrefix === 'string' ? saved.armorPrefix : 'armored',

@@ -45,19 +45,28 @@ export class OverworldScene extends Phaser.Scene {
   private landmarks: LandmarkZone[] = [];
   private nearPortalSent = false;
   private transitioning = false;
+  private spawnX = 480;
+  private spawnY = 405;
+  private arrivalGoldenFlash = false;
+  private busActive = false;
+  private busTimer?: Phaser.Time.TimerEvent;
   private unsubs: Array<() => void> = [];
 
   constructor() {
     super('OverworldScene');
   }
 
-  init(data?: { playerState?: PlayerState }): void {
+  init(data?: { playerState?: PlayerState; spawnX?: number; spawnY?: number; goldenFlash?: boolean }): void {
     this.initialState = data?.playerState
       ? { ...data.playerState, zone: 'overworld', weapon: { ...data.playerState.weapon } }
       : { ...INITIAL_PLAYER_STATE, zone: 'overworld', weapon: { ...INITIAL_PLAYER_STATE.weapon } };
+    this.spawnX = typeof data?.spawnX === 'number' ? data.spawnX : 480;
+    this.spawnY = typeof data?.spawnY === 'number' ? data.spawnY : 405;
+    this.arrivalGoldenFlash = Boolean(data?.goldenFlash);
     this.landmarks = [];
     this.nearPortalSent = false;
     this.transitioning = false;
+    this.busActive = false;
     this.joystick = { x: 0, y: 0 };
   }
 
@@ -112,8 +121,20 @@ export class OverworldScene extends Phaser.Scene {
     });
 
     // 4. Real 4-directional Animated Chibi Player + Soft Shadow
-    this.player = new Player(this, 480, 405, this.initialState, 'overworld');
+    this.player = new Player(this, this.spawnX, this.spawnY, this.initialState, 'overworld');
     this.physics.add.collider(this.player.sprite, this.colliders);
+
+    // Scheduled Animated Green Village Bus: drives along road every 25s, pauses at Bus Stop with bouncing yellow JOIN arrow!
+    this.time.delayedCall(3500, () => {
+      if (this.scene.isActive('OverworldScene')) this.spawnScheduledGreenBus();
+    });
+    this.busTimer = this.time.addEvent({
+      delay: 25000,
+      loop: true,
+      callback: () => {
+        if (this.scene.isActive('OverworldScene')) this.spawnScheduledGreenBus();
+      },
+    });
 
     this.promptText = this.add
       .text(0, 0, '', {
@@ -136,7 +157,12 @@ export class OverworldScene extends Phaser.Scene {
 
     this.cameras.main.setBounds(0, 0, MAP_W, MAP_H);
     this.cameras.main.startFollow(this.player.sprite, true, 0.14, 0.14);
-    this.cameras.main.fadeIn(240, 10, 14, 24);
+    if (this.arrivalGoldenFlash) {
+      this.cameras.main.flash(260, 250, 204, 21);
+      soundManager.playSfx('magic');
+    } else {
+      this.cameras.main.fadeIn(240, 10, 14, 24);
+    }
 
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.keys = this.input.keyboard!.addKeys('W,A,S,D,E') as Record<
@@ -208,6 +234,8 @@ export class OverworldScene extends Phaser.Scene {
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off('resize', this.applyResponsiveZoom, this);
+      this.busTimer?.remove(false);
+      this.busTimer = undefined;
       this.unsubs.forEach((u) => u());
       this.unsubs = [];
       this.clearRemotePlayers();
@@ -794,15 +822,52 @@ export class OverworldScene extends Phaser.Scene {
       onInteract: () => this.enterClub(),
     });
 
-    // 14. GREEN PARK & BIOME PYLON SHRINE (South-Center Park)
+    // 14. GREEN PARK: GOLDEN BLESSING SHRINE (Daily +250c & +10% Luck) + BIOME PYLON SHRINE
     const parkGfx = this.add.graphics().setDepth(3);
-    parkGfx.fillStyle(0x15803d, 0.45);
-    parkGfx.fillEllipse(480, 512, 136, 72);
-    parkGfx.lineStyle(1.5, 0x86efac, 0.7);
-    parkGfx.strokeEllipse(480, 512, 128, 64);
+    parkGfx.fillStyle(0x15803d, 0.48);
+    parkGfx.fillEllipse(468, 514, 184, 78);
+    parkGfx.lineStyle(1.5, 0x86efac, 0.72);
+    parkGfx.strokeEllipse(468, 514, 174, 68);
 
+    // 14A. Golden Blessing Shrine (West side of Green Park — pray 1x/day for +250 Coins & +10% Luck 10m!)
+    const shrineGlow = this.add
+      .image(422, 488, 'torch_glow')
+      .setTint(0xfacc15)
+      .setScale(0.78)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(2140)
+      .setAlpha(0.58);
+    this.glowLights.push(shrineGlow);
+
+    const goldenShrineImg = this.addBuildingOrProp({
+      texture: 'golden_shrine',
+      x: 422,
+      y: 512,
+      scale: 0.92,
+      shadowW: 42,
+      shadowH: 13,
+      bodyW: 26,
+      bodyH: 16,
+      label: 'GOLDEN SHRINE · DAILY',
+      joinArrowY: 446,
+    });
+    const prayAtShrine = () => {
+      this.cameras.main.flash(220, 250, 204, 21);
+      EventBus.emit('shrine:pray');
+    };
+    goldenShrineImg.setInteractive({ useHandCursor: true }).on('pointerdown', prayAtShrine);
+    this.landmarks.push({
+      x: 422,
+      y: 516,
+      radius: 48,
+      label: 'Press [E] or Click → Pray at Golden Blessing Shrine (+250 Coins & +10% Luck 10m)',
+      isDungeonPortal: false,
+      onInteract: prayAtShrine,
+    });
+
+    // 14B. Angkor Biome Pylon Shrine (East side of Green Park)
     const pylonGlow = this.add
-      .image(480, 488, 'torch_glow')
+      .image(502, 488, 'torch_glow')
       .setTint(0x38bdf8)
       .setScale(0.7)
       .setBlendMode(Phaser.BlendModes.ADD)
@@ -812,23 +877,23 @@ export class OverworldScene extends Phaser.Scene {
 
     const pylonImg = this.addBuildingOrProp({
       texture: 'pylon_shrine',
-      x: 480,
+      x: 502,
       y: 512,
       scale: 0.95,
       shadowW: 44,
       shadowH: 14,
       bodyW: 26,
       bodyH: 16,
-      label: 'GREEN PARK · PYLON SHRINE',
+      label: 'PYLON SHRINE · MAP',
       joinArrowY: 448,
     });
     pylonImg.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
       EventBus.emit('ui:openModal', { modal: 'worldMap' });
     });
     this.landmarks.push({
-      x: 480,
+      x: 502,
       y: 516,
-      radius: 50,
+      radius: 48,
       label: 'Press [E] or Click → Biome Pylon Network & World Map [M]',
       isDungeonPortal: false,
       onInteract: () => EventBus.emit('ui:openModal', { modal: 'worldMap' }),
@@ -928,6 +993,91 @@ export class OverworldScene extends Phaser.Scene {
     });
   }
 
+  private spawnScheduledGreenBus(): void {
+    if (this.busActive || !this.scene.isActive('OverworldScene')) return;
+    this.busActive = true;
+
+    const busY = 374;
+    const stopX = 342;
+    const bus = this.add
+      .image(-54, busY, 'village_bus')
+      .setScale(0.95)
+      .setDepth(382)
+      .setInteractive({ useHandCursor: true });
+    const shadow = this.add
+      .image(-54, busY + 14, 'soft_shadow')
+      .setDisplaySize(72, 16)
+      .setDepth(378);
+    const joinArrow = this.add
+      .image(stopX, busY - 34, 'join_arrow')
+      .setScale(0.62)
+      .setDepth(420)
+      .setVisible(false);
+    const busBadge = this.add
+      .text(stopX, busY - 50, '🚌 GREEN BUS · TAP TO BOARD', {
+        fontFamily: 'Fredoka, sans-serif',
+        fontSize: '10px',
+        fontStyle: 'bold',
+        color: '#fef08a',
+        backgroundColor: 'rgba(20, 83, 45, 0.9)',
+        padding: { x: 6, y: 2 },
+      })
+      .setResolution(2)
+      .setScale(0.45)
+      .setOrigin(0.5)
+      .setDepth(421)
+      .setVisible(false);
+
+    bus.on('pointerdown', () => {
+      soundManager.playSfx('click');
+      EventBus.emit('ui:openModal', { modal: 'worldMap' });
+    });
+
+    // Drive into Bus Stop
+    this.tweens.add({
+      targets: [bus, shadow],
+      x: stopX,
+      duration: 2400,
+      ease: 'Cubic.easeOut',
+      onComplete: () => {
+        if (!bus.active) return;
+        joinArrow.setVisible(true);
+        busBadge.setVisible(true);
+        const arrowBounce = this.tweens.add({
+          targets: joinArrow,
+          y: busY - 42,
+          duration: 420,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
+
+        // Pause 6 seconds at the Downtown Bus Stop so players can click JOIN
+        this.time.delayedCall(6000, () => {
+          arrowBounce.stop();
+          joinArrow.destroy();
+          busBadge.destroy();
+          if (!bus.active) {
+            this.busActive = false;
+            return;
+          }
+          // Depart East along village highway
+          this.tweens.add({
+            targets: [bus, shadow],
+            x: MAP_W + 80,
+            duration: 3200,
+            ease: 'Cubic.easeIn',
+            onComplete: () => {
+              bus.destroy();
+              shadow.destroy();
+              this.busActive = false;
+            },
+          });
+        });
+      },
+    });
+  }
+
   private handleTravelRequest(req: TravelRequestPayload): void {
     if (this.transitioning) return;
     const executeDestination = () => {
@@ -938,17 +1088,19 @@ export class OverworldScene extends Phaser.Scene {
       } else if (req.targetZone === 'dungeon') {
         this.enterDungeon(req.bossId ?? 'sdech_kongkaeb', req.difficulty ?? 'normal', 'solo');
       } else {
-        this.player.sprite.setPosition(480, 405);
-        this.cameras.main.flash(260, 125, 211, 252);
+        const destX = typeof req.spawnX === 'number' ? req.spawnX : 480;
+        const destY = typeof req.spawnY === 'number' ? req.spawnY : 405;
+        this.player.sprite.setPosition(destX, destY);
+        this.cameras.main.flash(260, 250, 204, 21);
         soundManager.playSfx('magic');
       }
     };
 
     if (req.method === 'bus') {
-      // Animated Khmer Express Bus gliding across the village road before arrival!
+      // Animated Green Village Bus gliding across the village road before arrival!
       soundManager.playSfx('click');
-      const bus = this.add.image(110, 372, 'village_bus').setScale(0.95).setDepth(2400);
-      EventBus.emit('ui:toast', { text: `🚌 Village Express Bus departing for ${req.destinationLabel}...` });
+      const bus = this.add.image(110, 372, 'village_bus').setScale(0.98).setDepth(2400);
+      EventBus.emit('ui:toast', { text: `🚌 Green Village Bus departing for ${req.destinationLabel}...` });
       this.tweens.add({
         targets: bus,
         x: 860,
@@ -962,9 +1114,9 @@ export class OverworldScene extends Phaser.Scene {
       return;
     }
 
-    // Instant Pylon / Magic Mirror / Return Portal crystal flash warp!
+    // Instant Angkor Pylon / District / Magic Mirror golden teleport flash!
     soundManager.playSfx('magic');
-    this.cameras.main.flash(240, 56, 189, 248);
+    this.cameras.main.flash(260, 250, 204, 21);
     this.time.delayedCall(220, executeDestination);
   }
 

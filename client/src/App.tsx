@@ -327,7 +327,13 @@ export const App: React.FC = () => {
 
   const authSessionRef = useRef<AuthSession | null>(null);
   const playerRef = useRef<PlayerState>(player);
+  const inActiveBossFightRef = useRef(false);
   const skipNextAutoSaveRef = useRef(false);
+
+  const inActiveBossFight = Boolean(zone === 'dungeon' && bossHud?.active);
+  useEffect(() => {
+    inActiveBossFightRef.current = inActiveBossFight;
+  }, [inActiveBossFight]);
 
   useEffect(() => {
     authSessionRef.current = authSession;
@@ -694,6 +700,10 @@ export const App: React.FC = () => {
 
   const handleTravel = useCallback(
     (req: TravelRequestPayload, busFareCoins: number) => {
+      if (inActiveBossFightRef.current) {
+        EventBus.emit('ui:toast', { text: '⚔️ Fast-travel is disabled during an active boss fight!' });
+        return;
+      }
       if (req.method === 'bus' && busFareCoins > 0) {
         let paid = false;
         runStateAction((prev) => {
@@ -707,6 +717,70 @@ export const App: React.FC = () => {
     },
     [runStateAction]
   );
+
+  const handleUseMagicMirror = useCallback(() => {
+    if (inActiveBossFightRef.current) {
+      EventBus.emit('ui:toast', { text: '⚔️ Magic Mirror cannot be used during an active boss fight!' });
+      return;
+    }
+    setActiveModal(null);
+    soundManager.playSfx('magic');
+    EventBus.emit('ui:toast', { text: '🪞 Magic Mirror flashed gold — warping to your Personal Farm!' });
+    EventBus.emit('travel:execute', {
+      method: 'mirror',
+      targetZone: 'farm',
+      destinationLabel: 'Personal Farm / Home',
+    });
+  }, []);
+
+  const handlePrayGoldenShrine = useCallback(() => {
+    const today = getTodayDateKey();
+    let blessedName: string | null = null;
+    runStateAction((prev) => {
+      if (prev.lastShrinePrayerDate === today) {
+        return {
+          state: prev,
+          ok: false,
+          message: '✨ You already received today’s Golden Shrine Blessing! Return tomorrow.',
+        };
+      }
+      soundManager.playSfx('level_up');
+      blessedName = prev.name;
+      const nextCoins = prev.currencies.coins + 250;
+      const now = Date.now();
+      const filteredBuffs = prev.activeBuffs.filter(
+        (b) => b.expiresAt > now && b.snackId !== 'golden_shrine_blessing'
+      );
+      filteredBuffs.push({
+        id: `shrine_${now}`,
+        snackId: 'golden_shrine_blessing',
+        name: 'Golden Shrine (+10% Luck)',
+        khmerName: 'ពរជ័យព្រះវិហារមាស',
+        icon: '✨',
+        color: '#facc15',
+        startedAt: now,
+        expiresAt: now + 10 * 60 * 1000,
+        critChanceBonus: 0.1,
+      });
+      return {
+        state: {
+          ...prev,
+          coins: nextCoins,
+          currencies: { ...prev.currencies, coins: nextCoins },
+          activeBuffs: filteredBuffs,
+          lastShrinePrayerDate: today,
+        },
+        ok: true,
+        message: '✨ Golden Blessing Shrine granted +250 Coins & +10% Luck for 10 min!',
+      };
+    });
+    if (blessedName) {
+      EventBus.emit('ticker:push', {
+        text: `✨ ${blessedName} prayed at the Green Park Golden Shrine and received +250 Coins & +10% Luck!`,
+        category: 'market',
+      });
+    }
+  }, [runStateAction]);
 
   const handleBuyMarketListing = useCallback(
     async (listing: MarketListingClient): Promise<boolean> => {
@@ -958,6 +1032,9 @@ export const App: React.FC = () => {
       EventBus.on('social:notice', ({ text }) => {
         EventBus.emit('ui:toast', { text });
       }),
+      EventBus.on('shrine:pray', () => {
+        handlePrayGoldenShrine();
+      }),
       EventBus.on('skill:xpGained', (payload) => {
         if (payload.leveledUp) {
           soundManager.playSfx('level_up');
@@ -1159,6 +1236,7 @@ export const App: React.FC = () => {
       <WorldMapModal
         open={activeModal === 'worldMap'}
         player={player}
+        inActiveBossFight={inActiveBossFight}
         onClose={() => setActiveModal(null)}
         onUnlockBiomePylon={(biomeId: BiomeId) =>
           runStateAction((s) => {
@@ -1180,18 +1258,22 @@ export const App: React.FC = () => {
       <ServerCityModal
         open={activeModal === 'serverCity'}
         currentCity={player.cityServer ?? 'phnom_penh'}
+        currentAreaId={networkStatus.areaId}
         online={networkStatus.online}
         playerCount={networkStatus.playerCount}
         onClose={() => setActiveModal(null)}
-        onSelectCity={(city: CityServerId) => {
+        onSelectCity={(city: CityServerId, areaId?: string) => {
           soundManager.playSfx('magic');
           runStateAction((s) => ({
             state: { ...s, cityServer: city },
             ok: true,
-            message: `🌏 Connected to ${city.replace('_', ' ').toUpperCase()} City Server!`,
+            message: `🌏 Connected to ${city.replace(/_/g, ' ').toUpperCase()}${areaId ? ` · ${areaId}` : ''}!`,
           }));
+          if (areaId) {
+            EventBus.emit('network:switchArea', { areaId });
+          }
           EventBus.emit('ticker:push', {
-            text: `🌏 Switched City Server hub to ${city.replace('_', ' ').toUpperCase()}!`,
+            text: `🌏 Switched City Server hub to ${city.replace(/_/g, ' ').toUpperCase()}${areaId ? ` (${areaId})` : ''}!`,
             category: 'weather',
           });
         }}
@@ -1453,6 +1535,7 @@ export const App: React.FC = () => {
       <InventoryModal
         open={activeModal === 'inventory'}
         player={player}
+        inActiveBossFight={inActiveBossFight}
         onClose={() => setActiveModal(null)}
         onEquip={handleEquipItem}
         onUnequip={handleUnequipSlot}
@@ -1460,6 +1543,7 @@ export const App: React.FC = () => {
           runFarmAction((s) => sellFarmProduce(s, itemId, quality, qty))
         }
         onEatSnack={(snackId) => runStateAction((s) => consumeStreetSnack(s, snackId))}
+        onUseMagicMirror={handleUseMagicMirror}
       />
 
       <ShopModal

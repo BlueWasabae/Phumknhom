@@ -758,4 +758,15 @@ export const FARM_ITEMS: Record<string, FarmItemMeta> = {
     primaryColor: '#a855f7',
     description: 'Iridescent violet-emerald serpent scale dropped by Neak Reach (Shadow Naga).',
   },
+  // Update 1.1A Travel Relic
+  tool_magic_mirror: {
+    id: 'tool_magic_mirror',
+    name: 'Magic Mirror',
+    khmerName: 'កញ្ចក់វេទមន្តត្រឡប់ផ្ទះ',
+    kind: 'artisan',
+    rarity: 'rare',
+    sellCoins: 0,
+    primaryColor: '#38bdf8',
+    description: 'Gaze into this Angkorian mirror to warp straight back to your Personal Farm & Stilt Home! (Disabled during active Boss fights.)',
+  },
 };

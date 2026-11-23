@@ -1,5 +1,5 @@
 import type { KhmerClassId, PlayerState } from '@shared/types';
-import { WORLD_BIOMES, type BiomeId } from '@shared/worldMapData';
+import { getBiomeOrFallback } from '@shared/worldMapData';
 
 export type CalamitySpecialKind =
   | 'biome_preah_khan'
@@ -166,7 +166,7 @@ export function getPreahKhanBiomeBonus(activeBiome?: string): {
   bonusDmgPct: number;
   colorHex: number;
 } {
-  const b = WORLD_BIOMES[(activeBiome as BiomeId) || 'phum_plaza'] ?? WORLD_BIOMES.phum_plaza;
+  const b = getBiomeOrFallback(activeBiome);
   return {
     elementName: b.preahKhanElement,
     bonusDmgPct: b.preahKhanBonusDmgPct,

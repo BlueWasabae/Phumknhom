@@ -1632,6 +1632,11 @@ export class DungeonBossScene extends Phaser.Scene {
       '18px'
     );
 
+    EventBus.emit('ticker:push', {
+      text: `⚔️ ${this.player.state.name} just defeated ${this.bossCtrl.def.englishName} on ${this.difficulty.toUpperCase()} Mode!`,
+      category: 'boss',
+    });
+
     EventBus.emit('dungeon:outcome', {
       outcome: 'victory',
       bossId: this.bossId,

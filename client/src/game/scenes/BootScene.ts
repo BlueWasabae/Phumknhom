@@ -664,23 +664,71 @@ export class BootScene extends Phaser.Scene {
     }
 
     if (!this.textures.exists('village_bus')) {
-      const tex = this.textures.createCanvas('village_bus', 76, 38);
+      const tex = this.textures.createCanvas('village_bus', 80, 42);
       if (tex) {
         const ctx = tex.getContext();
         ctx.imageSmoothingEnabled = false;
-        ctx.fillStyle = '#0284c7';
-        ctx.fillRect(4, 6, 68, 24);
+        // Cute Pixel-Art GREEN Village Bus with Khmer gold trim
+        ctx.fillStyle = '#14532d';
+        ctx.fillRect(10, 4, 58, 4); // roof rack
+        ctx.fillStyle = '#15803d';
+        ctx.fillRect(4, 8, 72, 24); // main green hull
+        ctx.fillStyle = '#22c55e';
+        ctx.fillRect(6, 10, 68, 12); // upper bright green body
         ctx.fillStyle = '#facc15';
-        ctx.fillRect(4, 18, 68, 6);
-        ctx.fillStyle = '#bae6fd';
-        for (let wx = 10; wx <= 54; wx += 14) {
-          ctx.fillRect(wx, 9, 10, 8);
+        ctx.fillRect(4, 21, 72, 5); // Khmer gold racing stripe
+        // Cozy passenger windows
+        ctx.fillStyle = '#e0f2fe';
+        for (let wx = 10; wx <= 56; wx += 14) {
+          ctx.fillRect(wx, 12, 10, 8);
+          ctx.fillStyle = '#bae6fd';
+          ctx.fillRect(wx, 17, 10, 3);
+          ctx.fillStyle = '#e0f2fe';
         }
+        // Front windshield & glowing headlights
         ctx.fillStyle = '#fef08a';
-        ctx.fillRect(68, 22, 4, 4);
+        ctx.fillRect(72, 24, 4, 5);
+        // Dark pixel bumper + chunky tires with gold hubcaps
         ctx.fillStyle = '#0f172a';
-        ctx.fillRect(14, 28, 10, 8);
-        ctx.fillRect(52, 28, 10, 8);
+        ctx.fillRect(2, 29, 76, 3);
+        ctx.fillRect(14, 30, 12, 10);
+        ctx.fillRect(54, 30, 12, 10);
+        ctx.fillStyle = '#facc15';
+        ctx.fillRect(18, 33, 4, 4);
+        ctx.fillRect(58, 33, 4, 4);
+        tex.refresh();
+      }
+    }
+
+    if (!this.textures.exists('golden_shrine')) {
+      const tex = this.textures.createCanvas('golden_shrine', 46, 58);
+      if (tex) {
+        const ctx = tex.getContext();
+        ctx.imageSmoothingEnabled = false;
+        // Stepped sandstone + gold base
+        ctx.fillStyle = '#78350f';
+        ctx.fillRect(5, 46, 36, 10);
+        ctx.fillStyle = '#b45309';
+        ctx.fillRect(9, 40, 28, 7);
+        // Golden lotus shrine pillars & alcove
+        ctx.fillStyle = '#f59e0b';
+        ctx.fillRect(12, 22, 22, 18);
+        ctx.fillStyle = '#fde047';
+        ctx.fillRect(15, 24, 16, 14);
+        // Glowing blessing orb inside alcove
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(20, 28, 6, 6);
+        // Tiered Angkor golden crown spire
+        ctx.fillStyle = '#d97706';
+        ctx.fillRect(9, 17, 28, 6);
+        ctx.fillStyle = '#facc15';
+        ctx.fillRect(14, 11, 18, 6);
+        ctx.fillStyle = '#fef08a';
+        ctx.fillRect(19, 5, 8, 6);
+        ctx.fillRect(21, 1, 4, 4);
+        ctx.strokeStyle = '#451a03';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(12, 22, 22, 18);
         tex.refresh();
       }
     }

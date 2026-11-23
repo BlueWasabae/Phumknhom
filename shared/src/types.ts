@@ -202,11 +202,12 @@ export interface PlayerState {
   ownedMounts?: string[];
   activeMount?: string | null;
   dailyFreeCoinSpinDate?: string | null;
-  cityServer?: 'phnom_penh' | 'siem_reap' | 'kampot';
+  cityServer?: 'phnom_penh' | 'siem_reap' | 'kampot' | 'battambang';
   activeBiome?: string;
   discoveredBiomes?: string[];
   unlockedPylons?: string[];
   bankCoins?: number;
+  lastShrinePrayerDate?: string | null;
   weaponPrefix?: string | null;
   armorPrefix?: string | null;
   shimmerBlessings?: string[];
@@ -420,6 +421,8 @@ export const INITIAL_PLAYER_STATE: PlayerState = {
     { itemId: 'snack_num_pang', quantity: 2, itemLevel: 1, quality: 'normal' },
     { itemId: 'snack_kafe', quantity: 1, itemLevel: 1, quality: 'normal' },
     { itemId: 'snack_pepper_skewer', quantity: 1, itemLevel: 1, quality: 'normal' },
+    // Update 1.1A Magic Mirror (Home/Farm Recall Tool)
+    { itemId: 'tool_magic_mirror', quantity: 1, itemLevel: 1, quality: 'normal' },
   ],
   farm: createInitialFarmState(),
   skills: createInitialSkillProfile(),
@@ -435,10 +438,11 @@ export const INITIAL_PLAYER_STATE: PlayerState = {
   activeMount: null,
   dailyFreeCoinSpinDate: null,
   cityServer: 'phnom_penh',
-  activeBiome: 'phum_plaza',
-  discoveredBiomes: ['phum_plaza', 'emerald_rice_valley'],
-  unlockedPylons: ['phum_plaza', 'emerald_rice_valley'],
+  activeBiome: 'emerald_rice_valley',
+  discoveredBiomes: ['emerald_rice_valley'],
+  unlockedPylons: ['emerald_rice_valley'],
   bankCoins: 500,
+  lastShrinePrayerDate: null,
   weaponPrefix: 'keen',
   armorPrefix: 'armored',
   shimmerBlessings: [],

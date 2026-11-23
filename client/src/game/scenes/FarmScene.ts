@@ -208,6 +208,31 @@ export class FarmScene extends Phaser.Scene {
         this.selectedCropId = cropId;
         this.toolMode = toolMode;
       }),
+      EventBus.on('travel:execute', (req) => {
+        if (this.transitioning) return;
+        soundManager.playSfx('magic');
+        this.cameras.main.flash(260, 250, 204, 21);
+        if (req.targetZone === 'farm') {
+          this.player.sprite.setPosition(EXIT_X, 495);
+          return;
+        }
+        this.time.delayedCall(220, () => {
+          if (req.targetZone === 'club') {
+            this.transitioning = true;
+            this.scene.start('ClubScene', { playerState: { ...this.player.state, zone: 'club' } });
+          } else if (req.targetZone === 'dungeon') {
+            this.transitioning = true;
+            this.scene.start('DungeonBossScene', {
+              bossId: req.bossId ?? 'sdech_kongkaeb',
+              difficulty: req.difficulty ?? 'normal',
+              partyMode: 'solo',
+              playerState: { ...this.player.state, zone: 'dungeon' },
+            });
+          } else {
+            this.returnToOverworld(req.spawnX, req.spawnY, true);
+          }
+        });
+      }),
       EventBus.on('input:interact', () => this.interactNearest()),
       EventBus.on('input:exitFarm', () => this.returnToOverworld())
     );
@@ -824,12 +849,15 @@ export class FarmScene extends Phaser.Scene {
     EventBus.emit('ui:openModal', { modal: 'farm', farmTab: 'seeds' });
   }
 
-  private returnToOverworld(): void {
+  private returnToOverworld(spawnX?: number, spawnY?: number, goldenFlash = false): void {
     if (this.transitioning) return;
     this.transitioning = true;
     this.cameras.main.fadeOut(220, 8, 12, 20);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
       this.scene.start('OverworldScene', {
+        spawnX,
+        spawnY,
+        goldenFlash,
         playerState: {
           ...this.player.state,
           zone: 'overworld',
@@ -891,6 +919,10 @@ export class FarmScene extends Phaser.Scene {
           soundManager.playSfx('splash');
           EventBus.emit('ui:toast', {
             text: `🌧️ Monsoon Rains auto-watered ${rainRes.wateredCount} farm plot(s) (-20% grow time)!`,
+          });
+          EventBus.emit('ticker:push', {
+            text: `🌧️ Monsoon Rain has begun — ${this.player.state.name}'s Personal Farm plots auto-watered!`,
+            category: 'weather',
           });
         }
       }
