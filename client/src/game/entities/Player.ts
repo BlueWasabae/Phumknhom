@@ -25,9 +25,9 @@ const JUMP_FRAME: Record<FacingDirection, number> = {
 };
 
 /**
- * Real animated Ninja Adventure chibi sprite (16x16 scaled 3x -> crisp 48x48 pixel art)
- * with soft ground shadow, 4-direction walk/idle/jump/attack frames, nameplate,
- * 4.5s overhead speech bubble, and 3s floating emoji emote.
+ * Real 4-directional animated Ninja Adventure chibi sprite (16x16)
+ * with soft elliptical ground shadow, crisp zoom-aware nameplate,
+ * 4.5s white rounded speech bubble, and 3s floating emoji emote.
  */
 export class Player {
   public readonly sprite: Phaser.Physics.Arcade.Sprite;
@@ -38,6 +38,8 @@ export class Player {
 
   private scene: Phaser.Scene;
   private zone: ZoneType;
+  private spriteScale: number;
+  private uiScale: number;
   private nameTag: Phaser.GameObjects.Text;
   private bubbleBg: Phaser.GameObjects.Graphics;
   private bubbleText: Phaser.GameObjects.Text;
@@ -58,19 +60,22 @@ export class Player {
     this.zone = zone;
     this.facing = zone === 'dungeon' ? 'right' : 'down';
 
-    // Soft elliptical shadow under character feet
-    this.shadow = scene.add.image(x, y + 20, 'soft_shadow').setDepth(zone === 'overworld' ? y + 10 : 48);
+    // Native 16x16 (1x) in zoomed Overworld (camera zoom 2.5x-2.8x) | 2.6x in side-scroll Dungeon
+    this.spriteScale = zone === 'overworld' ? 1.15 : 2.65;
+    this.uiScale = zone === 'overworld' ? 0.44 : 1;
 
-    // 16x16 Ninja Adventure Boy sprite scaled 3x (48x48 crisp pixelArt)
+    this.shadow = scene.add
+      .image(x, y + (zone === 'overworld' ? 8 : 20), 'soft_shadow')
+      .setScale(zone === 'overworld' ? 0.34 : 0.72)
+      .setDepth(zone === 'overworld' ? y + 6 : 48);
+
     this.sprite = scene.physics.add.sprite(x, y, 'player_boy', IDLE_FRAME[this.facing]);
-    this.sprite.setScale(3);
+    this.sprite.setScale(this.spriteScale);
     this.sprite.setCollideWorldBounds(true);
 
     if (zone === 'overworld') {
-      // Foot collider (in unscaled 16x16 coords) for smooth 2.5D Y-sorting
       this.sprite.setSize(10, 6).setOffset(3, 10);
     } else {
-      // Side-scrolling platformer collider (in unscaled 16x16 coords)
       this.sprite.setSize(10, 14).setOffset(3, 2);
       this.sprite.setDepth(50);
     }
@@ -78,14 +83,16 @@ export class Player {
     this.body = this.sprite.body as Phaser.Physics.Arcade.Body;
 
     this.nameTag = scene.add
-      .text(x, y + 26, this.state.name, {
+      .text(x, y + 14, this.state.name, {
         fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
-        fontSize: '12px',
+        fontSize: '13px',
         fontStyle: 'bold',
         color: zone === 'overworld' ? '#ffffff' : '#fef9c3',
         stroke: '#0f172a',
-        strokeThickness: 3,
+        strokeThickness: 4,
       })
+      .setResolution(2)
+      .setScale(this.uiScale)
       .setOrigin(0.5, 0)
       .setDepth(2500);
 
@@ -96,15 +103,19 @@ export class Player {
         fontSize: '13px',
         fontStyle: 'bold',
         color: '#1e293b',
-        wordWrap: { width: 190 },
+        wordWrap: { width: 185 },
         align: 'center',
       })
+      .setResolution(2)
+      .setScale(this.uiScale)
       .setOrigin(0.5, 1)
       .setDepth(3001)
       .setVisible(false);
 
     this.emoteText = scene.add
       .text(0, 0, '', { fontSize: '26px' })
+      .setResolution(2)
+      .setScale(this.uiScale)
       .setOrigin(0.5, 1)
       .setDepth(3002)
       .setVisible(false);
@@ -156,43 +167,54 @@ export class Player {
 
   syncVisuals(time: number, onGround = true): void {
     if (this.zone === 'overworld') {
-      const depth = this.sprite.y + 24;
+      const depth = this.sprite.y + 9;
       this.sprite.setDepth(depth);
-      this.shadow.setPosition(this.sprite.x, this.sprite.y + 22).setDepth(depth - 1).setScale(1).setAlpha(0.95);
+      this.shadow.setPosition(this.sprite.x, this.sprite.y + 8).setDepth(depth - 1);
+      this.nameTag.setPosition(this.sprite.x, this.sprite.y + 10);
     } else {
-      // Scale shadow slightly smaller when airborne in side-scrolling dungeon
       this.shadow
-        .setPosition(this.sprite.x, this.sprite.y + 23)
+        .setPosition(this.sprite.x, this.sprite.y + 21)
         .setDepth(48)
-        .setScale(onGround ? 1 : 0.6)
-        .setAlpha(onGround ? 0.9 : 0.35);
+        .setScale(onGround ? 0.72 : 0.44)
+        .setAlpha(onGround ? 0.92 : 0.35);
+      this.nameTag.setPosition(this.sprite.x, this.sprite.y + 25);
     }
 
-    this.nameTag.setPosition(this.sprite.x, this.sprite.y + 28);
+    const offsetY = this.zone === 'overworld' ? -13 : -28;
+    const s = this.uiScale;
 
-    const offsetY = -30;
     if (this.bubbleExpiresAt > 0) {
       if (time >= this.bubbleExpiresAt) {
         this.bubbleBg.setVisible(false);
         this.bubbleText.setVisible(false);
         this.bubbleExpiresAt = 0;
       } else {
-        const bx = Math.round(this.sprite.x);
-        const by = Math.round(this.sprite.y + offsetY);
-        this.bubbleText.setPosition(bx, by - 8);
+        const bx = this.sprite.x;
+        const by = this.sprite.y + offsetY;
+        const padX = 10 * s;
+        const padY = 6 * s;
+        const tailH = 6 * s;
+        this.bubbleText.setPosition(bx, by - tailH);
 
-        const padX = 12;
-        const padY = 7;
-        const w = Math.max(54, this.bubbleText.width + padX * 2);
-        const h = Math.max(26, this.bubbleText.height + padY * 2);
+        const textW = this.bubbleText.displayWidth;
+        const textH = this.bubbleText.displayHeight;
+        const w = Math.max(44 * s, textW + padX * 2);
+        const h = Math.max(22 * s, textH + padY * 2);
 
         this.bubbleBg.clear();
         this.bubbleBg.fillStyle(0xffffff, 0.98);
-        this.bubbleBg.lineStyle(2.5, 0x334155, 1);
-        this.bubbleBg.fillRoundedRect(bx - w / 2, by - 8 - h + padY, w, h, 11);
-        this.bubbleBg.strokeRoundedRect(bx - w / 2, by - 8 - h + padY, w, h, 11);
+        this.bubbleBg.lineStyle(Math.max(1.2, 2.2 * s), 0x334155, 1);
+        this.bubbleBg.fillRoundedRect(bx - w / 2, by - tailH - h + padY, w, h, 8 * s);
+        this.bubbleBg.strokeRoundedRect(bx - w / 2, by - tailH - h + padY, w, h, 8 * s);
         this.bubbleBg.fillStyle(0xffffff, 0.98);
-        this.bubbleBg.fillTriangle(bx - 6, by - 8 + padY, bx + 6, by - 8 + padY, bx, by + padY);
+        this.bubbleBg.fillTriangle(
+          bx - 5 * s,
+          by - tailH + padY,
+          bx + 5 * s,
+          by - tailH + padY,
+          bx,
+          by + padY
+        );
       }
     }
 
@@ -201,8 +223,8 @@ export class Player {
         this.emoteText.setVisible(false);
         this.emoteExpiresAt = 0;
       } else {
-        const floatY = Math.sin(time / 160) * 4;
-        const extraY = this.bubbleExpiresAt > 0 ? -52 : 0;
+        const floatY = Math.sin(time / 160) * 3 * s;
+        const extraY = this.bubbleExpiresAt > 0 ? -38 * s : 0;
         this.emoteText.setPosition(this.sprite.x, this.sprite.y + offsetY + extraY + floatY);
       }
     }

@@ -11,12 +11,11 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
-    // Loading bar
     const { width, height } = this.scale;
     const barBg = this.add.rectangle(width / 2, height / 2, 260, 14, 0x1e293b).setStrokeStyle(2, 0xf59e0b);
     const barFill = this.add.rectangle(width / 2 - 126, height / 2, 0, 8, 0xfacc15).setOrigin(0, 0.5);
     const label = this.add
-      .text(width / 2, height / 2 - 24, 'Loading ភូមិខ្ញុំ Pixel Art Packs...', {
+      .text(width / 2, height / 2 - 24, 'Loading ភូមិខ្ញុំ 16×16 Pixel Art...', {
         fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
         fontSize: '14px',
         color: '#fef3c7',
@@ -32,12 +31,8 @@ export class BootScene extends Phaser.Scene {
       label.destroy();
     });
 
-    // ---- 1. NINJA ADVENTURE PACK (Chibi Character, Slime, Slash VFX, Audio) ----
+    // ---- 1. NINJA ADVENTURE PACK (Chibi Character, Props, Slash VFX, Food, Audio) ----
     this.load.spritesheet('player_boy', `${NA}/Actor/Character/Boy/SpriteSheet.png`, {
-      frameWidth: 16,
-      frameHeight: 16,
-    });
-    this.load.spritesheet('slime_monster', `${NA}/Actor/Monster/Slime/Slime.png`, {
       frameWidth: 16,
       frameHeight: 16,
     });
@@ -45,28 +40,36 @@ export class BootScene extends Phaser.Scene {
       frameWidth: 32,
       frameHeight: 32,
     });
+    this.load.image('na_elements', `${NA}/Backgrounds/Tilesets/TilesetElement.png`);
     this.load.image('icon_noodle', `${NA}/Items/Food/Noodle.png`);
-    this.load.image('icon_sword', `${NA}/Items/Weapons/BigSword/Sprite.png`);
     this.load.audio('sfx_levelup', `${NA}/Audio/Jingles/LevelUp1.wav`);
 
-    // ---- 2. SERENE VILLAGE PACK (Stardew Grass/Paths, Houses, Trees, Campfire) ----
-    this.load.image('serene_atlas', `${SV}/Serene_Village_32x32.png`);
-    this.load.spritesheet('sv_campfire', `${SV}/Animated stuff/campfire_32x32.png`, {
-      frameWidth: 32,
-      frameHeight: 32,
+    // ---- 2. SERENE VILLAGE PACK (Native 16x16 Tileset + Animated Campfire) ----
+    this.load.image('serene_16', `${SV}/Serene_Village_16x16.png`);
+    this.load.spritesheet('sv_campfire_16', `${SV}/Animated stuff/campfire_16x16.png`, {
+      frameWidth: 16,
+      frameHeight: 16,
     });
 
-    // ---- 3. LEGACY FANTASY PACK (Parallax Cave/Forest, Platforms, Cave Entrance, Rocks) ----
+    // ---- 3. LEGACY FANTASY PACK (Parallax Cavern, Tiles, Entrance, Rocks, Wild Boar Mob) ----
     this.load.image('lf_sky', `${LF}/Background/Background.png`);
     this.load.image('lf_trees_bg', `${LF}/Trees/Background.png`);
     this.load.image('lf_tiles', `${LF}/Assets/Tiles.png`);
     this.load.image('lf_buildings', `${LF}/Assets/Buildings.png`);
     this.load.image('lf_rocks', `${LF}/Assets/Props-Rocks.png`);
+    this.load.spritesheet('boar_idle', `${LF}/Mob/Boar/Idle/Idle-Sheet.png`, {
+      frameWidth: 48,
+      frameHeight: 32,
+    });
+    this.load.spritesheet('boar_hit', `${LF}/Mob/Boar/Hit-Vanish/Hit-Sheet.png`, {
+      frameWidth: 48,
+      frameHeight: 32,
+    });
   }
 
   create(): void {
     this.sliceAtlasSubTextures();
-    this.generateUiMarkers();
+    this.generateUiAndLightTextures();
     this.registerAnimations();
 
     this.scene.start('OverworldScene', {
@@ -74,10 +77,6 @@ export class BootScene extends Phaser.Scene {
     });
   }
 
-  /**
-   * Slices clean sub-textures out of the loaded Serene Village & Legacy Fantasy sheets
-   * so Phaser tileSprites & Y-sorted prop images render crisp pixel art without bleeding.
-   */
   private cropToTexture(srcKey: string, dstKey: string, sx: number, sy: number, sw: number, sh: number): void {
     if (this.textures.exists(dstKey) || !this.textures.exists(srcKey)) return;
     const srcImg = this.textures.get(srcKey).getSourceImage() as HTMLImageElement | HTMLCanvasElement;
@@ -90,21 +89,28 @@ export class BootScene extends Phaser.Scene {
   }
 
   private sliceAtlasSubTextures(): void {
-    // Serene Village 32x32 grid (608x1440)
-    this.cropToTexture('serene_atlas', 'sv_grass', 96, 0, 32, 32);
-    this.cropToTexture('serene_atlas', 'sv_path', 192, 32, 32, 32);
-    this.cropToTexture('serene_atlas', 'sv_plaza_sand', 512, 128, 64, 64);
-    this.cropToTexture('serene_atlas', 'sv_flowers', 0, 96, 96, 96);
-    this.cropToTexture('serene_atlas', 'sv_sign_wood', 224, 416, 32, 32);
-    this.cropToTexture('serene_atlas', 'sv_fence_pen', 128, 480, 96, 96);
-    this.cropToTexture('serene_atlas', 'sv_flower_box', 128, 576, 96, 32);
-    this.cropToTexture('serene_atlas', 'sv_tree_green', 288, 384, 64, 96);
-    this.cropToTexture('serene_atlas', 'sv_tree_teal', 416, 384, 64, 96);
-    this.cropToTexture('serene_atlas', 'sv_house_red', 0, 672, 96, 128);
-    this.cropToTexture('serene_atlas', 'sv_house_green', 192, 928, 128, 128);
-    this.cropToTexture('serene_atlas', 'sv_house_blue', 192, 1184, 128, 128);
+    // Serene Village native 16x16 grid (304x720 = 19x45 tiles)
+    this.cropToTexture('serene_16', 'sv_grass', 48, 0, 16, 16);
+    this.cropToTexture('serene_16', 'sv_path', 96, 16, 16, 16);
+    this.cropToTexture('serene_16', 'sv_plaza_tile', 256, 64, 32, 32);
+    this.cropToTexture('serene_16', 'sv_flowers', 0, 48, 48, 48);
+    this.cropToTexture('serene_16', 'sv_sign_wood', 112, 208, 16, 16);
+    this.cropToTexture('serene_16', 'sv_fence_h', 80, 208, 32, 16);
+    this.cropToTexture('serene_16', 'sv_fence_pen', 64, 240, 48, 48);
+    this.cropToTexture('serene_16', 'sv_flower_box', 64, 288, 48, 16);
+    this.cropToTexture('serene_16', 'sv_tree_green', 144, 192, 32, 48);
+    this.cropToTexture('serene_16', 'sv_tree_teal', 208, 192, 32, 48);
+    this.cropToTexture('serene_16', 'sv_house_red', 0, 336, 48, 64);
+    this.cropToTexture('serene_16', 'sv_house_green', 96, 464, 64, 64);
+    this.cropToTexture('serene_16', 'sv_house_blue', 96, 592, 64, 64);
 
-    // Legacy Fantasy High Forest 2.3 (400x400 Tiles/Buildings, 896x256 Trees BG, 288x336 Rocks)
+    // Ninja Adventure TilesetElement.png (256x240 = 16x15 tiles)
+    this.cropToTexture('na_elements', 'na_bench', 32, 160, 48, 16);
+    this.cropToTexture('na_elements', 'na_cart', 32, 48, 32, 32);
+    this.cropToTexture('na_elements', 'na_lantern', 96, 48, 16, 32);
+    this.cropToTexture('na_elements', 'na_pebbles', 16, 160, 16, 16);
+
+    // Legacy Fantasy High Forest 2.3
     this.cropToTexture('lf_trees_bg', 'lf_parallax_far', 352, 0, 320, 256);
     this.cropToTexture('lf_trees_bg', 'lf_parallax_mid', 0, 0, 320, 256);
     this.cropToTexture('lf_tiles', 'lf_cave_floor', 16, 96, 48, 64);
@@ -113,72 +119,103 @@ export class BootScene extends Phaser.Scene {
     this.cropToTexture('lf_tiles', 'lf_plat_stone', 176, 238, 48, 18);
     this.cropToTexture('lf_tiles', 'lf_mushroom', 256, 246, 32, 26);
     this.cropToTexture('lf_tiles', 'lf_chest', 288, 276, 32, 28);
+    this.cropToTexture('lf_tiles', 'lf_vine_green', 240, 280, 18, 32);
+    this.cropToTexture('lf_tiles', 'lf_vine_purple', 274, 276, 14, 36);
+    this.cropToTexture('lf_tiles', 'lf_torch', 242, 314, 12, 18);
     this.cropToTexture('lf_buildings', 'lf_cave_entrance', 272, 208, 128, 160);
     this.cropToTexture('lf_rocks', 'lf_pillar', 0, 166, 60, 90);
     this.cropToTexture('lf_rocks', 'lf_boulder', 64, 32, 64, 48);
   }
 
-  private generateUiMarkers(): void {
-    // Crisp Yellow Downward "JOIN" Arrow marker (Avatar World signature)
+  private generateUiAndLightTextures(): void {
+    // Crisp Yellow Downward "JOIN" Arrow (compact crisp pixel-style)
     if (!this.textures.exists('join_arrow')) {
-      const tex = this.textures.createCanvas('join_arrow', 48, 52);
+      const tex = this.textures.createCanvas('join_arrow', 34, 36);
       if (tex) {
         const ctx = tex.getContext();
         ctx.fillStyle = '#facc15';
         ctx.strokeStyle = '#713f12';
-        ctx.lineWidth = 3;
+        ctx.lineWidth = 2.5;
         ctx.beginPath();
-        ctx.moveTo(14, 4);
-        ctx.lineTo(34, 4);
-        ctx.lineTo(34, 24);
-        ctx.lineTo(44, 24);
-        ctx.lineTo(24, 48);
-        ctx.lineTo(4, 24);
-        ctx.lineTo(14, 24);
+        ctx.moveTo(10, 3);
+        ctx.lineTo(24, 3);
+        ctx.lineTo(24, 17);
+        ctx.lineTo(31, 17);
+        ctx.lineTo(17, 33);
+        ctx.lineTo(3, 17);
+        ctx.lineTo(10, 17);
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
         ctx.fillStyle = '#451a03';
-        ctx.font = 'bold 11px sans-serif';
+        ctx.font = 'bold 8px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('JOIN', 24, 21);
+        ctx.fillText('JOIN', 17, 15);
         tex.refresh();
       }
     }
 
-    // Soft radial ground shadow under chibi characters & mobs
+    // Soft dark oval ground shadow (reusable for characters, trees, stalls, houses)
     if (!this.textures.exists('soft_shadow')) {
-      const tex = this.textures.createCanvas('soft_shadow', 36, 14);
+      const tex = this.textures.createCanvas('soft_shadow', 64, 24);
       if (tex) {
         const ctx = tex.getContext();
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.34)';
+        const grad = ctx.createRadialGradient(32, 12, 4, 32, 12, 30);
+        grad.addColorStop(0, 'rgba(0, 0, 0, 0.42)');
+        grad.addColorStop(0.7, 'rgba(0, 0, 0, 0.22)');
+        grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = grad;
         ctx.beginPath();
-        ctx.ellipse(18, 7, 15, 5.5, 0, 0, Math.PI * 2);
+        ctx.ellipse(32, 12, 30, 10, 0, 0, Math.PI * 2);
         ctx.fill();
         tex.refresh();
       }
     }
 
-    // Glowing portal vortex overlay placed inside cave doorway
+    // Glowing portal vortex overlay
     if (!this.textures.exists('portal_vortex')) {
-      const tex = this.textures.createCanvas('portal_vortex', 64, 80);
+      const tex = this.textures.createCanvas('portal_vortex', 48, 60);
       if (tex) {
         const ctx = tex.getContext();
-        const grad = ctx.createRadialGradient(32, 42, 4, 32, 42, 30);
-        grad.addColorStop(0, 'rgba(245, 208, 254, 0.95)');
+        const grad = ctx.createRadialGradient(24, 30, 3, 24, 30, 22);
+        grad.addColorStop(0, 'rgba(245, 208, 254, 0.96)');
         grad.addColorStop(0.55, 'rgba(147, 51, 234, 0.72)');
         grad.addColorStop(1, 'rgba(30, 27, 75, 0)');
         ctx.fillStyle = grad;
         ctx.beginPath();
-        ctx.ellipse(32, 42, 26, 36, 0, 0, Math.PI * 2);
+        ctx.ellipse(24, 30, 19, 26, 0, 0, Math.PI * 2);
         ctx.fill();
+        tex.refresh();
+      }
+    }
+
+    // Warm radial flickering torch glow + dust mote dot
+    if (!this.textures.exists('torch_glow')) {
+      const tex = this.textures.createCanvas('torch_glow', 128, 128);
+      if (tex) {
+        const ctx = tex.getContext();
+        const grad = ctx.createRadialGradient(64, 64, 4, 64, 64, 62);
+        grad.addColorStop(0, 'rgba(255, 220, 120, 0.55)');
+        grad.addColorStop(0.45, 'rgba(249, 115, 22, 0.25)');
+        grad.addColorStop(1, 'rgba(249, 115, 22, 0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 128, 128);
+        tex.refresh();
+      }
+    }
+
+    if (!this.textures.exists('dust_mote')) {
+      const tex = this.textures.createCanvas('dust_mote', 6, 6);
+      if (tex) {
+        const ctx = tex.getContext();
+        ctx.fillStyle = 'rgba(254, 243, 199, 0.75)';
+        ctx.fillRect(1, 1, 4, 4);
         tex.refresh();
       }
     }
   }
 
   private registerAnimations(): void {
-    // Ninja Adventure Boy 4-dir animations (cols: 0=Down, 1=Up, 2=Left, 3=Right)
     const walkDirs: Array<[string, number[]]> = [
       ['boy_walk_down', [0, 4, 8, 12]],
       ['boy_walk_up', [1, 5, 9, 13]],
@@ -196,33 +233,39 @@ export class BootScene extends Phaser.Scene {
       }
     }
 
-    // Slime idle bounce animation
-    if (!this.anims.exists('slime_bounce')) {
+    if (!this.anims.exists('slash_curved')) {
       this.anims.create({
-        key: 'slime_bounce',
-        frames: [0, 4, 8, 12].map((frame) => ({ key: 'slime_monster', frame })),
+        key: 'slash_curved',
+        frames: [0, 1, 2, 3].map((frame) => ({ key: 'fx_slash', frame })),
+        frameRate: 22,
+        repeat: 0,
+      });
+    }
+
+    if (!this.anims.exists('campfire_burn')) {
+      this.anims.create({
+        key: 'campfire_burn',
+        frames: [0, 1, 2, 3].map((frame) => ({ key: 'sv_campfire_16', frame })),
+        frameRate: 7,
+        repeat: -1,
+      });
+    }
+
+    if (!this.anims.exists('boar_idle_anim')) {
+      this.anims.create({
+        key: 'boar_idle_anim',
+        frames: [0, 1, 2, 3].map((frame) => ({ key: 'boar_idle', frame })),
         frameRate: 6,
         repeat: -1,
       });
     }
 
-    // Sword slash curved VFX
-    if (!this.anims.exists('slash_curved')) {
+    if (!this.anims.exists('boar_hit_anim')) {
       this.anims.create({
-        key: 'slash_curved',
-        frames: [0, 1, 2, 3].map((frame) => ({ key: 'fx_slash', frame })),
-        frameRate: 20,
+        key: 'boar_hit_anim',
+        frames: [0, 1, 2, 3].map((frame) => ({ key: 'boar_hit', frame })),
+        frameRate: 14,
         repeat: 0,
-      });
-    }
-
-    // Serene Village animated campfire
-    if (!this.anims.exists('campfire_burn')) {
-      this.anims.create({
-        key: 'campfire_burn',
-        frames: [0, 1, 2, 3].map((frame) => ({ key: 'sv_campfire', frame })),
-        frameRate: 7,
-        repeat: -1,
       });
     }
   }

@@ -7,11 +7,18 @@ import { Player } from '../entities/Player';
 const ARENA_W = 1800;
 const ARENA_H = 720;
 const FLOOR_Y = 620;
-const DUMMY_SPAWN_X = 1380;
-const DUMMY_SPAWN_Y = FLOOR_Y - 36;
-const DUMMY_MAX_HP = 180;
+const MONSTER_SPAWN_X = 1380;
+const MONSTER_SPAWN_Y = FLOOR_Y - 38;
+const MONSTER_MAX_HP = 180;
 const EXIT_PORTAL_X = 118;
 const EXIT_PORTAL_Y = FLOOR_Y - 68;
+
+interface DustMote {
+  sprite: Phaser.GameObjects.Image;
+  baseY: number;
+  speedX: number;
+  phase: number;
+}
 
 export class DungeonBossScene extends Phaser.Scene {
   private initialState: PlayerState = { ...INITIAL_PLAYER_STATE };
@@ -20,17 +27,16 @@ export class DungeonBossScene extends Phaser.Scene {
 
   private solidFloor!: Phaser.Physics.Arcade.StaticGroup;
   private elevatedPlatforms!: Phaser.Physics.Arcade.StaticGroup;
-  private parallaxFar!: Phaser.GameObjects.TileSprite;
-  private parallaxMid!: Phaser.GameObjects.TileSprite;
+  private dustMotes: DustMote[] = [];
 
-  // Training Slime Dummy (Ninja Adventure Slime sprite)
-  private dummy!: Phaser.Physics.Arcade.Sprite;
-  private dummyShadow!: Phaser.GameObjects.Image;
-  private dummyHp = DUMMY_MAX_HP;
-  private dummyAlive = true;
-  private dummyBarBg!: Phaser.GameObjects.Rectangle;
-  private dummyBarFill!: Phaser.GameObjects.Rectangle;
-  private dummyLabel!: Phaser.GameObjects.Text;
+  // Real animated Legacy Fantasy Wild Boar monster
+  private monster!: Phaser.Physics.Arcade.Sprite;
+  private monsterShadow!: Phaser.GameObjects.Image;
+  private monsterHp = MONSTER_MAX_HP;
+  private monsterAlive = true;
+  private monsterBarBg!: Phaser.GameObjects.Rectangle;
+  private monsterBarFill!: Phaser.GameObjects.Rectangle;
+  private monsterLabel!: Phaser.GameObjects.Text;
 
   // Platformer & Combat State
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -54,12 +60,13 @@ export class DungeonBossScene extends Phaser.Scene {
     this.initialState = data?.playerState
       ? { ...data.playerState, zone: 'dungeon', weapon: { ...data.playerState.weapon } }
       : { ...INITIAL_PLAYER_STATE, zone: 'dungeon', weapon: { ...INITIAL_PLAYER_STATE.weapon } };
-    this.dummyHp = DUMMY_MAX_HP;
-    this.dummyAlive = true;
+    this.monsterHp = MONSTER_MAX_HP;
+    this.monsterAlive = true;
     this.jumpsUsed = 0;
     this.nearExitSent = false;
     this.transitioning = false;
     this.joystick = { x: 0, y: 0 };
+    this.dustMotes = [];
   }
 
   create(): void {
@@ -67,10 +74,10 @@ export class DungeonBossScene extends Phaser.Scene {
     this.physics.world.gravity.y = 800;
     this.physics.world.setBounds(0, 0, ARENA_W, ARENA_H);
 
-    this.drawParallaxCavern();
+    this.drawParallaxCavernAndAtmosphere();
     this.buildArenaPlatforms();
     this.buildExitPortal();
-    this.buildTrainingDummy();
+    this.buildCavernMonster();
 
     this.player = new Player(this, 240, FLOOR_Y - 46, this.initialState, 'dungeon');
     this.physics.add.collider(this.player.sprite, this.solidFloor);
@@ -93,13 +100,14 @@ export class DungeonBossScene extends Phaser.Scene {
         fontSize: '13px',
         fontStyle: 'bold',
         color: '#a7f3d0',
-        backgroundColor: 'rgba(15, 23, 42, 0.88)',
+        backgroundColor: 'rgba(15, 23, 42, 0.9)',
         padding: { x: 10, y: 5 },
       })
       .setOrigin(0.5, 1)
       .setDepth(90)
       .setVisible(false);
 
+    this.cameras.main.setZoom(1);
     this.cameras.main.setBounds(0, 0, ARENA_W, ARENA_H);
     this.cameras.main.startFollow(this.player.sprite, true, 0.14, 0.14);
     this.cameras.main.fadeIn(240, 8, 10, 20);
@@ -146,45 +154,93 @@ export class DungeonBossScene extends Phaser.Scene {
     });
   }
 
-  private drawParallaxCavern(): void {
-    // 1. Legacy Fantasy Twilight Sky backdrop (desaturated indigo tint per Animation Bible §3)
+  private drawParallaxCavernAndAtmosphere(): void {
+    // 1. Deep Twilight Cavern Sky (static depth anchor)
     this.add
       .tileSprite(ARENA_W / 2, ARENA_H / 2, ARENA_W, ARENA_H, 'lf_sky')
       .setTileScale(2.8, 2.8)
-      .setTint(0x283056)
+      .setTint(0x202744)
       .setScrollFactor(0.1)
       .setDepth(0);
 
-    // 2. Far Parallax Cavern Silhouette Layer
-    this.parallaxFar = this.add
-      .tileSprite(ARENA_W / 2, 410, ARENA_W, 256, 'lf_parallax_far')
-      .setTileScale(2.1, 2.1)
-      .setTint(0x24344d)
-      .setScrollFactor(0.28)
+    // 2. Distant Parallax Silhouettes scrolling at 0.2x camera speed
+    this.add
+      .tileSprite(ARENA_W / 2, 405, ARENA_W, 256, 'lf_parallax_far')
+      .setTileScale(2.2, 2.2)
+      .setTint(0x25354f)
+      .setScrollFactor(0.2)
       .setDepth(2);
 
-    // 3. Mid Parallax Dark Forest-Cave Layer
-    this.parallaxMid = this.add
+    // 3. Mid-Layer Parallax Ruins/Forest Cavern scrolling at 0.5x camera speed
+    this.add
       .tileSprite(ARENA_W / 2, 445, ARENA_W, 256, 'lf_parallax_mid')
-      .setTileScale(2.1, 2.1)
-      .setTint(0x1b263b)
-      .setScrollFactor(0.55)
+      .setTileScale(2.2, 2.2)
+      .setTint(0x1a263a)
+      .setScrollFactor(0.5)
       .setDepth(4);
 
-    // 4. Atmospheric Legacy Fantasy Stone Monoliths, Glowing Mushrooms & Chest Props
-    const monolithXs = [360, 740, 1140, 1580];
-    for (const mx of monolithXs) {
-      this.add.image(mx, FLOOR_Y - 68, 'lf_pillar').setScale(1.6).setTint(0x64748b).setDepth(6);
+    // 4. Hanging Cavern Vines along upper cave ceiling
+    const vineXs = [210, 390, 540, 720, 890, 1080, 1290, 1510, 1680];
+    vineXs.forEach((vx, idx) => {
+      const tex = idx % 2 === 0 ? 'lf_vine_green' : 'lf_vine_purple';
+      const vine = this.add.image(vx, 85 + (idx % 3) * 18, tex).setScale(2.3).setOrigin(0.5, 0).setDepth(7);
+      this.tweens.add({
+        targets: vine,
+        angle: idx % 2 === 0 ? 3 : -3,
+        duration: 1800 + idx * 140,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    });
+
+    // 5. Ancient Monoliths + Flickering Warm Cavern Torches
+    const torchXs = [360, 740, 1140, 1580];
+    for (const tx of torchXs) {
+      this.add.image(tx, FLOOR_Y - 68, 'lf_pillar').setScale(1.6).setTint(0x64748b).setDepth(6);
+      this.add.image(tx, FLOOR_Y - 125, 'lf_torch').setScale(2.2).setDepth(8);
+      const glow = this.add
+        .image(tx, FLOOR_Y - 134, 'torch_glow')
+        .setScale(1.45)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(9);
+      this.tweens.add({
+        targets: glow,
+        alpha: 0.58,
+        scale: 1.65,
+        duration: 360 + Math.random() * 240,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
     }
-    const mushrooms = [310, 620, 970, 1280, 1650];
-    for (const mx of mushrooms) {
+
+    // 6. Cavern Mushrooms, Boulders & Treasure Chest Props
+    for (const mx of [310, 620, 970, 1280, 1650]) {
       this.add.image(mx, FLOOR_Y - 16, 'lf_mushroom').setScale(1.7).setDepth(16);
     }
     this.add.image(1460, 336, 'lf_chest').setScale(1.7).setDepth(16);
     this.add.image(560, FLOOR_Y - 26, 'lf_boulder').setScale(1.4).setTint(0x64748b).setDepth(8);
 
+    // 7. Ambient Floating Cavern Dust Particles
+    for (let i = 0; i < 28; i++) {
+      const dx = Math.random() * ARENA_W;
+      const dy = 140 + Math.random() * 430;
+      const mote = this.add
+        .image(dx, dy, 'dust_mote')
+        .setScale(0.8 + Math.random() * 1.1)
+        .setAlpha(0.25 + Math.random() * 0.45)
+        .setDepth(28);
+      this.dustMotes.push({
+        sprite: mote,
+        baseY: dy,
+        speedX: 8 + Math.random() * 14,
+        phase: Math.random() * Math.PI * 2,
+      });
+    }
+
     this.add
-      .text(440, 130, 'ANCIENT CAVERN · PHASE 1 COMBAT ARENA', {
+      .text(440, 130, 'ANCIENT CAVERN · TERRARIA SIDE-SCROLL ARENA', {
         fontFamily: 'Fredoka, sans-serif',
         fontSize: '18px',
         fontStyle: 'bold',
@@ -192,27 +248,26 @@ export class DungeonBossScene extends Phaser.Scene {
         stroke: '#0f172a',
         strokeThickness: 4,
       })
-      .setDepth(8);
+      .setDepth(12);
     this.add
       .text(440, 156, 'A/D Move  ·  Space/W Double Jump  ·  Shift/K Dash  ·  J/Click Sword Swing', {
         fontFamily: 'Kantumruy Pro, sans-serif',
         fontSize: '12px',
         color: '#cbd5e1',
       })
-      .setDepth(8);
+      .setDepth(12);
   }
 
   private buildArenaPlatforms(): void {
     this.solidFloor = this.physics.add.staticGroup();
     this.elevatedPlatforms = this.physics.add.staticGroup();
 
-    // Legacy Fantasy dark rocky cave ground + mossy top strip
     this.add.tileSprite(ARENA_W / 2, FLOOR_Y + 52, ARENA_W, 108, 'lf_cave_floor').setTileScale(1.8, 1.8).setDepth(10);
     this.add.tileSprite(ARENA_W / 2, FLOOR_Y + 10, ARENA_W, 34, 'lf_moss_top').setTileScale(1.8, 1.4).setDepth(11);
     const floorCollider = this.add.rectangle(ARENA_W / 2, FLOOR_Y + 50, ARENA_W, 100, 0x000000, 0);
     this.solidFloor.add(floorCollider);
 
-    // 4 Elevated One-Way Platforms at varying heights (Legacy Fantasy Stone & Timber Platforms)
+    // 4 Elevated One-Way Platforms (Legacy Fantasy Stone & Timber)
     const platforms: Array<{ x: number; y: number; w: number; tex: 'lf_plat_stone' | 'lf_plat_wood' }> = [
       { x: 460, y: 500, w: 224, tex: 'lf_plat_stone' },
       { x: 780, y: 395, w: 240, tex: 'lf_plat_wood' },
@@ -228,17 +283,21 @@ export class DungeonBossScene extends Phaser.Scene {
 
   private buildExitPortal(): void {
     this.add.image(EXIT_PORTAL_X, EXIT_PORTAL_Y, 'lf_cave_entrance').setScale(1.2).setDepth(18);
-    const vortex = this.add.image(EXIT_PORTAL_X + 12, EXIT_PORTAL_Y + 8, 'portal_vortex').setTint(0x34d399).setScale(1.1).setDepth(20);
+    const vortex = this.add
+      .image(EXIT_PORTAL_X + 12, EXIT_PORTAL_Y + 8, 'portal_vortex')
+      .setTint(0x34d399)
+      .setScale(1.35)
+      .setDepth(20);
     this.tweens.add({
       targets: vortex,
       alpha: 0.5,
-      scale: 1.25,
+      scale: 1.55,
       duration: 850,
       yoyo: true,
       repeat: -1,
     });
 
-    const arrow = this.add.image(EXIT_PORTAL_X + 8, EXIT_PORTAL_Y - 102, 'join_arrow').setDepth(24);
+    const arrow = this.add.image(EXIT_PORTAL_X + 8, EXIT_PORTAL_Y - 102, 'join_arrow').setScale(1.2).setDepth(24);
     this.tweens.add({
       targets: arrow,
       y: EXIT_PORTAL_Y - 114,
@@ -260,37 +319,37 @@ export class DungeonBossScene extends Phaser.Scene {
       .setDepth(24);
   }
 
-  private buildTrainingDummy(): void {
-    this.dummyShadow = this.add.image(DUMMY_SPAWN_X, FLOOR_Y - 4, 'soft_shadow').setScale(1.3).setDepth(40);
-    this.dummy = this.physics.add.sprite(DUMMY_SPAWN_X, DUMMY_SPAWN_Y, 'slime_monster', 0);
-    this.dummy.setScale(3.5);
-    this.dummy.play('slime_bounce');
-    this.dummy.setCollideWorldBounds(true);
-    this.dummy.setDragX(520);
-    this.dummy.setBounce(0.18);
-    this.dummy.setSize(12, 12).setOffset(2, 4);
-    this.dummy.setDepth(42);
-    this.physics.add.collider(this.dummy, this.solidFloor);
+  private buildCavernMonster(): void {
+    this.monsterShadow = this.add.image(MONSTER_SPAWN_X, FLOOR_Y - 2, 'soft_shadow').setScale(1.4, 0.8).setDepth(40);
+    this.monster = this.physics.add.sprite(MONSTER_SPAWN_X, MONSTER_SPAWN_Y, 'boar_idle', 0);
+    this.monster.setScale(2.2);
+    this.monster.play('boar_idle_anim');
+    this.monster.setCollideWorldBounds(true);
+    this.monster.setDragX(520);
+    this.monster.setBounce(0.16);
+    this.monster.setSize(34, 24).setOffset(7, 8);
+    this.monster.setDepth(42);
+    this.physics.add.collider(this.monster, this.solidFloor);
 
-    this.dummyLabel = this.add
-      .text(DUMMY_SPAWN_X, DUMMY_SPAWN_Y - 46, 'Training Slime Dummy', {
+    this.monsterLabel = this.add
+      .text(MONSTER_SPAWN_X, MONSTER_SPAWN_Y - 52, 'Cavern Boar (Training)', {
         fontFamily: 'Fredoka, sans-serif',
         fontSize: '12px',
         fontStyle: 'bold',
-        color: '#86efac',
+        color: '#fde68a',
         stroke: '#0f172a',
         strokeThickness: 3,
       })
       .setOrigin(0.5, 1)
       .setDepth(46);
 
-    this.dummyBarBg = this.add
-      .rectangle(DUMMY_SPAWN_X, DUMMY_SPAWN_Y - 36, 74, 8, 0x0f172a)
+    this.monsterBarBg = this.add
+      .rectangle(MONSTER_SPAWN_X, MONSTER_SPAWN_Y - 40, 82, 9, 0x0f172a)
       .setStrokeStyle(1.5, 0x64748b)
       .setDepth(46);
 
-    this.dummyBarFill = this.add
-      .rectangle(DUMMY_SPAWN_X - 35, DUMMY_SPAWN_Y - 36, 70, 5, 0x22c55e)
+    this.monsterBarFill = this.add
+      .rectangle(MONSTER_SPAWN_X - 39, MONSTER_SPAWN_Y - 40, 78, 5, 0xef4444)
       .setOrigin(0, 0.5)
       .setDepth(47);
   }
@@ -335,7 +394,6 @@ export class DungeonBossScene extends Phaser.Scene {
     const hitX = this.player.x + dir * 48;
     const hitY = this.player.y - 2;
 
-    // Real Ninja Adventure animated Curved Slash VFX sprite
     const slash = this.add
       .sprite(hitX, hitY, 'fx_slash', 0)
       .setScale(2.6)
@@ -344,15 +402,15 @@ export class DungeonBossScene extends Phaser.Scene {
     slash.play('slash_curved');
     slash.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => slash.destroy());
 
-    if (this.dummyAlive) {
-      const swingBox = new Phaser.Geom.Rectangle(hitX - 48, hitY - 38, 96, 76);
-      if (Phaser.Geom.Intersects.RectangleToRectangle(swingBox, this.dummy.getBounds())) {
-        this.hitTrainingDummy(dir);
+    if (this.monsterAlive) {
+      const swingBox = new Phaser.Geom.Rectangle(hitX - 50, hitY - 40, 100, 80);
+      if (Phaser.Geom.Intersects.RectangleToRectangle(swingBox, this.monster.getBounds())) {
+        this.hitCavernMonster(dir);
       }
     }
   }
 
-  private hitTrainingDummy(knockDir: number): void {
+  private hitCavernMonster(knockDir: number): void {
     const { weapon, skillDamagePct, armorDamagePct, snackBuffPct } = this.player.state;
 
     const hit = calculatePlayerDamage({
@@ -368,16 +426,20 @@ export class DungeonBossScene extends Phaser.Scene {
       critChance: weapon.critChance,
     });
 
-    this.dummyHp = Math.max(0, this.dummyHp - hit.finalDamage);
-    this.dummy.setVelocity(knockDir * weapon.knockbackForce, -165);
-    this.dummy.setTintFill(0xffffff);
+    this.monsterHp = Math.max(0, this.monsterHp - hit.finalDamage);
+    this.monster.setVelocity(knockDir * weapon.knockbackForce, -165);
+    this.monster.setTintFill(0xffffff);
+    this.monster.play('boar_hit_anim', true);
+    this.monster.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+      if (this.monsterAlive) this.monster.play('boar_idle_anim');
+    });
     this.time.delayedCall(95, () => {
-      if (this.dummyAlive) this.dummy.clearTint();
+      if (this.monsterAlive) this.monster.clearTint();
     });
 
     this.spawnFloatingText(
-      this.dummy.x + (Math.random() - 0.5) * 26,
-      this.dummy.y - 36,
+      this.monster.x + (Math.random() - 0.5) * 28,
+      this.monster.y - 40,
       hit.isCrit ? `${hit.finalDamage}! CRIT` : `${hit.finalDamage}`,
       hit.isCrit ? '#facc15' : '#ffffff',
       hit.isCrit ? '22px' : '16px'
@@ -394,20 +456,20 @@ export class DungeonBossScene extends Phaser.Scene {
       }, 40);
     }
 
-    EventBus.emit('combat:hit', { hit, dummyHp: this.dummyHp, dummyMaxHp: DUMMY_MAX_HP });
+    EventBus.emit('combat:hit', { hit, dummyHp: this.monsterHp, dummyMaxHp: MONSTER_MAX_HP });
 
-    if (this.dummyHp <= 0) {
-      this.defeatAndRespawnDummy();
+    if (this.monsterHp <= 0) {
+      this.defeatAndRespawnMonster();
     }
   }
 
-  private defeatAndRespawnDummy(): void {
-    this.dummyAlive = false;
-    this.dummy.setVisible(false);
-    this.dummyShadow.setVisible(false);
-    this.dummyBarBg.setVisible(false);
-    this.dummyBarFill.setVisible(false);
-    this.dummyLabel.setText('Respawning in 3s...').setColor('#fbbf24');
+  private defeatAndRespawnMonster(): void {
+    this.monsterAlive = false;
+    this.monster.setVisible(false);
+    this.monsterShadow.setVisible(false);
+    this.monsterBarBg.setVisible(false);
+    this.monsterBarFill.setVisible(false);
+    this.monsterLabel.setText('Respawning in 3s...').setColor('#fbbf24');
 
     this.player.state.coins += 25;
     this.player.state.xp += 30;
@@ -424,21 +486,22 @@ export class DungeonBossScene extends Phaser.Scene {
       this.sound.play('sfx_levelup', { volume: 0.35 });
     }
     EventBus.emit('player:state', { ...this.player.state, weapon: { ...this.player.state.weapon } });
-    this.spawnFloatingText(this.dummy.x, this.dummy.y - 54, '+25 Coins · +30 XP', '#4ade80', '14px');
+    this.spawnFloatingText(this.monster.x, this.monster.y - 54, '+25 Coins · +30 XP', '#4ade80', '14px');
 
     this.time.delayedCall(3000, () => {
       if (!this.scene.isActive('DungeonBossScene')) return;
-      this.dummyHp = DUMMY_MAX_HP;
-      this.dummyAlive = true;
-      this.dummy.setPosition(DUMMY_SPAWN_X, DUMMY_SPAWN_Y);
-      this.dummy.setVelocity(0, 0);
-      this.dummy.clearTint();
-      this.dummy.setVisible(true);
-      this.dummyShadow.setVisible(true);
-      this.dummyBarBg.setVisible(true);
-      this.dummyBarFill.setVisible(true);
-      this.dummyLabel.setText('Training Slime Dummy').setColor('#86efac');
-      this.spawnFloatingText(DUMMY_SPAWN_X, DUMMY_SPAWN_Y - 40, 'Dummy Respawned!', '#86efac', '13px');
+      this.monsterHp = MONSTER_MAX_HP;
+      this.monsterAlive = true;
+      this.monster.setPosition(MONSTER_SPAWN_X, MONSTER_SPAWN_Y);
+      this.monster.setVelocity(0, 0);
+      this.monster.clearTint();
+      this.monster.play('boar_idle_anim');
+      this.monster.setVisible(true);
+      this.monsterShadow.setVisible(true);
+      this.monsterBarBg.setVisible(true);
+      this.monsterBarFill.setVisible(true);
+      this.monsterLabel.setText('Cavern Boar (Training)').setColor('#fde68a');
+      this.spawnFloatingText(MONSTER_SPAWN_X, MONSTER_SPAWN_Y - 46, 'Monster Respawned!', '#86efac', '13px');
     });
   }
 
@@ -483,7 +546,8 @@ export class DungeonBossScene extends Phaser.Scene {
     });
   }
 
-  update(time: number): void {
+  update(time: number, delta: number): void {
+    const dt = delta / 1000;
     const typing =
       document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA';
     const onGround = this.player.body.blocked.down || this.player.body.touching.down;
@@ -540,19 +604,22 @@ export class DungeonBossScene extends Phaser.Scene {
 
     this.player.syncVisuals(time, onGround);
 
-    // Subtle parallax scroll polish
-    this.parallaxFar.tilePositionX = this.cameras.main.scrollX * 0.15;
-    this.parallaxMid.tilePositionX = this.cameras.main.scrollX * 0.35;
+    // Drift floating cavern dust motes gently
+    for (const m of this.dustMotes) {
+      m.sprite.x += m.speedX * dt;
+      if (m.sprite.x > ARENA_W) m.sprite.x = 0;
+      m.sprite.y = m.baseY + Math.sin(time / 900 + m.phase) * 14;
+    }
 
-    if (this.dummyAlive) {
-      const ratio = Math.max(0, this.dummyHp / DUMMY_MAX_HP);
-      this.dummyShadow.setPosition(this.dummy.x, FLOOR_Y - 2);
-      this.dummyBarBg.setPosition(this.dummy.x, this.dummy.y - 36);
-      this.dummyBarFill.setPosition(this.dummy.x - 35, this.dummy.y - 36);
-      this.dummyBarFill.width = 70 * ratio;
-      this.dummyLabel.setPosition(this.dummy.x, this.dummy.y - 46);
+    if (this.monsterAlive) {
+      const ratio = Math.max(0, this.monsterHp / MONSTER_MAX_HP);
+      this.monsterShadow.setPosition(this.monster.x, FLOOR_Y - 2);
+      this.monsterBarBg.setPosition(this.monster.x, this.monster.y - 40);
+      this.monsterBarFill.setPosition(this.monster.x - 39, this.monster.y - 40);
+      this.monsterBarFill.width = 78 * ratio;
+      this.monsterLabel.setPosition(this.monster.x, this.monster.y - 52);
     } else {
-      this.dummyLabel.setPosition(DUMMY_SPAWN_X, DUMMY_SPAWN_Y - 46);
+      this.monsterLabel.setPosition(MONSTER_SPAWN_X, MONSTER_SPAWN_Y - 52);
     }
 
     const nearExit = this.isNearExitPortal();

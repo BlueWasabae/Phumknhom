@@ -28,7 +28,7 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
     const maxR = rect.width / 2 - 16;
 
     let dx = clientX - cx;
-    let dy = zone === 'dungeon' ? 0 : clientY - cy; // 360° in Village, Left/Right in Dungeon
+    let dy = zone === 'dungeon' ? 0 : clientY - cy;
     const dist = Math.hypot(dx, dy);
     if (dist > maxR) {
       dx = (dx / dist) * maxR;
@@ -46,8 +46,8 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
   };
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-4 z-20 px-4 flex items-end justify-between">
-      {/* Bottom-Left Virtual Thumbstick */}
+    <div className="pointer-events-none fixed inset-x-0 bottom-4 z-20 px-4 flex items-end justify-between box-border max-w-full">
+      {/* Bottom-Left Warm-Wood Virtual Thumbstick */}
       <div
         ref={padRef}
         onPointerDown={(e) => {
@@ -62,10 +62,10 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
         }}
         onPointerUp={resetStick}
         onPointerCancel={resetStick}
-        className="pointer-events-auto w-28 h-28 rounded-full bg-slate-950/55 border-2 border-amber-300/60 backdrop-blur-sm relative flex items-center justify-center touch-none shadow-xl"
+        className="pointer-events-auto w-28 h-28 rounded-full bg-amber-950/55 border-[3px] border-amber-200/80 backdrop-blur-sm relative flex items-center justify-center touch-none shadow-xl"
       >
         <div
-          className="w-11 h-11 rounded-full bg-amber-400/95 border-2 border-amber-100 shadow-lg"
+          className="w-11 h-11 rounded-full stardew-btn"
           style={{ transform: `translate(${knob.x}px, ${knob.y}px)` }}
         />
       </div>
@@ -76,10 +76,8 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
           <button
             type="button"
             onPointerDown={() => EventBus.emit('input:interact')}
-            className={`w-24 h-24 rounded-full font-display font-bold text-xs shadow-xl active:scale-95 transition border-4 ${
-              nearPortal
-                ? 'bg-amber-400 border-yellow-100 text-slate-950 animate-pulse'
-                : 'bg-amber-400/90 border-amber-900 text-amber-950'
+            className={`w-24 h-24 rounded-full stardew-btn font-display font-bold text-xs leading-tight whitespace-pre-line ${
+              nearPortal ? 'ring-4 ring-yellow-300 animate-pulse' : ''
             }`}
           >
             {nearPortal ? 'JOIN\nPORTAL' : 'JOIN /\nINTERACT'}
@@ -90,7 +88,7 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
               <button
                 type="button"
                 onPointerDown={() => EventBus.emit('input:exitDungeon')}
-                className="px-4 py-2 rounded-full bg-emerald-500 border-2 border-white text-slate-950 font-display font-bold text-xs shadow-xl animate-pulse active:scale-95"
+                className="px-4 py-2 rounded-full bg-emerald-500 border-[3px] border-emerald-950 text-emerald-950 font-display font-bold text-xs shadow-xl animate-pulse active:scale-95"
               >
                 EXIT VILLAGE
               </button>
@@ -99,21 +97,21 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
               <button
                 type="button"
                 onPointerDown={() => EventBus.emit('input:dash')}
-                className="w-14 h-14 rounded-full bg-amber-400/95 border-2 border-white text-slate-950 font-display font-bold text-xs shadow-lg active:scale-95"
+                className="w-14 h-14 rounded-full stardew-btn font-display font-bold text-xs"
               >
                 DASH
               </button>
               <button
                 type="button"
                 onPointerDown={() => EventBus.emit('input:attack')}
-                className="w-16 h-16 rounded-full bg-red-500/95 border-2 border-amber-200 text-white font-display font-bold text-xs shadow-lg active:scale-95"
+                className="w-16 h-16 rounded-full bg-gradient-to-b from-rose-400 to-red-600 border-[3px] border-amber-950 text-white font-display font-bold text-xs shadow-lg active:scale-95"
               >
                 ATTACK
               </button>
               <button
                 type="button"
                 onPointerDown={() => EventBus.emit('input:jump')}
-                className="w-16 h-16 rounded-full bg-sky-500/95 border-2 border-white text-slate-950 font-display font-bold text-xs shadow-lg active:scale-95"
+                className="w-16 h-16 rounded-full bg-gradient-to-b from-sky-300 to-sky-500 border-[3px] border-amber-950 text-slate-950 font-display font-bold text-xs shadow-lg active:scale-95"
               >
                 JUMP
               </button>

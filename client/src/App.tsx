@@ -29,7 +29,7 @@ export const App: React.FC = () => {
     {
       id: 'sys-welcome',
       sender: 'Phum Guide',
-      text: 'Welcome to ភូមិខ្ញុំ (Phase 1)! Walk top-right to the Dungeon Portal and press E.',
+      text: 'Welcome to ភូមិខ្ញុំ! Walk top-right to the Cave Portal and press E.',
       timestamp: Date.now(),
     },
   ]);
@@ -73,8 +73,8 @@ export const App: React.FC = () => {
   }, []);
 
   return (
-    <div className="relative w-full h-dvh overflow-hidden bg-slate-950">
-      <div ref={mountRef} className="w-full h-full" />
+    <div className="relative w-screen h-dvh max-w-full max-h-dvh overflow-hidden bg-slate-950">
+      <div ref={mountRef} className="w-full h-full overflow-hidden" />
 
       <HUD
         player={player}
@@ -100,7 +100,7 @@ export const App: React.FC = () => {
       />
 
       {toast && (
-        <div className="pointer-events-none fixed bottom-20 left-1/2 -translate-x-1/2 z-40 px-4 py-1.5 rounded-full bg-slate-900/95 border border-amber-400/70 text-amber-200 font-display font-bold text-xs shadow-xl">
+        <div className="pointer-events-none fixed bottom-20 left-1/2 -translate-x-1/2 z-40 max-w-[90vw] px-4 py-1.5 rounded-full stardew-panel font-display font-bold text-xs text-center">
           {toast}
         </div>
       )}
