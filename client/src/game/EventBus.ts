@@ -84,6 +84,43 @@ export interface RemoteChatPayload {
   timestamp: number;
 }
 
+export interface InspectedRemotePlayer {
+  sessionId: string;
+  playerId: string;
+  name: string;
+  level: number;
+  stylish: number;
+  areaId: string;
+  loadout: EquippedLoadout;
+}
+
+export interface WhisperPayload {
+  fromSessionId: string;
+  fromName: string;
+  toName: string;
+  text: string;
+  timestamp: number;
+}
+
+export interface IncomingFriendRequestPayload {
+  friendshipId: string;
+  fromSessionId?: string;
+  fromPlayerId: string;
+  fromName: string;
+  status?: 'pending' | 'accepted';
+  timestamp: number;
+}
+
+export interface IncomingDungeonInvitePayload {
+  inviteId: string;
+  fromSessionId: string;
+  fromPlayerId: string;
+  fromName: string;
+  areaId: string;
+  bossId: string;
+  timestamp: number;
+}
+
 export interface EventMap {
   'scene:ready': { zone: ZoneType };
   'player:state': PlayerState;
@@ -101,6 +138,12 @@ export interface EventMap {
   'network:status': NetworkStatusPayload;
   'network:remoteChat': RemoteChatPayload;
   'network:switchArea': { areaId: string };
+  'auth:identityChanged': { playerId: string; playerState: PlayerState };
+  'social:inspectPlayer': InspectedRemotePlayer;
+  'social:whisper': WhisperPayload;
+  'social:friendRequest': IncomingFriendRequestPayload;
+  'social:dungeonInvite': IncomingDungeonInvitePayload;
+  'social:notice': { text: string };
   'portal:proximity': PortalProximityPayload;
   'combat:hit': { hit: CombatHitResult; dummyHp: number; dummyMaxHp: number };
   'combat:classMeter': ClassMeterPayload;
@@ -127,9 +170,12 @@ export interface EventMap {
       | 'fashionShop'
       | 'skills'
       | 'modeSelector'
-      | 'areaSwitcher';
+      | 'areaSwitcher'
+      | 'friends'
+      | 'auth';
     farmTab?: 'seeds' | 'livestock' | 'artisan';
     shopTab?: 'primary' | 'secondary';
+    friendsTab?: 'friends' | 'inbox';
   };
   'ui:toast': { text: string };
 }

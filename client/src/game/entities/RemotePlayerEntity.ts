@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { EquippedLoadout } from '@shared/types';
+import { EventBus } from '../EventBus';
 import { PaperDoll, type PaperDollFacing, type PaperDollPose } from './PaperDoll';
 import { Pet } from './Pet';
 import { parseAppearance, type RemotePlayerSnapshot } from '../network/RoomClient';
@@ -7,11 +8,15 @@ import { parseAppearance, type RemotePlayerSnapshot } from '../network/RoomClien
 /**
  * Renders another online player inside OverworldScene using the exact same
  * modular 8-layer PaperDoll + Companion Pet + smooth position interpolation (lerp)
- * + 4.5s overhead speech bubble + 3s floating emote.
+ * + interactive Tap-on-Player hit zone + 4.5s overhead speech bubble + 3s floating emote.
  */
 export class RemotePlayerEntity {
   public readonly sessionId: string;
+  public playerId: string;
   public name: string;
+  public level: number;
+  public stylish: number;
+  public areaId: string;
 
   private scene: Phaser.Scene;
   private x: number;
@@ -23,6 +28,7 @@ export class RemotePlayerEntity {
   private appearanceJson: string;
   private loadout: EquippedLoadout;
 
+  private hitZone: Phaser.GameObjects.Rectangle;
   private shadow: Phaser.GameObjects.Image;
   private paperDoll: PaperDoll;
   private pet: Pet;
@@ -38,7 +44,11 @@ export class RemotePlayerEntity {
   constructor(scene: Phaser.Scene, snapshot: RemotePlayerSnapshot) {
     this.scene = scene;
     this.sessionId = snapshot.sessionId;
+    this.playerId = snapshot.playerId || '';
     this.name = snapshot.name;
+    this.level = snapshot.level || 1;
+    this.stylish = snapshot.stylish || 168;
+    this.areaId = snapshot.areaId || 'AREA 0';
     this.x = snapshot.x;
     this.y = snapshot.y;
     this.targetX = snapshot.x;
@@ -57,6 +67,23 @@ export class RemotePlayerEntity {
 
     this.paperDoll = new PaperDoll(scene, this.x, this.y + 8, this.loadout, `${safePrefix}_pd`);
     this.paperDoll.setScale(0.42);
+
+    // Interactive Tap-on-Player hit box (works on both PC click and Mobile touch!)
+    this.hitZone = scene.add
+      .rectangle(this.x, this.y - 4, 28, 36, 0xffffff, 0)
+      .setDepth(this.y + 14)
+      .setInteractive({ useHandCursor: true });
+    this.hitZone.on('pointerdown', () => {
+      EventBus.emit('social:inspectPlayer', {
+        sessionId: this.sessionId,
+        playerId: this.playerId,
+        name: this.name,
+        level: this.level,
+        stylish: this.stylish,
+        areaId: this.areaId,
+        loadout: { ...this.loadout },
+      });
+    });
 
     this.pet = new Pet(scene, this.x - 16, this.y, this.loadout.pet, 'overworld', `${safePrefix}_pet`);
 
@@ -104,6 +131,10 @@ export class RemotePlayerEntity {
     this.targetY = snapshot.y;
     this.facing = snapshot.facing;
     this.isMoving = snapshot.isMoving;
+    if (snapshot.playerId) this.playerId = snapshot.playerId;
+    if (snapshot.level) this.level = snapshot.level;
+    if (typeof snapshot.stylish === 'number') this.stylish = snapshot.stylish;
+    if (snapshot.areaId) this.areaId = snapshot.areaId;
 
     if (snapshot.name && snapshot.name !== this.name) {
       this.name = snapshot.name;
@@ -157,6 +188,7 @@ export class RemotePlayerEntity {
 
     const depth = this.y + 9;
     this.paperDoll.setDepth(depth);
+    this.hitZone.setPosition(this.x, this.y - 4).setDepth(depth + 5);
     this.shadow.setPosition(this.x, this.y + 8).setDepth(depth - 1);
     this.nameTag.setPosition(this.x, this.y + 11);
 
@@ -214,6 +246,7 @@ export class RemotePlayerEntity {
   }
 
   public destroy(): void {
+    this.hitZone.destroy();
     this.paperDoll.destroy();
     this.pet.destroy();
     this.shadow.destroy();

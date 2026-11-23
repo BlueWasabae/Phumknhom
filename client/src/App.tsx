@@ -41,6 +41,17 @@ import {
   type ActionResult,
 } from './game/systems/FarmingEngine';
 import { respecAllSkills, unlockSkillTalent } from './game/systems/SkillManager';
+import {
+  acceptFriendRequestApi,
+  declineFriendRequestApi,
+  fetchFriends,
+  saveAccountProfile,
+  sendFriendRequestApi,
+  type AuthSession,
+  type FriendRecord,
+  type FriendsListResponse,
+} from './game/network/ApiClient';
+import { roomClient } from './game/network/RoomClient';
 import { launchPhaserGame } from './game/config';
 import {
   EventBus,
@@ -48,6 +59,8 @@ import {
   type ClassMeterPayload,
   type DungeonOutcomePayload,
   type FarmToolMode,
+  type IncomingDungeonInvitePayload,
+  type InspectedRemotePlayer,
   type NetworkStatusPayload,
   type SkillXpToastPayload,
 } from './game/EventBus';
@@ -61,6 +74,9 @@ import { ShopModal, type ShopMode } from './ui/ShopModal';
 import { SkillTreeModal } from './ui/SkillTreeModal';
 import { ModeSelectorModal } from './ui/ModeSelectorModal';
 import { AreaSwitcherModal } from './ui/AreaSwitcherModal';
+import { AuthModal } from './ui/AuthModal';
+import { PlayerActionModal } from './ui/PlayerActionModal';
+import { FriendsModal } from './ui/FriendsModal';
 
 type ActiveModalType =
   | null
@@ -71,7 +87,9 @@ type ActiveModalType =
   | 'fashionShop'
   | 'skills'
   | 'modeSelector'
-  | 'areaSwitcher';
+  | 'areaSwitcher'
+  | 'friends'
+  | 'auth';
 
 interface FloatingXpBanner extends SkillXpToastPayload {
   uid: number;
@@ -101,8 +119,19 @@ export const App: React.FC = () => {
   });
   const [nearPortal, setNearPortal] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [chatDraftPrefill, setChatDraftPrefill] = useState<{ text: string; nonce: number } | null>(null);
   const [touchUiEnabled, setTouchUiEnabled] = useState(false);
-  const [activeModal, setActiveModal] = useState<ActiveModalType>(null);
+  const [activeModal, setActiveModal] = useState<ActiveModalType>('auth');
+  const [authSession, setAuthSession] = useState<AuthSession | null>(null);
+  const [saveStatus, setSaveStatus] = useState<'guest' | 'saving' | 'saved'>('guest');
+  const [friendsTab, setFriendsTab] = useState<'friends' | 'inbox'>('friends');
+  const [friendsData, setFriendsData] = useState<FriendsListResponse>({
+    accepted: [],
+    incoming: [],
+    outgoing: [],
+  });
+  const [dungeonInvites, setDungeonInvites] = useState<IncomingDungeonInvitePayload[]>([]);
+  const [inspectedPlayer, setInspectedPlayer] = useState<InspectedRemotePlayer | null>(null);
   const [farmModalTab, setFarmModalTab] = useState<FarmModalTab>('seeds');
   const [shopTab, setShopTab] = useState<'primary' | 'secondary'>('primary');
   const [selectedCropId, setSelectedCropId] = useState('trakuon');
@@ -238,6 +267,174 @@ export const App: React.FC = () => {
     [runStateAction]
   );
 
+  const authSessionRef = useRef<AuthSession | null>(null);
+  const playerRef = useRef<PlayerState>(player);
+  const skipNextAutoSaveRef = useRef(false);
+
+  useEffect(() => {
+    authSessionRef.current = authSession;
+  }, [authSession]);
+
+  useEffect(() => {
+    playerRef.current = player;
+  }, [player]);
+
+  const refreshFriends = useCallback(async (explicitPlayerId?: string) => {
+    const pid = explicitPlayerId ?? authSessionRef.current?.playerId;
+    if (!pid) return;
+    const data = await fetchFriends(pid);
+    setFriendsData(data);
+  }, []);
+
+  // Debounced auto-save whenever player harvests, buys/sells, equips, levels a skill, defeats a boss, or switches zones
+  useEffect(() => {
+    if (!authSession) return;
+    if (skipNextAutoSaveRef.current) {
+      skipNextAutoSaveRef.current = false;
+      return;
+    }
+    setSaveStatus('saving');
+    const timer = window.setTimeout(() => {
+      void saveAccountProfile(authSession, playerRef.current).then((res) => {
+        if (res.ok) setSaveStatus('saved');
+      });
+    }, 1200);
+    return () => window.clearTimeout(timer);
+  }, [authSession, player, zone]);
+
+  // Flush save cleanly before tab refresh/close
+  useEffect(() => {
+    const onUnload = () => {
+      const sess = authSessionRef.current;
+      if (sess) {
+        void saveAccountProfile(sess, playerRef.current, true);
+      }
+    };
+    window.addEventListener('beforeunload', onUnload);
+    return () => window.removeEventListener('beforeunload', onUnload);
+  }, []);
+
+  const handleAuthenticated = useCallback(
+    (session: AuthSession, loadedState: PlayerState) => {
+      skipNextAutoSaveRef.current = true;
+      setAuthSession(session);
+      setSaveStatus('saved');
+      setPlayer(loadedState);
+      setActiveModal(null);
+      EventBus.emit('player:stateSync', loadedState);
+      EventBus.emit('auth:identityChanged', {
+        playerId: session.playerId,
+        playerState: loadedState,
+      });
+      EventBus.emit('ui:toast', {
+        text: `Welcome back, ${session.username}! Cloud Save synced (${
+          session.storageMode === 'supabase' ? 'Supabase' : 'Local DB'
+        }).`,
+      });
+      void refreshFriends(session.playerId);
+    },
+    [refreshFriends]
+  );
+
+  const handleOpenWhisper = useCallback((username: string) => {
+    setChatOpen(true);
+    setChatDraftPrefill({ text: `/w ${username} `, nonce: Date.now() });
+  }, []);
+
+  const handleAddFriendTarget = useCallback(
+    async (target: InspectedRemotePlayer) => {
+      const sess = authSessionRef.current;
+      if (!sess) {
+        EventBus.emit('ui:toast', { text: 'Sign in with an account (MENU → Login) to add friends!' });
+        setActiveModal('auth');
+        return;
+      }
+      const res = await sendFriendRequestApi(sess, {
+        targetPlayerId: target.playerId || undefined,
+        targetUsername: target.name,
+      });
+      if (!res.ok) {
+        EventBus.emit('ui:toast', { text: res.error });
+        return;
+      }
+      roomClient.sendFriendRequestPing({
+        targetSessionId: target.sessionId,
+        targetPlayerId: target.playerId || undefined,
+        targetName: target.name,
+        friendshipId: res.friendshipId,
+      });
+      EventBus.emit('ui:toast', {
+        text:
+          res.status === 'accepted'
+            ? `🎉 You and ${res.targetUsername} are now Friends!`
+            : `Friend request sent to ${res.targetUsername}!`,
+      });
+      void refreshFriends(sess.playerId);
+    },
+    [refreshFriends]
+  );
+
+  const handleAddFriendByName = useCallback(
+    async (username: string) => {
+      const sess = authSessionRef.current;
+      if (!sess) {
+        setActiveModal('auth');
+        return;
+      }
+      const res = await sendFriendRequestApi(sess, { targetUsername: username });
+      if (!res.ok) {
+        EventBus.emit('ui:toast', { text: res.error });
+        return;
+      }
+      EventBus.emit('ui:toast', {
+        text:
+          res.status === 'accepted'
+            ? `🎉 You and ${res.targetUsername} are now Friends!`
+            : `Friend request sent to ${res.targetUsername}!`,
+      });
+      void refreshFriends(sess.playerId);
+    },
+    [refreshFriends]
+  );
+
+  const handleAcceptFriend = useCallback(
+    async (friendshipId: string) => {
+      const sess = authSessionRef.current;
+      if (!sess) return;
+      const res = await acceptFriendRequestApi(sess, friendshipId);
+      if (!res.ok) {
+        EventBus.emit('ui:toast', { text: res.error });
+        return;
+      }
+      EventBus.emit('ui:toast', { text: '🎉 Friend request accepted!' });
+      void refreshFriends(sess.playerId);
+    },
+    [refreshFriends]
+  );
+
+  const handleDeclineFriend = useCallback(
+    async (friendshipId: string) => {
+      const sess = authSessionRef.current;
+      if (!sess) return;
+      await declineFriendRequestApi(sess, friendshipId);
+      EventBus.emit('ui:toast', { text: 'Friend request declined.' });
+      void refreshFriends(sess.playerId);
+    },
+    [refreshFriends]
+  );
+
+  const handleInviteDungeon = useCallback((target: { sessionId?: string; playerId?: string; name: string }) => {
+    const sent = roomClient.sendDungeonInvite({
+      targetSessionId: target.sessionId,
+      targetPlayerId: target.playerId,
+      targetName: target.name,
+      bossId: 'sdech_kongkaeb',
+    });
+    if (!sent) {
+      EventBus.emit('ui:toast', { text: 'Connect to the online Village Plaza to send Dungeon invites.' });
+    }
+  }, []);
+
   useEffect(() => {
     const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     if (isTouch) setTouchUiEnabled(true);
@@ -313,6 +510,39 @@ export const App: React.FC = () => {
           },
         ]);
       }),
+      EventBus.on('social:inspectPlayer', (target) => {
+        setInspectedPlayer(target);
+      }),
+      EventBus.on('social:whisper', (msg) => {
+        setMessages((prev) => [
+          ...prev.slice(-39),
+          {
+            id: `w-in-${msg.fromSessionId}-${msg.timestamp}`,
+            sender: `Whisper ← ${msg.fromName}`,
+            text: msg.text,
+            timestamp: msg.timestamp,
+          },
+        ]);
+        EventBus.emit('ui:toast', { text: `💬 Whisper from ${msg.fromName}: "${msg.text}"` });
+      }),
+      EventBus.on('social:friendRequest', (req) => {
+        EventBus.emit('ui:toast', {
+          text:
+            req.status === 'accepted'
+              ? `🎉 ${req.fromName} accepted your Friend Request!`
+              : `💌 New Friend Request from ${req.fromName}! Check your Mail Inbox.`,
+        });
+        void refreshFriends();
+      }),
+      EventBus.on('social:dungeonInvite', (inv) => {
+        setDungeonInvites((prev) => [inv, ...prev.filter((i) => i.fromName !== inv.fromName)].slice(0, 6));
+        EventBus.emit('ui:toast', {
+          text: `⚔️ ${inv.fromName} invited you to a Dungeon Raid! Check your Mail Inbox.`,
+        });
+      }),
+      EventBus.on('social:notice', ({ text }) => {
+        EventBus.emit('ui:toast', { text });
+      }),
       EventBus.on('skill:xpGained', (payload) => {
         const uid = xpUid++;
         setXpBanners((prev) => [...prev.slice(-2), { ...payload, uid }]);
@@ -320,8 +550,9 @@ export const App: React.FC = () => {
           setXpBanners((prev) => prev.filter((b) => b.uid !== uid));
         }, payload.leveledUp ? 3600 : 1900);
       }),
-      EventBus.on('ui:openModal', ({ modal, farmTab, shopTab: requestedShopTab }) => {
+      EventBus.on('ui:openModal', ({ modal, farmTab, shopTab: requestedShopTab, friendsTab: reqFriendsTab }) => {
         if (modal === 'farm' && farmTab) setFarmModalTab(farmTab);
+        if (modal === 'friends' && reqFriendsTab) setFriendsTab(reqFriendsTab);
         if (modal === 'wardrobe') {
           setShopTab('secondary');
           setActiveModal('fashionShop');
@@ -347,6 +578,7 @@ export const App: React.FC = () => {
   }, []);
 
   const shopMode: ShopMode = activeModal === 'snackShop' ? 'snack' : 'fashion';
+  const inboxCount = friendsData.incoming.length + dungeonInvites.length;
 
   return (
     <div className="relative w-screen h-dvh max-w-full max-h-dvh overflow-hidden bg-slate-950">
@@ -356,6 +588,9 @@ export const App: React.FC = () => {
         player={player}
         zone={zone}
         networkStatus={networkStatus}
+        authUsername={authSession?.username ?? null}
+        saveStatus={saveStatus}
+        inboxCount={inboxCount}
         chatOpen={chatOpen}
         onToggleChat={() => setChatOpen((o) => !o)}
         touchUiEnabled={touchUiEnabled}
@@ -379,6 +614,15 @@ export const App: React.FC = () => {
         }}
         onOpenSkills={() => setActiveModal('skills')}
         onOpenAreaSwitcher={() => setActiveModal('areaSwitcher')}
+        onOpenFriends={() => {
+          setFriendsTab('friends');
+          setActiveModal('friends');
+        }}
+        onOpenInbox={() => {
+          setFriendsTab('inbox');
+          setActiveModal('friends');
+        }}
+        onOpenAuth={() => setActiveModal('auth')}
         onFastForwardFarm={() => runFarmAction((s) => fastForwardFarmTimers(s, 60))}
       />
 
@@ -413,6 +657,7 @@ export const App: React.FC = () => {
         open={chatOpen}
         playerName={player.name}
         messages={messages}
+        draftPrefill={chatDraftPrefill}
         onAddMessage={(msg) => setMessages((prev) => [...prev.slice(-39), msg])}
       />
 
@@ -447,6 +692,60 @@ export const App: React.FC = () => {
             ok: true,
             message: `Display name updated to ${nextName}!`,
           }));
+        }}
+      />
+
+      <AuthModal
+        open={activeModal === 'auth'}
+        starterState={player}
+        onAuthenticated={handleAuthenticated}
+        onPlayGuest={() => {
+          setActiveModal(null);
+          EventBus.emit('ui:toast', {
+            text: 'Playing as Guest — sign in anytime from MENU → Login / Cloud Save.',
+          });
+        }}
+      />
+
+      <PlayerActionModal
+        target={inspectedPlayer}
+        onClose={() => setInspectedPlayer(null)}
+        onAddFriend={(target) => void handleAddFriendTarget(target)}
+        onWhisper={handleOpenWhisper}
+        onInviteDungeon={(target) =>
+          handleInviteDungeon({
+            sessionId: target.sessionId,
+            playerId: target.playerId || undefined,
+            name: target.name,
+          })
+        }
+      />
+
+      <FriendsModal
+        open={activeModal === 'friends'}
+        initialTab={friendsTab}
+        authSession={authSession}
+        friendsData={friendsData}
+        dungeonInvites={dungeonInvites}
+        onClose={() => setActiveModal(null)}
+        onRefresh={() => void refreshFriends()}
+        onOpenAuth={() => setActiveModal('auth')}
+        onSendFriendRequestByName={(username) => void handleAddFriendByName(username)}
+        onAcceptFriend={(id) => void handleAcceptFriend(id)}
+        onDeclineFriend={(id) => void handleDeclineFriend(id)}
+        onWhisper={handleOpenWhisper}
+        onInviteDungeon={(friend: FriendRecord) =>
+          handleInviteDungeon({ playerId: friend.playerId, name: friend.username })
+        }
+        onAcceptDungeonInvite={(inv) => {
+          setDungeonInvites((prev) => prev.filter((i) => i.inviteId !== inv.inviteId));
+          setActiveModal('modeSelector');
+          EventBus.emit('ui:toast', {
+            text: `Accepted ${inv.fromName}'s Raid Invite! Pick your boss & difficulty!`,
+          });
+        }}
+        onDeclineDungeonInvite={(inviteId) => {
+          setDungeonInvites((prev) => prev.filter((i) => i.inviteId !== inviteId));
         }}
       />
 

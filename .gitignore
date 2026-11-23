@@ -2,6 +2,9 @@ node_modules/
 dist/
 .env
 .env.*
+!.env.example
+!server/.env.example
+server/data/
 .asset-archives/
 client/public/assets/packs/
 client/public/assets/raw_khmer/

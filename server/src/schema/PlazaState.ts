@@ -2,7 +2,10 @@ import { MapSchema, Schema, type } from '@colyseus/schema';
 
 export class RemotePlayer extends Schema {
   @type('string') sessionId: string = '';
+  @type('string') playerId: string = '';
   @type('string') name: string = 'PhumHero';
+  @type('number') level: number = 1;
+  @type('number') stylish: number = 168;
   @type('number') x: number = 480;
   @type('number') y: number = 405;
   @type('string') facing: string = 'down';

@@ -4,7 +4,10 @@ import { EventBus } from '../EventBus';
 
 export interface RemotePlayerSnapshot {
   sessionId: string;
+  playerId: string;
   name: string;
+  level: number;
+  stylish: number;
   x: number;
   y: number;
   facing: 'down' | 'up' | 'left' | 'right';
@@ -30,7 +33,10 @@ export interface PlazaRoomHandlers {
 
 interface RawRemotePlayerSchema {
   sessionId: string;
+  playerId: string;
   name: string;
+  level: number;
+  stylish: number;
   x: number;
   y: number;
   facing: string;
@@ -105,7 +111,10 @@ function toSnapshot(raw: RawRemotePlayerSchema, key: string): RemotePlayerSnapsh
     raw.facing === 'up' || raw.facing === 'left' || raw.facing === 'right' ? raw.facing : 'down';
   return {
     sessionId: raw.sessionId || key,
+    playerId: raw.playerId || '',
     name: raw.name || 'Villager',
+    level: Number.isFinite(raw.level) ? raw.level : 1,
+    stylish: Number.isFinite(raw.stylish) ? raw.stylish : 168,
     x: Number.isFinite(raw.x) ? raw.x : 480,
     y: Number.isFinite(raw.y) ? raw.y : 405,
     facing,
@@ -158,7 +167,16 @@ class PlazaRoomClient {
 
   public async joinPlaza(
     areaId: string,
-    initial: { name: string; x: number; y: number; facing: string; loadout: EquippedLoadout },
+    initial: {
+      playerId?: string;
+      name: string;
+      level?: number;
+      stylish?: number;
+      x: number;
+      y: number;
+      facing: string;
+      loadout: EquippedLoadout;
+    },
     handlers: PlazaRoomHandlers
   ): Promise<boolean> {
     this.currentAreaId = areaId;
@@ -175,7 +193,10 @@ class PlazaRoomClient {
     try {
       const room = await this.client.joinOrCreate<RawPlazaStateSchema>('plaza', {
         areaId,
+        playerId: initial.playerId || '',
         name: initial.name,
+        level: initial.level ?? 1,
+        stylish: initial.stylish ?? 168,
         x: Math.round(initial.x),
         y: Math.round(initial.y),
         facing: initial.facing,
@@ -226,6 +247,46 @@ class PlazaRoomClient {
 
       room.onMessage('emote', (msg: { sessionId: string; emoji: string }) => {
         handlers.onEmote(msg);
+      });
+
+      room.onMessage(
+        'whisper',
+        (msg: { fromSessionId: string; fromName: string; toName: string; text: string; timestamp: number }) => {
+          EventBus.emit('social:whisper', msg);
+        }
+      );
+
+      room.onMessage(
+        'friendRequest',
+        (msg: {
+          friendshipId: string;
+          fromSessionId?: string;
+          fromPlayerId: string;
+          fromName: string;
+          status?: 'pending' | 'accepted';
+          timestamp: number;
+        }) => {
+          EventBus.emit('social:friendRequest', msg);
+        }
+      );
+
+      room.onMessage(
+        'dungeonInvite',
+        (msg: {
+          inviteId: string;
+          fromSessionId: string;
+          fromPlayerId: string;
+          fromName: string;
+          areaId: string;
+          bossId: string;
+          timestamp: number;
+        }) => {
+          EventBus.emit('social:dungeonInvite', msg);
+        }
+      );
+
+      room.onMessage('socialNotice', (msg: { text: string }) => {
+        EventBus.emit('social:notice', msg);
       });
 
       room.onLeave(() => {
@@ -291,12 +352,22 @@ class PlazaRoomClient {
     this.room.send('move', { x: rx, y: ry, facing, isMoving });
   }
 
-  public sendAppearance(loadout: EquippedLoadout, name?: string): void {
+  public sendAppearance(
+    loadout: EquippedLoadout,
+    meta?: { name?: string; level?: number; stylish?: number } | string
+  ): void {
     if (!this.room || !this.online) return;
-    this.room.send('updateAppearance', {
+    const payload: Record<string, unknown> = {
       appearanceJson: serializeAppearance(loadout),
-      ...(name ? { name } : {}),
-    });
+    };
+    if (typeof meta === 'string') {
+      payload.name = meta;
+    } else if (meta) {
+      if (meta.name) payload.name = meta.name;
+      if (typeof meta.level === 'number') payload.level = meta.level;
+      if (typeof meta.stylish === 'number') payload.stylish = meta.stylish;
+    }
+    this.room.send('updateAppearance', payload);
   }
 
   public sendChat(text: string): boolean {
@@ -308,6 +379,34 @@ class PlazaRoomClient {
   public sendEmote(emoji: string): boolean {
     if (!this.room || !this.online) return false;
     this.room.send('emote', { emoji });
+    return true;
+  }
+
+  public sendWhisper(targetName: string, text: string, targetSessionId?: string): boolean {
+    if (!this.room || !this.online) return false;
+    this.room.send('whisper', { targetName, targetSessionId, text });
+    return true;
+  }
+
+  public sendFriendRequestPing(target: {
+    targetSessionId?: string;
+    targetPlayerId?: string;
+    targetName?: string;
+    friendshipId?: string;
+  }): boolean {
+    if (!this.room || !this.online) return false;
+    this.room.send('friendRequest', target);
+    return true;
+  }
+
+  public sendDungeonInvite(target: {
+    targetSessionId?: string;
+    targetPlayerId?: string;
+    targetName?: string;
+    bossId?: string;
+  }): boolean {
+    if (!this.room || !this.online) return false;
+    this.room.send('dungeonInvite', target);
     return true;
   }
 

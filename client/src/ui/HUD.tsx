@@ -18,10 +18,12 @@ import { STREET_SNACKS, countInventoryAnyQuality } from '../data/recipes';
 import {
   Award,
   Backpack,
+  Cloud,
   Coins,
   FastForward,
   Gamepad2,
   Heart,
+  LogIn,
   Mail,
   Menu,
   MessageCircle,
@@ -30,6 +32,7 @@ import {
   Sprout,
   Swords,
   User,
+  Users,
 } from 'lucide-react';
 import {
   EventBus,
@@ -44,6 +47,9 @@ interface HUDProps {
   player: PlayerState;
   zone: ZoneType;
   networkStatus: NetworkStatusPayload;
+  authUsername: string | null;
+  saveStatus: 'guest' | 'saving' | 'saved';
+  inboxCount: number;
   chatOpen: boolean;
   onToggleChat: () => void;
   touchUiEnabled: boolean;
@@ -61,6 +67,9 @@ interface HUDProps {
   onOpenFarmModal: () => void;
   onOpenSkills: () => void;
   onOpenAreaSwitcher: () => void;
+  onOpenFriends: () => void;
+  onOpenInbox: () => void;
+  onOpenAuth: () => void;
   onFastForwardFarm: () => void;
 }
 
@@ -71,6 +80,9 @@ export const HUD: React.FC<HUDProps> = ({
   player,
   zone,
   networkStatus,
+  authUsername,
+  saveStatus,
+  inboxCount,
   chatOpen,
   onToggleChat,
   touchUiEnabled,
@@ -88,12 +100,14 @@ export const HUD: React.FC<HUDProps> = ({
   onOpenFarmModal,
   onOpenSkills,
   onOpenAreaSwitcher,
+  onOpenFriends,
+  onOpenInbox,
+  onOpenAuth,
   onFastForwardFarm,
 }) => {
   const [menuDropdownOpen, setMenuDropdownOpen] = useState(false);
   const [balanceModalOpen, setBalanceModalOpen] = useState(false);
   const [emoteOpen, setEmoteOpen] = useState(false);
-  const [unreadMail, setUnreadMail] = useState(true);
   const [previewDiff, setPreviewDiff] = useState<DifficultyMode>('normal');
   const [previewParty, setPreviewParty] = useState(2);
   const [now, setNow] = useState(() => Date.now());
@@ -264,19 +278,15 @@ export const HUD: React.FC<HUDProps> = ({
 
             <button
               type="button"
-              onClick={() => {
-                setUnreadMail(false);
-                EventBus.emit('ui:toast', {
-                  text: 'Mail: Visit MY KHMER HOME • FARM (top-left) to plant crops, raise livestock & craft Artisan goods!',
-                });
-              }}
+              onClick={onOpenInbox}
               aria-label="Mail Inbox"
+              title="Mail Inbox · Friend Requests & Dungeon Invites"
               className="stardew-btn relative p-2 rounded-xl shrink-0"
             >
               <Mail className="w-4 h-4" />
-              {unreadMail && (
-                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-600 text-white text-[10px] font-bold flex items-center justify-center border-2 border-amber-100">
-                  !
+              {inboxCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 min-w-4 h-4 px-1 rounded-full bg-red-600 text-white text-[10px] font-bold flex items-center justify-center border-2 border-amber-100 animate-bounce">
+                  {inboxCount > 9 ? '!' : inboxCount}
                 </span>
               )}
             </button>
@@ -348,6 +358,45 @@ export const HUD: React.FC<HUDProps> = ({
                   className="px-3 py-2 rounded-xl hover:bg-amber-200/80 text-left flex items-center gap-2 text-amber-950"
                 >
                   <Sparkles className="w-4 h-4 text-pink-700" /> Hair & Look Mirror
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuDropdownOpen(false);
+                    onOpenFriends();
+                  }}
+                  className="px-3 py-2 rounded-xl hover:bg-amber-200/80 text-left flex items-center justify-between gap-2 text-amber-950"
+                >
+                  <span className="flex items-center gap-2">
+                    <Users className="w-4 h-4 text-sky-700" /> Friends & Inbox
+                  </span>
+                  {inboxCount > 0 && (
+                    <span className="px-1.5 py-0.5 rounded-full bg-red-600 text-white text-[9px] font-bold">
+                      {inboxCount}
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuDropdownOpen(false);
+                    onOpenAuth();
+                  }}
+                  className="px-3 py-2 rounded-xl hover:bg-amber-200/80 text-left flex items-center justify-between gap-2 text-amber-950"
+                >
+                  <span className="flex items-center gap-2">
+                    {authUsername ? (
+                      <Cloud className="w-4 h-4 text-emerald-700" />
+                    ) : (
+                      <LogIn className="w-4 h-4 text-amber-800" />
+                    )}
+                    {authUsername ? `Account (${authUsername})` : 'Login / Cloud Save'}
+                  </span>
+                  {authUsername && (
+                    <span className="text-[9px] font-bold text-emerald-800">
+                      {saveStatus === 'saving' ? 'Saving...' : '☁ Saved'}
+                    </span>
+                  )}
                 </button>
                 <button
                   type="button"

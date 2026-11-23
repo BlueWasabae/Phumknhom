@@ -22,7 +22,7 @@ Check off each phase only after testing on **both Desktop and Mobile browsers** 
   - Build Boss #1 (*Sdech Kongkaeb — King Frog*) & Boss #5 (*Yeak Thmor — Stone Yaksha*) with Treasure Bags, cracked secret walls, and the No-Hit *Golden Frying Pan* Easter egg.
 - [x] **Phase 6 — Online Multiplayer Plaza (Colyseus)**
   - Real-time multi-channel `AREA 0` / `AREA 1` village plaza, synced movement, overhead chat bubbles, and emotes.
-- [ ] **Phase 7 — Accounts, Cloud Saves & Social (Supabase)**
+- [x] **Phase 7 — Accounts, Cloud Saves & Social (Supabase)**
   - Login/Register, persistent Coins/Gold/Diamonds, farm/machine timers, inventory, friends list, and tap-on-player menu.
 - [ ] **Phase 8 — Co-op Boss Raids, Open World & Side Activities**
   - 2–4 player scaled Boss Rooms, Endless Pagoda Tower, Riverside Fishing, Lucky Wheel, Pagoda Bundles, NPCs/Hearts, and Player Market (5% tax).

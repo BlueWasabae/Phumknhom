@@ -32,6 +32,7 @@ export class OverworldScene extends Phaser.Scene {
   private areaSignText!: Phaser.GameObjects.Text;
   private colliders!: Phaser.Physics.Arcade.StaticGroup;
   private remotePlayers = new Map<string, RemotePlayerEntity>();
+  private localPlayerId = '';
 
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keys!: Record<'W' | 'A' | 'S' | 'D' | 'E', Phaser.Input.Keyboard.Key>;
@@ -122,14 +123,31 @@ export class OverworldScene extends Phaser.Scene {
       }),
       EventBus.on('player:loadoutChanged', ({ loadout, playerState }) => {
         this.player.applyLoadoutUpdate(loadout, playerState);
-        roomClient.sendAppearance(loadout, playerState.name);
+        roomClient.sendAppearance(loadout, {
+          name: playerState.name,
+          level: playerState.level,
+          stylish: playerState.lifeStats.stylish,
+        });
       }),
       EventBus.on('player:stateSync', (nextState) => {
-        const nameChanged = this.player.state.name !== nextState.name;
+        const metaChanged =
+          this.player.state.name !== nextState.name ||
+          this.player.state.level !== nextState.level ||
+          this.player.state.lifeStats.stylish !== nextState.lifeStats.stylish;
         this.player.syncPlayerState(nextState);
-        if (nameChanged) {
-          roomClient.sendAppearance(this.player.state.loadout, nextState.name);
+        if (metaChanged) {
+          roomClient.sendAppearance(this.player.state.loadout, {
+            name: nextState.name,
+            level: nextState.level,
+            stylish: nextState.lifeStats.stylish,
+          });
         }
+      }),
+      EventBus.on('auth:identityChanged', ({ playerId, playerState }) => {
+        this.localPlayerId = playerId;
+        this.player.syncPlayerState(playerState);
+        const targetArea = channelToAreaId(playerState.areaChannel);
+        void this.connectToPlazaArea(targetArea, false);
       }),
       EventBus.on('network:switchArea', ({ areaId }) => {
         void this.connectToPlazaArea(areaId, true);
@@ -175,7 +193,10 @@ export class OverworldScene extends Phaser.Scene {
     const ok = await roomClient.joinPlaza(
       areaId,
       {
+        playerId: this.localPlayerId,
         name: this.player.state.name,
+        level: this.player.state.level,
+        stylish: this.player.state.lifeStats.stylish,
         x: this.player.x,
         y: this.player.y,
         facing: this.player.facing,

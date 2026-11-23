@@ -1,5 +1,6 @@
 import { Client, Room } from 'colyseus';
 import { PlazaState, RemotePlayer } from '../schema/PlazaState';
+import { presenceRegistry } from '../presence';
 
 export const ALLOWED_AREAS = ['AREA 0', 'AREA 1', 'AREA 2'] as const;
 export type AreaId = (typeof ALLOWED_AREAS)[number];
@@ -74,17 +75,30 @@ export class PlazaRoom extends Room<PlazaState> {
       }
     });
 
-    this.onMessage('updateAppearance', (client, payload: { appearanceJson?: string; name?: string }) => {
-      const player = this.state.players.get(client.sessionId);
-      if (!player || !payload || typeof payload !== 'object') return;
+    this.onMessage(
+      'updateAppearance',
+      (
+        client,
+        payload: { appearanceJson?: string; name?: string; level?: number; stylish?: number }
+      ) => {
+        const player = this.state.players.get(client.sessionId);
+        if (!player || !payload || typeof payload !== 'object') return;
 
-      if (typeof payload.appearanceJson === 'string') {
-        player.appearanceJson = sanitizeAppearance(payload.appearanceJson);
+        if (typeof payload.appearanceJson === 'string') {
+          player.appearanceJson = sanitizeAppearance(payload.appearanceJson);
+        }
+        if (typeof payload.name === 'string') {
+          player.name = sanitizeName(payload.name, player.name);
+          presenceRegistry.updateName(client.sessionId, player.name);
+        }
+        if (typeof payload.level === 'number' && Number.isFinite(payload.level)) {
+          player.level = Math.max(1, Math.min(100, Math.floor(payload.level)));
+        }
+        if (typeof payload.stylish === 'number' && Number.isFinite(payload.stylish)) {
+          player.stylish = Math.max(0, Math.floor(payload.stylish));
+        }
       }
-      if (typeof payload.name === 'string') {
-        player.name = sanitizeName(payload.name, player.name);
-      }
-    });
+    );
 
     this.onMessage('chat', (client, payload: { text?: string }) => {
       const player = this.state.players.get(client.sessionId);
@@ -123,12 +137,106 @@ export class PlazaRoom extends Room<PlazaState> {
         emoji,
       });
     });
+
+    // ==================== PHASE 7 SOCIAL ROUTING (WHISPER / FRIEND / DUNGEON INVITE) ====================
+
+    this.onMessage(
+      'whisper',
+      (client, payload: { targetName?: string; targetSessionId?: string; text?: string }) => {
+        const sender = this.state.players.get(client.sessionId);
+        if (!sender || typeof payload?.text !== 'string') return;
+
+        const text = payload.text.replace(/\s+/g, ' ').trim().slice(0, 120);
+        if (!text) return;
+
+        const targetRec = presenceRegistry.sendToTarget(
+          { sessionId: payload.targetSessionId, username: payload.targetName },
+          'whisper',
+          {
+            fromSessionId: client.sessionId,
+            fromName: sender.name,
+            toName: payload.targetName || '',
+            text,
+            timestamp: Date.now(),
+          }
+        );
+
+        if (!targetRec) {
+          client.send('socialNotice', {
+            text: `Player "${payload.targetName || 'Unknown'}" is currently offline or in a Dungeon/Farm.`,
+          });
+        }
+      }
+    );
+
+    this.onMessage(
+      'friendRequest',
+      (
+        client,
+        payload: { targetSessionId?: string; targetPlayerId?: string; targetName?: string; friendshipId?: string }
+      ) => {
+        const sender = this.state.players.get(client.sessionId);
+        if (!sender) return;
+        presenceRegistry.sendToTarget(
+          {
+            sessionId: payload.targetSessionId,
+            playerId: payload.targetPlayerId,
+            username: payload.targetName,
+          },
+          'friendRequest',
+          {
+            friendshipId: payload.friendshipId || '',
+            fromSessionId: client.sessionId,
+            fromPlayerId: sender.playerId,
+            fromName: sender.name,
+            timestamp: Date.now(),
+          }
+        );
+      }
+    );
+
+    this.onMessage(
+      'dungeonInvite',
+      (
+        client,
+        payload: { targetSessionId?: string; targetPlayerId?: string; targetName?: string; bossId?: string }
+      ) => {
+        const sender = this.state.players.get(client.sessionId);
+        if (!sender) return;
+        const delivered = presenceRegistry.sendToTarget(
+          {
+            sessionId: payload.targetSessionId,
+            playerId: payload.targetPlayerId,
+            username: payload.targetName,
+          },
+          'dungeonInvite',
+          {
+            inviteId: `inv_${Date.now()}_${client.sessionId.slice(0, 4)}`,
+            fromSessionId: client.sessionId,
+            fromPlayerId: sender.playerId,
+            fromName: sender.name,
+            areaId: this.state.areaId,
+            bossId: payload.bossId || 'sdech_kongkaeb',
+            timestamp: Date.now(),
+          }
+        );
+
+        client.send('socialNotice', {
+          text: delivered
+            ? `Sent Dungeon Party Invite to ${delivered.username}!`
+            : `${payload.targetName || 'Player'} is not currently in the Plaza.`,
+        });
+      }
+    );
   }
 
   onJoin(
     client: Client,
     options?: {
+      playerId?: string;
       name?: string;
+      level?: number;
+      stylish?: number;
       x?: number;
       y?: number;
       facing?: string;
@@ -138,7 +246,10 @@ export class PlazaRoom extends Room<PlazaState> {
   ): void {
     const player = new RemotePlayer();
     player.sessionId = client.sessionId;
+    player.playerId = typeof options?.playerId === 'string' ? options.playerId.slice(0, 64) : '';
     player.name = sanitizeName(options?.name, `Villager_${client.sessionId.slice(0, 4)}`);
+    player.level = typeof options?.level === 'number' ? Math.max(1, Math.floor(options.level)) : 1;
+    player.stylish = typeof options?.stylish === 'number' ? Math.max(0, Math.floor(options.stylish)) : 168;
     player.x = clamp(typeof options?.x === 'number' ? options.x : 480, MAP_MIN_X, MAP_MAX_X);
     player.y = clamp(typeof options?.y === 'number' ? options.y : 405, MAP_MIN_Y, MAP_MAX_Y);
     player.facing =
@@ -150,10 +261,18 @@ export class PlazaRoom extends Room<PlazaState> {
     player.areaId = this.state.areaId;
 
     this.state.players.set(client.sessionId, player);
+    presenceRegistry.register({
+      sessionId: client.sessionId,
+      playerId: player.playerId,
+      username: player.name,
+      areaId: this.state.areaId,
+      client,
+    });
   }
 
   onLeave(client: Client): void {
     this.state.players.delete(client.sessionId);
+    presenceRegistry.unregister(client.sessionId);
     this.lastChatAt.delete(client.sessionId);
     this.lastEmoteAt.delete(client.sessionId);
   }
