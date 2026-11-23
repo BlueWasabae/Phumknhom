@@ -1,4 +1,11 @@
-import type { CombatHitResult, EmoteSymbol, PlayerState, ZoneType } from '@shared/types';
+import type {
+  CombatHitResult,
+  EmoteSymbol,
+  EquippedLoadout,
+  KhmerClassId,
+  PlayerState,
+  ZoneType,
+} from '@shared/types';
 
 export interface JoystickVector {
   x: number; // -1..1
@@ -11,19 +18,33 @@ export interface PortalProximityPayload {
   targetZone: ZoneType;
 }
 
+export interface ClassMeterPayload {
+  classId: KhmerClassId;
+  stealthPct: number;       // 0..100 (Shadow Hunter)
+  yantStacks: number;       // 0..3   (Achar Mystic)
+  lbokatorStance: number;   // 1=Lion, 2=Crocodile, 3=Hanuman
+}
+
 export interface EventMap {
   'scene:ready': { zone: ZoneType };
   'player:state': PlayerState;
+  'player:loadoutChanged': {
+    loadout: EquippedLoadout;
+    activeClass: KhmerClassId;
+    playerState: PlayerState;
+  };
   'player:chat': { text: string };
   'player:emote': { emoji: EmoteSymbol };
   'portal:proximity': PortalProximityPayload;
   'combat:hit': { hit: CombatHitResult; dummyHp: number; dummyMaxHp: number };
+  'combat:classMeter': ClassMeterPayload;
   'mobile:joystick': JoystickVector;
   'input:interact': void;
   'input:jump': void;
   'input:attack': void;
   'input:dash': void;
   'input:exitDungeon': void;
+  'ui:openModal': { modal: 'profile' | 'inventory' | 'wardrobe' };
   'ui:toast': { text: string };
 }
 

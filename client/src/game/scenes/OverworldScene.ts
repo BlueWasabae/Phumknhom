@@ -108,6 +108,9 @@ export class OverworldScene extends Phaser.Scene {
       EventBus.on('player:emote', ({ emoji }) => {
         this.player.showEmote(emoji, 3000);
       }),
+      EventBus.on('player:loadoutChanged', ({ loadout, playerState }) => {
+        this.player.applyLoadoutUpdate(loadout, playerState);
+      }),
       EventBus.on('input:interact', () => {
         this.tryInteractNearest();
       })
@@ -371,10 +374,10 @@ export class OverworldScene extends Phaser.Scene {
     this.landmarks.push({
       x: 705,
       y: 368,
-      radius: 50,
-      label: 'Plaza Fashion Boutique (Paper-Doll Outfits in Phase 2)',
+      radius: 52,
+      label: 'Press [E] or Tap Interact → Fashion Mirror & Hair Salon',
       isDungeonPortal: false,
-      onInteract: () => EventBus.emit('ui:toast', { text: 'FASHION SHOP — 9-Layer Modular Paper-Doll unlocks in Phase 2!' }),
+      onInteract: () => EventBus.emit('ui:openModal', { modal: 'wardrobe' }),
     });
 
     // 5. ANGKOR DUNGEON PORTAL (Top-Right, Custom Angkor Wat Portal + Glow + Bouncing JOIN Arrow)

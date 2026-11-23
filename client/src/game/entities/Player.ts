@@ -1,44 +1,28 @@
 import Phaser from 'phaser';
-import type { PlayerState, ZoneType } from '@shared/types';
+import type { EquippedLoadout, PlayerState, ZoneType } from '@shared/types';
+import { PaperDoll, type PaperDollFacing, type PaperDollPose } from './PaperDoll';
+import { Pet } from './Pet';
 
-export type FacingDirection = 'down' | 'up' | 'left' | 'right';
-
-const IDLE_FRAME: Record<FacingDirection, number> = {
-  down: 0,
-  up: 1,
-  left: 2,
-  right: 3,
-};
-
-const ATTACK_FRAME: Record<FacingDirection, number> = {
-  down: 16,
-  up: 17,
-  left: 18,
-  right: 19,
-};
-
-const JUMP_FRAME: Record<FacingDirection, number> = {
-  down: 20,
-  up: 21,
-  left: 22,
-  right: 23,
-};
+export type FacingDirection = PaperDollFacing;
 
 /**
- * Real 4-directional animated Ninja Adventure chibi sprite (16x16)
- * with soft elliptical ground shadow, crisp zoom-aware nameplate,
- * 4.5s white rounded speech bubble, and 3s floating emoji emote.
+ * Unified Player entity hosting:
+ * - Invisible Arcade Physics body (foot collider in Overworld, full platformer body in Dungeon)
+ * - 8-layer modular chibi PaperDoll Container
+ * - Companion Pet entity (with bobbing follow & Barami Spirit Tamer dungeon auto-attack)
+ * - Soft oval ground shadow, nameplate, 4.5s overhead speech bubble, and 3s floating emote
  */
 export class Player {
   public readonly sprite: Phaser.Physics.Arcade.Sprite;
   public readonly body: Phaser.Physics.Arcade.Body;
   public readonly shadow: Phaser.GameObjects.Image;
+  public readonly paperDoll: PaperDoll;
+  public readonly pet: Pet;
   public state: PlayerState;
   public facing: FacingDirection = 'down';
 
   private scene: Phaser.Scene;
   private zone: ZoneType;
-  private spriteScale: number;
   private uiScale: number;
   private nameTag: Phaser.GameObjects.Text;
   private bubbleBg: Phaser.GameObjects.Graphics;
@@ -47,6 +31,7 @@ export class Player {
 
   private bubbleExpiresAt = 0;
   private emoteExpiresAt = 0;
+  private currentPose: PaperDollPose = 'idle';
 
   constructor(
     scene: Phaser.Scene,
@@ -56,32 +41,50 @@ export class Player {
     zone: ZoneType
   ) {
     this.scene = scene;
-    this.state = { ...state, zone, weapon: { ...state.weapon } };
+    this.state = {
+      ...state,
+      zone,
+      weapon: { ...state.weapon },
+      loadout: { ...state.loadout },
+      currencies: { ...state.currencies },
+      lifeStats: { ...state.lifeStats },
+    };
     this.zone = zone;
     this.facing = zone === 'dungeon' ? 'right' : 'down';
-
-    // Native 16x16 (1x) in zoomed Overworld (camera zoom 2.5x-2.8x) | 2.6x in side-scroll Dungeon
-    this.spriteScale = zone === 'overworld' ? 1.15 : 2.65;
     this.uiScale = zone === 'overworld' ? 0.44 : 1;
 
-    this.shadow = scene.add
-      .image(x, y + (zone === 'overworld' ? 8 : 20), 'soft_shadow')
-      .setScale(zone === 'overworld' ? 0.34 : 0.72)
-      .setDepth(zone === 'overworld' ? y + 6 : 48);
-
-    this.sprite = scene.physics.add.sprite(x, y, 'player_boy', IDLE_FRAME[this.facing]);
-    this.sprite.setScale(this.spriteScale);
+    // Invisible physics anchor sprite carrying the Arcade body
+    this.sprite = scene.physics.add.sprite(x, y, 'player_boy', 0);
+    this.sprite.setVisible(false);
     this.sprite.setCollideWorldBounds(true);
 
     if (zone === 'overworld') {
+      this.sprite.setScale(1.15);
       this.sprite.setSize(10, 6).setOffset(3, 10);
     } else {
+      this.sprite.setScale(2.65);
       this.sprite.setSize(10, 14).setOffset(3, 2);
-      this.sprite.setDepth(50);
     }
-
     this.body = this.sprite.body as Phaser.Physics.Arcade.Body;
 
+    // Soft elliptical ground shadow
+    this.shadow = scene.add
+      .image(x, y + (zone === 'overworld' ? 8 : 20), 'soft_shadow')
+      .setScale(zone === 'overworld' ? 0.36 : 0.78)
+      .setDepth(zone === 'overworld' ? y + 6 : 48);
+
+    // 8-Layer Modular Chibi Paper-Doll
+    const dollScale = zone === 'overworld' ? 0.42 : 0.96;
+    this.paperDoll = new PaperDoll(scene, x, y, this.state.loadout, `pd_${zone}`);
+    this.paperDoll.setScale(dollScale);
+    if (zone === 'dungeon') {
+      this.paperDoll.setDepth(50);
+    }
+
+    // Companion Pet Entity
+    this.pet = new Pet(scene, x - 20, y, this.state.loadout.pet, zone, `pet_${zone}`);
+
+    // Nameplate + Overhead Speech Bubble + Emote
     this.nameTag = scene.add
       .text(x, y + 14, this.state.name, {
         fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
@@ -133,7 +136,20 @@ export class Player {
     return this.facing !== 'left';
   }
 
-  showSpeechBubble(text: string, durationMs = 4500): void {
+  public applyLoadoutUpdate(loadout: EquippedLoadout, nextState: PlayerState): void {
+    this.state = {
+      ...nextState,
+      zone: this.zone,
+      weapon: { ...nextState.weapon },
+      loadout: { ...loadout },
+      currencies: { ...nextState.currencies },
+      lifeStats: { ...nextState.lifeStats },
+    };
+    this.paperDoll.setLoadout(loadout);
+    this.pet.setPet(loadout.pet);
+  }
+
+  public showSpeechBubble(text: string, durationMs = 4500): void {
     const clean = text.trim().slice(0, 120);
     if (!clean) return;
     this.bubbleText.setText(clean).setVisible(true);
@@ -141,46 +157,46 @@ export class Player {
     this.bubbleExpiresAt = this.scene.time.now + durationMs;
   }
 
-  showEmote(emoji: string, durationMs = 3000): void {
+  public showEmote(emoji: string, durationMs = 3000): void {
     this.emoteText.setText(emoji).setVisible(true);
     this.emoteExpiresAt = this.scene.time.now + durationMs;
   }
 
-  playStateAnimation(mode: 'idle' | 'walk' | 'jump' | 'attack'): void {
+  public playStateAnimation(mode: 'idle' | 'walk' | 'jump' | 'attack'): void {
     if (mode === 'walk') {
-      const animKey = `boy_walk_${this.facing}`;
-      if (this.sprite.anims.currentAnim?.key !== animKey || !this.sprite.anims.isPlaying) {
-        this.sprite.play(animKey, true);
-      }
-      return;
-    }
-
-    this.sprite.anims.stop();
-    if (mode === 'attack') {
-      this.sprite.setFrame(ATTACK_FRAME[this.facing]);
+      this.currentPose = Math.floor(this.scene.time.now / 150) % 2 === 0 ? 'walk1' : 'walk2';
+    } else if (mode === 'attack') {
+      this.currentPose = 'attack';
     } else if (mode === 'jump') {
-      this.sprite.setFrame(JUMP_FRAME[this.facing]);
+      this.currentPose = 'jump';
     } else {
-      this.sprite.setFrame(IDLE_FRAME[this.facing]);
+      this.currentPose = 'idle';
     }
   }
 
-  syncVisuals(time: number, onGround = true): void {
+  public syncVisuals(time: number, onGround = true): void {
+    const dollOffsetY = this.zone === 'overworld' ? 8 : 20;
+    this.paperDoll.setPosition(this.sprite.x, this.sprite.y + dollOffsetY);
+    this.paperDoll.setPoseAndFacing(this.currentPose, this.facing, time);
+
     if (this.zone === 'overworld') {
       const depth = this.sprite.y + 9;
-      this.sprite.setDepth(depth);
+      this.paperDoll.setDepth(depth);
       this.shadow.setPosition(this.sprite.x, this.sprite.y + 8).setDepth(depth - 1);
-      this.nameTag.setPosition(this.sprite.x, this.sprite.y + 10);
+      this.nameTag.setPosition(this.sprite.x, this.sprite.y + 11);
     } else {
+      this.paperDoll.setDepth(50);
       this.shadow
         .setPosition(this.sprite.x, this.sprite.y + 21)
         .setDepth(48)
-        .setScale(onGround ? 0.72 : 0.44)
+        .setScale(onGround ? 0.78 : 0.45)
         .setAlpha(onGround ? 0.92 : 0.35);
       this.nameTag.setPosition(this.sprite.x, this.sprite.y + 25);
     }
 
-    const offsetY = this.zone === 'overworld' ? -13 : -28;
+    this.pet.update(time, this.sprite.x, this.sprite.y, this.facingRight);
+
+    const offsetY = this.zone === 'overworld' ? -16 : -34;
     const s = this.uiScale;
 
     if (this.bubbleExpiresAt > 0) {
@@ -230,7 +246,9 @@ export class Player {
     }
   }
 
-  destroy(): void {
+  public destroy(): void {
+    this.paperDoll.destroy();
+    this.pet.destroy();
     this.shadow.destroy();
     this.nameTag.destroy();
     this.bubbleBg.destroy();

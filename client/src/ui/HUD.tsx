@@ -1,13 +1,14 @@
-import React, { useEffect, useId, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import type { CombatHitResult, DifficultyMode, EmoteSymbol, PlayerState, ZoneType } from '@shared/types';
 import {
   calculateCoopBossHp,
   calculateDamageTaken,
   calculateEffectiveDR,
   calculatePlayerDamage,
-  getXpForNextLevel,
 } from '@shared/balanceFormulas';
+import { KHMER_CLASSES } from '@shared/khmerClasses';
 import {
+  Backpack,
   Coins,
   Gamepad2,
   Heart,
@@ -15,10 +16,12 @@ import {
   Menu,
   MessageCircle,
   Smile,
+  Sparkles,
   Swords,
-  X,
+  User,
 } from 'lucide-react';
-import { EventBus } from '../game/EventBus';
+import { EventBus, type ClassMeterPayload } from '../game/EventBus';
+import { NativeDialog } from './NativeDialog';
 
 interface HUDProps {
   player: PlayerState;
@@ -28,6 +31,10 @@ interface HUDProps {
   touchUiEnabled: boolean;
   onToggleTouchUi: () => void;
   lastHit: CombatHitResult | null;
+  classMeter: ClassMeterPayload;
+  onOpenProfile: () => void;
+  onOpenInventory: () => void;
+  onOpenWardrobe: () => void;
 }
 
 const EMOTES: EmoteSymbol[] = ['👋', '😄', '❤️', '🔥'];
@@ -41,63 +48,20 @@ export const HUD: React.FC<HUDProps> = ({
   touchUiEnabled,
   onToggleTouchUi,
   lastHit,
+  classMeter,
+  onOpenProfile,
+  onOpenInventory,
+  onOpenWardrobe,
 }) => {
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuDropdownOpen, setMenuDropdownOpen] = useState(false);
+  const [balanceModalOpen, setBalanceModalOpen] = useState(false);
   const [emoteOpen, setEmoteOpen] = useState(false);
   const [unreadMail, setUnreadMail] = useState(true);
   const [previewDiff, setPreviewDiff] = useState<DifficultyMode>('normal');
   const [previewParty, setPreviewParty] = useState(2);
 
-  const dialogRef = useRef<HTMLDialogElement>(null);
-  const titleId = useId();
-
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-    if (menuOpen && !dialog.open) dialog.showModal();
-    else if (!menuOpen && dialog.open) dialog.close();
-  }, [menuOpen]);
-
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-
-    const onClose = () => {
-      dialog.returnValue = '';
-      setMenuOpen(false);
-    };
-    dialog.addEventListener('close', onClose);
-
-    // Light-dismiss fallback for browsers without <dialog closedby> (e.g., Safari)
-    let cleanupFallback: (() => void) | undefined;
-    if (!('closedBy' in HTMLDialogElement.prototype)) {
-      let pressedOutside = false;
-      const outside = (e: PointerEvent) => {
-        const r = dialog.getBoundingClientRect();
-        return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
-      };
-      const down = (e: PointerEvent) => {
-        pressedOutside = outside(e);
-      };
-      const up = (e: PointerEvent) => {
-        if (pressedOutside && outside(e) && dialog.open) dialog.close();
-      };
-      dialog.addEventListener('pointerdown', down);
-      dialog.addEventListener('pointerup', up);
-      cleanupFallback = () => {
-        dialog.removeEventListener('pointerdown', down);
-        dialog.removeEventListener('pointerup', up);
-      };
-    }
-
-    return () => {
-      dialog.removeEventListener('close', onClose);
-      cleanupFallback?.();
-    };
-  }, []);
-
-  const xpNeeded = getXpForNextLevel(player.level);
   const hpPct = Math.max(0, Math.min(100, (player.hp / Math.max(1, player.maxHp)) * 100));
+  const activeClassDef = KHMER_CLASSES[player.activeClass];
 
   const sampleHit = calculatePlayerDamage({
     weaponBase: player.weapon.baseDamage,
@@ -106,7 +70,7 @@ export const HUD: React.FC<HUDProps> = ({
     skillPct: player.skillDamagePct,
     armorPct: player.armorDamagePct,
     snackBuffPct: player.snackBuffPct,
-    enemyDefense: 6,
+    enemyDefense: 8,
     armorPen: player.weapon.armorPen,
     isCritOverride: false,
     rng: () => 0.5,
@@ -118,7 +82,7 @@ export const HUD: React.FC<HUDProps> = ({
     skillPct: player.skillDamagePct,
     armorPct: player.armorDamagePct,
     snackBuffPct: player.snackBuffPct,
-    enemyDefense: 6,
+    enemyDefense: 8,
     armorPen: player.weapon.armorPen,
     isCritOverride: true,
     rng: () => 0.5,
@@ -131,6 +95,13 @@ export const HUD: React.FC<HUDProps> = ({
     difficulty: previewDiff,
   });
   const sampleCoopBossHp = calculateCoopBossHp(4500, previewParty, previewDiff);
+
+  const stanceLabel =
+    classMeter.lbokatorStance === 3
+      ? 'Hanuman Slam'
+      : classMeter.lbokatorStance === 2
+      ? 'Crocodile Pierce'
+      : 'Lion Strike';
 
   const zonePill = (
     <div className="pointer-events-auto stardew-panel px-2.5 sm:px-3.5 py-1 rounded-2xl flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1 text-xs max-w-full">
@@ -149,7 +120,7 @@ export const HUD: React.FC<HUDProps> = ({
       <div className="flex items-center gap-2 shrink-0">
         <div className="flex items-center gap-1">
           <Heart className="w-3.5 h-3.5 text-rose-600 fill-rose-500 shrink-0" />
-          <div className="w-16 sm:w-24 h-2.5 rounded-full bg-amber-950/30 border border-amber-950/70 overflow-hidden">
+          <div className="w-16 sm:w-20 h-2.5 rounded-full bg-amber-950/30 border border-amber-950/70 overflow-hidden">
             <div
               className="h-full bg-gradient-to-r from-red-600 to-rose-400 transition-all"
               style={{ width: `${hpPct}%` }}
@@ -170,14 +141,13 @@ export const HUD: React.FC<HUDProps> = ({
 
   return (
     <>
-      {/* Fixed responsive HUD container: inset-x-0 top-0 px-3 pt-2 — guaranteed zero right-edge clipping */}
       <div className="pointer-events-none fixed inset-x-0 top-0 z-20 w-full max-w-full box-border px-3 pt-2 flex flex-col gap-1.5">
         <div className="w-full flex items-center justify-between gap-2 min-w-0">
-          {/* TOP-LEFT: MENU, Mail (red ! dot), Chat toggle */}
-          <div className="pointer-events-auto flex items-center gap-1.5 shrink-0">
+          {/* TOP-LEFT: MENU dropdown, Quick Bag (I), Mail (!), Chat */}
+          <div className="pointer-events-auto flex items-center gap-1.5 shrink-0 relative">
             <button
               type="button"
-              onClick={() => setMenuOpen(true)}
+              onClick={() => setMenuDropdownOpen((o) => !o)}
               className="stardew-btn px-2.5 sm:px-3 py-1.5 rounded-xl font-display font-bold text-xs sm:text-sm flex items-center gap-1.5 shrink-0"
             >
               <Menu className="w-4 h-4 shrink-0" />
@@ -186,10 +156,20 @@ export const HUD: React.FC<HUDProps> = ({
 
             <button
               type="button"
+              onClick={onOpenInventory}
+              aria-label="Inventory (I)"
+              title="Inventory · Wearing & Container (I / B)"
+              className="stardew-btn p-2 rounded-xl shrink-0"
+            >
+              <Backpack className="w-4 h-4" />
+            </button>
+
+            <button
+              type="button"
               onClick={() => {
                 setUnreadMail(false);
                 EventBus.emit('ui:toast', {
-                  text: 'Mail: Welcome to ភូមិខ្ញុំ! Walk top-right to enter the Cave Dungeon.',
+                  text: 'Mail: All 5 Khmer Class Weapons & Cosmetics are ready in your Container (press I)!',
                 });
               }}
               aria-label="Mail Inbox"
@@ -211,9 +191,54 @@ export const HUD: React.FC<HUDProps> = ({
             >
               <MessageCircle className="w-4 h-4" />
             </button>
+
+            {menuDropdownOpen && (
+              <div className="absolute left-0 top-12 w-52 stardew-panel rounded-2xl p-1.5 z-30 flex flex-col gap-1 text-xs font-display font-bold">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuDropdownOpen(false);
+                    onOpenProfile();
+                  }}
+                  className="px-3 py-2 rounded-xl hover:bg-amber-200/80 text-left flex items-center gap-2 text-amber-950"
+                >
+                  <User className="w-4 h-4 text-amber-800" /> Profile Card (5 Stats)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuDropdownOpen(false);
+                    onOpenInventory();
+                  }}
+                  className="px-3 py-2 rounded-xl hover:bg-amber-200/80 text-left flex items-center gap-2 text-amber-950"
+                >
+                  <Backpack className="w-4 h-4 text-emerald-800" /> Inventory (I / B)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuDropdownOpen(false);
+                    onOpenWardrobe();
+                  }}
+                  className="px-3 py-2 rounded-xl hover:bg-amber-200/80 text-left flex items-center gap-2 text-amber-950"
+                >
+                  <Sparkles className="w-4 h-4 text-pink-700" /> Hair & Look Mirror
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuDropdownOpen(false);
+                    setBalanceModalOpen(true);
+                  }}
+                  className="px-3 py-2 rounded-xl hover:bg-amber-200/80 text-left flex items-center gap-2 text-amber-950"
+                >
+                  <Swords className="w-4 h-4 text-purple-800" /> Balance Math Test
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* TOP-CENTER (inline on lg+, drops cleanly to centered second row on smaller screens) */}
+          {/* TOP-CENTER */}
           <div className="hidden lg:flex justify-center min-w-0 flex-1 px-2">
             {zonePill}
           </div>
@@ -261,137 +286,133 @@ export const HUD: React.FC<HUDProps> = ({
           </div>
         </div>
 
-        <div className="flex lg:hidden justify-center w-full">
-          {zonePill}
-        </div>
-      </div>
+        <div className="flex lg:hidden justify-center w-full">{zonePill}</div>
 
-      {/* WARM-WOOD STARDEW-STYLED PHASE 1.5 MENU MODAL */}
-      <dialog
-        ref={dialogRef}
-        aria-labelledby={titleId}
-        {...({ closedby: 'any' } as Record<string, string>)}
-        className="m-auto rounded-2xl overflow-visible shadow-2xl"
-      >
-        <div className="w-[min(92vw,480px)] stardew-panel rounded-2xl overflow-hidden">
-          <div className="px-4 py-3 stardew-wood flex items-center justify-between">
-            <div>
-              <h2 id={titleId} className="font-display font-bold text-base text-amber-100">
-                ភូមិខ្ញុំ · Character & Balance Journal
-              </h2>
-              <p className="text-[11px] text-amber-200/85">
-                {player.name} · Phase 1.5 Pixel-Art Edition
-              </p>
-            </div>
-            <form method="dialog">
-              <button
-                type="submit"
-                aria-label="Close Menu"
-                className="p-1.5 rounded-lg bg-amber-950/60 hover:bg-red-700 text-amber-100 transition"
+        {/* DUNGEON CLASS & SPECIAL MECHANIC METER (Stealth / Yant Sigils / Animal Stance) */}
+        {zone === 'dungeon' && (
+          <div className="flex justify-center w-full">
+            <div className="pointer-events-auto stardew-panel px-3 py-1 rounded-full flex items-center gap-2.5 text-[11px] font-display font-bold">
+              <span
+                className="px-2 py-0.5 rounded-full text-amber-50"
+                style={{ backgroundColor: activeClassDef.badgeBg }}
               >
-                <X className="w-4 h-4" />
-              </button>
-            </form>
-          </div>
+                {activeClassDef.khmerName} · {player.weapon.name}
+              </span>
 
-          <div className="p-4 space-y-3.5 text-xs">
-            <div className="grid grid-cols-3 gap-2 text-center">
-              <div className="p-2.5 rounded-xl bg-amber-50/90 border-2 border-amber-900/35">
-                <div className="text-[10px] font-semibold text-amber-800">Level & XP</div>
-                <div className="font-display font-bold text-sm text-amber-950">Lv. {player.level}</div>
-                <div className="text-[10px] text-amber-800">
-                  {player.xp} / {xpNeeded} XP
-                </div>
-              </div>
-              <div className="p-2.5 rounded-xl bg-amber-50/90 border-2 border-rose-800/35">
-                <div className="text-[10px] font-semibold text-rose-900">Vitality</div>
-                <div className="font-display font-bold text-sm text-rose-700">
-                  {player.hp}/{player.maxHp}
-                </div>
-                <div className="text-[10px] text-amber-900">DEF {player.defense}</div>
-              </div>
-              <div className="p-2.5 rounded-xl bg-amber-50/90 border-2 border-amber-700/40">
-                <div className="text-[10px] font-semibold text-amber-800">Coins</div>
-                <div className="font-display font-bold text-sm text-amber-900">
-                  {player.coins.toLocaleString()}
-                </div>
-                <div className="text-[10px] text-amber-800 truncate">
-                  {player.weapon.name} +{player.weapon.upgradeLevel}
-                </div>
-              </div>
-            </div>
-
-            <div className="p-3 rounded-xl bg-amber-100/80 border-2 border-amber-900/35 space-y-2.5">
-              <div className="font-display font-bold text-amber-950 flex items-center gap-1.5">
-                <Swords className="w-4 h-4 text-amber-800" />
-                <span>@shared/balanceFormulas Live Test</span>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-1">
-                {DIFFICULTIES.map((d) => (
-                  <button
-                    key={d}
-                    type="button"
-                    onClick={() => setPreviewDiff(d)}
-                    className={`px-2 py-0.5 rounded-lg uppercase text-[10px] font-bold border ${
-                      previewDiff === d
-                        ? 'bg-amber-800 text-amber-50 border-amber-950'
-                        : 'bg-amber-50 text-amber-900 border-amber-900/30'
-                    }`}
-                  >
-                    {d}
-                  </button>
-                ))}
-                <span className="ml-auto text-[11px] font-semibold text-amber-900">Party:</span>
-                {[1, 2, 3, 4].map((p) => (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={() => setPreviewParty(p)}
-                    className={`w-6 h-6 rounded-lg font-bold text-[11px] border ${
-                      previewParty === p
-                        ? 'bg-purple-700 text-white border-purple-950'
-                        : 'bg-amber-50 text-amber-900 border-amber-900/30'
-                    }`}
-                  >
-                    {p}
-                  </button>
-                ))}
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 text-[11px]">
-                <div className="p-2 rounded-lg bg-amber-50/95 border border-amber-900/25">
-                  <div className="text-amber-800/80">Expected Swing / Crit</div>
-                  <div className="font-bold text-amber-950">
-                    {sampleHit.finalDamage} dmg / <span className="text-orange-700">{sampleCrit.finalDamage} CRIT</span>
+              {player.activeClass === 'shadow' && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-purple-900">Stealth</span>
+                  <div className="w-24 h-2.5 rounded-full bg-purple-950/25 border border-purple-900 overflow-hidden">
+                    <div
+                      className={`h-full transition-all ${
+                        classMeter.stealthPct >= 100
+                          ? 'bg-gradient-to-r from-purple-600 via-fuchsia-400 to-purple-600 animate-pulse'
+                          : 'bg-purple-600'
+                      }`}
+                      style={{ width: `${classMeter.stealthPct}%` }}
+                    />
                   </div>
+                  <span className={classMeter.stealthPct >= 100 ? 'text-purple-700 animate-pulse' : 'text-amber-900'}>
+                    {classMeter.stealthPct >= 100 ? 'STRIKE READY!' : `${classMeter.stealthPct}%`}
+                  </span>
                 </div>
-                <div className="p-2 rounded-lg bg-amber-50/95 border border-amber-900/25">
-                  <div className="text-amber-800/80">Effective DR (25% Raw)</div>
-                  <div className="font-bold text-emerald-800">{sampleEffectiveDr}% Diminishing</div>
-                </div>
-                <div className="p-2 rounded-lg bg-amber-50/95 border border-amber-900/25">
-                  <div className="text-amber-800/80">Boss Hit Taken (24 ATK)</div>
-                  <div className="font-bold text-rose-700">
-                    -{sampleDamageTaken} HP ({previewDiff})
-                  </div>
-                </div>
-                <div className="p-2 rounded-lg bg-amber-50/95 border border-amber-900/25">
-                  <div className="text-amber-800/80">Co-op Boss HP (4,500 base)</div>
-                  <div className="font-bold text-purple-800">{sampleCoopBossHp.toLocaleString()} HP</div>
-                </div>
-              </div>
+              )}
 
-              {lastHit && (
-                <div className="text-[11px] text-amber-950 pt-1.5 border-t border-amber-900/20">
-                  Last Hit: <strong>{lastHit.finalDamage}</strong>
-                  {lastHit.isCrit ? ' (CRIT 1.75×)' : ''} · raw {lastHit.rawDamage} · variance ×{lastHit.varianceMultiplier}
-                </div>
+              {player.activeClass === 'mystic' && (
+                <span className="text-amber-800">
+                  Yant Sigils: {'✦'.repeat(classMeter.yantStacks)}
+                  {'✧'.repeat(Math.max(0, 3 - classMeter.yantStacks))} ({classMeter.yantStacks}/3)
+                </span>
+              )}
+
+              {player.activeClass === 'lbokator' && (
+                <span className="text-orange-800">Next Stance: {stanceLabel}</span>
+              )}
+
+              {player.activeClass === 'tamer' && (
+                <span className="text-emerald-800">Spirit Pact Active</span>
+              )}
+
+              {player.activeClass === 'archer' && (
+                <span className="text-emerald-800">Elemental Quiver · Shift = Backflip Shot</span>
               )}
             </div>
           </div>
+        )}
+      </div>
+
+      {/* Balance Formula Tester Modal */}
+      <NativeDialog
+        open={balanceModalOpen}
+        onClose={() => setBalanceModalOpen(false)}
+        title="@shared/balanceFormulas Live Test"
+        subtitle="Exact formulas from docs/GDD_SYSTEMS_SKILLS_AND_BALANCE.md"
+        maxWidthClass="w-[min(92vw,470px)]"
+      >
+        <div className="space-y-3 text-xs">
+          <div className="flex flex-wrap items-center gap-1">
+            {DIFFICULTIES.map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setPreviewDiff(d)}
+                className={`px-2 py-0.5 rounded-lg uppercase text-[10px] font-bold border ${
+                  previewDiff === d
+                    ? 'bg-amber-800 text-amber-50 border-amber-950'
+                    : 'bg-amber-50 text-amber-900 border-amber-900/30'
+                }`}
+              >
+                {d}
+              </button>
+            ))}
+            <span className="ml-auto text-[11px] font-semibold text-amber-900">Party:</span>
+            {[1, 2, 3, 4].map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setPreviewParty(p)}
+                className={`w-6 h-6 rounded-lg font-bold text-[11px] border ${
+                  previewParty === p
+                    ? 'bg-purple-700 text-white border-purple-950'
+                    : 'bg-amber-50 text-amber-900 border-amber-900/30'
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 text-[11px]">
+            <div className="p-2 rounded-lg bg-amber-50 border border-amber-900/25">
+              <div className="text-amber-800/80">Expected Swing / Crit</div>
+              <div className="font-bold text-amber-950">
+                {sampleHit.finalDamage} dmg / <span className="text-orange-700">{sampleCrit.finalDamage} CRIT</span>
+              </div>
+            </div>
+            <div className="p-2 rounded-lg bg-amber-50 border border-amber-900/25">
+              <div className="text-amber-800/80">Effective DR (25% Raw)</div>
+              <div className="font-bold text-emerald-800">{sampleEffectiveDr}% Diminishing</div>
+            </div>
+            <div className="p-2 rounded-lg bg-amber-50 border border-amber-900/25">
+              <div className="text-amber-800/80">Boss Hit Taken (24 ATK)</div>
+              <div className="font-bold text-rose-700">
+                -{sampleDamageTaken} HP ({previewDiff})
+              </div>
+            </div>
+            <div className="p-2 rounded-lg bg-amber-50 border border-amber-900/25">
+              <div className="text-amber-800/80">Co-op Boss HP (4,500 base)</div>
+              <div className="font-bold text-purple-800">{sampleCoopBossHp.toLocaleString()} HP</div>
+            </div>
+          </div>
+
+          {lastHit && (
+            <div className="text-[11px] text-amber-950 pt-1.5 border-t border-amber-900/20">
+              Last Hit: <strong>{lastHit.finalDamage}</strong>
+              {lastHit.isCrit ? ' (CRIT 1.75×)' : ''} · raw {lastHit.rawDamage} · variance ×{lastHit.varianceMultiplier}
+            </div>
+          )}
         </div>
-      </dialog>
+      </NativeDialog>
     </>
   );
 };

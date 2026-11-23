@@ -7,7 +7,7 @@ Check off each phase only after testing on **both Desktop and Mobile browsers** 
   - Top-Down Village (`gravity = 0`) + yellow `join` portal → Side-Scrolling Dungeon (`gravity = 800`) + Exit portal.
   - Responsive PC (`WASD`/Arrows + `Space` + `E`) and Mobile touch joystick + action buttons.
   - Local overhead chat speech bubble (4-second display).
-- [ ] **Phase 2 — Avatar World HUD & Character Paper-Doll**
+- [x] **Phase 2 — Avatar World HUD & Character Paper-Doll**
   - Top-left `MENU` / Mail / Chat and top-right Action / Emote HUD.
   - Modular paper-doll sprite renderer (`Wings -> Body -> Face -> Pants -> Shirt -> Hair -> Hat -> Weapon -> Pet`).
   - Profile Card (`Farm Level`, `Stylish`, `Friendly`, `Happy`, `Healthy`) & `Wearing`/`Container` inventory tabs.
