@@ -1,0 +1,116 @@
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  INITIAL_PLAYER_STATE,
+  type ChatMessage,
+  type CombatHitResult,
+  type PlayerState,
+  type ZoneType,
+} from '@shared/types';
+import { createPhaserGame } from './game/PhaserGame';
+import { EventBus } from './game/EventBus';
+import { HUD } from './components/HUD';
+import { ChatOverlay } from './components/ChatOverlay';
+import { MobileControls } from './components/MobileControls';
+
+export const App: React.FC = () => {
+  const mountRef = useRef<HTMLDivElement>(null);
+
+  const [player, setPlayer] = useState<PlayerState>({
+    ...INITIAL_PLAYER_STATE,
+    weapon: { ...INITIAL_PLAYER_STATE.weapon },
+  });
+  const [zone, setZone] = useState<ZoneType>('overworld');
+  const [nearPortal, setNearPortal] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [touchUiEnabled, setTouchUiEnabled] = useState(false);
+  const [lastHit, setLastHit] = useState<CombatHitResult | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    {
+      id: 'sys-welcome',
+      sender: 'Phum Guide',
+      text: 'Welcome to ភូមិខ្ញុំ (Phase 1)! Walk top-right to the Dungeon Portal and press E.',
+      timestamp: Date.now(),
+    },
+  ]);
+
+  // Auto-enable mobile touch controls on touchscreens
+  useEffect(() => {
+    const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    if (isTouch) setTouchUiEnabled(true);
+  }, []);
+
+  // Mount Phaser 3 engine & subscribe to EventBus cleanly
+  useEffect(() => {
+    if (!mountRef.current) return;
+    const { destroy } = createPhaserGame(mountRef.current);
+
+    let toastTimer: number | null = null;
+    const unsubs = [
+      EventBus.on('scene:ready', ({ zone: nextZone }) => {
+        setZone(nextZone);
+        setNearPortal(false);
+      }),
+      EventBus.on('player:state', (nextPlayer) => {
+        setPlayer(nextPlayer);
+      }),
+      EventBus.on('portal:proximity', ({ nearPortal: near }) => {
+        setNearPortal(near);
+      }),
+      EventBus.on('combat:hit', ({ hit }) => {
+        setLastHit(hit);
+      }),
+      EventBus.on('ui:toast', ({ text }) => {
+        setToast(text);
+        if (toastTimer) window.clearTimeout(toastTimer);
+        toastTimer = window.setTimeout(() => setToast(null), 3200);
+      }),
+    ];
+
+    return () => {
+      if (toastTimer) window.clearTimeout(toastTimer);
+      unsubs.forEach((u) => u());
+      destroy();
+    };
+  }, []);
+
+  return (
+    <div className="relative w-full h-dvh overflow-hidden bg-slate-950">
+      {/* Phaser 3 Canvas Mount */}
+      <div ref={mountRef} className="w-full h-full" />
+
+      {/* Avatar World-Inspired HUD */}
+      <HUD
+        player={player}
+        zone={zone}
+        chatOpen={chatOpen}
+        onToggleChat={() => setChatOpen((o) => !o)}
+        touchUiEnabled={touchUiEnabled}
+        onToggleTouchUi={() => setTouchUiEnabled((v) => !v)}
+        lastHit={lastHit}
+      />
+
+      {/* Overhead Speech Bubble Chat Input & History */}
+      <ChatOverlay
+        open={chatOpen}
+        playerName={player.name}
+        messages={messages}
+        onAddMessage={(msg) => setMessages((prev) => [...prev.slice(-39), msg])}
+      />
+
+      {/* Responsive Virtual Thumbstick & Context Action Buttons */}
+      <MobileControls
+        visible={touchUiEnabled}
+        zone={zone}
+        nearPortal={nearPortal}
+      />
+
+      {/* Toast Feedback Pill */}
+      {toast && (
+        <div className="pointer-events-none fixed bottom-20 left-1/2 -translate-x-1/2 z-40 px-4 py-1.5 rounded-full bg-slate-900/95 border border-amber-400/70 text-amber-200 font-display font-bold text-xs shadow-xl">
+          {toast}
+        </div>
+      )}
+    </div>
+  );
+};
