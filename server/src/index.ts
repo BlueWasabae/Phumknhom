@@ -25,6 +25,7 @@ import {
   registerPlayer,
   respondFriendRequest,
   savePlayerProfile,
+  syncGooglePlayer,
   verifyAuthToken,
   type SavedPlayerProfile,
 } from './db/supabase';
@@ -161,6 +162,25 @@ app.post('/api/auth/login', async (req, res) => {
   } catch (err) {
     console.error('[Phum Server] /api/auth/login error:', err);
     res.status(500).json({ error: 'Login failed.' });
+  }
+});
+
+app.post('/api/auth/google-sync', async (req, res) => {
+  try {
+    const { accessToken, starterProfile } = req.body as {
+      accessToken?: string;
+      starterProfile?: SavedPlayerProfile;
+    };
+    const token = accessToken || extractBearerToken(req);
+    const result = await syncGooglePlayer(token, starterProfile);
+    if (!result.ok) {
+      res.status(result.status).json({ error: result.error });
+      return;
+    }
+    res.json(result.data);
+  } catch (err) {
+    console.error('[Phum Server] /api/auth/google-sync error:', err);
+    res.status(500).json({ error: 'Google account sync failed.' });
   }
 });
 

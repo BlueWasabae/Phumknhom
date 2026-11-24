@@ -44,6 +44,7 @@ export interface SavedPlayerProfile {
   weaponPrefix?: string | null;
   armorPrefix?: string | null;
   shimmerBlessings?: string[];
+  hasCompletedCreation?: boolean;
   activeClass?: string;
   weapon?: Record<string, unknown>;
   defense?: number;
@@ -65,12 +66,16 @@ export interface AuthResponse {
   token: string;
   playerId: string;
   username: string;
+  email?: string | null;
+  isNewAccount?: boolean;
   profile: SavedPlayerProfile | null;
   storageMode: 'supabase' | 'local_json';
 }
 
 interface LocalPlayerRow {
   id: string;
+  auth_user_id?: string | null;
+  email?: string | null;
   username: string;
   password_hash: string;
   coins: number;
@@ -435,6 +440,11 @@ function rowToSavedProfile(row: {
     weaponPrefix: typeof meta.weaponPrefix === 'string' ? meta.weaponPrefix : 'keen',
     armorPrefix: typeof meta.armorPrefix === 'string' ? meta.armorPrefix : 'armored',
     shimmerBlessings: Array.isArray(meta.shimmerBlessings) ? (meta.shimmerBlessings as string[]) : [],
+    hasCompletedCreation: Boolean(
+      meta.hasCompletedCreation ??
+        (loadout as { hasCompletedCreation?: boolean }).hasCompletedCreation ??
+        false
+    ),
     activeClass: typeof meta.activeClass === 'string' ? meta.activeClass : undefined,
     weapon: typeof meta.weapon === 'object' && meta.weapon ? (meta.weapon as Record<string, unknown>) : undefined,
     defense: typeof meta.defense === 'number' ? meta.defense : undefined,
@@ -496,6 +506,7 @@ export async function registerPlayer(
     weaponPrefix: starterProfile?.weaponPrefix ?? 'keen',
     armorPrefix: starterProfile?.armorPrefix ?? 'armored',
     shimmerBlessings: starterProfile?.shimmerBlessings ?? [],
+    hasCompletedCreation: Boolean(starterProfile?.hasCompletedCreation ?? false),
     activeClass: starterProfile?.activeClass,
     weapon: starterProfile?.weapon,
     defense: starterProfile?.defense,
@@ -719,6 +730,11 @@ export async function savePlayerProfile(
     weaponPrefix: profile.weaponPrefix ?? 'keen',
     armorPrefix: profile.armorPrefix ?? 'armored',
     shimmerBlessings: profile.shimmerBlessings ?? [],
+    hasCompletedCreation: Boolean(
+      profile.hasCompletedCreation ??
+        (profile.loadout as { hasCompletedCreation?: boolean } | undefined)?.hasCompletedCreation ??
+        false
+    ),
     activeClass: profile.activeClass,
     weapon: profile.weapon,
     defense: profile.defense,
@@ -726,20 +742,33 @@ export async function savePlayerProfile(
   };
 
   if (supabaseClient) {
+    const updateFields: Record<string, unknown> = {
+      coins,
+      gold,
+      diamonds,
+      level,
+      xp,
+      life_stats: profile.lifeStats ?? {},
+      appearance: profile.loadout ?? {},
+      skills: profile.skills ?? {},
+      meta_json: metaJson,
+      updated_at: nowIso,
+    };
+    const nextName = validateUsername(profile.name);
+    if (nextName) {
+      const { data: clash } = await supabaseClient
+        .from('players')
+        .select('id')
+        .ilike('username', nextName)
+        .neq('id', playerId)
+        .maybeSingle();
+      if (!clash) {
+        updateFields.username = nextName;
+      }
+    }
     const { error: pErr } = await supabaseClient
       .from('players')
-      .update({
-        coins,
-        gold,
-        diamonds,
-        level,
-        xp,
-        life_stats: profile.lifeStats ?? {},
-        appearance: profile.loadout ?? {},
-        skills: profile.skills ?? {},
-        meta_json: metaJson,
-        updated_at: nowIso,
-      })
+      .update(updateFields)
       .eq('id', playerId);
     if (pErr) return { ok: false, error: pErr.message };
 
@@ -768,6 +797,13 @@ export async function savePlayerProfile(
   if (!row) {
     return { ok: false, error: 'Player account not found.' };
   }
+  const nextName = validateUsername(profile.name);
+  if (
+    nextName &&
+    !db.players.some((p) => p.id !== playerId && p.username.toLowerCase() === nextName.toLowerCase())
+  ) {
+    row.username = nextName;
+  }
   row.coins = coins;
   row.gold = gold;
   row.diamonds = diamonds;
@@ -787,6 +823,248 @@ export async function savePlayerProfile(
   writeLocalDb(db);
 
   return { ok: true, savedAt: nowIso };
+}
+
+function buildDefaultGoogleUsername(email: string | null, fullName?: unknown): string {
+  const rawBase =
+    typeof fullName === 'string' && fullName.trim().length >= 3
+      ? fullName.trim()
+      : email
+      ? email.split('@')[0]
+      : 'PhumHero';
+  const cleaned = rawBase.replace(/[^a-zA-Z0-9_\- ]/g, '').trim().replace(/\s+/g, '_').slice(0, 14);
+  return cleaned.length >= 3 ? cleaned : `PhumHero_${Math.floor(100 + Math.random() * 899)}`;
+}
+
+/**
+ * Verifies a Supabase Google OAuth access token via `supabase.auth.getUser(accessToken)`,
+ * looks up the player by `auth_user_id` (or creates a fresh starter profile with
+ * `hasCompletedCreation: false` and `pet: null`), and returns a game session + cloud save.
+ */
+export async function syncGooglePlayer(
+  rawAccessToken: unknown,
+  starterProfile?: SavedPlayerProfile
+): Promise<{ ok: true; data: AuthResponse } | { ok: false; status: number; error: string }> {
+  const accessToken = typeof rawAccessToken === 'string' ? rawAccessToken.trim() : '';
+  if (!accessToken) {
+    return { ok: false, status: 400, error: 'Missing Supabase Google access token.' };
+  }
+
+  if (!supabaseClient) {
+    return {
+      ok: false,
+      status: 503,
+      error: 'Google OAuth sync requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY on the server.',
+    };
+  }
+
+  const { data: userData, error: userErr } = await supabaseClient.auth.getUser(accessToken);
+  if (userErr || !userData?.user) {
+    return {
+      ok: false,
+      status: 401,
+      error: userErr?.message || 'Invalid or expired Google session token.',
+    };
+  }
+
+  const authUser = userData.user;
+  const authUserId = authUser.id;
+  const email = authUser.email ? authUser.email.trim().toLowerCase() : null;
+
+  // 1. Look up existing player by auth_user_id (or matching email)
+  let { data: existingPlayer } = await supabaseClient
+    .from('players')
+    .select('*')
+    .eq('auth_user_id', authUserId)
+    .maybeSingle();
+
+  if (!existingPlayer && email) {
+    const byEmail = await supabaseClient
+      .from('players')
+      .select('*')
+      .ilike('email', email)
+      .maybeSingle();
+    if (byEmail.data) {
+      existingPlayer = byEmail.data;
+      await supabaseClient
+        .from('players')
+        .update({ auth_user_id: authUserId, email })
+        .eq('id', existingPlayer.id);
+    }
+  }
+
+  if (existingPlayer) {
+    const [{ data: invRow }, { data: farmRow }] = await Promise.all([
+      supabaseClient.from('player_inventory').select('*').eq('player_id', existingPlayer.id).maybeSingle(),
+      supabaseClient.from('player_farm').select('*').eq('player_id', existingPlayer.id).maybeSingle(),
+    ]);
+
+    const saved = rowToSavedProfile({
+      username: existingPlayer.username,
+      coins: existingPlayer.coins,
+      gold: existingPlayer.gold,
+      diamonds: existingPlayer.diamonds,
+      level: existingPlayer.level,
+      xp: existingPlayer.xp,
+      life_stats: existingPlayer.life_stats ?? {},
+      appearance: existingPlayer.appearance ?? {},
+      skills: existingPlayer.skills ?? {},
+      meta_json: existingPlayer.meta_json ?? {},
+      inventory_json: invRow?.inventory_json ?? [],
+      equipped_json: invRow?.equipped_json ?? existingPlayer.appearance ?? {},
+      plots_json: farmRow?.plots_json ?? [],
+      trees_json: farmRow?.trees_json ?? [],
+      livestock_json: farmRow?.livestock_json ?? [],
+      machines_json: farmRow?.machines_json ?? [],
+    });
+
+    const token = createAuthToken(existingPlayer.id, existingPlayer.username);
+    return {
+      ok: true,
+      data: {
+        token,
+        playerId: existingPlayer.id,
+        username: existingPlayer.username,
+        email: existingPlayer.email ?? email,
+        isNewAccount: false,
+        profile: saved,
+        storageMode: 'supabase',
+      },
+    };
+  }
+
+  // 2. First-time Gmail player -> generate unique starter username & fresh profile (hasCompletedCreation: false, pet: null)
+  const baseName = buildDefaultGoogleUsername(
+    email,
+    (authUser.user_metadata as Record<string, unknown> | undefined)?.full_name
+  );
+  let candidateUsername = baseName;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const { data: clash } = await supabaseClient
+      .from('players')
+      .select('id')
+      .ilike('username', candidateUsername)
+      .maybeSingle();
+    if (!clash) break;
+    candidateUsername = `${baseName.slice(0, 14)}_${Math.floor(100 + Math.random() * 899)}`;
+  }
+
+  const nowIso = new Date().toISOString();
+  const id = crypto.randomUUID();
+  const passwordHash = hashPassword(crypto.randomBytes(24).toString('hex'));
+  const coins = starterProfile?.currencies?.coins ?? 2500;
+  const gold = starterProfile?.currencies?.gold ?? 10;
+  const diamonds = starterProfile?.currencies?.diamonds ?? 50;
+  const loadout: Record<string, unknown> = {
+    ...(starterProfile?.loadout ?? {}),
+    pet: null,
+    petId: null,
+    hasCompletedCreation: false,
+  };
+  const skills = starterProfile?.skills ?? {};
+  const inventory = starterProfile?.inventory ?? [];
+  const farm = starterProfile?.farm ?? { plots: [], trees: [], livestock: [], machines: [] };
+  const metaJson = {
+    hp: starterProfile?.hp ?? 150,
+    maxHp: starterProfile?.maxHp ?? 150,
+    activeBuffs: [],
+    quickSnackSlots: starterProfile?.quickSnackSlots,
+    clearedBosses: [],
+    bossDefeats: {},
+    pagodaBundles: {},
+    luckyWheelPity: 0,
+    villagePassUntil: null,
+    extraBagSlots: 0,
+    ownedMounts: [],
+    activeMount: null,
+    dailyFreeCoinSpinDate: null,
+    lastShrinePrayerDate: null,
+    cityServer: 'phnom_penh',
+    activeBiome: 'emerald_rice_valley',
+    discoveredBiomes: ['emerald_rice_valley'],
+    unlockedPylons: ['emerald_rice_valley'],
+    bankCoins: 500,
+    weaponPrefix: 'keen',
+    armorPrefix: 'armored',
+    shimmerBlessings: [],
+    hasCompletedCreation: false,
+    activeClass: starterProfile?.activeClass ?? 'lbokator',
+    weapon: starterProfile?.weapon,
+    defense: starterProfile?.defense ?? 10,
+    areaChannel: 0,
+  };
+
+  const { error: insertErr } = await supabaseClient.from('players').insert({
+    id,
+    auth_user_id: authUserId,
+    email,
+    username: candidateUsername,
+    password_hash: passwordHash,
+    coins,
+    gold,
+    diamonds,
+    level: 1,
+    xp: 0,
+    life_stats: starterProfile?.lifeStats ?? {},
+    appearance: loadout,
+    skills,
+    meta_json: metaJson,
+    updated_at: nowIso,
+  });
+
+  if (insertErr) {
+    return { ok: false, status: 500, error: insertErr.message };
+  }
+
+  await Promise.all([
+    supabaseClient.from('player_inventory').upsert({
+      player_id: id,
+      inventory_json: inventory,
+      equipped_json: loadout,
+      updated_at: nowIso,
+    }),
+    supabaseClient.from('player_farm').upsert({
+      player_id: id,
+      plots_json: farm.plots,
+      trees_json: farm.trees,
+      livestock_json: farm.livestock,
+      machines_json: farm.machines,
+      updated_at: nowIso,
+    }),
+  ]);
+
+  const createdProfile = rowToSavedProfile({
+    username: candidateUsername,
+    coins,
+    gold,
+    diamonds,
+    level: 1,
+    xp: 0,
+    life_stats: starterProfile?.lifeStats ?? {},
+    appearance: loadout,
+    skills,
+    meta_json: metaJson,
+    inventory_json: inventory,
+    equipped_json: loadout,
+    plots_json: farm.plots,
+    trees_json: farm.trees,
+    livestock_json: farm.livestock,
+    machines_json: farm.machines,
+  });
+
+  const token = createAuthToken(id, candidateUsername);
+  return {
+    ok: true,
+    data: {
+      token,
+      playerId: id,
+      username: candidateUsername,
+      email,
+      isNewAccount: true,
+      profile: createdProfile,
+      storageMode: 'supabase',
+    },
+  };
 }
 
 // ==================== FRIENDSHIPS ====================

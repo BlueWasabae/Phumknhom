@@ -79,6 +79,7 @@ import {
   saveAccountProfile,
   saveGuestCreationProfile,
   sendFriendRequestApi,
+  syncGoogleAccount,
   type AuthSession,
   type FriendRecord,
   type FriendsListResponse,
@@ -128,6 +129,7 @@ import { ReforgeModal, type ReforgeTab } from './ui/ReforgeModal';
 import { ClubGamesModal, type ClubGameTab } from './ui/ClubGamesModal';
 import { CharacterCreatorModal, type CharacterCreationResult } from './ui/CharacterCreatorModal';
 import { soundManager } from './game/systems/SoundManager';
+import { supabase } from './lib/supabaseClient';
 
 type ActiveModalType =
   | null
@@ -345,6 +347,7 @@ export const App: React.FC = () => {
   const playerRef = useRef<PlayerState>(player);
   const inActiveBossFightRef = useRef(false);
   const skipNextAutoSaveRef = useRef(false);
+  const syncedGoogleTokenRef = useRef<string | null>(null);
 
   const inActiveBossFight = Boolean(zone === 'dungeon' && bossHud?.active);
   useEffect(() => {
@@ -420,6 +423,56 @@ export const App: React.FC = () => {
     },
     [refreshFriends]
   );
+
+  // Supabase Google (Gmail) OAuth session listener: exchanges access_token via POST /api/auth/google-sync
+  useEffect(() => {
+    if (!supabase) return;
+
+    const handleSupabaseSession = async (
+      accessToken: string | undefined,
+      userId: string | undefined,
+      email: string | undefined
+    ) => {
+      if (!accessToken || !userId) return;
+      if (syncedGoogleTokenRef.current === accessToken) return;
+      syncedGoogleTokenRef.current = accessToken;
+
+      const res = await syncGoogleAccount(accessToken, playerRef.current);
+      if (!res.ok) {
+        syncedGoogleTokenRef.current = null;
+        EventBus.emit('ui:toast', { text: `Google Sign-In sync failed: ${res.error}` });
+        return;
+      }
+
+      handleAuthenticated(
+        { ...res.session, email: res.session.email ?? email ?? null },
+        res.playerState
+      );
+    };
+
+    void supabase.auth.getSession().then(({ data }) => {
+      const sess = data.session;
+      if (sess?.access_token && sess.user?.id) {
+        void handleSupabaseSession(sess.access_token, sess.user.id, sess.user.email);
+      }
+    });
+
+    const { data: authSub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (
+        (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') &&
+        session?.access_token &&
+        session.user?.id
+      ) {
+        void handleSupabaseSession(session.access_token, session.user.id, session.user.email);
+      } else if (event === 'SIGNED_OUT') {
+        syncedGoogleTokenRef.current = null;
+      }
+    });
+
+    return () => {
+      authSub.subscription.unsubscribe();
+    };
+  }, [handleAuthenticated]);
 
   const handleCompleteCharacterCreation = useCallback(
     (result: CharacterCreationResult) => {

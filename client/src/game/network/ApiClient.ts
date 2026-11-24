@@ -26,6 +26,7 @@ export interface AuthSession {
   token: string;
   playerId: string;
   username: string;
+  email?: string | null;
   storageMode: 'supabase' | 'local_json';
 }
 
@@ -401,6 +402,43 @@ async function postJson<T>(
   } catch {
     return { ok: false, error: 'Cannot reach Phum server on port 2567. You can Play as Guest offline!' };
   }
+}
+
+export async function syncGoogleAccount(
+  accessToken: string,
+  starterState: PlayerState
+): Promise<
+  | { ok: true; session: AuthSession; playerState: PlayerState; isNewAccount: boolean }
+  | { ok: false; error: string }
+> {
+  const starterProfile = serializePlayerStateForSave({
+    ...starterState,
+    hasCompletedCreation: false,
+    loadout: { ...starterState.loadout, pet: null, petId: null, hasCompletedCreation: false },
+  });
+  const res = await postJson<{
+    token: string;
+    playerId: string;
+    username: string;
+    email?: string | null;
+    isNewAccount?: boolean;
+    profile: SavedProfilePayload | null;
+    storageMode: 'supabase' | 'local_json';
+  }>('/auth/google-sync', { accessToken, starterProfile });
+
+  if (!res.ok) return res;
+  const { token, playerId, username: savedUser, email, isNewAccount, profile, storageMode } = res.data;
+  const hydrated = hydratePlayerStateFromSave(profile ?? starterProfile, savedUser);
+  if (isNewAccount) {
+    hydrated.hasCompletedCreation = false;
+    hydrated.loadout.hasCompletedCreation = false;
+  }
+  return {
+    ok: true,
+    session: { token, playerId, username: savedUser, email: email ?? null, storageMode },
+    playerState: hydrated,
+    isNewAccount: Boolean(isNewAccount),
+  };
 }
 
 export async function registerAccount(

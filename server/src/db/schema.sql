@@ -6,6 +6,8 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- 1. Core Player Account, Currencies, Life Stats, Appearance & 12-Skill RPG Profile
 CREATE TABLE IF NOT EXISTS public.players (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  auth_user_id UUID UNIQUE,
+  email TEXT UNIQUE,
   username TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
   coins INTEGER NOT NULL DEFAULT 2500,
@@ -21,7 +23,13 @@ CREATE TABLE IF NOT EXISTS public.players (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Safe idempotent migration for existing deployments upgrading to Google OAuth
+ALTER TABLE public.players ADD COLUMN IF NOT EXISTS auth_user_id UUID UNIQUE;
+ALTER TABLE public.players ADD COLUMN IF NOT EXISTS email TEXT UNIQUE;
+
 CREATE INDEX IF NOT EXISTS idx_players_username_lower ON public.players (LOWER(username));
+CREATE INDEX IF NOT EXISTS idx_players_auth_user_id ON public.players (auth_user_id);
+CREATE INDEX IF NOT EXISTS idx_players_email_lower ON public.players (LOWER(email));
 
 -- 2. Player Inventory (Container Stacks + Equipped 8-Slot Loadout)
 CREATE TABLE IF NOT EXISTS public.player_inventory (

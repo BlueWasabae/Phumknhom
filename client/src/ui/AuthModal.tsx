@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { PlayerState } from '@shared/types';
 import { Cloud, LogIn, Sparkles, UserPlus, Users } from 'lucide-react';
 import { loginAccount, registerAccount, type AuthSession } from '../game/network/ApiClient';
+import { isSupabaseAuthConfigured, signInWithGoogle } from '../lib/supabaseClient';
 import { NativeDialog } from './NativeDialog';
 
 interface AuthModalProps {
@@ -12,6 +13,27 @@ interface AuthModalProps {
 }
 
 const LAST_USER_KEY = 'phum_last_username';
+
+const GoogleGIcon: React.FC = () => (
+  <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0" aria-hidden="true">
+    <path
+      fill="#EA4335"
+      d="M12 10.2v3.9h5.45c-.24 1.25-.96 2.31-2.05 3.02l3.31 2.57c1.93-1.78 3.04-4.4 3.04-7.52 0-.72-.06-1.42-.18-2.09H12z"
+    />
+    <path
+      fill="#34A853"
+      d="M12 22c2.75 0 5.06-.91 6.75-2.46l-3.31-2.57c-.92.62-2.09.99-3.44.99-2.65 0-4.9-1.79-5.7-4.19l-3.42 2.64C4.56 19.74 8.01 22 12 22z"
+    />
+    <path
+      fill="#FBBC05"
+      d="M6.3 13.77A5.99 5.99 0 0 1 5.98 12c0-.61.11-1.2.32-1.77L2.88 7.59A9.97 9.97 0 0 0 2 12c0 1.61.39 3.13 1.08 4.41l3.22-2.64z"
+    />
+    <path
+      fill="#4285F4"
+      d="M12 6.04c1.5 0 2.84.52 3.9 1.53l2.92-2.92C17.05 3 14.74 2 12 2 8.01 2 4.56 4.26 2.88 7.59l3.42 2.64c.8-2.4 3.05-4.19 5.7-4.19z"
+    />
+  </svg>
+);
 
 export const AuthModal: React.FC<AuthModalProps> = ({
   open,
@@ -29,7 +51,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   });
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [googleSubmitting, setGoogleSubmitting] = useState(false);
+  const [googleNotice, setGoogleNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const handleGoogleSignIn = async () => {
+    setError(null);
+    setGoogleNotice(null);
+    if (!isSupabaseAuthConfigured) {
+      setGoogleNotice(
+        'Google Sign-In activates once VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are configured in your environment.'
+      );
+      return;
+    }
+    setGoogleSubmitting(true);
+    const res = await signInWithGoogle();
+    if (!res.ok) {
+      setGoogleSubmitting(false);
+      setError(res.error);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,10 +111,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       open={open}
       onClose={onPlayGuest}
       title="ភូមិខ្ញុំ (Phum Khnhom) · Welcome Home!"
-      subtitle="Sign in to sync your Coins, Farm timers, 12 Skills, Outfits & Friends across sessions"
+      subtitle="Sign in with Gmail or Username to sync your Coins, Farm timers, 12 Skills, Outfits & Friends"
       maxWidthClass="w-[min(94vw,460px)]"
     >
-      <div className="space-y-3.5 text-xs">
+      <div className="space-y-3 text-xs">
         {/* Cozy Khmer Banner */}
         <div className="p-3 rounded-xl bg-gradient-to-r from-emerald-900 via-amber-900 to-purple-900 text-amber-50 border-2 border-amber-500/70 space-y-1 shadow">
           <div className="font-display font-bold text-sm flex items-center gap-1.5 text-amber-200">
@@ -81,8 +122,38 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             2D Social Village RPG · Homestead Farm · Boss Caverns
           </div>
           <p className="text-[11px] text-amber-100/90 leading-snug">
-            Cloud accounts save your real-timestamp crops, Artisan machines, street snacks, 5 Khmer classes, and Friends list!
+            Cloud accounts save your customized Hero, real-timestamp crops, Artisan machines, 5 Khmer classes, and Friends list!
           </p>
+        </div>
+
+        {/* Prominent Top CTA: Continue with Google (Gmail) */}
+        <div className="space-y-1.5">
+          <button
+            type="button"
+            disabled={googleSubmitting || submitting}
+            onClick={() => void handleGoogleSignIn()}
+            className="w-full py-2.5 px-3 rounded-xl bg-white hover:bg-slate-50 active:scale-[0.99] border-2 border-amber-900/40 text-slate-900 font-display font-bold text-sm flex items-center justify-center gap-2 shadow-sm transition cursor-pointer disabled:opacity-60"
+          >
+            <GoogleGIcon />
+            <span>
+              {googleSubmitting ? 'Redirecting to Google...' : 'Continue with Google (Gmail)'}
+            </span>
+          </button>
+
+          {(!isSupabaseAuthConfigured || googleNotice) && (
+            <div className="px-2.5 py-1.5 rounded-xl bg-sky-50 border border-sky-400/50 text-sky-950 text-[10px] font-semibold leading-snug">
+              {googleNotice ??
+                'Local Dev Notice: Google Sign-In activates automatically once VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are configured.'}
+            </div>
+          )}
+        </div>
+
+        <div className="relative flex items-center py-0.5">
+          <div className="flex-1 border-t border-amber-900/25" />
+          <span className="px-2 text-[10px] font-bold text-amber-800/80 uppercase">
+            or use Username
+          </span>
+          <div className="flex-1 border-t border-amber-900/25" />
         </div>
 
         {/* Mode Tabs */}
@@ -159,7 +230,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
           <button
             type="submit"
-            disabled={submitting}
+            disabled={submitting || googleSubmitting}
             className="w-full phum-btn py-2.5 rounded-xl font-display font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-50"
           >
             <Cloud className="w-4 h-4" />
