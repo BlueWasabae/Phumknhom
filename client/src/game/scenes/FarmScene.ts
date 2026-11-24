@@ -229,7 +229,7 @@ export class FarmScene extends Phaser.Scene {
               playerState: { ...this.player.state, zone: 'dungeon' },
             });
           } else {
-            this.returnToOverworld(req.spawnX, req.spawnY, true);
+            this.returnToOverworld(req.spawnX, req.spawnY, true, req.mapId ?? 'central_plaza');
           }
         });
       }),
@@ -849,18 +849,25 @@ export class FarmScene extends Phaser.Scene {
     EventBus.emit('ui:openModal', { modal: 'farm', farmTab: 'seeds' });
   }
 
-  private returnToOverworld(spawnX?: number, spawnY?: number, goldenFlash = false): void {
+  private returnToOverworld(
+    spawnX = 220,
+    spawnY = 600,
+    goldenFlash = false,
+    mapId: 'central_plaza' | 'market_street' | 'temple_district' | 'green_park' | 'wild_frontier' = 'central_plaza'
+  ): void {
     if (this.transitioning) return;
     this.transitioning = true;
     this.cameras.main.fadeOut(220, 8, 12, 20);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
       this.scene.start('OverworldScene', {
+        mapId,
         spawnX,
         spawnY,
         goldenFlash,
         playerState: {
           ...this.player.state,
           zone: 'overworld',
+          currentMapId: mapId,
           weapon: { ...this.player.state.weapon },
           loadout: { ...this.player.state.loadout },
           currencies: { ...this.player.state.currencies },

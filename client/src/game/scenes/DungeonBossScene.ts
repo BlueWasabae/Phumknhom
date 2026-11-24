@@ -1988,9 +1988,13 @@ export class DungeonBossScene extends Phaser.Scene {
     this.cameras.main.fadeOut(220, 8, 12, 20);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
       this.scene.start('OverworldScene', {
+        mapId: 'temple_district',
+        spawnX: 1145,
+        spawnY: 700,
         playerState: {
           ...this.player.state,
           zone: 'overworld',
+          currentMapId: 'temple_district',
           hp: restoredHp,
           weapon: { ...this.player.state.weapon },
           loadout: { ...this.player.state.loadout },

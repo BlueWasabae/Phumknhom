@@ -8,6 +8,7 @@ import {
 } from '@shared/balanceFormulas';
 import { KHMER_CLASSES } from '@shared/khmerClasses';
 import { getKhmerWorldOrDefault } from '@shared/khmerWorlds';
+import { getVillageMapOrDefault } from '@shared/worldMapData';
 import {
   ALL_SKILL_IDS,
   SKILL_DEFINITIONS,
@@ -253,7 +254,8 @@ export const HUD: React.FC<HUDProps> = ({
           title="Click to switch Multiplayer Plaza Area (AREA 0 / AREA 1 / AREA 2)"
           className="font-display font-bold px-2 py-0.5 rounded-lg text-[11px] whitespace-nowrap border bg-emerald-700 hover:bg-emerald-600 text-amber-50 border-emerald-950 transition cursor-pointer"
         >
-          Phum Chaktomuk • {networkStatus.areaId} ▾
+          {getVillageMapOrDefault(player.currentMapId).icon}{' '}
+          {getVillageMapOrDefault(player.currentMapId).name} • {networkStatus.areaId} ▾
         </button>
       ) : zone === 'khmer_world' ? (
         <button

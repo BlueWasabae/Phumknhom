@@ -1,5 +1,5 @@
 import type { BossId, DifficultyMode, PlayerState } from '@shared/types';
-import { WORLD_BIOMES, type BiomeId } from '@shared/worldMapData';
+import { WORLD_BIOMES, type BiomeId, type VillageMapId } from '@shared/worldMapData';
 import type { KhmerWorldId } from '@shared/khmerWorlds';
 
 export interface ReturnPortalBookmark {
@@ -13,6 +13,7 @@ export interface TravelRequestPayload {
   method: 'bus' | 'pylon' | 'mirror' | 'return_portal';
   destinationLabel: string;
   targetZone: 'overworld' | 'farm' | 'club' | 'dungeon' | 'khmer_world';
+  mapId?: VillageMapId;
   worldId?: KhmerWorldId;
   biomeId?: BiomeId;
   bossId?: BossId;

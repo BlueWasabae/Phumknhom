@@ -108,7 +108,7 @@ export class ClubScene extends Phaser.Scene {
               playerState: { ...this.player.state, zone: 'dungeon' },
             });
           } else if (req.targetZone === 'overworld') {
-            this.returnToOverworld(req.spawnX, req.spawnY, true);
+            this.returnToOverworld(req.spawnX, req.spawnY, true, req.mapId ?? 'central_plaza');
           }
         });
       }),
@@ -266,16 +266,22 @@ export class ClubScene extends Phaser.Scene {
     EventBus.emit('ui:openModal', { modal: 'clubGames', clubGame: 'tien_len' });
   }
 
-  private returnToOverworld(spawnX?: number, spawnY?: number, goldenFlash = false): void {
+  private returnToOverworld(
+    spawnX = 1060,
+    spawnY = 860,
+    goldenFlash = false,
+    mapId: 'central_plaza' | 'market_street' | 'temple_district' | 'green_park' | 'wild_frontier' = 'market_street'
+  ): void {
     if (this.transitioning) return;
     this.transitioning = true;
     this.cameras.main.fadeOut(200, 10, 12, 22);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
       this.scene.start('OverworldScene', {
+        mapId,
         spawnX,
         spawnY,
         goldenFlash,
-        playerState: { ...this.player.state, zone: 'overworld' },
+        playerState: { ...this.player.state, zone: 'overworld', currentMapId: mapId },
       });
     });
   }

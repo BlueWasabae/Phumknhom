@@ -60,7 +60,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setGoogleNotice(null);
     if (!isSupabaseAuthConfigured) {
       setGoogleNotice(
-        'Google Sign-In activates once VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are configured in your environment.'
+        'Google Sign-In is not enabled on this server yet — create a free Username account or Play as Guest below!'
       );
       return;
     }
@@ -132,18 +132,27 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             type="button"
             disabled={googleSubmitting || submitting}
             onClick={() => void handleGoogleSignIn()}
+            title={
+              isSupabaseAuthConfigured
+                ? 'Sign in or create an account with your Google (Gmail) account'
+                : 'Google Sign-In activates once Supabase OAuth is configured'
+            }
             className="w-full py-2.5 px-3 rounded-xl bg-white hover:bg-slate-50 active:scale-[0.99] border-2 border-amber-900/40 text-slate-900 font-display font-bold text-sm flex items-center justify-center gap-2 shadow-sm transition cursor-pointer disabled:opacity-60"
           >
             <GoogleGIcon />
             <span>
               {googleSubmitting ? 'Redirecting to Google...' : 'Continue with Google (Gmail)'}
             </span>
+            {!isSupabaseAuthConfigured && (
+              <span className="ml-1 px-1.5 py-0.5 rounded-full bg-amber-100 border border-amber-400/60 text-amber-900 text-[9px] font-bold">
+                Setup Needed
+              </span>
+            )}
           </button>
 
-          {(!isSupabaseAuthConfigured || googleNotice) && (
-            <div className="px-2.5 py-1.5 rounded-xl bg-sky-50 border border-sky-400/50 text-sky-950 text-[10px] font-semibold leading-snug">
-              {googleNotice ??
-                'Local Dev Notice: Google Sign-In activates automatically once VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are configured.'}
+          {googleNotice && (
+            <div className="px-2.5 py-1.5 rounded-xl bg-amber-50 border border-amber-500/50 text-amber-950 text-[10px] font-semibold leading-snug">
+              {googleNotice}
             </div>
           )}
         </div>

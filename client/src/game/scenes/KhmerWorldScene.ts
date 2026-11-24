@@ -722,9 +722,15 @@ export class KhmerWorldScene extends Phaser.Scene {
         });
       } else {
         this.scene.start('OverworldScene', {
-          playerState: { ...nextPayload, zone: 'overworld', currentWorldId: 'phum_chaktomuk' },
-          spawnX: req.spawnX ?? 480,
-          spawnY: req.spawnY ?? 405,
+          mapId: req.mapId ?? 'central_plaza',
+          playerState: {
+            ...nextPayload,
+            zone: 'overworld',
+            currentMapId: req.mapId ?? 'central_plaza',
+            currentWorldId: 'phum_chaktomuk',
+          },
+          spawnX: req.spawnX,
+          spawnY: req.spawnY,
           goldenFlash: true,
         });
       }

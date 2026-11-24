@@ -226,6 +226,7 @@ export interface PlayerState {
   activeMount?: string | null;
   dailyFreeCoinSpinDate?: string | null;
   cityServer?: 'phnom_penh' | 'siem_reap' | 'kampot' | 'battambang';
+  currentMapId?: 'central_plaza' | 'market_street' | 'temple_district' | 'green_park' | 'wild_frontier';
   currentWorldId?: string;
   activeBiome?: string;
   discoveredBiomes?: string[];

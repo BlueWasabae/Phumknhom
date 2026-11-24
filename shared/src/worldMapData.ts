@@ -61,13 +61,251 @@ export const CITY_SERVERS: CityServerDef[] = [
   },
 ];
 
+export type VillageMapId =
+  | 'central_plaza'
+  | 'market_street'
+  | 'temple_district'
+  | 'green_park'
+  | 'wild_frontier';
+
+export interface VillageMapPortalDef {
+  id: string;
+  edge: 'north' | 'south' | 'east' | 'west';
+  x: number;
+  y: number;
+  targetType: 'village_map' | 'farm';
+  targetMapId?: VillageMapId;
+  targetSpawnX?: number;
+  targetSpawnY?: number;
+  signLabel: string;
+  khmerLabel: string;
+  prompt: string;
+}
+
+export interface VillageMapDef {
+  id: VillageMapId;
+  name: string;
+  khmerName: string;
+  icon: string;
+  width: number;
+  height: number;
+  defaultSpawnX: number;
+  defaultSpawnY: number;
+  description: string;
+  accentColor: string;
+  portals: VillageMapPortalDef[];
+}
+
+export const VILLAGE_MAPS: Record<VillageMapId, VillageMapDef> = {
+  central_plaza: {
+    id: 'central_plaza',
+    name: 'Central Plaza',
+    khmerName: 'ទីលានកណ្តាល',
+    icon: '🏛️',
+    width: 1600,
+    height: 1200,
+    defaultSpawnX: 800,
+    defaultSpawnY: 660,
+    description:
+      'Spacious village heartland with Campfire Courtyard, AREA 0 sign, Express Bus Stop, ATM Bank Vault & Lucky Wheel.',
+    accentColor: '#f59e0b',
+    portals: [
+      {
+        id: 'cp_north_temple',
+        edge: 'north',
+        x: 800,
+        y: 132,
+        targetType: 'village_map',
+        targetMapId: 'temple_district',
+        targetSpawnX: 800,
+        targetSpawnY: 1015,
+        signLabel: '↑ TEMPLE DISTRICT',
+        khmerLabel: 'សង្កាត់ប្រាសាទ',
+        prompt: 'Walk through Portal Arch or [E] → Temple District (Pagoda & Boss Portals)',
+      },
+      {
+        id: 'cp_east_market',
+        edge: 'east',
+        x: 1472,
+        y: 600,
+        targetType: 'village_map',
+        targetMapId: 'market_street',
+        targetSpawnX: 190,
+        targetSpawnY: 600,
+        signLabel: '→ MARKET STREET',
+        khmerLabel: 'វិថីផ្សារភូមិ',
+        prompt: 'Walk through East Gate or [E] → Market Street (Shops, Blacksmith & Club)',
+      },
+      {
+        id: 'cp_west_farm',
+        edge: 'west',
+        x: 128,
+        y: 600,
+        targetType: 'farm',
+        signLabel: '← MY FARM',
+        khmerLabel: 'ចម្ការផ្ទាល់ខ្លួន',
+        prompt: 'Walk through Homestead Gate or [E] → Enter Personal Farm & Stilt House',
+      },
+      {
+        id: 'cp_south_park',
+        edge: 'south',
+        x: 800,
+        y: 1086,
+        targetType: 'village_map',
+        targetMapId: 'green_park',
+        targetSpawnX: 800,
+        targetSpawnY: 195,
+        signLabel: '↓ GREEN PARK & PIER',
+        khmerLabel: 'សួនបៃតង និងស្ពានទន្លេ',
+        prompt: 'Walk through South Gate or [E] → Green Park, Blessing Shrine & Fishing Pier',
+      },
+    ],
+  },
+  market_street: {
+    id: 'market_street',
+    name: 'Market Street',
+    khmerName: 'វិថីផ្សារភូមិ',
+    icon: '🏪',
+    width: 1600,
+    height: 1200,
+    defaultSpawnX: 800,
+    defaultSpawnY: 600,
+    description:
+      'Lantern-lit shopping boulevard housing Fashion Boutique, Blacksmith Reforge, Num Pang Cart, Village Market & Phum Club.',
+    accentColor: '#ec4899',
+    portals: [
+      {
+        id: 'ms_west_plaza',
+        edge: 'west',
+        x: 128,
+        y: 600,
+        targetType: 'village_map',
+        targetMapId: 'central_plaza',
+        targetSpawnX: 1405,
+        targetSpawnY: 600,
+        signLabel: '← CENTRAL PLAZA',
+        khmerLabel: 'ទីលានកណ្តាល',
+        prompt: 'Walk through West Gate or [E] → Return to Central Plaza',
+      },
+      {
+        id: 'ms_east_frontier',
+        edge: 'east',
+        x: 1472,
+        y: 600,
+        targetType: 'village_map',
+        targetMapId: 'wild_frontier',
+        targetSpawnX: 190,
+        targetSpawnY: 600,
+        signLabel: '→ WILD FRONTIER',
+        khmerLabel: 'ព្រៃភ្នំធម្មជាតិ',
+        prompt: 'Walk through Frontier Arch or [E] → Wild Frontier (Herbs, Laterite & Mini-Boss)',
+      },
+    ],
+  },
+  temple_district: {
+    id: 'temple_district',
+    name: 'Temple District',
+    khmerName: 'សង្កាត់ប្រាសាទ',
+    icon: '🛕',
+    width: 1600,
+    height: 1200,
+    defaultSpawnX: 800,
+    defaultSpawnY: 680,
+    description:
+      'Sacred hilltop sanctuary with Ancient Pagoda Offering Altars, Angkor Dungeon Portal & the 3-Archway Boss Portal Hall.',
+    accentColor: '#a855f7',
+    portals: [
+      {
+        id: 'td_south_plaza',
+        edge: 'south',
+        x: 800,
+        y: 1086,
+        targetType: 'village_map',
+        targetMapId: 'central_plaza',
+        targetSpawnX: 800,
+        targetSpawnY: 205,
+        signLabel: '↓ CENTRAL PLAZA',
+        khmerLabel: 'ទីលានកណ្តាល',
+        prompt: 'Walk through South Temple Gate or [E] → Return to Central Plaza',
+      },
+    ],
+  },
+  green_park: {
+    id: 'green_park',
+    name: 'Green Park & Pier',
+    khmerName: 'សួនបៃតង និងស្ពានទន្លេ',
+    icon: '🌴',
+    width: 1600,
+    height: 1200,
+    defaultSpawnX: 800,
+    defaultSpawnY: 560,
+    description:
+      'Breezy riverside park with Golden Blessing Shrine, Duck Pond, Riverside Fishing Pier, Biome Pylon Shrine & Palm Groves.',
+    accentColor: '#10b981',
+    portals: [
+      {
+        id: 'gp_north_plaza',
+        edge: 'north',
+        x: 800,
+        y: 132,
+        targetType: 'village_map',
+        targetMapId: 'central_plaza',
+        targetSpawnX: 800,
+        targetSpawnY: 1010,
+        signLabel: '↑ CENTRAL PLAZA',
+        khmerLabel: 'ទីលានកណ្តាល',
+        prompt: 'Walk through North Park Gate or [E] → Return to Central Plaza',
+      },
+    ],
+  },
+  wild_frontier: {
+    id: 'wild_frontier',
+    name: 'Wild Frontier',
+    khmerName: 'ព្រៃភ្នំធម្មជាតិ',
+    icon: '⚔️',
+    width: 1600,
+    height: 1200,
+    defaultSpawnX: 420,
+    defaultSpawnY: 600,
+    description:
+      'Untamed Khmer wilds teeming with forageable herbs, mineable laterite ore, a hidden Apsara Shimmer Spring & a wandering Mini-Boss!',
+    accentColor: '#ef4444',
+    portals: [
+      {
+        id: 'wf_west_market',
+        edge: 'west',
+        x: 128,
+        y: 600,
+        targetType: 'village_map',
+        targetMapId: 'market_street',
+        targetSpawnX: 1405,
+        targetSpawnY: 600,
+        signLabel: '← MARKET STREET',
+        khmerLabel: 'វិថីផ្សារភូមិ',
+        prompt: 'Walk through West Frontier Gate or [E] → Return to Market Street',
+      },
+    ],
+  },
+};
+
+export const VILLAGE_MAP_LIST: VillageMapDef[] = Object.values(VILLAGE_MAPS);
+
+export function getVillageMapOrDefault(mapId?: string | null): VillageMapDef {
+  if (mapId && mapId in VILLAGE_MAPS) {
+    return VILLAGE_MAPS[mapId as VillageMapId];
+  }
+  return VILLAGE_MAPS.central_plaza;
+}
+
 export type CityDistrictId =
   | 'downtown_plaza'
+  | 'market_street'
   | 'green_park_shrine'
   | 'personal_farm'
   | 'fishing_pier'
   | 'the_club'
-  | 'ancient_pagoda';
+  | 'ancient_pagoda'
+  | 'wild_frontier';
 
 export interface CityDistrictNode {
   id: CityDistrictId;
@@ -77,6 +315,7 @@ export interface CityDistrictNode {
   mapX: number; // 0..100%
   mapY: number; // 0..100%
   targetZone: 'overworld' | 'farm' | 'club';
+  mapId?: VillageMapId;
   spawnX?: number;
   spawnY?: number;
   description: string;
@@ -85,71 +324,101 @@ export interface CityDistrictNode {
 export const CITY_DISTRICTS: CityDistrictNode[] = [
   {
     id: 'downtown_plaza',
-    name: 'Downtown Plaza',
+    name: 'Central Plaza',
     khmerName: 'ទីលានកណ្តាល',
     icon: '🏛️',
     mapX: 46,
     mapY: 48,
     targetZone: 'overworld',
-    spawnX: 480,
-    spawnY: 405,
-    description: 'Central campfire courtyard, Num Pang Cart, Fashion Shop, ATM Vault & Lucky Wheel.',
+    mapId: 'central_plaza',
+    spawnX: 800,
+    spawnY: 660,
+    description: 'Spacious central campfire courtyard, AREA 0 sign, Express Bus Stop, ATM Vault & Lucky Wheel.',
+  },
+  {
+    id: 'market_street',
+    name: 'Market Street',
+    khmerName: 'វិថីផ្សារភូមិ',
+    icon: '🏪',
+    mapX: 60,
+    mapY: 48,
+    targetZone: 'overworld',
+    mapId: 'market_street',
+    spawnX: 800,
+    spawnY: 600,
+    description: 'Fashion Boutique, Blacksmith Reforge, Num Pang Cart, Village Market (5% Tax) & Club Avenue.',
+  },
+  {
+    id: 'ancient_pagoda',
+    name: 'Temple District',
+    khmerName: 'សង្កាត់ប្រាសាទ',
+    icon: '🛕',
+    mapX: 46,
+    mapY: 32,
+    targetZone: 'overworld',
+    mapId: 'temple_district',
+    spawnX: 800,
+    spawnY: 680,
+    description: 'Ancient Pagoda (6 Offering Altars), Angkor Dungeon Portal & 3-Archway Boss Portal Hall.',
   },
   {
     id: 'green_park_shrine',
-    name: 'Green Park & Shrine',
-    khmerName: 'សួនបៃតង និងអាស្រមមាស',
+    name: 'Green Park & Pier',
+    khmerName: 'សួនបៃតង និងស្ពានទន្លេ',
     icon: '⛩️',
-    mapX: 52,
-    mapY: 62,
+    mapX: 46,
+    mapY: 64,
     targetZone: 'overworld',
-    spawnX: 455,
-    spawnY: 516,
-    description: 'Golden Blessing Shrine (daily +250c & +10% Luck) & Central Biome Pylon.',
+    mapId: 'green_park',
+    spawnX: 800,
+    spawnY: 560,
+    description: 'Golden Blessing Shrine (+250c & +10% Luck), Duck Pond, Fishing Pier & Biome Pylon Shrine.',
+  },
+  {
+    id: 'wild_frontier',
+    name: 'Wild Frontier',
+    khmerName: 'ព្រៃភ្នំធម្មជាតិ',
+    icon: '⚔️',
+    mapX: 74,
+    mapY: 48,
+    targetZone: 'overworld',
+    mapId: 'wild_frontier',
+    spawnX: 420,
+    spawnY: 600,
+    description: 'Forageable Khmer herbs, mineable Laterite rocks, hidden Apsara Shimmer Spring & Wandering Mini-Boss!',
   },
   {
     id: 'personal_farm',
     name: 'Personal Farm',
     khmerName: 'ចម្ការផ្ទាល់ខ្លួន',
     icon: '🌱',
-    mapX: 34,
-    mapY: 42,
+    mapX: 32,
+    mapY: 48,
     targetZone: 'farm',
     description: 'Your 6×4 Crop Garden, Fruit Tree Orchard, Livestock Pen & Artisan Machines.',
   },
   {
     id: 'fishing_pier',
-    name: 'Fishing Pier',
+    name: 'Riverside Pier',
     khmerName: 'ស្ពានស្ទូចត្រីទន្លេ',
     icon: '🎣',
     mapX: 35,
-    mapY: 63,
+    mapY: 64,
     targetZone: 'overworld',
-    spawnX: 295,
-    spawnY: 492,
-    description: 'Mekong Riverside Pier — catch Catfish, Silver Carp & Golden Lotus Koi.',
+    mapId: 'green_park',
+    spawnX: 520,
+    spawnY: 790,
+    description: 'Green Park Mekong Pier — catch Catfish, Silver Carp & Golden Lotus Koi.',
   },
   {
     id: 'the_club',
     name: 'The Club',
     khmerName: 'ក្លឹបកម្សាន្តភូមិ',
     icon: '🃏',
-    mapX: 60,
-    mapY: 50,
+    mapX: 62,
+    mapY: 60,
     targetZone: 'club',
     description: 'Indoor neon lounge with Tien Len & Ouk Chaktrang tables!',
-  },
-  {
-    id: 'ancient_pagoda',
-    name: 'Ancient Pagoda',
-    khmerName: 'វត្តបុរាណ',
-    icon: '🛕',
-    mapX: 48,
-    mapY: 32,
-    targetZone: 'overworld',
-    spawnX: 480,
-    spawnY: 230,
-    description: 'Restore all 6 Offering Altars for permanent Greenhouse & Chef discounts.',
   },
 ];
 

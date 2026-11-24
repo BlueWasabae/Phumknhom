@@ -1092,6 +1092,30 @@ export const App: React.FC = () => {
       EventBus.on('player:state', (nextPlayer) => {
         setPlayer(nextPlayer);
       }),
+      EventBus.on('frontier:gather', ({ skillId, xp, coins, itemId, label }) => {
+        runStateAction((prev) => {
+          const gainedCoins = coins ?? 0;
+          const nextCoins = prev.currencies.coins + gainedCoins;
+          const nextInv = prev.inventory.map((i) => ({ ...i }));
+          if (itemId) {
+            const existing = nextInv.find((i) => i.itemId === itemId && (i.quality ?? 'normal') === 'normal');
+            if (existing) existing.quantity += 1;
+            else nextInv.push({ itemId, quantity: 1, itemLevel: 1, quality: 'normal' });
+          }
+          const withLoot: PlayerState = {
+            ...prev,
+            coins: nextCoins,
+            currencies: { ...prev.currencies, coins: nextCoins },
+            inventory: nextInv,
+          };
+          const xpRes = awardSkillXp(withLoot, skillId, xp);
+          return {
+            state: xpRes.state,
+            ok: true,
+            message: label,
+          };
+        });
+      }),
       EventBus.on('portal:proximity', ({ nearPortal: near }) => {
         setNearPortal(near);
       }),

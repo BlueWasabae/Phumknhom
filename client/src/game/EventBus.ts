@@ -177,6 +177,13 @@ export interface EventMap {
   };
   'dungeon:outcome': DungeonOutcomePayload | null;
   'travel:execute': TravelRequestPayload;
+  'frontier:gather': {
+    skillId: 'foraging' | 'mining' | 'melee';
+    xp: number;
+    coins?: number;
+    itemId?: string;
+    label: string;
+  };
   'ticker:push': { text: string; category?: 'boss' | 'reforge' | 'weather' | 'club' | 'market' };
   'shrine:pray': void;
   'mobile:joystick': JoystickVector;

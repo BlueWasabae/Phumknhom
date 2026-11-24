@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { PlayerState } from '@shared/types';
 import {
   CITY_DISTRICTS,
+  VILLAGE_MAP_LIST,
   WORLD_BIOMES,
   WORLD_BIOME_LIST,
   getBiomeOrFallback,
@@ -131,6 +132,59 @@ export const WorldMapModal: React.FC<WorldMapModalProps> = ({
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-800 text-slate-200">
               🌫️ Fog-of-War
             </span>
+          </div>
+        </div>
+
+        {/* 5 Spacious Connected Village & Frontier Maps (Walk-Through Portals + Instant Fast-Travel!) */}
+        <div className="p-2.5 rounded-2xl bg-amber-50/95 border-2 border-amber-900/35 space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="font-display font-bold text-xs text-amber-950">
+              🏡 5 Connected Village &amp; Frontier Maps (Walk-Through Road Portals &amp; Express Bus)
+            </div>
+            <span className="text-[10px] font-bold text-amber-900 bg-amber-200/80 px-2 py-0.5 rounded-full">
+              1600×1200 Spacious Layouts
+            </span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5">
+            {VILLAGE_MAP_LIST.map((m) => {
+              const isHere =
+                player.zone === 'overworld' && (player.currentMapId ?? 'central_plaza') === m.id;
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  disabled={inActiveBossFight}
+                  onClick={() =>
+                    doWarp({
+                      method: 'pylon',
+                      destinationLabel: `${m.name} (${m.khmerName})`,
+                      targetZone: 'overworld',
+                      mapId: m.id,
+                      spawnX: m.defaultSpawnX,
+                      spawnY: m.defaultSpawnY,
+                    })
+                  }
+                  className={`p-2 rounded-xl border-2 text-left transition cursor-pointer disabled:opacity-45 ${
+                    isHere
+                      ? 'bg-amber-800 text-amber-50 border-amber-950 shadow'
+                      : 'bg-white hover:bg-amber-100 text-amber-950 border-amber-900/30'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-sm">{m.icon}</span>
+                    {isHere && (
+                      <span className="text-[8px] font-bold px-1.5 py-0.2 rounded bg-yellow-300 text-amber-950">
+                        HERE
+                      </span>
+                    )}
+                  </div>
+                  <div className="font-display font-bold text-[11px] truncate mt-0.5">{m.name}</div>
+                  <div className={`text-[9px] truncate ${isHere ? 'text-amber-200' : 'text-amber-800'}`}>
+                    {m.khmerName}
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -346,6 +400,7 @@ export const WorldMapModal: React.FC<WorldMapModalProps> = ({
                         method: 'pylon',
                         destinationLabel: selectedDistrict.name,
                         targetZone: selectedDistrict.targetZone,
+                        mapId: selectedDistrict.mapId,
                         spawnX: selectedDistrict.spawnX,
                         spawnY: selectedDistrict.spawnY,
                       })
@@ -362,6 +417,7 @@ export const WorldMapModal: React.FC<WorldMapModalProps> = ({
                         method: 'bus',
                         destinationLabel: selectedDistrict.name,
                         targetZone: selectedDistrict.targetZone,
+                        mapId: selectedDistrict.mapId,
                         spawnX: selectedDistrict.spawnX,
                         spawnY: selectedDistrict.spawnY,
                       })
