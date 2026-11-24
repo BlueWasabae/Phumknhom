@@ -24,6 +24,8 @@ import { areaIdToChannel, channelToAreaId, roomClient } from '../network/RoomCli
 import { soundManager } from '../systems/SoundManager';
 import { SeasonAtmosphereOverlay } from '../systems/SeasonClock';
 import { travelManager, type TravelRequestPayload } from '../systems/TravelAndPylons';
+import { worldEventManager } from '../systems/WorldEventManager';
+import type { ActiveWorldEventSnapshot } from '@shared/worldEvents';
 
 // Spacious 1600x1200 connected Phum Khnhom Village & Frontier maps (ZERO overlapping buildings!)
 const MAP_W = 1600;
@@ -64,6 +66,23 @@ interface FrontierMiniBoss {
   lastHitAt: number;
 }
 
+interface WorldEventMob {
+  id: string;
+  kind: 'eclipse_spirit' | 'golden_frog' | 'golden_boss';
+  name: string;
+  sprite: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image;
+  hpBg: Phaser.GameObjects.Rectangle;
+  hpFill: Phaser.GameObjects.Rectangle;
+  nameText: Phaser.GameObjects.Text;
+  hp: number;
+  maxHp: number;
+  homeX: number;
+  homeY: number;
+  dir: number;
+  alive: boolean;
+  lastHitAt: number;
+}
+
 export interface OverworldSceneInitData {
   mapId?: VillageMapId;
   playerState?: PlayerState;
@@ -94,6 +113,9 @@ export class OverworldScene extends Phaser.Scene {
   private npcs: NpcVillager[] = [];
   private statueDolls: PaperDoll[] = [];
   private miniBoss: FrontierMiniBoss | null = null;
+  private worldEventObjects: Phaser.GameObjects.GameObject[] = [];
+  private worldEventMobs: WorldEventMob[] = [];
+  private worldEventMerchantLandmark: LandmarkZone | null = null;
   private gateLockUntil = 0;
   private nearPortalSent = false;
   private transitioning = false;
@@ -336,6 +358,12 @@ export class OverworldScene extends Phaser.Scene {
       EventBus.on('cavern:enterRequest', ({ returnMapId }) => {
         this.enterCavernExplore(returnMapId);
       }),
+      EventBus.on('tower:enterRequest', ({ floor, partyMode }) => {
+        this.enterPagodaTower(floor, partyMode);
+      }),
+      EventBus.on('worldEvent:changed', (snap) => {
+        this.syncWorldEventVisuals(snap);
+      }),
       EventBus.on('travel:execute', (req) => {
         this.handleTravelRequest(req);
       }),
@@ -350,8 +378,10 @@ export class OverworldScene extends Phaser.Scene {
 
     const initialArea = channelToAreaId(this.player.state.areaChannel);
     void this.connectToPlazaArea(initialArea, false);
+    this.syncWorldEventVisuals(worldEventManager.getActiveEvent());
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.clearWorldEventVisuals();
       this.scale.off('resize', this.applyResponsiveZoom, this);
       this.busTimer?.remove(false);
       this.busTimer = undefined;
@@ -1150,12 +1180,9 @@ export class OverworldScene extends Phaser.Scene {
         y: 345,
         tint: 0xc084fc,
         title: 'ENDLESS PAGODA TOWER',
-        prompt: 'Press [E] or Click → Endless Pagoda Tower Preview (Mythic Trial Selector)',
+        prompt: 'Press [E] or Click → Endless 50-Floor Pagoda Tower (Checkpoints & Weapon Auras)',
         onEnter: () => {
-          EventBus.emit('ui:toast', {
-            text: '🗼 Endless Pagoda Tower Preview: Select Mythic / Death difficulty in the Boss Trial Hall!',
-          });
-          EventBus.emit('ui:openModal', { modal: 'modeSelector' });
+          EventBus.emit('ui:openModal', { modal: 'pagodaTower' });
         },
       },
       {
@@ -1198,6 +1225,42 @@ export class OverworldScene extends Phaser.Scene {
         onInteract: arch.onEnter,
       });
     }
+
+    // 4. ANGKOR RELIC HALL (MUSEUM) — Center Courtyard with glowing yellow JOIN arrow
+    const museumAura = this.add
+      .image(800, 598, 'torch_glow')
+      .setTint(0xfacc15)
+      .setScale(1.25)
+      .setAlpha(0.45)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(620);
+    this.glowLights.push(museumAura);
+
+    const museum = this.addBuildingOrProp({
+      texture: 'ancient_pagoda',
+      x: 800,
+      y: 635,
+      scale: 1.38,
+      shadowW: 92,
+      shadowH: 22,
+      bodyW: 66,
+      bodyH: 26,
+      label: 'ANGKOR RELIC HALL · MUSEUM',
+      joinArrowY: 545,
+    });
+    museum.setTint(0xfef3c7);
+    museum.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+      if (typeof document !== 'undefined' && document.querySelector('dialog[open]')) return;
+      EventBus.emit('ui:openModal', { modal: 'museum' });
+    });
+    this.landmarks.push({
+      x: 800,
+      y: 652,
+      radius: 66,
+      label: 'Press [E] or Click → Enter Angkor Relic Hall (Museum & Scholar Perks)',
+      isDungeonPortal: false,
+      onInteract: () => EventBus.emit('ui:openModal', { modal: 'museum' }),
+    });
   }
 
   // ==================== MAP 4: GREEN PARK & RIVERSIDE PIER ====================
@@ -2084,6 +2147,310 @@ export class OverworldScene extends Phaser.Scene {
     });
   }
 
+  private enterPagodaTower(floor = 1, partyMode: 'solo' | 'coop' = 'solo'): void {
+    if (this.transitioning) return;
+    this.transitioning = true;
+    soundManager.playSfx('magic');
+    this.cameras.main.fadeOut(220, 24, 12, 42);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      this.scene.start('PagodaTowerScene', {
+        floor,
+        partyMode,
+        playerState: {
+          ...this.player.state,
+          zone: 'tower',
+          activeMount: null,
+          currentMapId: 'temple_district',
+        },
+      });
+    });
+  }
+
+  // ==================== UPDATE 1.4: DYNAMIC WORLD EVENTS ====================
+  private clearWorldEventVisuals(): void {
+    for (const obj of this.worldEventObjects) {
+      if (obj && obj.active) obj.destroy();
+    }
+    this.worldEventObjects = [];
+    for (const mob of this.worldEventMobs) {
+      mob.sprite.destroy();
+      mob.hpBg.destroy();
+      mob.hpFill.destroy();
+      mob.nameText.destroy();
+    }
+    this.worldEventMobs = [];
+    if (this.worldEventMerchantLandmark) {
+      this.landmarks = this.landmarks.filter((lm) => lm !== this.worldEventMerchantLandmark);
+      this.worldEventMerchantLandmark = null;
+    }
+  }
+
+  private syncWorldEventVisuals(snap: ActiveWorldEventSnapshot | null): void {
+    if (!this.scene || !this.scene.isActive('OverworldScene')) return;
+    this.clearWorldEventVisuals();
+    if (!snap) return;
+
+    // 1. Crimson Eclipse over Wild Frontier
+    if (snap.eventId === 'crimson_eclipse' && this.mapId === 'wild_frontier') {
+      const tintOverlay = this.add
+        .rectangle(0, 0, this.scale.width * 2, this.scale.height * 2, 0x991b1b, 0.24)
+        .setOrigin(0)
+        .setScrollFactor(0)
+        .setDepth(2120);
+      this.worldEventObjects.push(tintOverlay);
+
+      const coords: Array<[number, number]> = [
+        [735, 560],
+        [885, 570],
+        [620, 500],
+        [980, 520],
+        [820, 690],
+      ];
+      coords.forEach(([x, y], idx) => this.spawnWorldEventMob('eclipse_spirit', x, y, idx));
+    }
+
+    // 2. Golden Frog Rain over Wild Frontier & Green Park
+    if (snap.eventId === 'golden_frog_rain' && (this.mapId === 'wild_frontier' || this.mapId === 'green_park')) {
+      const frogSpots: Array<[number, number]> =
+        this.mapId === 'green_park'
+          ? [[740, 565], [875, 575], [640, 515], [960, 535], [700, 665], [920, 665]]
+          : [[735, 560], [875, 575], [620, 520], [980, 530], [720, 675], [910, 675]];
+      frogSpots.forEach(([x, y], idx) => this.spawnWorldEventMob('golden_frog', x, y, idx));
+
+      if (snap.bossSummoned && !snap.bossDefeated) {
+        this.spawnWorldEventMob('golden_boss', 800, 600, 99);
+      }
+    }
+
+    // 3. Khmer Night Market along Market Street
+    if (snap.eventId === 'khmer_night_market' && this.mapId === 'market_street') {
+      // Extra festive paper lanterns lighting up Market Street
+      for (const lx of [260, 430, 600, 770, 940, 1110, 1280]) {
+        const lantern = this.add
+          .circle(lx, 504, 7, 0xf97316, 0.95)
+          .setStrokeStyle(2, 0xfef08a)
+          .setDepth(2145);
+        const halo = this.add
+          .image(lx, 504, 'torch_glow')
+          .setTint(0xf59e0b)
+          .setScale(0.92)
+          .setAlpha(0.55)
+          .setBlendMode(Phaser.BlendModes.ADD)
+          .setDepth(2140);
+        this.tweens.add({ targets: [lantern, halo], y: 500, duration: 900, yoyo: true, repeat: -1 });
+        this.worldEventObjects.push(lantern, halo);
+      }
+
+      // Parked Traveling Tuk-Tuk Merchant right in the center of Market Street!
+      const mx = 800;
+      const my = 625;
+      const merchGlow = this.add
+        .image(mx, my - 10, 'torch_glow')
+        .setTint(0xf59e0b)
+        .setScale(1.15)
+        .setAlpha(0.6)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(my - 4);
+      const cartTex = this.textures.exists('mount_mini_tuk_tuk')
+        ? 'mount_mini_tuk_tuk'
+        : 'num_pang_cart';
+      const merchant = this.add
+        .image(mx, my, cartTex)
+        .setScale(cartTex === 'mount_mini_tuk_tuk' ? 1.55 : 0.64)
+        .setDepth(my + 2)
+        .setInteractive({ useHandCursor: true });
+      merchant.on('pointerdown', () => {
+        if (typeof document !== 'undefined' && document.querySelector('dialog[open]')) return;
+        EventBus.emit('ui:openModal', { modal: 'nightMarket' });
+      });
+      const merchArrow = this.add.image(mx, my - 46, 'join_arrow').setScale(0.58).setDepth(my + 18);
+      this.tweens.add({ targets: merchArrow, y: my - 53, duration: 500, yoyo: true, repeat: -1 });
+      const merchLabel = this.add
+        .text(mx, my + 24, '🏮 TRAVELING TUK-TUK MERCHANT · NIGHT MARKET', {
+          fontFamily: 'Fredoka, sans-serif',
+          fontSize: '10px',
+          fontStyle: 'bold',
+          color: '#fef08a',
+          backgroundColor: 'rgba(124, 45, 18, 0.92)',
+          padding: { x: 6, y: 2 },
+        })
+        .setResolution(2)
+        .setScale(0.45)
+        .setOrigin(0.5, 0)
+        .setDepth(my + 22);
+      this.worldEventObjects.push(merchGlow, merchant, merchArrow, merchLabel);
+
+      const lm: LandmarkZone = {
+        x: mx,
+        y: my,
+        radius: 64,
+        label: 'Press [E] or Click → Browse Night Market Tuk-Tuk Merchant (30–40% Off!)',
+        isDungeonPortal: false,
+        onInteract: () => EventBus.emit('ui:openModal', { modal: 'nightMarket' }),
+      };
+      this.worldEventMerchantLandmark = lm;
+      this.landmarks.push(lm);
+    }
+  }
+
+  private spawnWorldEventMob(
+    kind: 'eclipse_spirit' | 'golden_frog' | 'golden_boss',
+    x: number,
+    y: number,
+    idx: number
+  ): void {
+    const isBoss = kind === 'golden_boss';
+    const tex =
+      isBoss && this.textures.exists('boss_sdech_kongkaeb')
+        ? 'boss_sdech_kongkaeb'
+        : kind === 'eclipse_spirit'
+          ? 'pet_spirit'
+          : 'pet_frog';
+    const sprite = isBoss
+      ? this.add.image(x, y, tex).setScale(0.38).setTint(0xfde047).setDepth(y + 8).setInteractive({ useHandCursor: true })
+      : this.add
+          .sprite(x, y, tex, 0)
+          .setScale(kind === 'eclipse_spirit' ? 1.55 : 1.45)
+          .setTint(kind === 'eclipse_spirit' ? 0xf87171 : 0xfacc15)
+          .setDepth(y + 6)
+          .setInteractive({ useHandCursor: true });
+
+    if (!isBoss && 'play' in sprite) {
+      const anim = kind === 'eclipse_spirit' ? 'pet_spirit_idle' : 'pet_frog_idle';
+      if (this.anims.exists(anim)) sprite.play(anim);
+    }
+
+    const maxHp = isBoss ? 420 : kind === 'eclipse_spirit' ? 80 : 45;
+    const barW = isBoss ? 80 : 38;
+    const hpBg = this.add.rectangle(x, y - (isBoss ? 44 : 24), barW + 4, 6, 0x0f172a).setDepth(y + 12);
+    const hpFill = this.add
+      .rectangle(x - barW / 2, y - (isBoss ? 44 : 24), barW, 4, isBoss ? 0xfacc15 : kind === 'eclipse_spirit' ? 0xef4444 : 0x22c55e)
+      .setOrigin(0, 0.5)
+      .setDepth(y + 13);
+    const label = isBoss
+      ? '👑 GOLDEN SDECH KONGKAEB'
+      : kind === 'eclipse_spirit'
+        ? '🌑 Shadow Spirit'
+        : '🐸 Golden Mini-Frog';
+    const nameText = this.add
+      .text(x, y - (isBoss ? 52 : 30), label, {
+        fontFamily: 'Fredoka, sans-serif',
+        fontSize: isBoss ? '11px' : '9px',
+        fontStyle: 'bold',
+        color: isBoss ? '#fde047' : kind === 'eclipse_spirit' ? '#fecaca' : '#fef08a',
+        backgroundColor: 'rgba(15, 23, 42, 0.88)',
+        padding: { x: 4, y: 1 },
+      })
+      .setResolution(2)
+      .setScale(0.46)
+      .setOrigin(0.5, 1)
+      .setDepth(y + 14);
+
+    const mob: WorldEventMob = {
+      id: `we_${kind}_${idx}_${Date.now()}`,
+      kind,
+      name: label,
+      sprite,
+      hpBg,
+      hpFill,
+      nameText,
+      hp: maxHp,
+      maxHp,
+      homeX: x,
+      homeY: y,
+      dir: idx % 2 === 0 ? 1 : -1,
+      alive: true,
+      lastHitAt: 0,
+    };
+    this.worldEventMobs.push(mob);
+    sprite.on('pointerdown', () => {
+      if (typeof document !== 'undefined' && document.querySelector('dialog[open]')) return;
+      this.damageWorldEventMob(mob);
+    });
+  }
+
+  private damageWorldEventMob(mob: WorldEventMob): void {
+    if (!mob.alive) return;
+    const now = this.time.now;
+    if (now - mob.lastHitAt < 200) return;
+    mob.lastHitAt = now;
+
+    const dmg = 45 + Math.round(this.player.state.weapon.baseDamage * 0.9);
+    mob.hp = Math.max(0, mob.hp - dmg);
+    soundManager.playSfx('hit');
+    mob.sprite.setTintFill(0xffffff);
+    this.time.delayedCall(90, () => {
+      if (mob.sprite.active && mob.alive) {
+        mob.sprite.setTint(mob.kind === 'eclipse_spirit' ? 0xf87171 : 0xfacc15);
+      }
+    });
+    const maxW = mob.kind === 'golden_boss' ? 80 : 38;
+    mob.hpFill.width = Math.max(0, Math.round(maxW * (mob.hp / mob.maxHp)));
+    this.spawnFloatingText(mob.sprite.x, mob.sprite.y - 26, `-${dmg}`, '#fde047');
+
+    if (mob.hp <= 0) {
+      mob.alive = false;
+      mob.sprite.setVisible(false);
+      mob.hpBg.setVisible(false);
+      mob.hpFill.setVisible(false);
+      mob.nameText.setVisible(false);
+      soundManager.playSfx('victory');
+
+      if (mob.kind === 'eclipse_spirit') {
+        worldEventManager.recordProgress(1);
+        EventBus.emit('worldEvent:reward', {
+          skillId: 'melee',
+          xp: 30,
+          coins: 45,
+          items: [{ itemId: 'mat_eclipse_shard', quantity: 1 }],
+          label: '🌑 Defeated Shadow Spirit → +1× Eclipse Shard & +45 Coins!',
+        });
+      } else if (mob.kind === 'golden_frog') {
+        const { summonedBossNow } = worldEventManager.recordProgress(1);
+        EventBus.emit('worldEvent:reward', {
+          skillId: 'melee',
+          xp: 18,
+          coins: 35,
+          label: '🐸 Popped Golden Mini-Frog (+35 Coins)!',
+        });
+        if (summonedBossNow && !this.worldEventMobs.some((m) => m.kind === 'golden_boss' && m.alive)) {
+          this.spawnWorldEventMob('golden_boss', 800, 600, 99);
+        }
+      } else if (mob.kind === 'golden_boss') {
+        worldEventManager.markBossDefeated();
+        this.cameras.main.flash(260, 250, 204, 21);
+        EventBus.emit('worldEvent:reward', {
+          skillId: 'vitality',
+          xp: 90,
+          coins: 650,
+          gold: 3,
+          items: [{ itemId: 'wings_rain_caller_umbrella', quantity: 1 }],
+          label: '👑 Defeated Golden Sdech Kongkaeb! +650 Coins, +3 Gold & ☂️ Rain-Caller Umbrella!',
+        });
+      }
+
+      // Respawn normal event wave mob after 5.5s if event is still active
+      if (mob.kind !== 'golden_boss') {
+        this.time.delayedCall(5500, () => {
+          const active = worldEventManager.getActiveEvent();
+          if (!active || !mob.sprite.active) return;
+          if (
+            (mob.kind === 'eclipse_spirit' && active.eventId === 'crimson_eclipse') ||
+            (mob.kind === 'golden_frog' && active.eventId === 'golden_frog_rain')
+          ) {
+            mob.hp = mob.maxHp;
+            mob.alive = true;
+            mob.hpFill.width = maxW;
+            mob.sprite.setPosition(mob.homeX + Phaser.Math.Between(-50, 50), mob.homeY).setVisible(true);
+            mob.hpBg.setVisible(true);
+            mob.hpFill.setVisible(true);
+            mob.nameText.setVisible(true);
+          }
+        });
+      }
+    }
+  }
+
   private enterDungeon(
     bossId: BossId = 'sdech_kongkaeb',
     difficulty: DifficultyMode = 'normal',
@@ -2143,6 +2510,17 @@ export class OverworldScene extends Phaser.Scene {
   }
 
   private tryInteractNearest(): void {
+    // Allow striking nearby Dynamic World Event mobs/boss with [E]
+    for (const em of this.worldEventMobs) {
+      if (
+        em.alive &&
+        Phaser.Math.Distance.Between(this.player.x, this.player.y, em.sprite.x, em.sprite.y) <= 105
+      ) {
+        this.damageWorldEventMob(em);
+        return;
+      }
+    }
+
     // Allow striking the Wild Frontier mini-boss with [E] when nearby!
     if (
       this.miniBoss &&
@@ -2236,6 +2614,25 @@ export class OverworldScene extends Phaser.Scene {
       mb.hpBg.setPosition(mb.sprite.x, mb.sprite.y - 30);
       mb.hpFill.setPosition(mb.sprite.x - 26, mb.sprite.y - 30);
       mb.nameText.setPosition(mb.sprite.x, mb.sprite.y - 42);
+    }
+
+    // Animate Dynamic World Event mobs (Shadow Spirits, bouncing Golden Mini-Frogs & Golden Boss)
+    for (const em of this.worldEventMobs) {
+      if (!em.alive) continue;
+      const spd = em.kind === 'golden_boss' ? 0.036 : 0.048;
+      em.sprite.x += em.dir * delta * spd;
+      if (em.sprite.x > em.homeX + 90) em.dir = -1;
+      if (em.sprite.x < em.homeX - 90) em.dir = 1;
+      if ('setFlipX' in em.sprite) em.sprite.setFlipX(em.dir < 0);
+      const bob =
+        em.kind === 'golden_frog'
+          ? -Math.abs(Math.sin(time / 210 + em.homeX)) * 12
+          : Math.sin(time / 290 + em.homeX) * 6;
+      em.sprite.y = em.homeY + bob;
+      const isB = em.kind === 'golden_boss';
+      em.hpBg.setPosition(em.sprite.x, em.sprite.y - (isB ? 44 : 24));
+      em.hpFill.setPosition(em.sprite.x - (isB ? 40 : 19), em.sprite.y - (isB ? 44 : 24));
+      em.nameText.setPosition(em.sprite.x, em.sprite.y - (isB ? 52 : 30));
     }
 
     roomClient.sendMove(

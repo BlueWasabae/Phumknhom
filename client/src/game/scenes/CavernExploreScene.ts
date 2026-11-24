@@ -830,18 +830,46 @@ export class CavernExploreScene extends Phaser.Scene {
     soundManager.playSfx('harvest');
 
     const dropQty = node.kind === 'laterite' ? 2 : 1;
+    const bonusItems: Array<{ itemId: string; quantity: number }> = [
+      { itemId: node.itemId, quantity: dropQty },
+    ];
+
+    // Update 1.4 — Small chance to unearth an Ancient Relic for the Angkor Relic Museum!
+    const relicChance = 0.22 + (bridge.museumRareDropLuckPct ?? 0);
+    let relicNote = '';
+    if (Math.random() < relicChance) {
+      const relicId =
+        node.kind === 'laterite'
+          ? Math.random() < 0.55
+            ? 'relic_laterite_core'
+            : 'relic_sandstone_apsara'
+          : node.kind === 'jade'
+            ? 'relic_jade_naga_seal'
+            : 'relic_bronze_angkor_bell';
+      bonusItems.push({ itemId: relicId, quantity: 1 });
+      const relicLabel =
+        relicId === 'relic_laterite_core'
+          ? 'Laterite Core'
+          : relicId === 'relic_sandstone_apsara'
+            ? 'Sandstone Apsara'
+            : relicId === 'relic_jade_naga_seal'
+              ? 'Jade Naga Seal'
+              : 'Bronze Angkor Bell';
+      relicNote = ` + 🏛️ ${relicLabel}!`;
+    }
+
     this.spawnFloatingText(
       node.x,
       node.y - 46,
-      `+${dropQty} ${node.name} · +${node.xp} Mining XP`,
+      `+${dropQty} ${node.name} · +${node.xp} Mining XP${relicNote}`,
       '#4ade80',
       '13px'
     );
     EventBus.emit('cavern:reward', {
       skillId: 'mining',
       xp: node.xp,
-      items: [{ itemId: node.itemId, quantity: dropQty }],
-      label: `⛏️ Mined ${dropQty}× ${node.name} (+${node.xp} Mining XP)!`,
+      items: bonusItems,
+      label: `⛏️ Mined ${dropQty}× ${node.name} (+${node.xp} Mining XP)${relicNote}`,
     });
 
     this.time.delayedCall(25000, () => {
@@ -881,6 +909,17 @@ export class CavernExploreScene extends Phaser.Scene {
     ];
     let bonusCoins = node.coins;
     let lootSummary = `+${bonusCoins}c, ${node.reforgeStones}× Reforge Stone`;
+
+    // Update 1.4 — Relic Chests also yield an Ancient Museum Relic!
+    const chestRelics = [
+      { id: 'relic_sandstone_apsara', label: 'Sandstone Apsara' },
+      { id: 'relic_jade_naga_seal', label: 'Jade Naga Seal' },
+      { id: 'relic_bronze_angkor_bell', label: 'Bronze Angkor Bell' },
+      { id: 'relic_laterite_core', label: 'Laterite Core' },
+    ];
+    const pickedRelic = chestRelics[Math.floor(Math.random() * chestRelics.length)];
+    items.push({ itemId: pickedRelic.id, quantity: 1 });
+    lootSummary += `, 🏛️ ${pickedRelic.label}`;
 
     if (!alreadyOwnsAcc && accDef) {
       items.push({ itemId: accDef.id, quantity: 1 });

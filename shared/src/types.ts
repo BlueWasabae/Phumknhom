@@ -16,7 +16,9 @@ export type {
   StarterOutfitId,
 } from './characterStyles';
 
-export type ZoneType = 'overworld' | 'dungeon' | 'cavern' | 'farm' | 'club' | 'khmer_world' | 'house';
+export type ZoneType = 'overworld' | 'dungeon' | 'cavern' | 'tower' | 'farm' | 'club' | 'khmer_world' | 'house';
+
+export type WeaponAuraId = 'golden_lotus' | 'emerald_naga' | 'celestial_angkor';
 
 export interface NpcFriendshipEntry {
   hearts: number; // 0..10 (supports 0.2 / 0.5 / 1.0 increments)
@@ -142,6 +144,8 @@ export interface PlayerAppearance {
   armor: string | null;
   /** Equipped Rideable Khmer Mount (Village Bicycle, Water Buffalo, Mini Tuk-Tuk) */
   mount?: string | null;
+  /** Unlocked Endless Pagoda Tower Weapon Aura (Floor 10 / 25 / 50) */
+  weaponAura?: WeaponAuraId | null;
   /** 5 dedicated combat/utility accessory slots (Update 1.3A) */
   accessories?: (string | null)[];
   /** When true (default), Vanity slots (Hat/Shirt/Pants/Wings) override Combat Armor visuals */
@@ -261,6 +265,12 @@ export interface PlayerState {
   npcFriendships?: Record<string, NpcFriendshipEntry>;
   houseDecor?: PlacedHouseDecor[];
   ownedFurniture?: Record<string, number>;
+  /** Update 1.4 — Highest Endless Pagoda Tower floor cleared (0..50) */
+  highestTowerFloor?: number;
+  /** Update 1.4 — Unlocked Tower Milestone Weapon Auras */
+  unlockedWeaponAuras?: WeaponAuraId[];
+  /** Update 1.4 — Donated Angkor Relic Museum itemIds */
+  museumDonations?: string[];
   hasCompletedCreation?: boolean;
   skillDamagePct: number;
   armorDamagePct: number;
@@ -316,6 +326,7 @@ export const DEFAULT_LOADOUT: EquippedLoadout = {
   weapon: 'weapon_phkak',
   armor: 'armor_rattan_guard',
   mount: null,
+  weaponAura: null,
   accessories: [null, null, null, null, null],
   showVanityOverArmor: true,
   hasCompletedCreation: false,
@@ -483,6 +494,8 @@ export const INITIAL_PLAYER_STATE: PlayerState = {
     { itemId: 'snack_pepper_skewer', quantity: 1, itemLevel: 1, quality: 'normal' },
     // Update 1.1A Magic Mirror (Home/Farm Recall Tool)
     { itemId: 'tool_magic_mirror', quantity: 1, itemLevel: 1, quality: 'normal' },
+    // Update 1.4 Village Heirloom Relic (Ready for Angkor Relic Museum display!)
+    { itemId: 'relic_sandstone_apsara', quantity: 1, itemLevel: 1, quality: 'normal' },
   ],
   farm: createInitialFarmState(),
   skills: createInitialSkillProfile(),
@@ -520,6 +533,9 @@ export const INITIAL_PLAYER_STATE: PlayerState = {
     furn_krama_tapestry: 2,
     furn_banana_plant: 2,
   },
+  highestTowerFloor: 0,
+  unlockedWeaponAuras: [],
+  museumDonations: [],
   hasCompletedCreation: false,
   skillDamagePct: 0.025,
   armorDamagePct: 0.04,

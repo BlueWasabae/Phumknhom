@@ -707,6 +707,8 @@ export function drawFullPaperDollToCanvas(
 export class PaperDoll extends Phaser.GameObjects.Container {
   private bodySprite: Phaser.GameObjects.Image;
   private weaponSprite: Phaser.GameObjects.Image;
+  private weaponAuraGlow: Phaser.GameObjects.Image;
+  private weaponAuraSparks: Phaser.GameObjects.Arc[] = [];
   private auraGlow: Phaser.GameObjects.Image;
   private parryArc: Phaser.GameObjects.Arc;
 
@@ -746,12 +748,29 @@ export class PaperDoll extends Phaser.GameObjects.Container {
       .setScale(2.05)
       .setVisible(false);
 
+    this.weaponAuraGlow = scene.add
+      .image(15, -18, 'torch_glow')
+      .setScale(0.24)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setVisible(false);
+
+    this.weaponAuraSparks = [0, 1, 2].map(() =>
+      scene.add.circle(15, -18, 2.2, 0xfacc15, 0.92).setVisible(false)
+    );
+
     this.parryArc = scene.add
       .arc(12, -16, 22, -70, 70, false, 0xfacc15, 0.35)
       .setStrokeStyle(3, 0xfef9c3, 1)
       .setVisible(false);
 
-    this.add([this.auraGlow, this.bodySprite, this.weaponSprite, this.parryArc]);
+    this.add([
+      this.auraGlow,
+      this.bodySprite,
+      this.weaponAuraGlow,
+      this.weaponSprite,
+      ...this.weaponAuraSparks,
+      this.parryArc,
+    ]);
     this.applyWeaponAndAura();
     scene.add.existing(this);
   }
@@ -788,6 +807,30 @@ export class PaperDoll extends Phaser.GameObjects.Container {
       else this.weaponSprite.clearTint();
     } else {
       this.weaponSprite.setVisible(false);
+    }
+
+    // Update 1.4 — Pagoda Tower Milestone Weapon Aura Glow & Orbiting Particles
+    const wAura = this.loadout.weaponAura;
+    if (wAura && this.weaponSprite.visible) {
+      const auraColor =
+        wAura === 'celestial_angkor'
+          ? 0xc084fc
+          : wAura === 'emerald_naga'
+            ? 0x10b981
+            : 0xfacc15;
+      const sparkAlt =
+        wAura === 'celestial_angkor'
+          ? 0xfef08a
+          : wAura === 'emerald_naga'
+            ? 0x6ee7b7
+            : 0xf472b6;
+      this.weaponAuraGlow.setTint(auraColor).setAlpha(0.62).setVisible(true);
+      this.weaponAuraSparks.forEach((sp, idx) => {
+        sp.setFillStyle(idx % 2 === 0 ? auraColor : sparkAlt, 0.95).setVisible(true);
+      });
+    } else {
+      this.weaponAuraGlow.setVisible(false);
+      this.weaponAuraSparks.forEach((sp) => sp.setVisible(false));
     }
 
     const wingDef = this.loadout.wings ? ITEM_CATALOG[this.loadout.wings] : undefined;
@@ -853,6 +896,15 @@ export class PaperDoll extends Phaser.GameObjects.Container {
       this.weaponSprite.setRotation(dir * -0.15);
     } else {
       this.weaponSprite.setRotation(dir * -0.28 + (isWalking ? Math.sin(time / 120) * 0.14 : 0));
+    }
+
+    if (this.weaponAuraGlow.visible) {
+      this.weaponAuraGlow.setPosition(handX, handY - 6);
+      this.weaponAuraGlow.setScale(0.22 + Math.sin(time / 180) * 0.04);
+      this.weaponAuraSparks.forEach((sp, idx) => {
+        const ang = time / 240 + (idx * Math.PI * 2) / 3;
+        sp.setPosition(handX + Math.cos(ang) * 10, handY - 6 + Math.sin(ang) * 8);
+      });
     }
 
     this.parryArc.setVisible(pose === 'parry');

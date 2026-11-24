@@ -84,6 +84,9 @@ export interface SavedProfilePayload {
   npcFriendships?: PlayerState['npcFriendships'];
   houseDecor?: PlayerState['houseDecor'];
   ownedFurniture?: PlayerState['ownedFurniture'];
+  highestTowerFloor?: number;
+  unlockedWeaponAuras?: PlayerState['unlockedWeaponAuras'];
+  museumDonations?: string[];
   hasCompletedCreation?: boolean;
   activeClass: PlayerState['activeClass'];
   weapon: PlayerState['weapon'];
@@ -91,7 +94,7 @@ export interface SavedProfilePayload {
   areaChannel: number;
 }
 
-export type LeaderboardCategory = 'farmer' | 'stylish' | 'slayer';
+export type LeaderboardCategory = 'farmer' | 'stylish' | 'slayer' | 'tower';
 
 export interface LeaderboardEntry {
   rank: number;
@@ -105,6 +108,7 @@ export interface LeaderboardResponse {
   farmer: LeaderboardEntry[];
   stylish: LeaderboardEntry[];
   slayer: LeaderboardEntry[];
+  tower: LeaderboardEntry[];
 }
 
 function buildOfflineFallbackLeaderboard(localPlayer?: PlayerState): LeaderboardResponse {
@@ -115,6 +119,7 @@ function buildOfflineFallbackLeaderboard(localPlayer?: PlayerState): Leaderboard
     stylish: number;
     uniqueBosses: number;
     totalKills: number;
+    highestTowerFloor: number;
     loadout: EquippedLoadout;
   }> = [
     {
@@ -124,6 +129,7 @@ function buildOfflineFallbackLeaderboard(localPlayer?: PlayerState): Leaderboard
       stylish: 485,
       uniqueBosses: 4,
       totalKills: 19,
+      highestTowerFloor: 42,
       loadout: {
         ...DEFAULT_LOADOUT,
         hat: 'hat_royal_crown',
@@ -140,6 +146,7 @@ function buildOfflineFallbackLeaderboard(localPlayer?: PlayerState): Leaderboard
       stylish: 540,
       uniqueBosses: 3,
       totalKills: 11,
+      highestTowerFloor: 31,
       loadout: {
         ...DEFAULT_LOADOUT,
         hairStyle: 'braided_royal',
@@ -157,6 +164,7 @@ function buildOfflineFallbackLeaderboard(localPlayer?: PlayerState): Leaderboard
       stylish: 390,
       uniqueBosses: 4,
       totalKills: 26,
+      highestTowerFloor: 50,
       loadout: {
         ...DEFAULT_LOADOUT,
         hairStyle: 'silver_spiky',
@@ -174,6 +182,7 @@ function buildOfflineFallbackLeaderboard(localPlayer?: PlayerState): Leaderboard
       stylish: 295,
       uniqueBosses: 2,
       totalKills: 7,
+      highestTowerFloor: 18,
       loadout: { ...DEFAULT_LOADOUT, hat: 'hat_doun', shirt: 'shirt_krama_set', weapon: 'weapon_phkak' },
     },
     {
@@ -183,6 +192,7 @@ function buildOfflineFallbackLeaderboard(localPlayer?: PlayerState): Leaderboard
       stylish: 410,
       uniqueBosses: 3,
       totalKills: 15,
+      highestTowerFloor: 35,
       loadout: { ...DEFAULT_LOADOUT, shirt: 'shirt_shadow_cloak', weapon: 'weapon_kambet' },
     },
     {
@@ -192,6 +202,7 @@ function buildOfflineFallbackLeaderboard(localPlayer?: PlayerState): Leaderboard
       stylish: 325,
       uniqueBosses: 3,
       totalKills: 12,
+      highestTowerFloor: 27,
       loadout: { ...DEFAULT_LOADOUT, shirt: 'shirt_traveler_vest', weapon: 'weapon_thnu' },
     },
     {
@@ -201,6 +212,7 @@ function buildOfflineFallbackLeaderboard(localPlayer?: PlayerState): Leaderboard
       stylish: 350,
       uniqueBosses: 2,
       totalKills: 8,
+      highestTowerFloor: 22,
       loadout: { ...DEFAULT_LOADOUT, shirt: 'shirt_krama_set', weapon: 'weapon_krama_whip' },
     },
     {
@@ -210,6 +222,7 @@ function buildOfflineFallbackLeaderboard(localPlayer?: PlayerState): Leaderboard
       stylish: 445,
       uniqueBosses: 2,
       totalKills: 6,
+      highestTowerFloor: 15,
       loadout: { ...DEFAULT_LOADOUT, hairStyle: 'high_ponytail', hat: 'hat_frog_crown', shirt: 'shirt_apsara_gold' },
     },
     {
@@ -219,6 +232,7 @@ function buildOfflineFallbackLeaderboard(localPlayer?: PlayerState): Leaderboard
       stylish: 280,
       uniqueBosses: 2,
       totalKills: 9,
+      highestTowerFloor: 12,
       loadout: { ...DEFAULT_LOADOUT, shirt: 'shirt_village_tunic', weapon: 'weapon_phkak' },
     },
   ];
@@ -232,6 +246,7 @@ function buildOfflineFallbackLeaderboard(localPlayer?: PlayerState): Leaderboard
       stylish: localPlayer.lifeStats.stylish,
       uniqueBosses: localPlayer.clearedBosses.length,
       totalKills,
+      highestTowerFloor: localPlayer.highestTowerFloor ?? 0,
       loadout: { ...localPlayer.loadout },
     });
   }
@@ -269,7 +284,21 @@ function buildOfflineFallbackLeaderboard(localPlayer?: PlayerState): Leaderboard
       loadout: p.loadout,
     }));
 
-  return { farmer, stylish, slayer };
+  const tower = [...seeds]
+    .sort((a, b) => b.highestTowerFloor - a.highestTowerFloor || b.totalKills - a.totalKills)
+    .slice(0, 10)
+    .map((p, idx) => ({
+      rank: idx + 1,
+      username: p.username,
+      score: p.highestTowerFloor,
+      detailLabel:
+        p.highestTowerFloor >= 50
+          ? 'Floor 50 / 50 · Celestial Angkor Champion'
+          : `Reached Pagoda Floor ${p.highestTowerFloor} / 50`,
+      loadout: p.loadout,
+    }));
+
+  return { farmer, stylish, slayer, tower };
 }
 
 export async function fetchLeaderboard(localPlayer?: PlayerState): Promise<LeaderboardResponse> {
@@ -282,10 +311,12 @@ export async function fetchLeaderboard(localPlayer?: PlayerState): Promise<Leade
           ...r,
           loadout: { ...DEFAULT_LOADOUT, ...(r.loadout ?? {}) },
         });
+        const fallback = buildOfflineFallbackLeaderboard(localPlayer);
         return {
           farmer: json.farmer.map(normalizeRow),
           stylish: json.stylish.map(normalizeRow),
           slayer: json.slayer.map(normalizeRow),
+          tower: Array.isArray(json.tower) && json.tower.length > 0 ? json.tower.map(normalizeRow) : fallback.tower,
         };
       }
     }
@@ -341,6 +372,9 @@ export function serializePlayerStateForSave(state: PlayerState): SavedProfilePay
     npcFriendships: { ...(state.npcFriendships ?? {}) },
     houseDecor: state.houseDecor ? state.houseDecor.map((d) => ({ ...d })) : undefined,
     ownedFurniture: state.ownedFurniture ? { ...state.ownedFurniture } : undefined,
+    highestTowerFloor: state.highestTowerFloor ?? 0,
+    unlockedWeaponAuras: [...(state.unlockedWeaponAuras ?? [])],
+    museumDonations: [...(state.museumDonations ?? [])],
     hasCompletedCreation: Boolean(state.hasCompletedCreation ?? state.loadout.hasCompletedCreation),
     activeClass: state.activeClass,
     weapon: { ...state.weapon },
@@ -608,6 +642,10 @@ export function hydratePlayerStateFromSave(
       saved?.ownedFurniture && typeof saved.ownedFurniture === 'object'
         ? saved.ownedFurniture
         : INITIAL_PLAYER_STATE.ownedFurniture,
+    highestTowerFloor:
+      typeof saved?.highestTowerFloor === 'number' ? Math.max(0, Math.min(50, saved.highestTowerFloor)) : 0,
+    unlockedWeaponAuras: Array.isArray(saved?.unlockedWeaponAuras) ? saved.unlockedWeaponAuras : [],
+    museumDonations: Array.isArray(saved?.museumDonations) ? saved.museumDonations : [],
     hasCompletedCreation: Boolean(
       saved?.hasCompletedCreation ?? saved?.loadout?.hasCompletedCreation ?? false
     ),

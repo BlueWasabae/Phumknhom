@@ -32,7 +32,7 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
     const maxR = rect.width / 2 - 16;
 
     let dx = clientX - cx;
-    let dy = zone === 'dungeon' || zone === 'cavern' ? 0 : clientY - cy;
+    let dy = zone === 'dungeon' || zone === 'cavern' || zone === 'tower' ? 0 : clientY - cy;
     const dist = Math.hypot(dx, dy);
     if (dist > maxR) {
       dx = (dx / dist) * maxR;
@@ -74,7 +74,7 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
       </div>
 
       <div className="pointer-events-auto flex items-end gap-2">
-        {zone === 'dungeon' || zone === 'cavern' ? (
+        {zone === 'dungeon' || zone === 'cavern' || zone === 'tower' ? (
           <div className="flex flex-col items-end gap-2">
             {zone === 'dungeon' && bossHud?.difficulty === 'mythic' && (bossHud.focusPct >= 100 || bossHud.furyPct >= 100) && (
               <div className="flex items-center gap-2">

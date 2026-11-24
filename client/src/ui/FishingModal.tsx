@@ -47,6 +47,7 @@ const CATCH_TABLE: Array<{ weight: number; reward: FishingCatchReward }> = [
   {
     weight: 16,
     reward: {
+      itemId: 'fish_sunken_coin_pouch',
       coins: 220,
       label: 'Sunken Coin Pouch (+220 Coins)',
       khmerLabel: 'ថង់ប្រាក់លិចទឹក',

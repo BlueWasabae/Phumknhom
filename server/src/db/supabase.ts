@@ -47,6 +47,9 @@ export interface SavedPlayerProfile {
   npcFriendships?: Record<string, { hearts: number; lastGiftDay: string | null; claimedRewards?: number[] }>;
   houseDecor?: Array<{ uid: string; itemId: string; x: number; y: number; rotation?: number }>;
   ownedFurniture?: Record<string, number>;
+  highestTowerFloor?: number;
+  unlockedWeaponAuras?: string[];
+  museumDonations?: string[];
   hasCompletedCreation?: boolean;
   activeClass?: string;
   weapon?: Record<string, unknown>;
@@ -454,6 +457,13 @@ function rowToSavedProfile(row: {
       typeof meta.ownedFurniture === 'object' && meta.ownedFurniture
         ? (meta.ownedFurniture as Record<string, number>)
         : undefined,
+    highestTowerFloor: typeof meta.highestTowerFloor === 'number' ? meta.highestTowerFloor : 0,
+    unlockedWeaponAuras: Array.isArray(meta.unlockedWeaponAuras)
+      ? (meta.unlockedWeaponAuras as string[])
+      : [],
+    museumDonations: Array.isArray(meta.museumDonations)
+      ? (meta.museumDonations as string[])
+      : [],
     hasCompletedCreation: Boolean(
       meta.hasCompletedCreation ??
         (loadout as { hasCompletedCreation?: boolean }).hasCompletedCreation ??
@@ -520,6 +530,9 @@ export async function registerPlayer(
     weaponPrefix: starterProfile?.weaponPrefix ?? 'keen',
     armorPrefix: starterProfile?.armorPrefix ?? 'armored',
     shimmerBlessings: starterProfile?.shimmerBlessings ?? [],
+    highestTowerFloor: starterProfile?.highestTowerFloor ?? 0,
+    unlockedWeaponAuras: starterProfile?.unlockedWeaponAuras ?? [],
+    museumDonations: starterProfile?.museumDonations ?? [],
     hasCompletedCreation: Boolean(starterProfile?.hasCompletedCreation ?? false),
     activeClass: starterProfile?.activeClass,
     weapon: starterProfile?.weapon,
@@ -747,6 +760,9 @@ export async function savePlayerProfile(
     npcFriendships: profile.npcFriendships ?? {},
     houseDecor: profile.houseDecor,
     ownedFurniture: profile.ownedFurniture,
+    highestTowerFloor: typeof profile.highestTowerFloor === 'number' ? profile.highestTowerFloor : 0,
+    unlockedWeaponAuras: Array.isArray(profile.unlockedWeaponAuras) ? profile.unlockedWeaponAuras : [],
+    museumDonations: Array.isArray(profile.museumDonations) ? profile.museumDonations : [],
     hasCompletedCreation: Boolean(
       profile.hasCompletedCreation ??
         (profile.loadout as { hasCompletedCreation?: boolean } | undefined)?.hasCompletedCreation ??
@@ -1353,6 +1369,7 @@ export async function getTopTenLeaderboards(): Promise<{
   farmer: ServerLeaderboardEntry[];
   stylish: ServerLeaderboardEntry[];
   slayer: ServerLeaderboardEntry[];
+  tower: ServerLeaderboardEntry[];
 }> {
   interface RawRecord {
     username: string;
@@ -1401,7 +1418,7 @@ export async function getTopTenLeaderboards(): Promise<{
         wings: 'wings_garuda',
         weapon: 'weapon_preah_khan',
       },
-      meta_json: { bankCoins: 4500, clearedBosses: ['sdech_kongkaeb', 'arp_prey_chrov', 'yeak_thmor', 'neak_reach'], bossDefeats: { sdech_kongkaeb: 8, yeak_thmor: 6, neak_reach: 5 } },
+      meta_json: { highestTowerFloor: 42, bankCoins: 4500, clearedBosses: ['sdech_kongkaeb', 'arp_prey_chrov', 'yeak_thmor', 'neak_reach'], bossDefeats: { sdech_kongkaeb: 8, yeak_thmor: 6, neak_reach: 5 } },
     },
     {
       username: 'Bopha_Lotus',
@@ -1415,7 +1432,7 @@ export async function getTopTenLeaderboards(): Promise<{
         wings: 'wings_yant_halo',
         weapon: 'weapon_sastra',
       },
-      meta_json: { bankCoins: 2000, clearedBosses: ['sdech_kongkaeb', 'arp_prey_chrov', 'yeak_thmor'], bossDefeats: { sdech_kongkaeb: 5, yeak_thmor: 4 } },
+      meta_json: { highestTowerFloor: 31, bankCoins: 2000, clearedBosses: ['sdech_kongkaeb', 'arp_prey_chrov', 'yeak_thmor'], bossDefeats: { sdech_kongkaeb: 5, yeak_thmor: 4 } },
     },
     {
       username: 'Vireak_Lbokator',
@@ -1429,7 +1446,7 @@ export async function getTopTenLeaderboards(): Promise<{
         wings: 'wings_ember',
         weapon: 'weapon_stone_club',
       },
-      meta_json: { bankCoins: 1500, clearedBosses: ['sdech_kongkaeb', 'arp_prey_chrov', 'yeak_thmor', 'neak_reach'], bossDefeats: { sdech_kongkaeb: 9, yeak_thmor: 10, neak_reach: 7 } },
+      meta_json: { highestTowerFloor: 50, bankCoins: 1500, clearedBosses: ['sdech_kongkaeb', 'arp_prey_chrov', 'yeak_thmor', 'neak_reach'], bossDefeats: { sdech_kongkaeb: 9, yeak_thmor: 10, neak_reach: 7 } },
     },
   ];
   const existingNames = new Set(rows.map((r) => r.username.toLowerCase()));
@@ -1445,6 +1462,7 @@ export async function getTopTenLeaderboards(): Promise<{
     const cleared = Array.isArray(r.meta_json?.clearedBosses) ? r.meta_json.clearedBosses.length : 0;
     const defeatsObj = (r.meta_json?.bossDefeats as Record<string, number> | undefined) ?? {};
     const totalKills = Object.values(defeatsObj).reduce((sum, n) => sum + (Number(n) || 0), 0);
+    const highestTowerFloor = Math.max(0, Math.min(50, Number(r.meta_json?.highestTowerFloor) || 0));
     return {
       username: r.username,
       farmLevel,
@@ -1452,6 +1470,7 @@ export async function getTopTenLeaderboards(): Promise<{
       stylish,
       cleared,
       totalKills,
+      highestTowerFloor,
       loadout: r.appearance ?? {},
     };
   });
@@ -1489,5 +1508,19 @@ export async function getTopTenLeaderboards(): Promise<{
       loadout: p.loadout,
     }));
 
-  return { farmer, stylish, slayer };
+  const tower = [...parsed]
+    .sort((a, b) => b.highestTowerFloor - a.highestTowerFloor || b.totalKills - a.totalKills)
+    .slice(0, 10)
+    .map((p, i) => ({
+      rank: i + 1,
+      username: p.username,
+      score: p.highestTowerFloor,
+      detailLabel:
+        p.highestTowerFloor >= 50
+          ? 'Floor 50 / 50 · Celestial Angkor Champion'
+          : `Reached Pagoda Floor ${p.highestTowerFloor} / 50`,
+      loadout: p.loadout,
+    }));
+
+  return { farmer, stylish, slayer, tower };
 }

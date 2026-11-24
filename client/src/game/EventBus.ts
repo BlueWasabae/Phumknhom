@@ -8,9 +8,11 @@ import type {
   PlacedHouseDecor,
   PlayerState,
   SkillId,
+  WeaponAuraId,
   ZoneType,
 } from '@shared/types';
 import type { KhmerNpcId } from '@shared/npcSchedules';
+import type { ActiveWorldEventSnapshot } from '@shared/worldEvents';
 import type { TravelRequestPayload } from './systems/TravelAndPylons';
 
 export interface JoystickVector {
@@ -196,6 +198,27 @@ export interface EventMap {
     items?: Array<{ itemId: string; quantity: number }>;
     label: string;
   };
+  'tower:enterRequest': {
+    floor: number;
+    partyMode: 'solo' | 'coop';
+  };
+  'tower:floorCleared': {
+    floor: number;
+    isBossFloor: boolean;
+    coins: number;
+    vitalityXp: number;
+    reforgeStones: number;
+    unlockedAura: WeaponAuraId | null;
+  };
+  'worldEvent:changed': ActiveWorldEventSnapshot | null;
+  'worldEvent:reward': {
+    skillId?: SkillId;
+    xp?: number;
+    coins?: number;
+    gold?: number;
+    items?: Array<{ itemId: string; quantity: number }>;
+    label: string;
+  };
   'npc:openDialogue': { npcId: KhmerNpcId };
   'house:setDecorateMode': { active: boolean; itemId?: string | null };
   'house:placeQuick': { itemId: string };
@@ -243,8 +266,11 @@ export interface EventMap {
       | 'reforge'
       | 'clubGames'
       | 'houseDecor'
-      | 'leaderboard';
-    leaderboardCategory?: 'farmer' | 'stylish' | 'slayer';
+      | 'leaderboard'
+      | 'pagodaTower'
+      | 'museum'
+      | 'nightMarket';
+    leaderboardCategory?: 'farmer' | 'stylish' | 'slayer' | 'tower';
     farmTab?: 'seeds' | 'livestock' | 'artisan';
     shopTab?: 'primary' | 'secondary';
     friendsTab?: 'friends' | 'inbox';

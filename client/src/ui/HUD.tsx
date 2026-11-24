@@ -53,6 +53,12 @@ import {
   type NetworkStatusPayload,
 } from '../game/EventBus';
 import { soundManager, type AudioSettings } from '../game/systems/SoundManager';
+import { worldEventManager } from '../game/systems/WorldEventManager';
+import {
+  WORLD_EVENT_LIST,
+  type ActiveWorldEventSnapshot,
+  type WorldEventId,
+} from '@shared/worldEvents';
 import {
   SEASONS,
   SEASON_ORDER,
@@ -100,6 +106,9 @@ interface HUDProps {
   onOpenHouseDecor?: () => void;
   onInviteFriendsHome?: () => void;
   onOpenLeaderboard?: () => void;
+  onOpenPagodaTower?: () => void;
+  onOpenMuseum?: () => void;
+  onOpenNightMarket?: () => void;
   onToggleMount?: () => void;
   onFastForwardFarm: () => void;
 }
@@ -144,6 +153,9 @@ export const HUD: React.FC<HUDProps> = ({
   onOpenHouseDecor,
   onInviteFriendsHome,
   onOpenLeaderboard,
+  onOpenPagodaTower,
+  onOpenMuseum,
+  onOpenNightMarket,
   onToggleMount,
   onFastForwardFarm,
 }) => {
@@ -152,6 +164,9 @@ export const HUD: React.FC<HUDProps> = ({
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [audioSettings, setAudioSettings] = useState<AudioSettings>(() => soundManager.getSettings());
   const [seasonSnap, setSeasonSnap] = useState<SeasonClockSnapshot>(() => seasonClock.getSnapshot());
+  const [activeWorldEvent, setActiveWorldEvent] = useState<ActiveWorldEventSnapshot | null>(() =>
+    worldEventManager.getActiveEvent()
+  );
   const [emoteOpen, setEmoteOpen] = useState(false);
   const [previewDiff, setPreviewDiff] = useState<DifficultyMode>('normal');
   const [previewParty, setPreviewParty] = useState(2);
@@ -160,6 +175,7 @@ export const HUD: React.FC<HUDProps> = ({
   useEffect(() => {
     const unsubAudio = soundManager.subscribe(setAudioSettings);
     const unsubSeason = seasonClock.subscribe(setSeasonSnap);
+    const unsubEvent = worldEventManager.subscribe(setActiveWorldEvent);
     const id = window.setInterval(() => {
       setNow(Date.now());
       setSeasonSnap(seasonClock.getSnapshot());
@@ -167,6 +183,7 @@ export const HUD: React.FC<HUDProps> = ({
     return () => {
       unsubAudio();
       unsubSeason();
+      unsubEvent();
       window.clearInterval(id);
     };
   }, []);
@@ -296,6 +313,8 @@ export const HUD: React.FC<HUDProps> = ({
             ? 'Phum Night Club • Lounge'
             : zone === 'cavern'
             ? '⛏️ Ancient Cavern • Mining & Relics'
+            : zone === 'tower'
+            ? '🗼 Endless Pagoda Tower (50F)'
             : 'Ancient Cavern • Dungeon'}
         </span>
       )}
@@ -381,6 +400,37 @@ export const HUD: React.FC<HUDProps> = ({
             </button>
           )}
         </div>
+      )}
+
+      {/* Live Dynamic World Event Pill (Update 1.4) */}
+      {activeWorldEvent && (
+        <button
+          type="button"
+          onClick={() => {
+            soundManager.playSfx('click');
+            if (activeWorldEvent.eventId === 'khmer_night_market' && onOpenNightMarket) {
+              onOpenNightMarket();
+              return;
+            }
+            const targetMap = activeWorldEvent.def.targetMaps[0] ?? 'wild_frontier';
+            EventBus.emit('travel:execute', {
+              method: 'pylon',
+              destinationLabel: `${activeWorldEvent.def.name} (${targetMap.replace(/_/g, ' ')})`,
+              targetZone: 'overworld',
+              mapId: targetMap,
+            });
+          }}
+          title={`${activeWorldEvent.def.description} Click to jump right into the event!`}
+          className={`px-2 py-0.5 rounded-lg border font-display font-bold text-[10px] whitespace-nowrap shadow-sm animate-pulse cursor-pointer transition ${activeWorldEvent.def.pillBgClass}`}
+        >
+          {activeWorldEvent.def.icon} {activeWorldEvent.def.name}{' '}
+          {activeWorldEvent.eventId === 'golden_frog_rain'
+            ? `(${activeWorldEvent.progressCount}/15)`
+            : activeWorldEvent.eventId === 'crimson_eclipse'
+              ? `(${activeWorldEvent.progressCount}⚔)`
+              : ''}{' '}
+          · {formatCountdown(activeWorldEvent.remainingMs)}
+        </button>
       )}
 
       {/* 4-Season Weather, Day/Night & Chankitek Lunar Phase Badge */}
@@ -576,6 +626,40 @@ export const HUD: React.FC<HUDProps> = ({
                 >
                   <Store className="w-4 h-4 text-amber-700" /> Village Market (5% Tax)
                 </button>
+                {onOpenPagodaTower && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuDropdownOpen(false);
+                      onOpenPagodaTower();
+                    }}
+                    className="px-3 py-2 rounded-xl hover:bg-purple-200/80 text-left flex items-center justify-between gap-2 text-amber-950"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Swords className="w-4 h-4 text-purple-700" /> Pagoda Tower (50F)
+                    </span>
+                    <span className="text-[9px] font-bold text-purple-800">
+                      F{player.highestTowerFloor ?? 0}
+                    </span>
+                  </button>
+                )}
+                {onOpenMuseum && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuDropdownOpen(false);
+                      onOpenMuseum();
+                    }}
+                    className="px-3 py-2 rounded-xl hover:bg-amber-200/80 text-left flex items-center justify-between gap-2 text-amber-950"
+                  >
+                    <span className="flex items-center gap-2">
+                      <BookOpen className="w-4 h-4 text-emerald-700" /> Angkor Relic Museum
+                    </span>
+                    <span className="text-[9px] font-bold text-emerald-800">
+                      {(player.museumDonations ?? []).length}/12
+                    </span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => {
@@ -1296,6 +1380,57 @@ export const HUD: React.FC<HUDProps> = ({
                     }`}
                   >
                     {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Update 1.4: Trigger World Event (Test Selector) */}
+          <div className="p-3 rounded-xl bg-amber-50 border border-amber-900/25 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-display font-bold text-amber-950">
+                ⚡ Trigger World Event (Test)
+              </span>
+              {activeWorldEvent && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    soundManager.playSfx('click');
+                    worldEventManager.clearEvent();
+                  }}
+                  className="px-2 py-0.5 rounded-lg bg-stone-200 hover:bg-stone-300 text-stone-800 font-bold text-[10px] cursor-pointer"
+                >
+                  End Active Event
+                </button>
+              )}
+            </div>
+            <p className="text-[10px] text-amber-900/85 leading-snug">
+              Instantly launch any Dynamic World Event without waiting for the timer. Alerts broadcast on the live ticker &amp; spawn across their target maps!
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+              {WORLD_EVENT_LIST.map((ev) => {
+                const isRunning = activeWorldEvent?.eventId === ev.id;
+                return (
+                  <button
+                    key={ev.id}
+                    type="button"
+                    onClick={() => {
+                      soundManager.playSfx('magic');
+                      worldEventManager.triggerEvent(ev.id as WorldEventId, true);
+                    }}
+                    className={`p-2 rounded-xl border-2 text-left transition cursor-pointer ${
+                      isRunning
+                        ? 'bg-purple-800 text-amber-50 border-amber-400 shadow'
+                        : 'bg-white hover:bg-amber-100 text-amber-950 border-amber-900/25'
+                    }`}
+                  >
+                    <div className="font-display font-bold text-[11px]">
+                      {ev.icon} {ev.name}
+                    </div>
+                    <div className="text-[9px] opacity-80">
+                      {Math.round(ev.durationMs / 60000)}m · {ev.targetMaps.join(', ').replace(/_/g, ' ')}
+                    </div>
                   </button>
                 );
               })}

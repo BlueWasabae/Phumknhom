@@ -10,8 +10,11 @@ import {
   type PlayerState,
   type QualityTier,
   type SkillId,
+  type WeaponAuraId,
   type ZoneType,
 } from '@shared/types';
+import { donateItemToMuseum } from '@shared/museumCatalog';
+import type { ActiveWorldEventSnapshot, NightMarketOffer } from '@shared/worldEvents';
 import { KHMER_CLASSES } from '@shared/khmerClasses';
 import { computeVillageToDungeonBridge } from '@shared/skillTrees';
 import {
@@ -147,8 +150,12 @@ import { CharacterCreatorModal, type CharacterCreationResult } from './ui/Charac
 import { NpcDialogueModal } from './ui/NpcDialogueModal';
 import { HouseDecorModal } from './ui/HouseDecorModal';
 import { LeaderboardModal } from './ui/LeaderboardModal';
+import { PagodaTowerModal } from './ui/PagodaTowerModal';
+import { MuseumModal } from './ui/MuseumModal';
+import { NightMarketModal } from './ui/NightMarketModal';
 import { getMountSpec } from './game/entities/MountEntity';
 import { soundManager } from './game/systems/SoundManager';
+import { worldEventManager } from './game/systems/WorldEventManager';
 import { supabase } from './lib/supabaseClient';
 
 type ActiveModalType =
@@ -175,6 +182,9 @@ type ActiveModalType =
   | 'clubGames'
   | 'houseDecor'
   | 'leaderboard'
+  | 'pagodaTower'
+  | 'museum'
+  | 'nightMarket'
   | 'characterCreator';
 
 interface FloatingXpBanner extends SkillXpToastPayload {
@@ -205,6 +215,13 @@ export const App: React.FC = () => {
   const [activeNpcId, setActiveNpcId] = useState<KhmerNpcId | null>(null);
   const [houseDecorateMode, setHouseDecorateMode] = useState(false);
   const [leaderboardCategory, setLeaderboardCategory] = useState<LeaderboardCategory>('farmer');
+  const [activeWorldEvent, setActiveWorldEvent] = useState<ActiveWorldEventSnapshot | null>(() =>
+    worldEventManager.getActiveEvent()
+  );
+
+  useEffect(() => {
+    return worldEventManager.subscribe(setActiveWorldEvent);
+  }, []);
 
   const [zone, setZone] = useState<ZoneType>('overworld');
   const [networkStatus, setNetworkStatus] = useState<NetworkStatusPayload>({
@@ -1310,6 +1327,9 @@ export const App: React.FC = () => {
           npcFriendships: nextPlayer.npcFriendships ?? prev.npcFriendships,
           houseDecor: nextPlayer.houseDecor ?? prev.houseDecor,
           ownedFurniture: nextPlayer.ownedFurniture ?? prev.ownedFurniture,
+          highestTowerFloor: Math.max(nextPlayer.highestTowerFloor ?? 0, prev.highestTowerFloor ?? 0),
+          unlockedWeaponAuras: nextPlayer.unlockedWeaponAuras ?? prev.unlockedWeaponAuras,
+          museumDonations: nextPlayer.museumDonations ?? prev.museumDonations,
         }));
       }),
       EventBus.on('npc:openDialogue', ({ npcId }) => {
@@ -1401,6 +1421,79 @@ export const App: React.FC = () => {
             ok: true,
             message: label,
           };
+        });
+      }),
+      EventBus.on('tower:floorCleared', ({ floor, isBossFloor, coins, vitalityXp, reforgeStones, unlockedAura }) => {
+        runStateAction((prev) => {
+          const nextCoins = prev.currencies.coins + coins;
+          const nextInv = prev.inventory.map((i) => ({ ...i }));
+          const existingStone = nextInv.find((i) => i.itemId === 'mat_reforge_stone');
+          if (existingStone) existingStone.quantity += reforgeStones;
+          else nextInv.push({ itemId: 'mat_reforge_stone', quantity: reforgeStones, itemLevel: 1, quality: 'normal' });
+
+          const prevHighest = prev.highestTowerFloor ?? 0;
+          const nextHighest = Math.max(prevHighest, floor);
+          const nextAuras = new Set<WeaponAuraId>(prev.unlockedWeaponAuras ?? []);
+          if (unlockedAura) nextAuras.add(unlockedAura);
+          if (nextHighest >= 10) nextAuras.add('golden_lotus');
+          if (nextHighest >= 25) nextAuras.add('emerald_naga');
+          if (nextHighest >= 50) nextAuras.add('celestial_angkor');
+
+          const nextLoadout: EquippedLoadout =
+            unlockedAura && !prev.loadout.weaponAura
+              ? { ...prev.loadout, weaponAura: unlockedAura }
+              : { ...prev.loadout };
+
+          const withLoot: PlayerState = {
+            ...prev,
+            coins: nextCoins,
+            currencies: { ...prev.currencies, coins: nextCoins },
+            inventory: nextInv,
+            loadout: nextLoadout,
+            highestTowerFloor: nextHighest,
+            unlockedWeaponAuras: Array.from(nextAuras),
+          };
+          const xpRes = awardSkillXp(withLoot, 'vitality', vitalityXp);
+          const auraNote = unlockedAura
+            ? ` ✨ UNLOCKED ${unlockedAura.replace(/_/g, ' ').toUpperCase()} WEAPON AURA!`
+            : '';
+          return {
+            state: xpRes.state,
+            ok: true,
+            message: `🗼 Cleared Pagoda Floor ${floor}${isBossFloor ? ' (Mythic Boss!)' : ''}! +${coins}c · +${vitalityXp} Vitality XP · +${reforgeStones}× Reforge Stone!${auraNote}`,
+          };
+        });
+        if (isBossFloor || floor % 10 === 0) {
+          EventBus.emit('ticker:push', {
+            text: `🗼 ${playerRef.current.name} conquered Endless Pagoda Tower Floor ${floor} / 50!`,
+            category: 'boss',
+          });
+        }
+      }),
+      EventBus.on('worldEvent:reward', ({ skillId, xp, coins, gold, items, label }) => {
+        runStateAction((prev) => {
+          const nextCoins = prev.currencies.coins + (coins ?? 0);
+          const nextGold = prev.currencies.gold + (gold ?? 0);
+          const nextInv = prev.inventory.map((i) => ({ ...i }));
+          if (items) {
+            for (const drop of items) {
+              const existing = nextInv.find(
+                (i) => i.itemId === drop.itemId && (i.quality ?? 'normal') === 'normal'
+              );
+              if (existing) existing.quantity += drop.quantity;
+              else nextInv.push({ itemId: drop.itemId, quantity: drop.quantity, itemLevel: 1, quality: 'normal' });
+            }
+          }
+          let nextState: PlayerState = {
+            ...prev,
+            coins: nextCoins,
+            currencies: { ...prev.currencies, coins: nextCoins, gold: nextGold },
+            inventory: nextInv,
+          };
+          if (skillId && xp && xp > 0) {
+            nextState = awardSkillXp(nextState, skillId, xp).state;
+          }
+          return { state: nextState, ok: true, message: label };
         });
       }),
       EventBus.on('portal:proximity', ({ nearPortal: near }) => {
@@ -1610,6 +1703,9 @@ export const App: React.FC = () => {
           setLeaderboardCategory('farmer');
           setActiveModal('leaderboard');
         }}
+        onOpenPagodaTower={() => setActiveModal('pagodaTower')}
+        onOpenMuseum={() => setActiveModal('museum')}
+        onOpenNightMarket={() => setActiveModal('nightMarket')}
         onToggleMount={handleToggleMount}
         onOpenHouseDecor={() => setActiveModal('houseDecor')}
         onInviteFriendsHome={() => {
@@ -1801,6 +1897,47 @@ export const App: React.FC = () => {
         onEquipAccessory={handleEquipItem}
         onCraftArmorSet={handleCraftArmorSet}
         onEquipArmorSet={handleEquipItem}
+        onEmpowerEclipseWeapon={() =>
+          runStateAction((s) => {
+            if (s.weapon.upgradeLevel >= 10) {
+              return { state: s, ok: false, message: 'Equipped weapon is already at maximum +10 empowerment!' };
+            }
+            const shardQty = s.inventory
+              .filter((i) => i.itemId === 'mat_eclipse_shard')
+              .reduce((sum, i) => sum + i.quantity, 0);
+            if (shardQty < 2) {
+              return {
+                state: s,
+                ok: false,
+                message: 'Need 2× Eclipse Shards (dropped by Shadow Spirits during Crimson Eclipse).',
+              };
+            }
+            let remaining = 2;
+            const nextInv = s.inventory
+              .map((entry) => {
+                if (entry.itemId !== 'mat_eclipse_shard' || remaining <= 0) return { ...entry };
+                const take = Math.min(entry.quantity, remaining);
+                remaining -= take;
+                return { ...entry, quantity: entry.quantity - take };
+              })
+              .filter((entry) => entry.quantity > 0);
+
+            const nextLevel = Math.min(10, s.weapon.upgradeLevel + 1);
+            soundManager.playSfx('level_up');
+            return {
+              state: {
+                ...s,
+                inventory: nextInv,
+                weapon: {
+                  ...s.weapon,
+                  upgradeLevel: nextLevel,
+                },
+              },
+              ok: true,
+              message: `🌑 Empowered ${s.weapon.name} to +${nextLevel} (+${nextLevel * 6}% Weapon Power)!`,
+            };
+          })
+        }
       />
 
       <ClubGamesModal
@@ -1839,6 +1976,60 @@ export const App: React.FC = () => {
         initialCategory={leaderboardCategory}
         player={player}
         onClose={() => setActiveModal(null)}
+      />
+
+      <PagodaTowerModal
+        open={activeModal === 'pagodaTower'}
+        player={player}
+        onClose={() => setActiveModal(null)}
+        onStartFloor={(floor, partyMode) => {
+          setActiveModal(null);
+          EventBus.emit('tower:enterRequest', { floor, partyMode });
+        }}
+        onEquipWeaponAura={(auraId) => applyLoadoutPatch({ weaponAura: auraId })}
+      />
+
+      <MuseumModal
+        open={activeModal === 'museum'}
+        player={player}
+        onClose={() => setActiveModal(null)}
+        onDonateItem={(itemId) =>
+          runStateAction((s) => {
+            const res = donateItemToMuseum(s, itemId);
+            if (res.ok) soundManager.playSfx(res.unlockedScholarHat ? 'level_up' : 'coin');
+            return res;
+          })
+        }
+      />
+
+      <NightMarketModal
+        open={activeModal === 'nightMarket'}
+        player={player}
+        activeEvent={activeWorldEvent}
+        onClose={() => setActiveModal(null)}
+        onBuyOffer={(offer: NightMarketOffer) =>
+          runStateAction((s) => {
+            if (s.currencies.coins < offer.discountCoins) {
+              return { state: s, ok: false, message: `Need ${offer.discountCoins.toLocaleString()} Coins.` };
+            }
+            const nextCoins = s.currencies.coins - offer.discountCoins;
+            const nextInv = s.inventory.map((i) => ({ ...i }));
+            const existing = nextInv.find((i) => i.itemId === offer.itemId && (i.quality ?? 'normal') === 'normal');
+            if (existing) existing.quantity += offer.quantity;
+            else nextInv.push({ itemId: offer.itemId, quantity: offer.quantity, itemLevel: 1, quality: 'normal' });
+            soundManager.playSfx('coin');
+            return {
+              state: {
+                ...s,
+                coins: nextCoins,
+                currencies: { ...s.currencies, coins: nextCoins },
+                inventory: nextInv,
+              },
+              ok: true,
+              message: `🏮 Night Market Deal! Bought ${offer.name} for ${offer.discountCoins.toLocaleString()}c (-${offer.discountPct}%)!`,
+            };
+          })
+        }
       />
 
       <AreaSwitcherModal

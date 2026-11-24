@@ -9,6 +9,7 @@ import {
   getAvailableTalentPoints,
   getEarnedTalentPoints,
 } from '@shared/skillTrees';
+import { getMuseumScholarPerks } from '@shared/museumCatalog';
 import { EventBus } from '../EventBus';
 
 export interface SkillXpResult {
@@ -36,7 +37,8 @@ export function awardSkillXp(
   amount: number,
   emitToast = true
 ): SkillXpResult {
-  const safeXp = Math.max(0, Math.round(amount));
+  const museumPerks = getMuseumScholarPerks(state.museumDonations);
+  const safeXp = Math.max(0, Math.round(amount * (1 + museumPerks.skillXpBonusPct)));
   const curEntry = state.skills.skills[skillId];
   if (!curEntry || safeXp <= 0) {
     return {

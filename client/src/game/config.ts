@@ -6,14 +6,15 @@ import { FarmScene } from './scenes/FarmScene';
 import { ClubScene } from './scenes/ClubScene';
 import { CavernExploreScene } from './scenes/CavernExploreScene';
 import { HouseInteriorScene } from './scenes/HouseInteriorScene';
+import { PagodaTowerScene } from './scenes/PagodaTowerScene';
 import { DungeonBossScene } from './scenes/DungeonBossScene';
 
 export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameConfig {
   return {
     type: Phaser.AUTO,
     parent,
-    width: parent.clientWidth || window.innerWidth,
-    height: parent.clientHeight || window.innerHeight,
+    width: Math.max(320, parent.clientWidth || window.innerWidth || 1280),
+    height: Math.max(240, parent.clientHeight || window.innerHeight || 720),
     backgroundColor: '#0f172a',
     pixelArt: true,
     roundPixels: true,
@@ -39,6 +40,7 @@ export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameCon
       ClubScene,
       CavernExploreScene,
       HouseInteriorScene,
+      PagodaTowerScene,
       DungeonBossScene,
     ],
   };

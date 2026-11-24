@@ -8,6 +8,7 @@ import {
 } from './types';
 import { computeReforgeDeltas } from './balanceFormulas';
 import { aggregateAccessoryBonuses, getCombatArmorSetBonus } from './accessoryFusions';
+import { getMuseumScholarPerks } from './museumCatalog';
 export { createInitialSkillProfile };
 
 export type SkillCategory = 'life' | 'combat';
@@ -497,6 +498,8 @@ export interface VillageToDungeonBridgeStats {
   hasGroundSlamShockwave: boolean;// Yeak Thmor Stone Set hard-landing shockwave
   hasWaterShield: boolean;        // Naga Scale Set orbiting water shield (blocks 1 hit / 20s)
   activeArmorSetId: string | null;
+  museumRareDropLuckPct: number;  // 6+ Museum donations -> +10% Rare Drop Luck
+  museumSkillXpBonusPct: number;  // 10+ Museum donations -> +15% All Skill XP
 }
 
 /**
@@ -591,12 +594,14 @@ export function computeVillageToDungeonBridge(
 
   const foragingLv = skills.foraging?.level ?? 1;
   const rogueLv = skills.rogue?.level ?? 1;
+  const museumPerks = getMuseumScholarPerks(player.museumDonations);
   let moveSpeedBonusPct =
     snackMoveSpeedPct +
     (foragingLv - 1) * 0.003 +
     (rogueLv - 1) * 0.001 +
     reforge.moveSpeedPct +
-    acc.moveSpeedPct;
+    acc.moveSpeedPct +
+    museumPerks.moveSpeedBonusPct;
   let jumpPowerBonusPct = snackJumpPowerPct;
   if (hasTalent(player.skills, 'foraging', 'forage_stride')) moveSpeedBonusPct += 0.1;
   if (hasTalent(player.skills, 'rogue', 'rogue_toes')) {
@@ -677,5 +682,7 @@ export function computeVillageToDungeonBridge(
     hasGroundSlamShockwave: Boolean(armorSet?.groundSlamShockwave),
     hasWaterShield: Boolean(armorSet?.waterShieldEvery20s),
     activeArmorSetId: armorSet?.armorId ?? null,
+    museumRareDropLuckPct: museumPerks.rareDropLuckBonusPct,
+    museumSkillXpBonusPct: museumPerks.skillXpBonusPct,
   };
 }

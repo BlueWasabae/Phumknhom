@@ -1419,6 +1419,47 @@ export const ITEM_CATALOG: Record<string, CatalogItem> = {
     stats: {},
   },
 
+  // ==================== UPDATE 1.4: WORLD EVENT & MUSEUM EXCLUSIVE VANITY ====================
+  wings_rain_caller_umbrella: {
+    id: 'wings_rain_caller_umbrella',
+    name: 'Rain-Caller Umbrella',
+    khmerName: 'ឆ័ត្រសូត្រហៅភ្លៀង',
+    slot: 'wings',
+    rarity: 'legendary',
+    stylishScore: 96,
+    description: 'Ornate royal Cambodian monsoon silk umbrella dropped by Golden Sdech Kongkaeb during Golden Frog Rain.',
+    primaryColor: '#facc15',
+    accentColor: '#38bdf8',
+    styleVariant: 'lotus_aura',
+    stats: { maxHp: 18, critChance: 0.04 },
+  },
+  hat_angkor_scholar: {
+    id: 'hat_angkor_scholar',
+    name: 'Angkor Scholar Hat',
+    khmerName: 'មួកបណ្ឌិតអង្គរ',
+    slot: 'hat',
+    rarity: 'legendary',
+    stylishScore: 92,
+    description: 'Prestigious gilded Khmer archivist crown awarded for donating 10 exhibits to the Angkor Relic Museum.',
+    primaryColor: '#eab308',
+    accentColor: '#10b981',
+    styleVariant: 'royal_crown',
+    stats: { defense: 3, maxHp: 20, critChance: 0.03 },
+  },
+  hat_night_market_lantern: {
+    id: 'hat_night_market_lantern',
+    name: 'Night Market Lantern Hat',
+    khmerName: 'មួកចង្កៀងផ្សាររាត្រី',
+    slot: 'hat',
+    rarity: 'epic',
+    stylishScore: 68,
+    description: 'Limited Khmer Night Market warm-glow lantern hat sold exclusively by the Traveling Tuk-Tuk Merchant.',
+    primaryColor: '#f97316',
+    accentColor: '#fef08a',
+    styleVariant: 'sun_straw',
+    stats: { maxHp: 15, critChance: 0.02 },
+  },
+
   // ==================== UPDATE 1.3A: COMBAT ARMOR SETS ====================
   armor_laterite_miner: {
     id: COMBAT_ARMOR_SETS.armor_laterite_miner.id,

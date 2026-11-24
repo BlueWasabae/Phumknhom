@@ -5,7 +5,7 @@ import {
   type LeaderboardCategory,
   type LeaderboardResponse,
 } from '../game/network/ApiClient';
-import { Crown, Sprout, Swords, Trophy } from 'lucide-react';
+import { Castle, Crown, Sprout, Swords, Trophy } from 'lucide-react';
 import { NativeDialog } from './NativeDialog';
 import { PaperDollPreview } from './PaperDollPreview';
 
@@ -25,6 +25,7 @@ const CATEGORIES: Array<{
   { id: 'farmer', title: 'Greatest Farmer', subtitle: 'Farm Level + Wealth', Icon: Sprout },
   { id: 'stylish', title: 'Most Stylish Icon', subtitle: 'Highest Stylish Score', Icon: Crown },
   { id: 'slayer', title: 'Mythic Boss Slayer', subtitle: 'Unique Bosses & Clears', Icon: Swords },
+  { id: 'tower', title: 'Top Tower Climbers', subtitle: 'Highest Pagoda Floor (1–50)', Icon: Castle },
 ];
 
 export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
@@ -61,7 +62,7 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
     >
       <div className="space-y-3 text-xs">
         {/* Category Switcher */}
-        <div className="grid grid-cols-3 gap-1.5">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
           {CATEGORIES.map(({ id, title, Icon }) => (
             <button
               key={id}

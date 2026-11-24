@@ -33,6 +33,7 @@ interface ReforgeModalProps {
   onEquipAccessory: (accId: string) => void;
   onCraftArmorSet: (armorId: string) => void;
   onEquipArmorSet: (armorId: string) => void;
+  onEmpowerEclipseWeapon?: () => void;
 }
 
 export const ReforgeModal: React.FC<ReforgeModalProps> = ({
@@ -51,6 +52,7 @@ export const ReforgeModal: React.FC<ReforgeModalProps> = ({
   onEquipAccessory,
   onCraftArmorSet,
   onEquipArmorSet,
+  onEmpowerEclipseWeapon,
 }) => {
   const [tab, setTab] = useState<ReforgeTab>(initialTab);
   const [busy, setBusy] = useState(false);
@@ -137,9 +139,35 @@ export const ReforgeModal: React.FC<ReforgeModalProps> = ({
         </div>
 
         <div className="max-h-[62dvh] overflow-y-auto pr-1 space-y-3">
-          {/* TAB 1: BLACKSMITH PREFIX REFORGING + 6 KHMER MYTHIC ARSENAL WEAPONS */}
+          {/* TAB 1: BLACKSMITH PREFIX REFORGING + ECLIPSE SHARD EMPOWERMENT + 6 KHMER MYTHIC ARSENAL WEAPONS */}
           {tab === 'reforge' && (
             <>
+              {onEmpowerEclipseWeapon && (() => {
+                const shardQty = player.inventory
+                  .filter((i) => i.itemId === 'mat_eclipse_shard')
+                  .reduce((sum, i) => sum + i.quantity, 0);
+                const maxed = player.weapon.upgradeLevel >= 10;
+                return (
+                  <div className="p-3 rounded-2xl bg-gradient-to-r from-rose-950 via-slate-900 to-purple-950 text-rose-50 border-2 border-rose-500/70 flex flex-wrap items-center justify-between gap-2.5">
+                    <div>
+                      <div className="font-display font-bold text-xs text-rose-300">
+                        🌑 Crimson Eclipse Weapon Empowerment ({player.weapon.name} +{player.weapon.upgradeLevel})
+                      </div>
+                      <div className="text-[10px] text-rose-100/90">
+                        Fuse <strong>2× Eclipse Shards</strong> (Bag: {shardQty}) to permanently empower your equipped weapon (+1 Upgrade Level, +6% Power, max +10).
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={maxed || shardQty < 2}
+                      onClick={onEmpowerEclipseWeapon}
+                      className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white border border-rose-300 font-display font-bold text-xs disabled:opacity-45 cursor-pointer"
+                    >
+                      {maxed ? '★ Max Empowered (+10)' : '🌑 Empower (2 Shards)'}
+                    </button>
+                  </div>
+                );
+              })()}
               <div className="grid sm:grid-cols-2 gap-3">
                 {/* Weapon Prefix Reforge */}
                 <div className="relative overflow-hidden p-3.5 rounded-2xl bg-amber-50 border-2 border-amber-900/35 flex flex-col justify-between gap-3">
