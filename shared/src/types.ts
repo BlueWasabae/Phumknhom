@@ -16,7 +16,7 @@ export type {
   StarterOutfitId,
 } from './characterStyles';
 
-export type ZoneType = 'overworld' | 'dungeon' | 'farm' | 'club';
+export type ZoneType = 'overworld' | 'dungeon' | 'farm' | 'club' | 'khmer_world';
 
 export type DifficultyMode = 'normal' | 'expert' | 'mythic' | 'death';
 
@@ -226,6 +226,7 @@ export interface PlayerState {
   activeMount?: string | null;
   dailyFreeCoinSpinDate?: string | null;
   cityServer?: 'phnom_penh' | 'siem_reap' | 'kampot' | 'battambang';
+  currentWorldId?: string;
   activeBiome?: string;
   discoveredBiomes?: string[];
   unlockedPylons?: string[];

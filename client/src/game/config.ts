@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { BootScene } from './scenes/BootScene';
 import { OverworldScene } from './scenes/OverworldScene';
+import { KhmerWorldScene } from './scenes/KhmerWorldScene';
 import { FarmScene } from './scenes/FarmScene';
 import { ClubScene } from './scenes/ClubScene';
 import { DungeonBossScene } from './scenes/DungeonBossScene';
@@ -28,7 +29,7 @@ export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameCon
         debug: false,
       },
     },
-    scene: [BootScene, OverworldScene, FarmScene, ClubScene, DungeonBossScene],
+    scene: [BootScene, OverworldScene, KhmerWorldScene, FarmScene, ClubScene, DungeonBossScene],
   };
 }
 

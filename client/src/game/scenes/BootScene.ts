@@ -104,6 +104,34 @@ export class BootScene extends Phaser.Scene {
     this.load.image('na_floor', `${NA}/Backgrounds/Tilesets/TilesetFloor.png`);
     this.load.image('na_houses', `${NA}/Backgrounds/Tilesets/TilesetHouse.png`);
     this.load.image('na_nature', `${NA}/Backgrounds/Tilesets/TilesetNature.png`);
+    this.load.image('na_water', `${NA}/Backgrounds/Tilesets/TilesetWater.png`);
+    this.load.image('na_desert', `${NA}/Backgrounds/Tilesets/TilesetDesert.png`);
+    this.load.image('na_abandoned', `${NA}/Backgrounds/Tilesets/TilesetVillageAbandoned.png`);
+    this.load.image('na_boat', `${NA}/Backgrounds/Vehicles/Boat.png`);
+    this.load.spritesheet('na_wf_top', `${NA}/Backgrounds/Animated/Waterfall/TopSheet16x16.png`, {
+      frameWidth: 16,
+      frameHeight: 16,
+    });
+    this.load.spritesheet('na_wf_mid', `${NA}/Backgrounds/Animated/Waterfall/MiddleSheet16x16.png`, {
+      frameWidth: 16,
+      frameHeight: 16,
+    });
+    this.load.spritesheet('na_wf_bot', `${NA}/Backgrounds/Animated/Waterfall/BottomSheet16x16.png`, {
+      frameWidth: 16,
+      frameHeight: 16,
+    });
+    this.load.spritesheet('na_ripples', `${NA}/Backgrounds/Animated/Water Ripples/SpriteSheet16x16.png`, {
+      frameWidth: 16,
+      frameHeight: 16,
+    });
+    this.load.spritesheet('na_flag_red', `${NA}/Backgrounds/Animated/Flag/FlagRed16x16.png`, {
+      frameWidth: 16,
+      frameHeight: 16,
+    });
+    this.load.spritesheet('na_flag_yellow', `${NA}/Backgrounds/Animated/Flag/FlagYellow16x16.png`, {
+      frameWidth: 16,
+      frameHeight: 16,
+    });
     this.load.image('na_chest', `${NA}/Items/Treasure/BigTreasureChest.png`);
     this.load.image('na_anvil', `${NA}/Items/Tool/Anvil.png`);
     this.load.image('na_gold_coin', `${NA}/Items/Treasure/GoldCoin.png`);
@@ -319,6 +347,53 @@ export class BootScene extends Phaser.Scene {
     // Real Wooden Notice Signpost for Express Bus Stop
     this.cropToTexture('na_elements', 'bus_stop_sign', 96, 48, 16, 32);
 
+    // Interconnected Khmer World Gateway & Cultural Landmark Props (100% Cohesive Ninja Adventure Tilesets!)
+    this.cropToTexture('na_houses', 'angkor_arch_gate', 464, 320, 64, 48);
+    this.cropToTexture('na_water', 'na_water_tile', 16, 16, 16, 16);
+    this.cropToTexture('na_water', 'na_boardwalk_tile', 64, 192, 32, 32);
+    this.cropToTexture('na_desert', 'na_palm_tree', 160, 144, 32, 48);
+    this.cropToTexture('na_desert', 'na_singha_statue', 0, 144, 32, 48);
+    this.cropToTexture('na_desert', 'na_lion_fountain', 0, 96, 32, 48);
+    this.cropToTexture('na_desert', 'na_coastal_stall_a', 32, 160, 32, 32);
+    this.cropToTexture('na_desert', 'na_coastal_stall_b', 64, 160, 32, 32);
+    this.cropToTexture('na_desert', 'na_stone_well', 0, 48, 32, 32);
+    this.cropToTexture('na_abandoned', 'na_ruin_wall', 0, 0, 64, 48);
+    this.cropToTexture('na_abandoned', 'na_ruin_statue', 0, 48, 32, 48);
+    this.cropToTexture('na_abandoned', 'na_ruin_pillar', 32, 48, 16, 48);
+    this.cropToTexture('na_abandoned', 'na_ruin_frog', 144, 80, 32, 32);
+    this.cropToTexture('na_abandoned', 'na_ruin_sanctuary', 256, 80, 64, 80);
+
+    // Coastal sandy ground tile (clean 32x32 golden beach sand)
+    if (!this.textures.exists('coastal_sand_tile') && this.textures.exists('na_floor')) {
+      this.cropToTexture('na_floor', 'coastal_sand_tile', 16, 16, 32, 32);
+    }
+    // Rice paddy golden-green meadow tile (Battambang Rice Bowl)
+    if (!this.textures.exists('rice_paddy_tile') && this.textures.exists('serene_16')) {
+      const svImg = this.textures.get('serene_16').getSourceImage() as HTMLImageElement;
+      const tex = this.textures.createCanvas('rice_paddy_tile', 64, 64);
+      if (tex) {
+        const ctx = tex.getContext();
+        ctx.imageSmoothingEnabled = false;
+        for (let gy = 0; gy < 64; gy += 16) {
+          for (let gx = 0; gx < 64; gx += 16) {
+            ctx.drawImage(svImg, 48, 0, 16, 16, gx, gy, 16, 16);
+          }
+        }
+        // Subtle sunlit golden rice stalks woven into Battambang paddy grass
+        ctx.fillStyle = 'rgba(250, 204, 21, 0.24)';
+        ctx.fillRect(0, 0, 64, 64);
+        ctx.fillStyle = '#ca8a04';
+        for (const [rx, ry] of [[8, 10], [24, 14], [42, 8], [14, 38], [36, 44], [52, 32]]) {
+          ctx.fillRect(rx, ry, 2, 5);
+          ctx.fillRect(rx + 3, ry + 1, 2, 4);
+          ctx.fillStyle = '#fef08a';
+          ctx.fillRect(rx, ry, 2, 2);
+          ctx.fillStyle = '#ca8a04';
+        }
+        tex.refresh();
+      }
+    }
+
     // Ninja Adventure Nature Trees (real tropical/golden trees if custom Khmer trees absent!)
     this.cropToTexture('na_nature', 'sugar_palm_tree', 48, 288, 48, 48);
     this.cropToTexture('na_nature', 'golden_durian_tree', 144, 288, 48, 48);
@@ -454,37 +529,214 @@ export class BootScene extends Phaser.Scene {
       }
     }
 
-    // Cute pixel-art Green Village Bus (unique vehicle not in medieval packs)
+    // Cohesive 16-bit Pixel-Art Khmer Express Coach Bus (matching #2b1b17 1px outlines & warm village palette!)
     if (!this.textures.exists('village_bus')) {
-      const tex = this.textures.createCanvas('village_bus', 80, 42);
+      const tex = this.textures.createCanvas('village_bus', 68, 38);
       if (tex) {
         const ctx = tex.getContext();
         ctx.imageSmoothingEnabled = false;
-        ctx.fillStyle = '#14532d';
-        ctx.fillRect(10, 4, 58, 4);
+        const O = '#2b1b17';
+        // Luggage rack on top
+        ctx.fillStyle = O;
+        ctx.fillRect(14, 2, 38, 5);
+        ctx.fillStyle = '#b45309';
+        ctx.fillRect(15, 3, 12, 3);
+        ctx.fillStyle = '#d97706';
+        ctx.fillRect(29, 3, 10, 3);
+        ctx.fillStyle = '#92400e';
+        ctx.fillRect(41, 3, 10, 3);
+        // Main coach body outline
+        ctx.fillStyle = O;
+        ctx.fillRect(4, 6, 60, 24);
+        ctx.fillRect(6, 5, 56, 2);
+        // Roof highlight (warm cream-ivory like Khmer heritage coaches)
+        ctx.fillStyle = '#fef3c7';
+        ctx.fillRect(6, 7, 56, 4);
+        ctx.fillStyle = '#fde68a';
+        ctx.fillRect(6, 10, 56, 2);
+        // Upper green body band
         ctx.fillStyle = '#15803d';
-        ctx.fillRect(4, 8, 72, 24);
-        ctx.fillStyle = '#22c55e';
-        ctx.fillRect(6, 10, 68, 12);
+        ctx.fillRect(5, 12, 58, 10);
+        // Shaded lower teal-emerald skirt
+        ctx.fillStyle = '#166534';
+        ctx.fillRect(5, 22, 58, 7);
+        // Royal Khmer gold accent stripe
         ctx.fillStyle = '#facc15';
-        ctx.fillRect(4, 21, 72, 5);
-        ctx.fillStyle = '#e0f2fe';
-        for (let wx = 10; wx <= 56; wx += 14) {
-          ctx.fillRect(wx, 12, 10, 8);
-          ctx.fillStyle = '#bae6fd';
-          ctx.fillRect(wx, 17, 10, 3);
+        ctx.fillRect(5, 20, 58, 3);
+        ctx.fillStyle = '#ca8a04';
+        ctx.fillRect(5, 22, 58, 1);
+        // Crisp outlined windows with sky reflection
+        for (let wx = 9; wx <= 49; wx += 11) {
+          ctx.fillStyle = O;
+          ctx.fillRect(wx, 11, 9, 8);
+          ctx.fillStyle = '#7dd3fc';
+          ctx.fillRect(wx + 1, 12, 7, 6);
           ctx.fillStyle = '#e0f2fe';
+          ctx.fillRect(wx + 1, 12, 4, 2);
+          ctx.fillStyle = '#38bdf8';
+          ctx.fillRect(wx + 1, 16, 7, 2);
         }
+        // Front windshield & glowing headlight
+        ctx.fillStyle = O;
+        ctx.fillRect(58, 11, 5, 8);
+        ctx.fillStyle = '#bae6fd';
+        ctx.fillRect(59, 12, 3, 6);
         ctx.fillStyle = '#fef08a';
-        ctx.fillRect(72, 24, 4, 5);
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(2, 29, 76, 3);
-        ctx.fillRect(14, 30, 12, 10);
-        ctx.fillRect(54, 30, 12, 10);
-        ctx.fillStyle = '#facc15';
-        ctx.fillRect(18, 33, 4, 4);
-        ctx.fillRect(58, 33, 4, 4);
+        ctx.fillRect(61, 22, 3, 4);
+        // Rear brake light & chrome bumpers
+        ctx.fillStyle = '#ef4444';
+        ctx.fillRect(4, 22, 2, 3);
+        ctx.fillStyle = '#cbd5e1';
+        ctx.fillRect(3, 27, 62, 2);
+        // Outlined spoked wheels
+        for (const wx of [13, 46]) {
+          ctx.fillStyle = O;
+          ctx.fillRect(wx, 27, 10, 10);
+          ctx.fillStyle = '#334155';
+          ctx.fillRect(wx + 1, 28, 8, 8);
+          ctx.fillStyle = '#eab308';
+          ctx.fillRect(wx + 3, 30, 4, 4);
+          ctx.fillStyle = '#fef9c3';
+          ctx.fillRect(wx + 4, 31, 2, 2);
+        }
         tex.refresh();
+        tex.setFilter(Phaser.Textures.FilterMode.NEAREST);
+      }
+    }
+
+    // Battambang Norry Bamboo Train (Authentic Cambodian motorized bamboo rail platform!)
+    if (!this.textures.exists('norry_bamboo_train')) {
+      const tex = this.textures.createCanvas('norry_bamboo_train', 56, 28);
+      if (tex) {
+        const ctx = tex.getContext();
+        ctx.imageSmoothingEnabled = false;
+        const O = '#2b1b17';
+        // Woven bamboo deck & rattan cushions
+        ctx.fillStyle = O;
+        ctx.fillRect(3, 11, 50, 10);
+        ctx.fillStyle = '#d97706';
+        ctx.fillRect(4, 12, 48, 8);
+        for (let bx = 6; bx < 50; bx += 4) {
+          ctx.fillStyle = '#f59e0b';
+          ctx.fillRect(bx, 12, 2, 8);
+        }
+        // Checkered red-white Krama passenger cushion mat
+        ctx.fillStyle = O;
+        ctx.fillRect(10, 7, 24, 5);
+        for (let kx = 11; kx < 33; kx += 2) {
+          ctx.fillStyle = kx % 4 === 1 ? '#dc2626' : '#fef3c7';
+          ctx.fillRect(kx, 8, 2, 3);
+        }
+        // Small rear motor & exhaust handle
+        ctx.fillStyle = O;
+        ctx.fillRect(38, 6, 11, 7);
+        ctx.fillStyle = '#475569';
+        ctx.fillRect(39, 7, 9, 5);
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillRect(40, 8, 4, 2);
+        // Steel railway wheels
+        for (const wx of [10, 40]) {
+          ctx.fillStyle = O;
+          ctx.fillRect(wx, 20, 7, 7);
+          ctx.fillStyle = '#64748b';
+          ctx.fillRect(wx + 1, 21, 5, 5);
+          ctx.fillStyle = '#cbd5e1';
+          ctx.fillRect(wx + 2, 22, 3, 3);
+        }
+        tex.refresh();
+        tex.setFilter(Phaser.Textures.FilterMode.NEAREST);
+      }
+    }
+
+    // Modular 16-bit Bamboo Railway Tracks (Horizontal & Vertical — seamless timber sleepers + steel rails!)
+    if (!this.textures.exists('railway_track_h')) {
+      const tex = this.textures.createCanvas('railway_track_h', 32, 24);
+      if (tex) {
+        const ctx = tex.getContext();
+        ctx.imageSmoothingEnabled = false;
+        ctx.fillStyle = 'rgba(120, 82, 48, 0.55)';
+        ctx.fillRect(0, 2, 32, 20);
+        // Timber sleepers
+        for (let sx = 2; sx < 32; sx += 8) {
+          ctx.fillStyle = '#2b1b17';
+          ctx.fillRect(sx, 3, 5, 18);
+          ctx.fillStyle = '#854d0e';
+          ctx.fillRect(sx + 1, 4, 3, 16);
+          ctx.fillStyle = '#a16207';
+          ctx.fillRect(sx + 1, 4, 2, 14);
+        }
+        // Dual steel rails
+        for (const ry of [6, 15]) {
+          ctx.fillStyle = '#2b1b17';
+          ctx.fillRect(0, ry, 32, 3);
+          ctx.fillStyle = '#cbd5e1';
+          ctx.fillRect(0, ry + 1, 32, 1);
+        }
+        tex.refresh();
+        tex.setFilter(Phaser.Textures.FilterMode.NEAREST);
+      }
+    }
+    if (!this.textures.exists('railway_track_v')) {
+      const tex = this.textures.createCanvas('railway_track_v', 24, 32);
+      if (tex) {
+        const ctx = tex.getContext();
+        ctx.imageSmoothingEnabled = false;
+        ctx.fillStyle = 'rgba(120, 82, 48, 0.55)';
+        ctx.fillRect(2, 0, 20, 32);
+        for (let sy = 2; sy < 32; sy += 8) {
+          ctx.fillStyle = '#2b1b17';
+          ctx.fillRect(3, sy, 18, 5);
+          ctx.fillStyle = '#854d0e';
+          ctx.fillRect(4, sy + 1, 16, 3);
+          ctx.fillStyle = '#a16207';
+          ctx.fillRect(4, sy + 1, 14, 2);
+        }
+        for (const rx of [6, 15]) {
+          ctx.fillStyle = '#2b1b17';
+          ctx.fillRect(rx, 0, 3, 32);
+          ctx.fillStyle = '#cbd5e1';
+          ctx.fillRect(rx + 1, 0, 1, 32);
+        }
+        tex.refresh();
+        tex.setFilter(Phaser.Textures.FilterMode.NEAREST);
+      }
+    }
+
+    // Open Wooden Village Fence Gate (matching Serene Village warm timber fence palette!)
+    if (!this.textures.exists('wood_fence_gate')) {
+      const tex = this.textures.createCanvas('wood_fence_gate', 56, 36);
+      if (tex) {
+        const ctx = tex.getContext();
+        ctx.imageSmoothingEnabled = false;
+        const O = '#2b1b17';
+        // Left & right carved timber gate posts with hanging lanterns
+        for (const gx of [4, 42]) {
+          ctx.fillStyle = O;
+          ctx.fillRect(gx, 4, 10, 30);
+          ctx.fillStyle = '#92400e';
+          ctx.fillRect(gx + 1, 5, 8, 28);
+          ctx.fillStyle = '#b45309';
+          ctx.fillRect(gx + 2, 6, 4, 25);
+          // Golden cap
+          ctx.fillStyle = '#facc15';
+          ctx.fillRect(gx + 1, 5, 8, 3);
+        }
+        // Overhead wooden lintel beam with Khmer gold ornament
+        ctx.fillStyle = O;
+        ctx.fillRect(2, 2, 52, 7);
+        ctx.fillStyle = '#78350f';
+        ctx.fillRect(3, 3, 50, 5);
+        ctx.fillStyle = '#f59e0b';
+        ctx.fillRect(22, 4, 12, 3);
+        // Open swung fence doors flanking the walkable entryway
+        ctx.fillStyle = O;
+        ctx.fillRect(13, 18, 6, 14);
+        ctx.fillRect(37, 18, 6, 14);
+        ctx.fillStyle = '#b45309';
+        ctx.fillRect(14, 19, 4, 12);
+        ctx.fillRect(38, 19, 4, 12);
+        tex.refresh();
+        tex.setFilter(Phaser.Textures.FilterMode.NEAREST);
       }
     }
   }
@@ -536,6 +788,12 @@ export class BootScene extends Phaser.Scene {
     this.safeCreateAnim('campfire_burn_32', 'sv_campfire_32', [0, 1, 2, 3], 8, -1);
     this.safeCreateAnim('shimmer_ripple', 'na_water_purple', [0, 1, 2, 3], 5, -1);
     this.safeCreateAnim('lucky_wheel_spin', 'na_wheel_prop', [0, 1, 2, 3], 5, -1);
+    this.safeCreateAnim('wf_top', 'na_wf_top', [0, 1, 2, 3, 4], 8, -1);
+    this.safeCreateAnim('wf_mid', 'na_wf_mid', [0, 1, 2, 3, 4], 8, -1);
+    this.safeCreateAnim('wf_bot', 'na_wf_bot', [0, 1, 2], 8, -1);
+    this.safeCreateAnim('water_ripples_blue', 'na_ripples', [0, 1, 2, 3], 5, -1);
+    this.safeCreateAnim('flag_red_wave', 'na_flag_red', [0, 1, 2, 3], 6, -1);
+    this.safeCreateAnim('flag_yellow_wave', 'na_flag_yellow', [0, 1, 2, 3], 6, -1);
     this.safeCreateAnim('boar_idle_anim', 'boar_idle', [0, 1, 2, 3], 6, -1);
     this.safeCreateAnim('boar_hit_anim', 'boar_hit', [0, 1, 2, 3], 14, 0);
   }

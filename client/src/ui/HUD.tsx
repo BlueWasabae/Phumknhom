@@ -7,6 +7,7 @@ import {
   calculatePlayerDamage,
 } from '@shared/balanceFormulas';
 import { KHMER_CLASSES } from '@shared/khmerClasses';
+import { getKhmerWorldOrDefault } from '@shared/khmerWorlds';
 import {
   ALL_SKILL_IDS,
   SKILL_DEFINITIONS,
@@ -252,7 +253,18 @@ export const HUD: React.FC<HUDProps> = ({
           title="Click to switch Multiplayer Plaza Area (AREA 0 / AREA 1 / AREA 2)"
           className="font-display font-bold px-2 py-0.5 rounded-lg text-[11px] whitespace-nowrap border bg-emerald-700 hover:bg-emerald-600 text-amber-50 border-emerald-950 transition cursor-pointer"
         >
-          Phum Village • {networkStatus.areaId} ▾
+          Phum Chaktomuk • {networkStatus.areaId} ▾
+        </button>
+      ) : zone === 'khmer_world' ? (
+        <button
+          type="button"
+          onClick={onOpenWorldMap}
+          title="Exploring Connected Khmer Cultural World — Click to open World Map [M]"
+          className="font-display font-bold px-2 py-0.5 rounded-lg text-[11px] whitespace-nowrap border bg-teal-800 hover:bg-teal-700 text-amber-50 border-teal-950 transition cursor-pointer"
+        >
+          {getKhmerWorldOrDefault(player.currentWorldId).icon}{' '}
+          {getKhmerWorldOrDefault(player.currentWorldId).name} •{' '}
+          {getKhmerWorldOrDefault(player.currentWorldId).khmerName}
         </button>
       ) : (
         <span

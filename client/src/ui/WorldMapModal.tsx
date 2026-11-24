@@ -9,6 +9,10 @@ import {
   type CityDistrictId,
 } from '@shared/worldMapData';
 import {
+  KHMER_WORLD_LIST,
+  type KhmerWorldId,
+} from '@shared/khmerWorlds';
+import {
   travelManager,
   type TravelRequestPayload,
 } from '../game/systems/TravelAndPylons';
@@ -127,6 +131,75 @@ export const WorldMapModal: React.FC<WorldMapModalProps> = ({
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-800 text-slate-200">
               🌫️ Fog-of-War
             </span>
+          </div>
+        </div>
+
+        {/* Connected Khmer Cultural World Regions Bar (Walkable via Gates, Railways & Piers!) */}
+        <div className="p-2.5 rounded-2xl bg-gradient-to-r from-amber-50 via-emerald-50/70 to-sky-50 border-2 border-amber-900/35 space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="font-display font-bold text-xs text-amber-950">
+              🧭 Explorable Khmer Cultural Worlds (Connected by Fence Gates, Angkor Archways, Bamboo Railways &amp; Piers)
+            </div>
+            <span className="text-[10px] font-bold text-emerald-900 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-700/30">
+              6 Interconnected Regions
+            </span>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
+            {KHMER_WORLD_LIST.map((w) => {
+              const isCurrent =
+                (player.zone === 'overworld' && w.id === 'phum_chaktomuk') ||
+                (player.zone === 'khmer_world' && player.currentWorldId === w.id);
+              return (
+                <button
+                  key={w.id}
+                  type="button"
+                  disabled={inActiveBossFight}
+                  onClick={() =>
+                    doWarp({
+                      method: 'pylon',
+                      destinationLabel: `${w.name} (${w.khmerName})`,
+                      targetZone: w.id === 'phum_chaktomuk' ? 'overworld' : 'khmer_world',
+                      worldId: w.id as KhmerWorldId,
+                      biomeId: w.biomeAttunement,
+                    })
+                  }
+                  className={`p-2 rounded-xl border-2 text-left transition flex items-start gap-2 disabled:opacity-45 cursor-pointer ${
+                    isCurrent
+                      ? 'bg-emerald-800 text-amber-50 border-amber-400 shadow'
+                      : 'bg-white/90 hover:bg-amber-100/90 text-amber-950 border-amber-900/30'
+                  }`}
+                >
+                  <span className="text-lg leading-none shrink-0 mt-0.5">{w.icon}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-display font-bold text-[11px] flex items-center justify-between gap-1">
+                      <span className="truncate">{w.name}</span>
+                      {isCurrent && (
+                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-400 text-amber-950 shrink-0">
+                          HERE
+                        </span>
+                      )}
+                    </div>
+                    <div
+                      className={`text-[10px] font-bold truncate ${
+                        isCurrent ? 'text-amber-200' : 'text-amber-800'
+                      }`}
+                    >
+                      {w.khmerName}
+                    </div>
+                    <div
+                      className={`text-[9px] truncate ${
+                        isCurrent ? 'text-emerald-100' : 'text-amber-900/80'
+                      }`}
+                    >
+                      {w.culturalReference}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          <div className="text-[10px] text-amber-900 font-semibold">
+            Walk-Through Routes: <strong>Phum Chaktomuk</strong> ↔ West Fence (<strong>Srok Battambang</strong>) ↔ North Bamboo Railway (<strong>Phnom Kulen</strong>) ↔ East Archway (<strong>Nokor Angkor Thom</strong>) ↔ South Archway (<strong>Phum Chaktomuk</strong>) ↔ South Pier (<strong>Tonlé Sap Kampong Phluk</strong>) ↔ Harbor Ferry (<strong>Chhner Kampot</strong>).
           </div>
         </div>
 

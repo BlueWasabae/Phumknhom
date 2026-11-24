@@ -6,6 +6,7 @@ import {
   type PlayerState,
 } from '@shared/types';
 import { computeVillageToDungeonBridge } from '@shared/skillTrees';
+import { KHMER_WORLDS, type WorldGatewayDef } from '@shared/khmerWorlds';
 import { EventBus, type JoystickVector } from '../EventBus';
 import { Player } from '../entities/Player';
 import { RemotePlayerEntity } from '../entities/RemotePlayerEntity';
@@ -43,6 +44,8 @@ export class OverworldScene extends Phaser.Scene {
   private keys!: Record<'W' | 'A' | 'S' | 'D' | 'E', Phaser.Input.Keyboard.Key>;
   private joystick: JoystickVector = { x: 0, y: 0 };
   private landmarks: LandmarkZone[] = [];
+  private worldGateways: WorldGatewayDef[] = [];
+  private gateLockUntil = 0;
   private nearPortalSent = false;
   private transitioning = false;
   private spawnX = 480;
@@ -72,6 +75,7 @@ export class OverworldScene extends Phaser.Scene {
     this.spawnY = typeof data?.spawnY === 'number' ? data.spawnY : 405;
     this.arrivalGoldenFlash = Boolean(data?.goldenFlash);
     this.landmarks = [];
+    this.worldGateways = [...KHMER_WORLDS.phum_chaktomuk.gateways];
     this.nearPortalSent = false;
     this.transitioning = false;
     this.busActive = false;
@@ -98,6 +102,7 @@ export class OverworldScene extends Phaser.Scene {
 
     this.colliders = this.physics.add.staticGroup();
     this.buildLandmarks();
+    this.buildWorldGateways();
     this.buildFencesAndTrees();
 
     // 4-Season Weather Particles & Day/Night Atmosphere Overlay
@@ -128,9 +133,10 @@ export class OverworldScene extends Phaser.Scene {
       },
     });
 
-    // 4. Real 4-directional Animated Chibi Player + Soft Shadow
+    // 4. Real 10-Layer Human Chibi Player + Soft Shadow
     this.player = new Player(this, this.spawnX, this.spawnY, this.initialState, 'overworld');
     this.physics.add.collider(this.player.sprite, this.colliders);
+    this.gateLockUntil = this.time.now + 950;
 
     // Scheduled Animated Green Village Bus: drives along road every 25s, pauses at Bus Stop with bouncing yellow JOIN arrow!
     this.time.delayedCall(3500, () => {
@@ -329,39 +335,46 @@ export class OverworldScene extends Phaser.Scene {
   };
 
   private buildTopHorizonStrip(): void {
-    // Warm tropical morning sky along north edge (y = 0..82)
+    // 100% Cohesive 16-bit Pixel-Art Meadow & Village Canopy Treeline (replaces mismatched dark-forest parallax!)
     this.add
-      .tileSprite(MAP_W / 2, HORIZON_H / 2, MAP_W, HORIZON_H, 'lf_sky')
-      .setTileScale(0.65, 0.35)
+      .tileSprite(MAP_W / 2, HORIZON_H / 2, MAP_W, HORIZON_H, 'sv_grass')
       .setDepth(0);
 
-    // Distant lush treeline silhouette separating sky and village grass
-    this.add
-      .tileSprite(MAP_W / 2, HORIZON_H - 18, MAP_W, 74, 'lf_parallax_far')
-      .setTileScale(0.42, 0.36)
-      .setTint(0x2f7d4d)
-      .setDepth(1);
-
-    // Crisp grass hedge line at y = HORIZON_H
-    const rim = this.add.graphics().setDepth(2);
-    rim.fillStyle(0x2d6a3e, 1);
-    rim.fillRect(0, HORIZON_H - 5, MAP_W, 7);
+    // Dense overlapping Serene Village & Ninja Adventure trees framing the north edge
+    // Leave an open stone road corridor at x = 480 for the North Angkor Stone Archway!
+    const canopyTrees = ['sv_tree_green', 'sv_tree_teal', 'na_palm_tree', 'sugar_palm_tree'] as const;
+    for (let x = 24; x <= MAP_W - 24; x += 38) {
+      if (Math.abs(x - 480) < 58) continue;
+      const idx = Math.floor(x / 38);
+      const tex = canopyTrees[idx % canopyTrees.length];
+      const ty = 72 + (idx % 2) * 14;
+      this.add.image(x, ty, 'soft_shadow').setDisplaySize(34, 11).setDepth(ty - 2);
+      const tree = this.add.image(x, ty, tex).setOrigin(0.5, 0.92).setScale(1.04).setDepth(ty);
+      this.tweens.add({
+        targets: tree,
+        angle: idx % 2 === 0 ? 1.6 : -1.6,
+        duration: 2300 + (idx % 5) * 260,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    }
   }
 
   private buildBorderedPathsAndPlaza(): void {
     const borderGfx = this.add.graphics().setDepth(1);
 
-    // Warm dark-earth road trim under horizontal & vertical village paths
+    // Warm dark-earth road trim extending all the way to the 4 cardinal World Gateways!
     borderGfx.fillStyle(0x8d6339, 0.85);
-    borderGfx.fillRoundedRect(130, 344, 700, 56, 8);
-    borderGfx.fillRoundedRect(450, 150, 60, 420, 8);
+    borderGfx.fillRoundedRect(36, 344, MAP_W - 72, 56, 8);
+    borderGfx.fillRoundedRect(450, 106, 60, MAP_H - 130, 8);
     // Cobblestone Central Village Plaza trim
     borderGfx.fillStyle(0x7c5b3b, 0.9);
     borderGfx.fillRoundedRect(388, 304, 184, 132, 10);
 
-    // Textured Serene Village dirt roads
-    this.add.tileSprite(480, 372, 692, 48, 'sv_path').setDepth(2);
-    this.add.tileSprite(480, 360, 52, 412, 'sv_path').setDepth(2);
+    // Textured dirt roads reaching North Archway, South Pier, West Battambang Gate & East Kampot Gate
+    this.add.tileSprite(MAP_W / 2, 372, MAP_W - 80, 48, 'sv_path').setDepth(2);
+    this.add.tileSprite(480, 370, 52, MAP_H - 138, 'sv_path').setDepth(2);
 
     // Proper Central Village Plaza Courtyard (sandstone/cobblestone tiles — no flat circle!)
     this.add.tileSprite(480, 370, 176, 124, 'sv_plaza_tile').setDepth(3);
@@ -1021,6 +1034,84 @@ export class OverworldScene extends Phaser.Scene {
     }
   }
 
+  private buildWorldGateways(): void {
+    // 4 Physical Walk-Through Gateways connecting Phum Chaktomuk to Cambodia's Cultural Worlds!
+    for (const gw of this.worldGateways) {
+      const tex =
+        gw.style === 'stone_arch'
+          ? 'angkor_arch_gate'
+          : gw.style === 'pier_dock'
+          ? 'fishing_pier'
+          : 'wood_fence_gate';
+      const scale = gw.style === 'stone_arch' ? 1.2 : gw.style === 'pier_dock' ? 1.15 : 1.1;
+
+      this.add.image(gw.x, gw.y + 2, 'soft_shadow').setDisplaySize(56, 15).setDepth(gw.y - 3);
+      const gateImg = this.add
+        .image(gw.x, gw.y, tex)
+        .setOrigin(0.5, 0.85)
+        .setScale(scale)
+        .setDepth(gw.y + 16)
+        .setInteractive({ useHandCursor: true });
+
+      gateImg.on('pointerdown', () => this.travelThroughGateway(gw));
+
+      // Waving pixel-art Khmer festival flags beside every world gateway
+      const flagTex = gw.style === 'stone_arch' ? 'na_flag_yellow' : 'na_flag_red';
+      const flagAnim = gw.style === 'stone_arch' ? 'flag_yellow_wave' : 'flag_red_wave';
+      for (const fx of [-26, 26]) {
+        const flag = this.add.sprite(gw.x + fx, gw.y - 12, flagTex, 0).setScale(1.0).setDepth(gw.y + 18);
+        if (this.anims.exists(flagAnim)) flag.play(flagAnim);
+      }
+
+      this.add
+        .text(gw.x, gw.y + 8, `${gw.signTitle}\n${gw.signKhmer}`, {
+          fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
+          fontSize: '10px',
+          fontStyle: 'bold',
+          color: '#fef08a',
+          backgroundColor: 'rgba(15, 23, 42, 0.88)',
+          align: 'center',
+          padding: { x: 6, y: 2 },
+        })
+        .setResolution(2)
+        .setScale(0.42)
+        .setOrigin(0.5, 0)
+        .setDepth(gw.y + 24);
+
+      this.landmarks.push({
+        x: gw.x,
+        y: gw.y,
+        radius: 44,
+        label: gw.promptText,
+        isDungeonPortal: false,
+        onInteract: () => this.travelThroughGateway(gw),
+      });
+    }
+  }
+
+  private travelThroughGateway(gw: WorldGatewayDef): void {
+    if (this.transitioning) return;
+    this.transitioning = true;
+    soundManager.playSfx('click');
+    this.cameras.main.fadeOut(220, 10, 14, 24);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      this.scene.start('KhmerWorldScene', {
+        worldId: gw.targetWorldId,
+        playerState: {
+          ...this.player.state,
+          zone: 'khmer_world',
+          currentWorldId: gw.targetWorldId,
+          weapon: { ...this.player.state.weapon },
+          loadout: { ...this.player.state.loadout },
+          currencies: { ...this.player.state.currencies },
+          lifeStats: { ...this.player.state.lifeStats },
+        },
+        spawnX: gw.targetSpawnX,
+        spawnY: gw.targetSpawnY,
+      });
+    });
+  }
+
   private buildFencesAndTrees(): void {
     // Decorative wooden fences framing the north & south village edges
     for (const fx of [360, 400, 560, 600]) {
@@ -1178,6 +1269,23 @@ export class OverworldScene extends Phaser.Scene {
         this.enterClub();
       } else if (req.targetZone === 'dungeon') {
         this.enterDungeon(req.bossId ?? 'sdech_kongkaeb', req.difficulty ?? 'normal', 'solo');
+      } else if (req.targetZone === 'khmer_world' && req.worldId && req.worldId !== 'phum_chaktomuk') {
+        this.transitioning = true;
+        this.scene.start('KhmerWorldScene', {
+          worldId: req.worldId,
+          playerState: {
+            ...this.player.state,
+            zone: 'khmer_world',
+            currentWorldId: req.worldId,
+            weapon: { ...this.player.state.weapon },
+            loadout: { ...this.player.state.loadout },
+            currencies: { ...this.player.state.currencies },
+            lifeStats: { ...this.player.state.lifeStats },
+          },
+          spawnX: req.spawnX ?? 480,
+          spawnY: req.spawnY ?? 380,
+          goldenFlash: true,
+        });
       } else {
         const destX = typeof req.spawnX === 'number' ? req.spawnX : 480;
         const destY = typeof req.spawnY === 'number' ? req.spawnY : 405;
@@ -1328,6 +1436,16 @@ export class OverworldScene extends Phaser.Scene {
     roomClient.sendMove(this.player.x, this.player.y, this.player.facing, isMoving, time);
     this.remotePlayers.forEach((remote) => remote.update(time, delta));
     this.atmosphere?.update(time, delta);
+
+    // Seamless walk-through transition when stepping through N/S/E/W World Gateways!
+    if (!this.transitioning && time > this.gateLockUntil) {
+      for (const gw of this.worldGateways) {
+        if (Phaser.Math.Distance.Between(this.player.x, this.player.y, gw.x, gw.y) <= 24) {
+          this.travelThroughGateway(gw);
+          return;
+        }
+      }
+    }
 
     const nearest = this.findNearestLandmark();
     if (nearest) {
