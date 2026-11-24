@@ -12,9 +12,12 @@ import {
   type PlayerState,
   type QualityTier,
   type SkillId,
+  type TukTukCartItem,
+  type TukTukCartListing,
   type WeaponAuraId,
   type ZoneType,
 } from '@shared/types';
+import { rollRandomTreasureMap } from '@shared/treasureMaps';
 import { donateItemToMuseum } from '@shared/museumCatalog';
 import type { ActiveWorldEventSnapshot, NightMarketOffer } from '@shared/worldEvents';
 import type { FestivalId } from '@shared/festivals';
@@ -159,6 +162,8 @@ import { NightMarketModal } from './ui/NightMarketModal';
 import { FestivalModal } from './ui/FestivalModal';
 import { KromModal } from './ui/KromModal';
 import { ScryingMirrorModal } from './ui/ScryingMirrorModal';
+import { TukTukCartModal } from './ui/TukTukCartModal';
+import { TreasureMapModal } from './ui/TreasureMapModal';
 import { getMountSpec } from './game/entities/MountEntity';
 import { soundManager } from './game/systems/SoundManager';
 import { seasonClock } from './game/systems/SeasonClock';
@@ -195,6 +200,8 @@ type ActiveModalType =
   | 'festival'
   | 'krom'
   | 'scryingMirror'
+  | 'tukTukCart'
+  | 'treasureMap'
   | 'characterCreator';
 
 interface FloatingXpBanner extends SkillXpToastPayload {
@@ -223,6 +230,7 @@ export const App: React.FC = () => {
   });
 
   const [activeNpcId, setActiveNpcId] = useState<KhmerNpcId | null>(null);
+  const [focusedCartId, setFocusedCartId] = useState<string | null>(null);
   const [houseDecorateMode, setHouseDecorateMode] = useState(false);
   const [leaderboardCategory, setLeaderboardCategory] = useState<LeaderboardCategory>('farmer');
   const [activeWorldEvent, setActiveWorldEvent] = useState<ActiveWorldEventSnapshot | null>(() =>
@@ -888,17 +896,29 @@ export const App: React.FC = () => {
           else nextInv.push({ itemId: reward.itemId, quantity: 1, itemLevel: 1, quality: 'normal' });
         }
         const nextCoins = prev.currencies.coins + (reward.coins ?? 0);
+        let mapNote = '';
+        let nextTreasureMap = prev.activeTreasureMap ?? null;
+        if (Math.random() < 0.12) {
+          const existingMap = nextInv.find((i) => i.itemId === 'item_torn_treasure_map');
+          if (existingMap) existingMap.quantity += 1;
+          else nextInv.push({ itemId: 'item_torn_treasure_map', quantity: 1, itemLevel: 1, quality: 'normal' });
+          if (!nextTreasureMap) {
+            nextTreasureMap = rollRandomTreasureMap();
+          }
+          mapNote = ' + 🗺️ Torn Angkor Treasure Map!';
+        }
         const base: PlayerState = {
           ...prev,
           coins: nextCoins,
           currencies: { ...prev.currencies, coins: nextCoins },
           inventory: nextInv,
+          activeTreasureMap: nextTreasureMap,
         };
         const xpRes = awardSkillXp(base, 'fishing', reward.fishingXp, true);
         return {
           state: xpRes.state,
           ok: true,
-          message: `🎣 Caught ${reward.label} (+${reward.fishingXp} Fishing XP)!`,
+          message: `🎣 Caught ${reward.label} (+${reward.fishingXp} Fishing XP)${mapNote}!`,
         };
       });
     },
@@ -1402,17 +1422,27 @@ export const App: React.FC = () => {
             if (existing) existing.quantity += 1;
             else nextInv.push({ itemId, quantity: 1, itemLevel: 1, quality: 'normal' });
           }
+          let mapNote = '';
+          let nextTreasureMap = prev.activeTreasureMap ?? null;
+          if (skillId === 'foraging' && Math.random() < 0.12) {
+            const existingMap = nextInv.find((i) => i.itemId === 'item_torn_treasure_map');
+            if (existingMap) existingMap.quantity += 1;
+            else nextInv.push({ itemId: 'item_torn_treasure_map', quantity: 1, itemLevel: 1, quality: 'normal' });
+            if (!nextTreasureMap) nextTreasureMap = rollRandomTreasureMap();
+            mapNote = ' + 🗺️ Torn Angkor Treasure Map!';
+          }
           const withLoot: PlayerState = {
             ...prev,
             coins: nextCoins,
             currencies: { ...prev.currencies, coins: nextCoins },
             inventory: nextInv,
+            activeTreasureMap: nextTreasureMap,
           };
           const xpRes = awardSkillXp(withLoot, skillId, xp);
           return {
             state: xpRes.state,
             ok: true,
-            message: label,
+            message: `${label}${mapNote}`,
           };
         });
       }),
@@ -1421,8 +1451,10 @@ export const App: React.FC = () => {
           const gainedCoins = coins ?? 0;
           const nextCoins = prev.currencies.coins + gainedCoins;
           const nextInv = prev.inventory.map((i) => ({ ...i }));
+          let droppedMap = false;
           if (items && items.length > 0) {
             for (const drop of items) {
+              if (drop.itemId === 'item_torn_treasure_map') droppedMap = true;
               const existing = nextInv.find(
                 (i) => i.itemId === drop.itemId && (i.quality ?? 'normal') === 'normal'
               );
@@ -1435,6 +1467,10 @@ export const App: React.FC = () => {
             coins: nextCoins,
             currencies: { ...prev.currencies, coins: nextCoins },
             inventory: nextInv,
+            activeTreasureMap:
+              droppedMap && !prev.activeTreasureMap
+                ? rollRandomTreasureMap()
+                : prev.activeTreasureMap,
           };
           if (skillId && xp && xp > 0) {
             const xpRes = awardSkillXp(nextState, skillId, xp);
@@ -1454,6 +1490,22 @@ export const App: React.FC = () => {
           const existingStone = nextInv.find((i) => i.itemId === 'mat_reforge_stone');
           if (existingStone) existingStone.quantity += reforgeStones;
           else nextInv.push({ itemId: 'mat_reforge_stone', quantity: reforgeStones, itemLevel: 1, quality: 'normal' });
+
+          // Update 1.6 Guaranteed Boss Essence drop on every 5th Pagoda Boss Floor!
+          let essenceNote = '';
+          if (isBossFloor) {
+            const cycle = ['essence_slime', 'essence_stone', 'essence_naga'] as const;
+            const essenceId = cycle[Math.floor((floor / 5 - 1)) % cycle.length];
+            const existingEss = nextInv.find((i) => i.itemId === essenceId);
+            if (existingEss) existingEss.quantity += 1;
+            else nextInv.push({ itemId: essenceId, quantity: 1, itemLevel: 1, quality: 'normal' });
+            essenceNote =
+              essenceId === 'essence_slime'
+                ? ' · +1 ✨ Slime Essence'
+                : essenceId === 'essence_stone'
+                ? ' · +1 ✨ Stone Essence'
+                : ' · +1 ✨ Naga Essence';
+          }
 
           const prevHighest = prev.highestTowerFloor ?? 0;
           const nextHighest = Math.max(prevHighest, floor);
@@ -1484,7 +1536,7 @@ export const App: React.FC = () => {
           return {
             state: xpRes.state,
             ok: true,
-            message: `🗼 Cleared Pagoda Floor ${floor}${isBossFloor ? ' (Mythic Boss!)' : ''}! +${coins}c · +${vitalityXp} Vitality XP · +${reforgeStones}× Reforge Stone!${auraNote}`,
+            message: `🗼 Cleared Pagoda Floor ${floor}${isBossFloor ? ' (Mythic Boss!)' : ''}! +${coins}c · +${vitalityXp} Vitality XP · +${reforgeStones}× Reforge Stone${essenceNote}!${auraNote}`,
           };
         });
         if (isBossFloor || floor % 10 === 0) {
@@ -1608,6 +1660,71 @@ export const App: React.FC = () => {
           },
         ]);
       }),
+      EventBus.on('cart:saleNotice', ({ buyerName, itemName, quantity, revenueCoins, cookingXp }) => {
+        soundManager.playSfx('coin');
+        runStateAction((prev) => {
+          const nextCoins = prev.currencies.coins + revenueCoins;
+          const paid: PlayerState = {
+            ...prev,
+            coins: nextCoins,
+            currencies: { ...prev.currencies, coins: nextCoins },
+          };
+          const xpRes = awardSkillXp(paid, 'cooking', cookingXp, true);
+          return {
+            state: xpRes.state,
+            ok: true,
+            message: `🚕 Cart Sale! ${buyerName} bought ${quantity}× ${itemName} → +${revenueCoins.toLocaleString()}c & +${cookingXp} Cooking XP!`,
+          };
+        });
+      }),
+      EventBus.on('treasure:dugChest', ({ spotId, coins, gold, reforgeStones, cosmeticItemId, cosmeticLabel }) => {
+        runStateAction((prev) => {
+          const nextCoins = prev.currencies.coins + coins;
+          const nextGold = prev.currencies.gold + gold;
+          let nextInv = prev.inventory.map((i) => ({ ...i }));
+
+          // Consume 1 Torn Angkor Treasure Map
+          const mapIdx = nextInv.findIndex((i) => i.itemId === 'item_torn_treasure_map' && i.quantity > 0);
+          if (mapIdx >= 0) {
+            nextInv[mapIdx] = { ...nextInv[mapIdx], quantity: nextInv[mapIdx].quantity - 1 };
+            nextInv = nextInv.filter((i) => i.quantity > 0);
+          }
+          const remainingMaps = nextInv
+            .filter((i) => i.itemId === 'item_torn_treasure_map')
+            .reduce((acc, i) => acc + i.quantity, 0);
+
+          const addDrop = (itemId: string, qty: number) => {
+            const ex = nextInv.find((i) => i.itemId === itemId);
+            if (ex) ex.quantity += qty;
+            else nextInv.push({ itemId, quantity: qty, itemLevel: 1, quality: 'normal' });
+          };
+          addDrop('mat_reforge_stone', reforgeStones);
+          if (cosmeticItemId) addDrop(cosmeticItemId, 1);
+
+          const nextActiveMap = remainingMaps > 0 ? rollRandomTreasureMap(spotId) : null;
+          const base: PlayerState = {
+            ...prev,
+            coins: nextCoins,
+            currencies: { ...prev.currencies, coins: nextCoins, gold: nextGold },
+            inventory: nextInv,
+            activeTreasureMap: nextActiveMap,
+          };
+          const xpRes = awardSkillXp(base, 'foraging', 65, true);
+          return {
+            state: xpRes.state,
+            ok: true,
+            message: `🏆 Ancient Relic Chest! +${coins.toLocaleString()}c · +${gold} Gold · +${reforgeStones}× Reforge Stone${
+              cosmeticLabel ? ` · Unlocked ${cosmeticLabel}` : ''
+            }!`,
+          };
+        });
+        EventBus.emit('ticker:push', {
+          text: `🗺️ ${playerRef.current.name} unearthed an Ancient Angkor Relic Chest${
+            cosmeticLabel ? ` and found ${cosmeticLabel}` : ''
+          }!`,
+          category: 'club',
+        });
+      }),
       EventBus.on('portal:proximity', ({ nearPortal: near }) => {
         setNearPortal(near);
       }),
@@ -1721,12 +1838,14 @@ export const App: React.FC = () => {
           reforgeTab: reqReforgeTab,
           clubGame,
           leaderboardCategory: reqLbCat,
+          cartId,
         }) => {
           if (modal === 'farm' && farmTab) setFarmModalTab(farmTab);
           if (modal === 'friends' && reqFriendsTab) setFriendsTab(reqFriendsTab);
           if (modal === 'reforge' && reqReforgeTab) setReforgeTab(reqReforgeTab);
           if (modal === 'clubGames' && clubGame) setClubGameTab(clubGame);
           if (modal === 'leaderboard' && reqLbCat) setLeaderboardCategory(reqLbCat);
+          if (modal === 'tukTukCart') setFocusedCartId(cartId ?? null);
           if (modal === 'wardrobe') {
             setShopTab('secondary');
             setActiveModal('fashionShop');
@@ -1821,6 +1940,11 @@ export const App: React.FC = () => {
         onOpenFestival={() => setActiveModal('festival')}
         onOpenKrom={() => setActiveModal('krom')}
         onOpenScryingMirror={() => setActiveModal('scryingMirror')}
+        onOpenTukTukCart={() => {
+          setFocusedCartId(null);
+          setActiveModal('tukTukCart');
+        }}
+        onOpenTreasureMap={() => setActiveModal('treasureMap')}
         onToggleMount={handleToggleMount}
         onOpenHouseDecor={() => setActiveModal('houseDecor')}
         onInviteFriendsHome={() => {
@@ -2486,6 +2610,119 @@ export const App: React.FC = () => {
         }
         onEatSnack={(snackId) => runStateAction((s) => consumeStreetSnack(s, snackId))}
         onUseMagicMirror={handleUseMagicMirror}
+        onReadTreasureMap={() => {
+          runStateAction((s) => {
+            if (s.activeTreasureMap) return { state: s, ok: true, message: '' };
+            return {
+              state: { ...s, activeTreasureMap: rollRandomTreasureMap() },
+              ok: true,
+              message: '🗺️ Deciphered a new Angkor Treasure Map clue!',
+            };
+          });
+          setActiveModal('treasureMap');
+        }}
+      />
+
+      <TukTukCartModal
+        open={activeModal === 'tukTukCart'}
+        player={player}
+        authSession={authSession}
+        focusedCartId={focusedCartId}
+        onClose={() => setActiveModal(null)}
+        onCartsChanged={(carts: TukTukCartListing[]) => {
+          EventBus.emit('cart:listUpdated', { carts });
+        }}
+        onStockCartConsume={(cart: TukTukCartListing, stockedItems: TukTukCartItem[], toastMsg: string) => {
+          runStateAction((s) => {
+            let nextInv = s.inventory.map((i) => ({ ...i }));
+            for (const st of stockedItems) {
+              const idx = nextInv.findIndex(
+                (i) => i.itemId === st.itemId && (i.quality ?? 'normal') === (st.quality ?? 'normal')
+              );
+              if (idx >= 0) {
+                nextInv[idx] = { ...nextInv[idx], quantity: Math.max(0, nextInv[idx].quantity - st.quantity) };
+              }
+            }
+            nextInv = nextInv.filter((i) => i.quantity > 0);
+            soundManager.playSfx('level_up');
+            return { state: { ...s, inventory: nextInv }, ok: true, message: toastMsg };
+          });
+          EventBus.emit('ticker:push', {
+            text: `🚕 ${cart.signTitle} just parked in ${
+              cart.mapId === 'temple_district' ? 'Temple District (Dungeon Portal)' : 'Central Plaza'
+            }!`,
+            category: 'market',
+          });
+        }}
+        onBuyCartItemComplete={(
+          item: TukTukCartItem,
+          quantity: number,
+          totalPrice: number,
+          cartOwnerName: string
+        ) => {
+          runStateAction((s) => {
+            if (s.currencies.coins < totalPrice) {
+              return { state: s, ok: false, message: `Need ${totalPrice.toLocaleString()} Coins.` };
+            }
+            const nextCoins = s.currencies.coins - totalPrice;
+            const nextInv = s.inventory.map((i) => ({ ...i }));
+            const qual: QualityTier = item.quality ?? 'normal';
+            const ex = nextInv.find((i) => i.itemId === item.itemId && (i.quality ?? 'normal') === qual);
+            if (ex) ex.quantity += quantity;
+            else nextInv.push({ itemId: item.itemId, quantity, itemLevel: 1, quality: qual });
+            soundManager.playSfx('coin');
+            return {
+              state: {
+                ...s,
+                coins: nextCoins,
+                currencies: { ...s.currencies, coins: nextCoins },
+                inventory: nextInv,
+              },
+              ok: true,
+              message: `🥖 Bought ${quantity}× ${item.icon} ${item.name} from ${cartOwnerName}'s Tuk-Tuk Cart (-${totalPrice.toLocaleString()}c)!`,
+            };
+          });
+        }}
+        onCloseCartReturn={(returnedItems: TukTukCartItem[], revenueCoins: number, toastMsg: string) => {
+          runStateAction((s) => {
+            const nextInv = s.inventory.map((i) => ({ ...i }));
+            for (const item of returnedItems) {
+              const qual: QualityTier = item.quality ?? 'normal';
+              const ex = nextInv.find((i) => i.itemId === item.itemId && (i.quality ?? 'normal') === qual);
+              if (ex) ex.quantity += item.quantity;
+              else nextInv.push({ itemId: item.itemId, quantity: item.quantity, itemLevel: 1, quality: qual });
+            }
+            const nextCoins = s.currencies.coins + revenueCoins;
+            soundManager.playSfx('coin');
+            return {
+              state: {
+                ...s,
+                coins: nextCoins,
+                currencies: { ...s.currencies, coins: nextCoins },
+                inventory: nextInv,
+              },
+              ok: true,
+              message: toastMsg,
+            };
+          });
+        }}
+      />
+
+      <TreasureMapModal
+        open={activeModal === 'treasureMap'}
+        player={player}
+        onClose={() => setActiveModal(null)}
+        onTravelToMap={(mapId) => {
+          handleTravel(
+            {
+              method: 'pylon',
+              destinationLabel: mapId.replace(/_/g, ' '),
+              targetZone: 'overworld',
+              mapId,
+            },
+            0
+          );
+        }}
       />
 
       <ShopModal

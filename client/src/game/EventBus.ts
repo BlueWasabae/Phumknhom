@@ -1,4 +1,5 @@
 import type {
+  ActiveTreasureMap,
   BossId,
   CombatHitResult,
   DifficultyMode,
@@ -8,6 +9,7 @@ import type {
   PlacedHouseDecor,
   PlayerState,
   SkillId,
+  TukTukCartListing,
   WeaponAuraId,
   ZoneType,
 } from '@shared/types';
@@ -33,7 +35,7 @@ export interface ClassMeterPayload {
   lbokatorStance: number;   // 1=Lion, 2=Crocodile, 3=Hanuman
 }
 
-export type FarmToolMode = 'smart' | 'fertilize';
+export type FarmToolMode = 'smart' | 'fertilize' | 'infuse';
 
 export interface SkillXpToastPayload {
   skillId: SkillId;
@@ -243,6 +245,23 @@ export interface EventMap {
     attackBonusPct: number;
     durationMs: number;
   };
+  'cart:listUpdated': { carts: TukTukCartListing[] };
+  'cart:saleNotice': {
+    buyerName: string;
+    itemName: string;
+    quantity: number;
+    revenueCoins: number;
+    cookingXp: number;
+  };
+  'treasure:dugChest': {
+    spotId: string;
+    coins: number;
+    gold: number;
+    reforgeStones: number;
+    cosmeticItemId: string | null;
+    cosmeticLabel: string | null;
+    nextMap?: ActiveTreasureMap | null;
+  };
   'npc:openDialogue': { npcId: KhmerNpcId };
   'house:setDecorateMode': { active: boolean; itemId?: string | null };
   'house:placeQuick': { itemId: string };
@@ -296,13 +315,16 @@ export interface EventMap {
       | 'nightMarket'
       | 'festival'
       | 'krom'
-      | 'scryingMirror';
+      | 'scryingMirror'
+      | 'tukTukCart'
+      | 'treasureMap';
     leaderboardCategory?: 'farmer' | 'stylish' | 'slayer' | 'tower';
     farmTab?: 'seeds' | 'livestock' | 'artisan';
     shopTab?: 'primary' | 'secondary';
     friendsTab?: 'friends' | 'inbox';
     reforgeTab?: 'reforge' | 'fusion' | 'shimmer' | 'bank';
     clubGame?: 'kla_klok' | 'ouk_chaktrang' | 'tien_len';
+    cartId?: string;
   };
   'ui:toast': { text: string };
 }

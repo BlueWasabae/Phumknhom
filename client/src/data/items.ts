@@ -1548,6 +1548,22 @@ export const ITEM_CATALOG: Record<string, CatalogItem> = {
     },
   },
 
+  // ==================== UPDATE 1.6: TREASURE HUNTER COSMETIC CAPE ====================
+  wings_golden_krama_cape: {
+    id: 'wings_golden_krama_cape',
+    name: 'Golden Krama Cape',
+    khmerName: 'អាវឃ្លុំក្រមាមាសអ្នករុករក',
+    slot: 'wings',
+    rarity: 'legendary',
+    stylishScore: 92,
+    setName: 'Angkor Treasure Hunter',
+    description: 'Flowing crimson-and-gold Khmer Krama explorer cloak unearthed from Ancient Relic Chests. Pure prestige cosmetic!',
+    primaryColor: '#f59e0b',
+    accentColor: '#dc2626',
+    styleVariant: 'ember_wings',
+    stats: {},
+  },
+
   // ==================== UPDATE 1.3A: 5-SLOT ACCESSORIES & FUSED RELICS ====================
   ...Object.fromEntries(
     Object.values(ACCESSORY_DEFS).map((acc) => [

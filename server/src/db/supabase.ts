@@ -56,6 +56,7 @@ export interface SavedPlayerProfile {
   kromLevel?: number;
   pchumBenBlessingUntil?: number | null;
   festivalSplashCount?: number;
+  activeTreasureMap?: Record<string, unknown> | null;
   hasCompletedCreation?: boolean;
   activeClass?: string;
   weapon?: Record<string, unknown>;
@@ -476,6 +477,10 @@ function rowToSavedProfile(row: {
     kromLevel: typeof meta.kromLevel === 'number' ? meta.kromLevel : 0,
     pchumBenBlessingUntil: typeof meta.pchumBenBlessingUntil === 'number' ? meta.pchumBenBlessingUntil : null,
     festivalSplashCount: typeof meta.festivalSplashCount === 'number' ? meta.festivalSplashCount : 0,
+    activeTreasureMap:
+      meta.activeTreasureMap && typeof meta.activeTreasureMap === 'object'
+        ? (meta.activeTreasureMap as Record<string, unknown>)
+        : null,
     hasCompletedCreation: Boolean(
       meta.hasCompletedCreation ??
         (loadout as { hasCompletedCreation?: boolean }).hasCompletedCreation ??
@@ -551,6 +556,7 @@ export async function registerPlayer(
     kromLevel: starterProfile?.kromLevel ?? 0,
     pchumBenBlessingUntil: starterProfile?.pchumBenBlessingUntil ?? null,
     festivalSplashCount: starterProfile?.festivalSplashCount ?? 0,
+    activeTreasureMap: starterProfile?.activeTreasureMap ?? null,
     hasCompletedCreation: Boolean(starterProfile?.hasCompletedCreation ?? false),
     activeClass: starterProfile?.activeClass,
     weapon: starterProfile?.weapon,
@@ -788,6 +794,10 @@ export async function savePlayerProfile(
     pchumBenBlessingUntil:
       typeof profile.pchumBenBlessingUntil === 'number' ? profile.pchumBenBlessingUntil : null,
     festivalSplashCount: typeof profile.festivalSplashCount === 'number' ? profile.festivalSplashCount : 0,
+    activeTreasureMap:
+      profile.activeTreasureMap && typeof profile.activeTreasureMap === 'object'
+        ? profile.activeTreasureMap
+        : null,
     hasCompletedCreation: Boolean(
       profile.hasCompletedCreation ??
         (profile.loadout as { hasCompletedCreation?: boolean } | undefined)?.hasCompletedCreation ??

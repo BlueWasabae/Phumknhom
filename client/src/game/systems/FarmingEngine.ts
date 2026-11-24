@@ -328,6 +328,105 @@ export function autoWaterAllPlotsForMonsoon(
   };
 }
 
+export const SPIRIT_INFUSABLE_CROPS: Record<
+  string,
+  { spiritItemId: string; spiritName: string }
+> = {
+  phka_rumduol: {
+    spiritItemId: 'crop_spirit_jasmine_rice',
+    spiritName: 'Spirit Jasmine Rice',
+  },
+  pink_lotus: {
+    spiritItemId: 'crop_celestial_pink_lotus',
+    spiritName: 'Celestial Pink Lotus',
+  },
+  kampot_pepper: {
+    spiritItemId: 'crop_inferno_kampot_pepper',
+    spiritName: 'Inferno Kampot Pepper',
+  },
+};
+
+export const BOSS_ESSENCE_IDS: Array<{ id: string; essenceType: 'slime' | 'stone' | 'naga'; name: string }> = [
+  { id: 'essence_slime', essenceType: 'slime', name: 'Slime Essence' },
+  { id: 'essence_stone', essenceType: 'stone', name: 'Stone Essence' },
+  { id: 'essence_naga', essenceType: 'naga', name: 'Naga Essence' },
+];
+
+export function countTotalBossEssence(inv: InventoryItem[]): number {
+  return inv
+    .filter((i) => i.itemId === 'essence_slime' || i.itemId === 'essence_stone' || i.itemId === 'essence_naga')
+    .reduce((acc, i) => acc + i.quantity, 0);
+}
+
+/**
+ * Update 1.6 — Infuse Spirit on planted Phka Rumduol, Pink Lotus, or Kampot Pepper plots.
+ * Consumes 1 Boss Essence and mutates the growing harvest into a Spirit-Infused Crop!
+ */
+export function infusePlotWithSpirit(
+  state: PlayerState,
+  index: number,
+  preferredEssenceId?: string
+): ActionResult {
+  const plot = state.farm.plots[index];
+  if (!plot || !plot.cropId) {
+    return { state, ok: false, message: 'Plant Phka Rumduol, Pink Lotus, or Kampot Pepper first!' };
+  }
+  const spiritSpec = SPIRIT_INFUSABLE_CROPS[plot.cropId];
+  if (!spiritSpec) {
+    return {
+      state,
+      ok: false,
+      message: 'Only Phka Rumduol (Jasmine Rice), Pink Lotus, or Kampot Pepper can be Spirit-Infused!',
+    };
+  }
+  if (plot.spiritInfused) {
+    return { state, ok: false, message: 'This plot is already infused with Boss Spirit Essence!' };
+  }
+
+  const ordered = preferredEssenceId
+    ? [
+        ...BOSS_ESSENCE_IDS.filter((e) => e.id === preferredEssenceId),
+        ...BOSS_ESSENCE_IDS.filter((e) => e.id !== preferredEssenceId),
+      ]
+    : BOSS_ESSENCE_IDS;
+
+  let chosen = ordered.find((e) => state.inventory.some((i) => i.itemId === e.id && i.quantity > 0));
+  if (!chosen) {
+    return {
+      state,
+      ok: false,
+      message: 'Need 1 Boss Essence (Slime, Stone, or Naga Essence) from Dungeon / Pagoda Bosses!',
+    };
+  }
+
+  const nextInv = consumeInventory(state.inventory, chosen.id, 1);
+  if (!nextInv) {
+    return { state, ok: false, message: 'No Boss Essence available.' };
+  }
+
+  const plots = state.farm.plots.map((p) =>
+    p.index === index
+      ? {
+          ...p,
+          spiritInfused: true,
+          spiritEssenceType: chosen.essenceType,
+        }
+      : p
+  );
+
+  const nextState = addFarmXpAndPlayerXp(
+    { ...state, inventory: nextInv, farm: { ...state.farm, plots } },
+    35,
+    18
+  );
+
+  return {
+    state: nextState,
+    ok: true,
+    message: `✨ Infused Plot #${index + 1} with ${chosen.name}! Will harvest into ${spiritSpec.spiritName} (+35 Farm XP)!`,
+  };
+}
+
 /**
  * Fertilizer grants a 20% chance for Gold-Star crop (1.5x Coins & +60s buff duration).
  */
@@ -375,21 +474,30 @@ export function harvestPlot(state: PlayerState, index: number, now = Date.now())
           effectiveGrowMs: 0,
           watered: false,
           fertilized: false,
+          spiritInfused: false,
+          spiritEssenceType: undefined,
         }
       : p
   );
-  const nextInv = addInventory(state.inventory, crop.harvestItemId, 1, quality);
+  const spiritSpec = plot.spiritInfused ? SPIRIT_INFUSABLE_CROPS[plot.cropId] : undefined;
+  const harvestItemId = spiritSpec ? spiritSpec.spiritItemId : crop.harvestItemId;
+  const harvestLabel = spiritSpec ? spiritSpec.spiritName : crop.name;
+  const xpAward = spiritSpec ? crop.farmXp * 2 : crop.farmXp;
+
+  const nextInv = addInventory(state.inventory, harvestItemId, 1, quality);
   const nextState = addFarmXpAndPlayerXp(
     { ...state, inventory: nextInv, farm: { ...state.farm, plots } },
-    crop.farmXp,
-    Math.round(crop.farmXp * 0.6)
+    xpAward,
+    Math.round(xpAward * 0.6)
   );
 
   return {
     state: nextState,
     ok: true,
-    goldStar: isGoldStar,
-    message: isGoldStar
+    goldStar: isGoldStar || Boolean(spiritSpec),
+    message: spiritSpec
+      ? `✨ SPIRIT-INFUSED ${isGoldStar ? '★ ' : ''}${harvestLabel} harvested! (+${xpAward} Farm XP)`
+      : isGoldStar
       ? `★ GOLD-STAR ${crop.name} harvested! (+${crop.farmXp} Farm XP)`
       : `Harvested ${crop.name}! (+${crop.farmXp} Farm XP)`,
   };

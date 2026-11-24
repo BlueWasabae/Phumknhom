@@ -4,10 +4,13 @@ import {
   createInitialFarmState,
   createInitialSkillProfile,
   type ActiveDungeonFightInfo,
+  type ActiveTreasureMap,
   type EquippedLoadout,
   type KromGuild,
   type PlayerState,
   type SkillId,
+  type TukTukCartItem,
+  type TukTukCartListing,
 } from '@shared/types';
 import { computeKromBuffs } from '@shared/festivals';
 import { ALL_SKILL_IDS, computeVillageToDungeonBridge } from '@shared/skillTrees';
@@ -96,6 +99,7 @@ export interface SavedProfilePayload {
   kromLevel?: number;
   pchumBenBlessingUntil?: number | null;
   festivalSplashCount?: number;
+  activeTreasureMap?: ActiveTreasureMap | null;
   hasCompletedCreation?: boolean;
   activeClass: PlayerState['activeClass'];
   weapon: PlayerState['weapon'];
@@ -390,6 +394,7 @@ export function serializePlayerStateForSave(state: PlayerState): SavedProfilePay
     kromLevel: state.kromLevel ?? 0,
     pchumBenBlessingUntil: state.pchumBenBlessingUntil ?? null,
     festivalSplashCount: state.festivalSplashCount ?? 0,
+    activeTreasureMap: state.activeTreasureMap ?? null,
     hasCompletedCreation: Boolean(state.hasCompletedCreation ?? state.loadout.hasCompletedCreation),
     activeClass: state.activeClass,
     weapon: { ...state.weapon },
@@ -529,6 +534,31 @@ export function hydratePlayerStateFromSave(
       : INITIAL_PLAYER_STATE.inventory.map((i) => ({ ...i }));
   if (!rawInventory.some((i) => i.itemId === 'tool_magic_mirror')) {
     rawInventory.push({ itemId: 'tool_magic_mirror', quantity: 1, itemLevel: 1, quality: 'normal' });
+  }
+  // Update 1.6 Starter Migration: ensure returning saves without Update 1.6 items receive starter Boss Essences & Torn Map
+  const hasAnyEssenceOrSpirit =
+    rawInventory.some(
+      (i) =>
+        i.itemId === 'essence_slime' ||
+        i.itemId === 'essence_stone' ||
+        i.itemId === 'essence_naga' ||
+        i.itemId === 'crop_spirit_jasmine_rice' ||
+        i.itemId === 'crop_celestial_pink_lotus' ||
+        i.itemId === 'crop_inferno_kampot_pepper'
+    ) || Boolean(saved?.farm?.plots?.some((p) => p.spiritInfused));
+  if (!hasAnyEssenceOrSpirit) {
+    rawInventory.push(
+      { itemId: 'essence_slime', quantity: 1, itemLevel: 1, quality: 'normal' },
+      { itemId: 'essence_stone', quantity: 1, itemLevel: 1, quality: 'normal' },
+      { itemId: 'essence_naga', quantity: 1, itemLevel: 1, quality: 'normal' }
+    );
+  }
+  const willHaveActiveMap =
+    saved?.activeTreasureMap === undefined
+      ? Boolean(INITIAL_PLAYER_STATE.activeTreasureMap)
+      : Boolean(saved.activeTreasureMap);
+  if (willHaveActiveMap && !rawInventory.some((i) => i.itemId === 'item_torn_treasure_map')) {
+    rawInventory.push({ itemId: 'item_torn_treasure_map', quantity: 1, itemLevel: 1, quality: 'normal' });
   }
   const inventory = rawInventory;
 
@@ -670,6 +700,12 @@ export function hydratePlayerStateFromSave(
         ? saved.pchumBenBlessingUntil
         : null,
     festivalSplashCount: typeof saved?.festivalSplashCount === 'number' ? saved.festivalSplashCount : 0,
+    activeTreasureMap:
+      saved?.activeTreasureMap && typeof saved.activeTreasureMap === 'object'
+        ? saved.activeTreasureMap
+        : saved?.activeTreasureMap === null
+        ? null
+        : INITIAL_PLAYER_STATE.activeTreasureMap,
     hasCompletedCreation: Boolean(
       saved?.hasCompletedCreation ?? saved?.loadout?.hasCompletedCreation ?? false
     ),
@@ -1246,4 +1282,233 @@ export async function sendVillageCheerApi(
     session?.token
   );
   return res.ok ? { ok: true, delivered: res.data.delivered } : { ok: true, delivered: false };
+}
+
+// ==================== UPDATE 1.6 PLAYER-RUN TUK-TUK FOOD CARTS API ====================
+
+const LOCAL_CARTS_KEY = 'phum_khnhom_tuktuk_carts_v1';
+
+function createDefaultOfflineCarts(): TukTukCartListing[] {
+  return [
+    {
+      cartId: 'cart_demo_chef_dara',
+      ownerId: 'npc_chef_dara',
+      ownerName: 'Chef Dara',
+      ownerKromTag: 'PHUM',
+      signTitle: "Chef Dara's Hot Snacks",
+      mapId: 'temple_district',
+      x: 655,
+      y: 620,
+      items: [
+        {
+          itemId: 'snack_num_pang',
+          name: 'Num Pang',
+          icon: '🥖',
+          quantity: 12,
+          priceCoins: 55,
+          quality: 'normal',
+          summary: 'Instant +60 HP',
+        },
+        {
+          itemId: 'snack_pepper_skewer',
+          name: 'Kampot Pepper Skewers',
+          icon: '🍢',
+          quantity: 8,
+          priceCoins: 175,
+          quality: 'gold_star',
+          summary: '+25% ATK (4m)',
+        },
+        {
+          itemId: 'elixir_naga',
+          name: 'Elixir of the Naga',
+          icon: '🧪',
+          quantity: 4,
+          priceCoins: 650,
+          quality: 'normal',
+          summary: '+30% Max HP & +10% Lifesteal (5m)',
+        },
+      ],
+      totalSalesCoins: 1420,
+      totalItemsSold: 9,
+      openedAt: Date.now() - 3600_000,
+      isDemo: true,
+    },
+  ];
+}
+
+function loadLocalTukTukCarts(): TukTukCartListing[] {
+  try {
+    const raw = window.localStorage.getItem(LOCAL_CARTS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed as TukTukCartListing[];
+    }
+  } catch {
+    // ignore
+  }
+  const seeded = createDefaultOfflineCarts();
+  saveLocalTukTukCarts(seeded);
+  return seeded;
+}
+
+function saveLocalTukTukCarts(carts: TukTukCartListing[]): void {
+  try {
+    window.localStorage.setItem(LOCAL_CARTS_KEY, JSON.stringify(carts));
+  } catch {
+    // ignore
+  }
+}
+
+export async function fetchTukTukCartsApi(mapId?: string): Promise<TukTukCartListing[]> {
+  try {
+    const qs = mapId ? `?mapId=${encodeURIComponent(mapId)}` : '';
+    const res = await fetch(`${getApiBase()}/cart/list${qs}`);
+    if (res.ok) {
+      const json = (await res.json()) as { carts?: TukTukCartListing[] };
+      if (Array.isArray(json.carts)) {
+        saveLocalTukTukCarts(json.carts);
+        return json.carts;
+      }
+    }
+  } catch {
+    // Offline fallback below
+  }
+  const local = loadLocalTukTukCarts();
+  return mapId ? local.filter((c) => c.mapId === mapId) : local;
+}
+
+export async function openTukTukCartApi(
+  token: string | undefined,
+  payload: {
+    ownerId: string;
+    ownerName: string;
+    ownerKromTag?: string;
+    mapId: 'central_plaza' | 'temple_district';
+    signTitle: string;
+    items: TukTukCartItem[];
+  }
+): Promise<{ ok: boolean; cart?: TukTukCartListing; carts: TukTukCartListing[]; error?: string }> {
+  const res = await postJson<{ ok: boolean; cart: TukTukCartListing; carts: TukTukCartListing[] }>(
+    '/cart/open',
+    payload,
+    token
+  );
+  if (res.ok) {
+    saveLocalTukTukCarts(res.data.carts);
+    return { ok: true, cart: res.data.cart, carts: res.data.carts };
+  }
+  // Offline fallback
+  const carts = loadLocalTukTukCarts();
+  const spots =
+    payload.mapId === 'temple_district'
+      ? [
+          { x: 945, y: 620 },
+          { x: 655, y: 620 },
+          { x: 950, y: 710 },
+        ]
+      : [
+          { x: 985, y: 645 },
+          { x: 615, y: 645 },
+          { x: 995, y: 530 },
+        ];
+  const existingIdx = carts.findIndex(
+    (c) => !c.isDemo && c.ownerId === payload.ownerId && c.ownerName === payload.ownerName
+  );
+  const spot = spots[carts.filter((c) => c.mapId === payload.mapId).length % spots.length] ?? spots[0];
+  const cart: TukTukCartListing = {
+    cartId: existingIdx >= 0 ? carts[existingIdx].cartId : `cart_local_${Date.now()}`,
+    ownerId: payload.ownerId,
+    ownerName: payload.ownerName,
+    ownerKromTag: payload.ownerKromTag,
+    signTitle: payload.signTitle || `${payload.ownerName}'s Hot Snacks`,
+    mapId: payload.mapId,
+    x: spot.x,
+    y: spot.y,
+    items: payload.items,
+    totalSalesCoins: existingIdx >= 0 ? carts[existingIdx].totalSalesCoins : 0,
+    totalItemsSold: existingIdx >= 0 ? carts[existingIdx].totalItemsSold : 0,
+    openedAt: Date.now(),
+  };
+  if (existingIdx >= 0) carts[existingIdx] = cart;
+  else carts.push(cart);
+  saveLocalTukTukCarts(carts);
+  return { ok: true, cart, carts };
+}
+
+export async function buyFromTukTukCartApi(
+  token: string | undefined,
+  payload: { cartId: string; itemId: string; quantity: number; buyerName: string }
+): Promise<{
+  ok: boolean;
+  carts: TukTukCartListing[];
+  purchasedItem?: TukTukCartItem;
+  quantityBought?: number;
+  totalPrice?: number;
+  error?: string;
+}> {
+  const res = await postJson<{
+    ok: boolean;
+    carts: TukTukCartListing[];
+    purchasedItem: TukTukCartItem;
+    quantityBought: number;
+    totalPrice: number;
+  }>('/cart/buy', payload, token);
+  if (res.ok) {
+    saveLocalTukTukCarts(res.data.carts);
+    return res.data;
+  }
+  const carts = loadLocalTukTukCarts();
+  const cIdx = carts.findIndex((c) => c.cartId === payload.cartId);
+  if (cIdx < 0) return { ok: false, carts, error: 'Food cart not found.' };
+  const cart = carts[cIdx];
+  const iIdx = cart.items.findIndex((i) => i.itemId === payload.itemId && i.quantity > 0);
+  if (iIdx < 0) return { ok: false, carts, error: 'Item sold out!' };
+  const stack = cart.items[iIdx];
+  const qty = Math.max(1, Math.min(stack.quantity, payload.quantity || 1));
+  const totalPrice = stack.priceCoins * qty;
+  const purchasedItem: TukTukCartItem = { ...stack, quantity: qty };
+  if (!cart.isDemo) {
+    stack.quantity -= qty;
+    if (stack.quantity <= 0) cart.items.splice(iIdx, 1);
+  }
+  cart.totalSalesCoins += totalPrice;
+  cart.totalItemsSold += qty;
+  if (!cart.isDemo && cart.items.length === 0) carts.splice(cIdx, 1);
+  saveLocalTukTukCarts(carts);
+  return { ok: true, carts, purchasedItem, quantityBought: qty, totalPrice };
+}
+
+export async function closeTukTukCartApi(
+  token: string | undefined,
+  payload: { cartId?: string; ownerId: string; ownerName: string }
+): Promise<{
+  ok: boolean;
+  returnedItems: TukTukCartItem[];
+  revenueCoins: number;
+  carts: TukTukCartListing[];
+  error?: string;
+}> {
+  const res = await postJson<{
+    ok: boolean;
+    returnedItems: TukTukCartItem[];
+    revenueCoins: number;
+    carts: TukTukCartListing[];
+  }>('/cart/close', payload, token);
+  if (res.ok) {
+    saveLocalTukTukCarts(res.data.carts);
+    return res.data;
+  }
+  const carts = loadLocalTukTukCarts();
+  const idx = carts.findIndex(
+    (c) => !c.isDemo && ((payload.cartId && c.cartId === payload.cartId) || c.ownerName === payload.ownerName)
+  );
+  if (idx < 0) return { ok: false, returnedItems: [], revenueCoins: 0, carts, error: 'No active cart.' };
+  const [removed] = carts.splice(idx, 1);
+  saveLocalTukTukCarts(carts);
+  return {
+    ok: true,
+    returnedItems: removed.items,
+    revenueCoins: removed.totalSalesCoins,
+    carts,
+  };
 }

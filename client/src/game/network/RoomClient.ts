@@ -400,6 +400,31 @@ class PlazaRoomClient {
         }
       );
 
+      room.onMessage('tukTukCartsUpdated', (msg: { carts?: unknown[] }) => {
+        if (Array.isArray(msg?.carts)) {
+          EventBus.emit('cart:listUpdated', { carts: msg.carts as never });
+        }
+      });
+
+      room.onMessage(
+        'cartSaleNotice',
+        (msg: {
+          buyerName?: string;
+          itemName?: string;
+          quantity?: number;
+          revenueCoins?: number;
+          cookingXp?: number;
+        }) => {
+          EventBus.emit('cart:saleNotice', {
+            buyerName: msg.buyerName ?? 'Villager',
+            itemName: msg.itemName ?? 'Hot Snack',
+            quantity: msg.quantity ?? 1,
+            revenueCoins: msg.revenueCoins ?? 0,
+            cookingXp: msg.cookingXp ?? 18,
+          });
+        }
+      );
+
       room.onLeave(() => {
         if (this.room === room) {
           this.room = null;

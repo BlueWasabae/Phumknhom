@@ -1960,11 +1960,18 @@ export class DungeonBossScene extends Phaser.Scene {
       );
     }
 
-    // Melee Seething Blade lifesteal
+    // Melee Seething Blade & Elixir of the Naga (+10% Lifesteal) healing
     if (bridge.seethingLifestealChance > 0 && Math.random() < bridge.seethingLifestealChance) {
       const heal = Math.max(3, Math.round(bridge.effectiveMaxHp * 0.03));
       this.player.state.hp = Math.min(bridge.effectiveMaxHp, this.player.state.hp + heal);
       this.spawnFloatingText(this.player.x, this.player.y - 44, `+${heal} HP`, '#34d399', '13px');
+    }
+    if (bridge.snackLifestealPct > 0) {
+      const nagaHeal = Math.max(2, Math.min(28, Math.round(totalDamage * bridge.snackLifestealPct)));
+      if (this.player.state.hp < bridge.effectiveMaxHp) {
+        this.player.state.hp = Math.min(bridge.effectiveMaxHp, this.player.state.hp + nagaHeal);
+        this.spawnFloatingText(this.player.x + 12, this.player.y - 52, `+${nagaHeal} 🧪`, '#22d3ee', '12px');
+      }
     }
 
     // Live Combat Class Skill XP
@@ -2193,6 +2200,16 @@ export class DungeonBossScene extends Phaser.Scene {
         lootLabels.push('🛡️ Naga Scale Set (Combat Armor)');
       }
     }
+
+    // Update 1.6 Guaranteed Boss Essence drop for Spirit-Infused Farming!
+    const essenceDrop =
+      this.bossId === 'sdech_kongkaeb'
+        ? { id: 'essence_slime', label: '✨ Slime Essence' }
+        : this.bossId === 'yeak_thmor'
+        ? { id: 'essence_stone', label: '✨ Stone Essence' }
+        : { id: 'essence_naga', label: '✨ Naga Essence' };
+    nextInv = this.addItemToInventory(nextInv, essenceDrop.id, 1, false).nextInv;
+    lootLabels.push(essenceDrop.label);
 
     const totalCoins = rolled.coins + extraDupCoins;
     soundManager.playSfx('coin');

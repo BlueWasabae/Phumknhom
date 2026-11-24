@@ -26,6 +26,7 @@ interface InventoryModalProps {
   onSellFarmItem: (itemId: string, quality: QualityTier, qty?: number) => void;
   onEatSnack?: (snackId: string) => void;
   onUseMagicMirror?: () => void;
+  onReadTreasureMap?: () => void;
 }
 
 const COMBAT_CORE_SLOTS: Array<{ slot: 'weapon' | 'armor'; label: string }> = [
@@ -65,6 +66,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
   onSellFarmItem,
   onEatSnack,
   onUseMagicMirror,
+  onReadTreasureMap,
 }) => {
   const [tab, setTab] = useState<'wearing' | 'container'>('container');
   const [filterSlot, setFilterSlot] = useState<ContainerFilter>('all');
@@ -501,7 +503,18 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                     <div className="text-[11px] font-semibold text-amber-800">{selectedFarmDef.khmerName}</div>
                     <p className="text-[11px] text-amber-900/90 mt-1 leading-snug">{selectedFarmDef.description}</p>
                   </div>
-                  {selectedFarmDef.id === 'tool_magic_mirror' && onUseMagicMirror ? (
+                  {selectedFarmDef.id === 'item_torn_treasure_map' && onReadTreasureMap ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        onReadTreasureMap();
+                      }}
+                      className="w-full py-2 rounded-xl bg-gradient-to-b from-amber-500 to-orange-700 hover:from-amber-400 hover:to-orange-600 text-white border border-amber-950 font-display font-bold text-xs shadow-sm"
+                    >
+                      🗺️ Read Map → Reveal Buried X Clue!
+                    </button>
+                  ) : selectedFarmDef.id === 'tool_magic_mirror' && onUseMagicMirror ? (
                     <button
                       type="button"
                       disabled={inActiveBossFight}

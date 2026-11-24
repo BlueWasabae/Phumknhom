@@ -476,6 +476,7 @@ export interface VillageToDungeonBridgeStats {
   snackMaxHpPct: number;          // From Golden Durian Feast etc.
   snackCritBonus: number;         // From Golden Durian Feast etc.
   snackMpRegenPct: number;        // From Lotus Spirit Tea
+  snackLifestealPct: number;      // From Elixir of the Naga (+10% Lifesteal)
   moveSpeedBonusPct: number;      // Snack + Foraging/Rogue passives + talents
   jumpPowerBonusPct: number;      // Snack + Rogue agility talent
   poisonImmune: boolean;          // From Coconut Anti-Venom
@@ -536,6 +537,7 @@ export function computeVillageToDungeonBridge(
   let snackMoveSpeedPct = 0;
   let snackJumpPowerPct = 0;
   let snackMpRegenPct = 0;
+  let snackLifestealPct = 0;
   let poisonImmune = false;
 
   for (const buff of player.activeBuffs) {
@@ -546,6 +548,7 @@ export function computeVillageToDungeonBridge(
     if (buff.moveSpeedPct) snackMoveSpeedPct += buff.moveSpeedPct * cookingPowerMult;
     if (buff.jumpPowerPct) snackJumpPowerPct += buff.jumpPowerPct * cookingPowerMult;
     if (buff.mpRegenPct) snackMpRegenPct += buff.mpRegenPct * cookingPowerMult;
+    if (buff.lifestealPct) snackLifestealPct += buff.lifestealPct;
     if (buff.poisonImmune) poisonImmune = true;
   }
 
@@ -665,6 +668,7 @@ export function computeVillageToDungeonBridge(
     snackMaxHpPct,
     snackCritBonus,
     snackMpRegenPct,
+    snackLifestealPct,
     moveSpeedBonusPct,
     jumpPowerBonusPct,
     poisonImmune,

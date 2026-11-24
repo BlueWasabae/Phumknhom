@@ -4,13 +4,20 @@ import express from 'express';
 import cors from 'cors';
 import { Server, matchMaker } from 'colyseus';
 import { WebSocketTransport } from '@colyseus/ws-transport';
-import { ALLOWED_AREAS, PlazaRoom } from './rooms/PlazaRoom';
+import { ALLOWED_AREAS, PlazaRoom, broadcastTukTukCartsUpdate } from './rooms/PlazaRoom';
 import {
   DungeonRoom,
   listActiveDungeonFights,
   sendVillageCheerToDungeon,
 } from './rooms/DungeonRoom';
 import { ClubRoom } from './rooms/ClubRoom';
+import {
+  buyFromTukTukCart,
+  closeTukTukCart,
+  listTukTukCarts,
+  openTukTukCart,
+  type TukTukCartItemRecord,
+} from './economy/tukTukCartService';
 import {
   createKrom,
   donateToKrom,
@@ -535,6 +542,95 @@ app.post('/api/dungeon/cheer', (req, res) => {
   }
   const result = sendVillageCheerToDungeon(body.roomId, sender);
   res.json({ ok: true, ...result, senderName: sender });
+});
+
+// ==================== UPDATE 1.6 PLAYER-RUN TUK-TUK FOOD CARTS ====================
+
+app.get('/api/cart/list', (req, res) => {
+  const mapId = typeof req.query.mapId === 'string' ? req.query.mapId : undefined;
+  res.json({ carts: listTukTukCarts(mapId) });
+});
+
+app.post('/api/cart/open', (req, res) => {
+  const verified = verifyAuthToken(extractBearerToken(req));
+  const body = (req.body ?? {}) as {
+    ownerName?: string;
+    ownerKromTag?: string;
+    mapId?: 'central_plaza' | 'temple_district';
+    signTitle?: string;
+    items?: TukTukCartItemRecord[];
+  };
+  const result = openTukTukCart({
+    ownerId: verified?.playerId ?? 'guest',
+    ownerName: verified?.username ?? body.ownerName ?? 'PhumHero',
+    ownerKromTag: body.ownerKromTag,
+    mapId: body.mapId === 'central_plaza' ? 'central_plaza' : 'temple_district',
+    signTitle: body.signTitle,
+    items: body.items ?? [],
+  });
+  if (!result.ok) {
+    res.status(400).json({ error: result.error });
+    return;
+  }
+  broadcastTukTukCartsUpdate(result.carts);
+  res.status(201).json(result);
+});
+
+app.post('/api/cart/buy', (req, res) => {
+  const verified = verifyAuthToken(extractBearerToken(req));
+  const body = (req.body ?? {}) as {
+    cartId?: string;
+    itemId?: string;
+    quantity?: number;
+    buyerName?: string;
+  };
+  if (!body.cartId || !body.itemId) {
+    res.status(400).json({ error: 'Missing cartId or itemId.' });
+    return;
+  }
+  const buyerName = verified?.username ?? body.buyerName ?? 'Villager';
+  const result = buyFromTukTukCart({
+    cartId: body.cartId,
+    itemId: body.itemId,
+    quantity: body.quantity ?? 1,
+    buyerId: verified?.playerId ?? 'guest',
+    buyerName,
+  });
+  if (!result.ok) {
+    res.status(400).json({ error: result.error });
+    return;
+  }
+  broadcastTukTukCartsUpdate(result.carts);
+  if (result.cart && !result.cart.isDemo && result.purchasedItem) {
+    presenceRegistry.sendToTarget(
+      { playerId: result.cart.ownerId, username: result.cart.ownerName },
+      'cartSaleNotice',
+      {
+        buyerName,
+        itemName: result.purchasedItem.name,
+        quantity: result.quantityBought ?? 1,
+        revenueCoins: result.totalPrice ?? 0,
+        cookingXp: result.chefCookingXp ?? 18,
+      }
+    );
+  }
+  res.json(result);
+});
+
+app.post('/api/cart/close', (req, res) => {
+  const verified = verifyAuthToken(extractBearerToken(req));
+  const body = (req.body ?? {}) as { cartId?: string; ownerName?: string };
+  const result = closeTukTukCart({
+    cartId: body.cartId,
+    ownerId: verified?.playerId ?? 'guest',
+    ownerName: verified?.username ?? body.ownerName ?? 'PhumHero',
+  });
+  if (!result.ok) {
+    res.status(400).json({ error: result.error });
+    return;
+  }
+  broadcastTukTukCartsUpdate(result.carts);
+  res.json(result);
 });
 
 const httpServer = http.createServer(app);

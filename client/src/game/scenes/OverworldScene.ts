@@ -4,6 +4,7 @@ import {
   type BossId,
   type DifficultyMode,
   type PlayerState,
+  type TukTukCartListing,
 } from '@shared/types';
 import { computeVillageToDungeonBridge } from '@shared/skillTrees';
 import {
@@ -19,7 +20,7 @@ import { PaperDoll } from '../entities/PaperDoll';
 import { NpcVillager } from '../entities/NpcVillager';
 import { RemotePlayerEntity } from '../entities/RemotePlayerEntity';
 import { getMountSpec } from '../entities/MountEntity';
-import { fetchLeaderboard } from '../network/ApiClient';
+import { fetchLeaderboard, fetchTukTukCartsApi } from '../network/ApiClient';
 import { areaIdToChannel, channelToAreaId, roomClient } from '../network/RoomClient';
 import { soundManager } from '../systems/SoundManager';
 import { SeasonAtmosphereOverlay, seasonClock } from '../systems/SeasonClock';
@@ -120,6 +121,32 @@ export class OverworldScene extends Phaser.Scene {
   private festivalObjects: Phaser.GameObjects.GameObject[] = [];
   private festivalLandmarks: LandmarkZone[] = [];
   private lastSyncedFestival: FestivalId | null = null;
+  private tukTukCartObjects: Phaser.GameObjects.GameObject[] = [];
+  private tukTukCartLandmarks: LandmarkZone[] = [];
+  private treasureDigObjects: Phaser.GameObjects.GameObject[] = [];
+  private treasureDigLandmark: LandmarkZone | null = null;
+  private lastTreasureSpotId: string | null = null;
+  private treasureGuardians: Array<{
+    sprite: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite;
+    hpBg: Phaser.GameObjects.Rectangle;
+    hpFill: Phaser.GameObjects.Rectangle;
+    nameText: Phaser.GameObjects.Text;
+    homeX: number;
+    homeY: number;
+    dir: number;
+    hp: number;
+    maxHp: number;
+    alive: boolean;
+  }> = [];
+  private activeTreasureChest: {
+    x: number;
+    y: number;
+    spotId: string;
+    sprite: Phaser.GameObjects.Image;
+    glow: Phaser.GameObjects.Image;
+    label: Phaser.GameObjects.Text;
+    opened: boolean;
+  } | null = null;
   private gateLockUntil = 0;
   private nearPortalSent = false;
   private transitioning = false;
@@ -339,7 +366,11 @@ export class OverworldScene extends Phaser.Scene {
           this.player.state.level !== nextState.level ||
           this.player.state.lifeStats.stylish !== nextState.lifeStats.stylish ||
           this.player.state.kromTag !== nextState.kromTag;
+        const nextSpotId = nextState.activeTreasureMap?.spotId ?? null;
         this.player.syncPlayerState({ ...nextState, currentMapId: this.mapId });
+        if (nextSpotId !== this.lastTreasureSpotId && !this.activeTreasureChest) {
+          this.syncTreasureMapDigSpot();
+        }
         if (metaChanged) {
           roomClient.sendAppearance(this.player.state.loadout, {
             name: nextState.name,
@@ -373,6 +404,9 @@ export class OverworldScene extends Phaser.Scene {
       EventBus.on('worldEvent:changed', (snap) => {
         this.syncWorldEventVisuals(snap);
       }),
+      EventBus.on('cart:listUpdated', ({ carts }) => {
+        this.syncTukTukCarts(carts);
+      }),
       seasonClock.subscribe((snap) => {
         if (snap.activeFestival !== this.lastSyncedFestival) {
           this.syncFestivalVisuals(snap.activeFestival);
@@ -394,10 +428,20 @@ export class OverworldScene extends Phaser.Scene {
     void this.connectToPlazaArea(initialArea, false);
     this.syncWorldEventVisuals(worldEventManager.getActiveEvent());
     this.syncFestivalVisuals(seasonClock.getSnapshot().activeFestival);
+    if (this.mapId === 'central_plaza' || this.mapId === 'temple_district') {
+      void fetchTukTukCartsApi(this.mapId).then((carts) => {
+        if (this.scene && this.scene.isActive('OverworldScene')) {
+          this.syncTukTukCarts(carts);
+        }
+      });
+    }
+    this.syncTreasureMapDigSpot();
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.clearWorldEventVisuals();
       this.clearFestivalVisuals();
+      this.clearTukTukCarts();
+      this.clearTreasureDigVisuals();
       this.scale.off('resize', this.applyResponsiveZoom, this);
       this.busTimer?.remove(false);
       this.busTimer = undefined;
@@ -2499,6 +2543,403 @@ export class OverworldScene extends Phaser.Scene {
     }
   }
 
+  // ==================== UPDATE 1.6: PLAYER-RUN TUK-TUK FOOD CARTS ====================
+  private clearTukTukCarts(): void {
+    for (const obj of this.tukTukCartObjects) {
+      if (obj && obj.active) obj.destroy();
+    }
+    this.tukTukCartObjects = [];
+    if (this.tukTukCartLandmarks.length > 0) {
+      const rm = new Set(this.tukTukCartLandmarks);
+      this.landmarks = this.landmarks.filter((lm) => !rm.has(lm));
+      this.tukTukCartLandmarks = [];
+    }
+  }
+
+  private syncTukTukCarts(allCarts: TukTukCartListing[]): void {
+    if (!this.scene || !this.scene.isActive('OverworldScene')) return;
+    this.clearTukTukCarts();
+    if (this.mapId !== 'central_plaza' && this.mapId !== 'temple_district') return;
+
+    const mapCarts = allCarts.filter((c) => c.mapId === this.mapId && c.items.length > 0);
+    for (const cart of mapCarts) {
+      const cx = cart.x;
+      const cy = cart.y;
+
+      const glow = this.add
+        .image(cx, cy - 8, 'torch_glow')
+        .setTint(0xf59e0b)
+        .setScale(1.05)
+        .setAlpha(0.55)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(cy - 6);
+      this.tweens.add({ targets: glow, alpha: 0.28, scale: 1.22, duration: 840, yoyo: true, repeat: -1 });
+
+      const shadow = this.add.image(cx, cy + 4, 'soft_shadow').setDisplaySize(64, 20).setDepth(cy - 5);
+      const texKey = this.textures.exists('num_pang_cart') ? 'num_pang_cart' : 'mount_mini_tuk_tuk';
+      const sprite = this.add
+        .image(cx, cy, texKey)
+        .setOrigin(0.5, 0.88)
+        .setScale(texKey === 'num_pang_cart' ? 0.62 : 0.7)
+        .setTint(0xfffbeb)
+        .setDepth(cy)
+        .setInteractive({ useHandCursor: true });
+
+      // Glowing canopy badge + floating signboard
+      const sign = this.add
+        .text(cx, cy - 48, `🚕 ${cart.signTitle}`, {
+          fontFamily: 'Fredoka, sans-serif',
+          fontSize: '11px',
+          fontStyle: 'bold',
+          color: '#fef08a',
+          backgroundColor: 'rgba(124, 45, 18, 0.94)',
+          padding: { x: 7, y: 2 },
+        })
+        .setResolution(2)
+        .setScale(0.45)
+        .setOrigin(0.5, 1)
+        .setDepth(cy + 14);
+      const sub = this.add
+        .text(cx, cy + 8, `🔥 ${cart.items.length} Hot Buffs · Click / [E] to Buy`, {
+          fontFamily: 'Fredoka, sans-serif',
+          fontSize: '10px',
+          fontStyle: 'bold',
+          color: '#a7f3d0',
+          backgroundColor: 'rgba(15, 23, 42, 0.88)',
+          padding: { x: 5, y: 1 },
+        })
+        .setResolution(2)
+        .setScale(0.4)
+        .setOrigin(0.5, 0)
+        .setDepth(cy + 14);
+
+      const openCart = () => {
+        soundManager.playSfx('click');
+        EventBus.emit('ui:openModal', { modal: 'tukTukCart', cartId: cart.cartId });
+      };
+      sprite.on('pointerdown', openCart);
+
+      const lm: LandmarkZone = {
+        x: cx,
+        y: cy,
+        radius: 68,
+        label: `Press [E] or Click → 🚕 ${cart.signTitle} (Buy Hot Combat Buffs!)`,
+        isDungeonPortal: false,
+        onInteract: openCart,
+      };
+      this.tukTukCartObjects.push(glow, shadow, sprite, sign, sub);
+      this.tukTukCartLandmarks.push(lm);
+      this.landmarks.push(lm);
+    }
+  }
+
+  // ==================== UPDATE 1.6: TORN ANGKOR TREASURE MAP DIG SPOT ====================
+  private clearTreasureDigVisuals(): void {
+    for (const obj of this.treasureDigObjects) {
+      if (obj && obj.active) obj.destroy();
+    }
+    this.treasureDigObjects = [];
+    if (this.treasureDigLandmark) {
+      this.landmarks = this.landmarks.filter((lm) => lm !== this.treasureDigLandmark);
+      this.treasureDigLandmark = null;
+    }
+    for (const g of this.treasureGuardians) {
+      g.sprite.destroy();
+      g.hpBg.destroy();
+      g.hpFill.destroy();
+      g.nameText.destroy();
+    }
+    this.treasureGuardians = [];
+    if (this.activeTreasureChest) {
+      this.activeTreasureChest.sprite.destroy();
+      this.activeTreasureChest.glow.destroy();
+      this.activeTreasureChest.label.destroy();
+      this.activeTreasureChest = null;
+    }
+  }
+
+  private syncTreasureMapDigSpot(): void {
+    if (!this.scene || !this.scene.isActive('OverworldScene')) return;
+    this.clearTreasureDigVisuals();
+
+    const mapClue = this.player.state.activeTreasureMap;
+    this.lastTreasureSpotId = mapClue?.spotId ?? null;
+    if (!mapClue || mapClue.mapId !== this.mapId) return;
+
+    const tx = mapClue.x;
+    const ty = mapClue.y;
+
+    const ringOuter = this.add
+      .circle(tx, ty, 24, 0xfacc15, 0.2)
+      .setStrokeStyle(3, 0xfde047, 0.95)
+      .setDepth(ty - 12)
+      .setInteractive({ useHandCursor: true });
+    const ringInner = this.add
+      .circle(tx, ty, 13, 0xf59e0b, 0.32)
+      .setStrokeStyle(2, 0xef4444, 0.95)
+      .setDepth(ty - 11);
+    const xMark = this.add
+      .text(tx, ty, '✕', {
+        fontFamily: 'Fredoka, sans-serif',
+        fontSize: '20px',
+        fontStyle: 'bold',
+        color: '#ef4444',
+        stroke: '#fef08a',
+        strokeThickness: 4,
+      })
+      .setResolution(2)
+      .setScale(0.65)
+      .setOrigin(0.5)
+      .setDepth(ty - 10);
+
+    const lbl = this.add
+      .text(tx, ty - 26, '🗺️ X MARKS THE SPOT — Press [E] / Click to Dig!', {
+        fontFamily: 'Fredoka, sans-serif',
+        fontSize: '11px',
+        fontStyle: 'bold',
+        color: '#fef08a',
+        backgroundColor: 'rgba(124, 45, 18, 0.94)',
+        padding: { x: 7, y: 2 },
+      })
+      .setResolution(2)
+      .setScale(0.45)
+      .setOrigin(0.5, 1)
+      .setDepth(ty + 15);
+
+    this.tweens.add({
+      targets: [ringOuter, ringInner],
+      scale: 1.24,
+      alpha: 0.45,
+      duration: 720,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    const digNow = () => this.digTreasureSpot(tx, ty, mapClue.spotId);
+    ringOuter.on('pointerdown', digNow);
+    xMark.setInteractive({ useHandCursor: true }).on('pointerdown', digNow);
+
+    const lm: LandmarkZone = {
+      x: tx,
+      y: ty,
+      radius: 78,
+      label: 'Press [E] or Click → ⛏️ Dig Ancient Relic Chest!',
+      isDungeonPortal: false,
+      onInteract: digNow,
+    };
+
+    this.treasureDigObjects.push(ringOuter, ringInner, xMark, lbl);
+    this.treasureDigLandmark = lm;
+    this.landmarks.push(lm);
+  }
+
+  private digTreasureSpot(tx: number, ty: number, spotId: string): void {
+    if (this.activeTreasureChest) return;
+
+    // Remove pulsing X ring & landmark while guarded Relic Chest is active
+    for (const obj of this.treasureDigObjects) {
+      if (obj && obj.active) obj.destroy();
+    }
+    this.treasureDigObjects = [];
+    if (this.treasureDigLandmark) {
+      this.landmarks = this.landmarks.filter((lm) => lm !== this.treasureDigLandmark);
+      this.treasureDigLandmark = null;
+    }
+
+    soundManager.playSfx('harvest');
+    this.cameras.main.shake(120, 0.005);
+
+    const glow = this.add
+      .image(tx, ty - 8, 'torch_glow')
+      .setTint(0xfacc15)
+      .setScale(1.2)
+      .setAlpha(0.75)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(ty - 3);
+    const chestSprite = this.add
+      .image(tx, ty, 'lf_chest')
+      .setScale(1.35)
+      .setDepth(ty)
+      .setInteractive({ useHandCursor: true });
+    const chestLbl = this.add
+      .text(tx, ty - 28, '🔒 ANCIENT RELIC CHEST (Defeat 2 Shadow Guardians!)', {
+        fontFamily: 'Fredoka, sans-serif',
+        fontSize: '11px',
+        fontStyle: 'bold',
+        color: '#fde047',
+        backgroundColor: 'rgba(15, 23, 42, 0.92)',
+        padding: { x: 7, y: 2 },
+      })
+      .setResolution(2)
+      .setScale(0.45)
+      .setOrigin(0.5, 1)
+      .setDepth(ty + 18);
+
+    this.activeTreasureChest = {
+      x: tx,
+      y: ty,
+      spotId,
+      sprite: chestSprite,
+      glow,
+      label: chestLbl,
+      opened: false,
+    };
+
+    // Spawn 2 quick Shadow Guardian mobs guarding the unearthed chest
+    const offsets: Array<[number, number, string]> = [
+      [-48, 8, 'Shadow Relic Guard'],
+      [48, 8, 'Angkor Shade Sentinel'],
+    ];
+    offsets.forEach(([ox, oy, name], idx) => {
+      const gx = tx + ox;
+      const gy = ty + oy;
+      const spr = this.add
+        .sprite(gx, gy, 'pet_spirit', 0)
+        .setScale(1.65)
+        .setTint(0xc084fc)
+        .setDepth(gy + 4)
+        .setInteractive({ useHandCursor: true });
+      if (this.anims.exists('pet_spirit_idle')) {
+        spr.play('pet_spirit_idle');
+      }
+      const hpBg = this.add.rectangle(gx, gy - 26, 40, 5, 0x0f172a).setDepth(gy + 12);
+      const hpFill = this.add.rectangle(gx - 19, gy - 26, 38, 3, 0xc084fc).setOrigin(0, 0.5).setDepth(gy + 13);
+      const nameText = this.add
+        .text(gx, gy - 32, `👻 ${name} (Click / [E])`, {
+          fontFamily: 'Fredoka, sans-serif',
+          fontSize: '10px',
+          fontStyle: 'bold',
+          color: '#e9d5ff',
+          backgroundColor: 'rgba(15, 23, 42, 0.88)',
+          padding: { x: 4, y: 1 },
+        })
+        .setResolution(2)
+        .setScale(0.42)
+        .setOrigin(0.5, 1)
+        .setDepth(gy + 14);
+
+      const guard = {
+        sprite: spr,
+        hpBg,
+        hpFill,
+        nameText,
+        homeX: gx,
+        homeY: gy,
+        dir: idx === 0 ? -1 : 1,
+        hp: 2,
+        maxHp: 2,
+        alive: true,
+      };
+      spr.on('pointerdown', () => this.damageTreasureGuardian(guard));
+      this.treasureGuardians.push(guard);
+    });
+
+    chestSprite.on('pointerdown', () => {
+      const aliveGuard = this.treasureGuardians.find((g) => g.alive);
+      if (aliveGuard) {
+        this.damageTreasureGuardian(aliveGuard);
+      } else {
+        this.burstOpenTreasureChest();
+      }
+    });
+
+    EventBus.emit('ui:toast', {
+      text: '⛏️ Unearthed an Ancient Relic Chest! Defeat the 2 Shadow Guardians (Click or press [E]) to claim it!',
+    });
+  }
+
+  private damageTreasureGuardian(guard: OverworldScene['treasureGuardians'][number]): void {
+    if (!guard.alive) return;
+    guard.hp -= 1;
+    soundManager.playSfx('hit');
+    guard.sprite.setTintFill(0xffffff);
+    this.time.delayedCall(90, () => {
+      if (guard.sprite.active && guard.alive) guard.sprite.setTint(0xa855f7);
+    });
+    guard.hpFill.width = Math.max(0, Math.round(38 * (guard.hp / guard.maxHp)));
+    this.spawnFloatingText(guard.sprite.x, guard.sprite.y - 24, 'STRIKE! -50%', '#fde047');
+
+    if (guard.hp <= 0) {
+      guard.alive = false;
+      guard.sprite.destroy();
+      guard.hpBg.destroy();
+      guard.hpFill.destroy();
+      guard.nameText.destroy();
+      soundManager.playSfx('crit');
+
+      const remaining = this.treasureGuardians.filter((g) => g.alive).length;
+      if (remaining === 0) {
+        this.burstOpenTreasureChest();
+      } else if (this.activeTreasureChest) {
+        this.activeTreasureChest.label.setText('🔒 ANCIENT RELIC CHEST (1 Shadow Guardian left!)');
+      }
+    }
+  }
+
+  private burstOpenTreasureChest(): void {
+    const chest = this.activeTreasureChest;
+    if (!chest || chest.opened) return;
+    chest.opened = true;
+
+    soundManager.playSfx('victory');
+    this.cameras.main.flash(260, 250, 204, 21);
+
+    // Golden relic burst particles
+    for (let i = 0; i < 16; i++) {
+      const ang = (Math.PI * 2 * i) / 16;
+      const p = this.add.circle(chest.x, chest.y - 8, 3.5, i % 2 === 0 ? 0xfacc15 : 0x38bdf8, 0.95).setDepth(2400);
+      this.tweens.add({
+        targets: p,
+        x: chest.x + Math.cos(ang) * Phaser.Math.Between(34, 72),
+        y: chest.y - 8 + Math.sin(ang) * Phaser.Math.Between(24, 58),
+        alpha: 0,
+        duration: 620,
+        onComplete: () => p.destroy(),
+      });
+    }
+
+    const coins = Phaser.Math.Between(500, 1500);
+    const gold = Phaser.Math.Between(1, 3);
+    const reforgeStones = Phaser.Math.Between(1, 2);
+
+    const ownsCompass = this.player.state.inventory.some((i) => i.itemId === 'acc_angkor_explorer_compass');
+    const ownsCape = this.player.state.inventory.some((i) => i.itemId === 'wings_golden_krama_cape');
+    let cosmeticItemId: string | null = null;
+    let cosmeticLabel: string | null = null;
+    if (Math.random() < 0.72) {
+      if (!ownsCompass && (!ownsCape ? Math.random() < 0.55 : true)) {
+        cosmeticItemId = 'acc_angkor_explorer_compass';
+        cosmeticLabel = '🧭 Angkor Explorer Compass';
+      } else if (!ownsCape) {
+        cosmeticItemId = 'wings_golden_krama_cape';
+        cosmeticLabel = '🧣 Golden Krama Cape';
+      }
+    }
+
+    this.spawnFloatingText(
+      chest.x,
+      chest.y - 32,
+      `🏆 +${coins}c · +${gold} Gold · +${reforgeStones} Reforge Stone${cosmeticLabel ? ` · ${cosmeticLabel}` : ''}!`,
+      '#fde047'
+    );
+
+    EventBus.emit('treasure:dugChest', {
+      spotId: chest.spotId,
+      coins,
+      gold,
+      reforgeStones,
+      cosmeticItemId,
+      cosmeticLabel,
+    });
+
+    chest.sprite.destroy();
+    chest.glow.destroy();
+    chest.label.destroy();
+    this.activeTreasureChest = null;
+    this.treasureGuardians = [];
+  }
+
   // ==================== UPDATE 1.4: DYNAMIC WORLD EVENTS ====================
   private clearWorldEventVisuals(): void {
     for (const obj of this.worldEventObjects) {
@@ -2843,6 +3284,17 @@ export class OverworldScene extends Phaser.Scene {
   }
 
   private tryInteractNearest(): void {
+    // Update 1.6 — Strike Shadow Guardians guarding an unearthed Ancient Relic Chest with [E]
+    for (const tg of this.treasureGuardians) {
+      if (
+        tg.alive &&
+        Phaser.Math.Distance.Between(this.player.x, this.player.y, tg.sprite.x, tg.sprite.y) <= 115
+      ) {
+        this.damageTreasureGuardian(tg);
+        return;
+      }
+    }
+
     // Allow striking nearby Dynamic World Event mobs/boss with [E]
     for (const em of this.worldEventMobs) {
       if (
@@ -2966,6 +3418,18 @@ export class OverworldScene extends Phaser.Scene {
       em.hpBg.setPosition(em.sprite.x, em.sprite.y - (isB ? 44 : 24));
       em.hpFill.setPosition(em.sprite.x - (isB ? 40 : 19), em.sprite.y - (isB ? 44 : 24));
       em.nameText.setPosition(em.sprite.x, em.sprite.y - (isB ? 52 : 30));
+    }
+
+    // Animate unearthed Ancient Relic Chest Shadow Guardians
+    for (const tg of this.treasureGuardians) {
+      if (!tg.alive) continue;
+      tg.sprite.x += tg.dir * delta * 0.036;
+      if (tg.sprite.x > tg.homeX + 26) tg.dir = -1;
+      if (tg.sprite.x < tg.homeX - 26) tg.dir = 1;
+      tg.sprite.y = tg.homeY + Math.sin(time / 240 + tg.homeX) * 5;
+      tg.hpBg.setPosition(tg.sprite.x, tg.sprite.y - 26);
+      tg.hpFill.setPosition(tg.sprite.x - 19, tg.sprite.y - 26);
+      tg.nameText.setPosition(tg.sprite.x, tg.sprite.y - 32);
     }
 
     roomClient.sendMove(

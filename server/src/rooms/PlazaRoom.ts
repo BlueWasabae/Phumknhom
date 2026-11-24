@@ -46,11 +46,13 @@ function sanitizeAppearance(raw: unknown): string {
 }
 
 export class PlazaRoom extends Room<PlazaState> {
+  static activeRooms = new Set<PlazaRoom>();
   maxClients = 40;
   private lastChatAt = new Map<string, number>();
   private lastEmoteAt = new Map<string, number>();
 
   onCreate(options: { areaId?: string }): void {
+    PlazaRoom.activeRooms.add(this);
     const areaId = normalizeAreaId(options?.areaId);
     const state = new PlazaState();
     state.areaId = areaId;
@@ -381,4 +383,14 @@ export class PlazaRoom extends Room<PlazaState> {
     this.lastChatAt.delete(client.sessionId);
     this.lastEmoteAt.delete(client.sessionId);
   }
+
+  onDispose(): void {
+    PlazaRoom.activeRooms.delete(this);
+  }
+}
+
+export function broadcastTukTukCartsUpdate(carts: unknown[]): void {
+  PlazaRoom.activeRooms.forEach((room) => {
+    room.broadcast('tukTukCartsUpdated', { carts });
+  });
 }

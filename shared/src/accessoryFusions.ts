@@ -186,6 +186,25 @@ export const ACCESSORY_DEFS: Record<string, AccessoryDefinition> = {
       dashCooldownReductionPct: 0.3,
     },
   },
+  // ==================== UPDATE 1.6 TREASURE HUNTER ACCESSORY ====================
+  acc_angkor_explorer_compass: {
+    id: 'acc_angkor_explorer_compass',
+    name: 'Angkor Explorer Compass',
+    khmerName: 'ត្រីវិស័យអ្នករុករកអង្គរ',
+    rarity: 'legendary',
+    tier: 'base',
+    icon: '🧭',
+    primaryColor: '#f59e0b',
+    accentColor: '#fef08a',
+    stylishScore: 76,
+    summary: '+12% Move Speed, +18% Mining Speed & +6% Crit',
+    description: 'Gilded brass Angkorian astrolabe unearthed from buried Torn Treasure Map Relic Chests. Boosts speed, mining, and treasure luck!',
+    effects: {
+      moveSpeedPct: 0.12,
+      miningSpeedPct: 0.18,
+      critChanceBonus: 0.06,
+    },
+  },
 };
 
 export const ACCESSORY_LIST: AccessoryDefinition[] = Object.values(ACCESSORY_DEFS);

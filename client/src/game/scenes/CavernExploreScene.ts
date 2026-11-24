@@ -858,6 +858,12 @@ export class CavernExploreScene extends Phaser.Scene {
       relicNote = ` + 🏛️ ${relicLabel}!`;
     }
 
+    // Update 1.6 — Rare bonus Torn Angkor Treasure Map drop from Mining!
+    if (Math.random() < 0.12 + (bridge.museumRareDropLuckPct ?? 0)) {
+      bonusItems.push({ itemId: 'item_torn_treasure_map', quantity: 1 });
+      relicNote += ' + 🗺️ Torn Angkor Treasure Map!';
+    }
+
     this.spawnFloatingText(
       node.x,
       node.y - 46,

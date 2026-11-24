@@ -60,6 +60,42 @@ export interface ActiveDungeonFightInfo {
   isSimulation?: boolean;
 }
 
+export interface ActiveTreasureMap {
+  spotId: string;
+  mapId: 'central_plaza' | 'market_street' | 'temple_district' | 'green_park' | 'wild_frontier';
+  clueTitle: string;
+  clueDescription: string;
+  x: number;
+  y: number;
+  discoveredAt: number;
+}
+
+export interface TukTukCartItem {
+  itemId: string;
+  name: string;
+  icon: string;
+  quantity: number;
+  priceCoins: number;
+  quality?: QualityTier;
+  summary: string;
+}
+
+export interface TukTukCartListing {
+  cartId: string;
+  ownerId: string;
+  ownerName: string;
+  ownerKromTag?: string;
+  signTitle: string;
+  mapId: 'central_plaza' | 'temple_district';
+  x: number;
+  y: number;
+  items: TukTukCartItem[];
+  totalSalesCoins: number;
+  totalItemsSold: number;
+  openedAt: number;
+  isDemo?: boolean;
+}
+
 export type WeaponAuraId = 'golden_lotus' | 'emerald_naga' | 'celestial_angkor';
 
 export interface NpcFriendshipEntry {
@@ -130,6 +166,7 @@ export interface ActiveSnackBuff {
   critChanceBonus?: number;
   mpRegenPct?: number;
   poisonImmune?: boolean;
+  lifestealPct?: number;
 }
 
 export type EquipSlot =
@@ -214,6 +251,9 @@ export interface FarmPlotState {
   effectiveGrowMs: number;      // starts at crop.growSeconds * 1000, cut by 20% remaining when watered
   watered: boolean;
   fertilized: boolean;
+  /** Update 1.6 — Spirit-Infused Farming via Boss Essence */
+  spiritInfused?: boolean;
+  spiritEssenceType?: 'slime' | 'stone' | 'naga';
 }
 
 export interface FruitTreeState {
@@ -320,6 +360,8 @@ export interface PlayerState {
   kromLevel?: number;
   pchumBenBlessingUntil?: number | null;
   festivalSplashCount?: number;
+  /** Update 1.6 — Active Torn Angkor Treasure Map clue coordinates */
+  activeTreasureMap?: ActiveTreasureMap | null;
   hasCompletedCreation?: boolean;
   skillDamagePct: number;
   armorDamagePct: number;
@@ -386,16 +428,18 @@ export const DEFAULT_LOADOUT: EquippedLoadout = {
 export function createInitialFarmState(now = Date.now()): FarmState {
   // Starter 6x4 Farm Plot grid (18 unlocked + bottom row of 6 unlockable with Coins)
   const plots: FarmPlotState[] = Array.from({ length: 24 }, (_, index) => {
-    const starterPlanted = index === 0 || index === 1;
+    const isStarterTrakuon = index === 0;
+    const isStarterRice = index === 1;
     return {
       index,
       unlocked: index < 18,
       tilled: index < 6,
-      cropId: starterPlanted ? 'trakuon' : null,
-      plantedAt: starterPlanted ? now - 95_000 : null,
-      effectiveGrowMs: starterPlanted ? 120_000 : 0,
-      watered: starterPlanted,
-      fertilized: index === 0,
+      cropId: isStarterTrakuon ? 'trakuon' : isStarterRice ? 'phka_rumduol' : null,
+      plantedAt: isStarterTrakuon ? now - 95_000 : isStarterRice ? now - 120_000 : null,
+      effectiveGrowMs: isStarterTrakuon ? 120_000 : isStarterRice ? 900_000 : 0,
+      watered: isStarterTrakuon || isStarterRice,
+      fertilized: isStarterTrakuon,
+      spiritInfused: false,
     };
   });
 
@@ -547,6 +591,11 @@ export const INITIAL_PLAYER_STATE: PlayerState = {
     { itemId: 'tool_magic_mirror', quantity: 1, itemLevel: 1, quality: 'normal' },
     // Update 1.4 Village Heirloom Relic (Ready for Angkor Relic Museum display!)
     { itemId: 'relic_sandstone_apsara', quantity: 1, itemLevel: 1, quality: 'normal' },
+    // Update 1.6 Starter Boss Essences (3) & Torn Angkor Treasure Map (1) for immediate testing!
+    { itemId: 'essence_slime', quantity: 1, itemLevel: 1, quality: 'normal' },
+    { itemId: 'essence_stone', quantity: 1, itemLevel: 1, quality: 'normal' },
+    { itemId: 'essence_naga', quantity: 1, itemLevel: 1, quality: 'normal' },
+    { itemId: 'item_torn_treasure_map', quantity: 1, itemLevel: 1, quality: 'normal' },
   ],
   farm: createInitialFarmState(),
   skills: createInitialSkillProfile(),
@@ -593,6 +642,16 @@ export const INITIAL_PLAYER_STATE: PlayerState = {
   kromLevel: 0,
   pchumBenBlessingUntil: null,
   festivalSplashCount: 0,
+  activeTreasureMap: {
+    spotId: 'spot_plaza_se_palm',
+    mapId: 'central_plaza',
+    clueTitle: 'Central Plaza — Beneath the Southeast Palm Lantern',
+    clueDescription:
+      'Walk southeast of the Central Courtyard campfire toward the glowing stone lantern beneath the towering sugar palms.',
+    x: 1020,
+    y: 780,
+    discoveredAt: 1,
+  },
   hasCompletedCreation: false,
   skillDamagePct: 0.025,
   armorDamagePct: 0.04,

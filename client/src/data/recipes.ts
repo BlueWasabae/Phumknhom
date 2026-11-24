@@ -40,6 +40,7 @@ export interface StreetSnackDef {
     critChanceBonus?: number;
     mpRegenPct?: number;
     poisonImmune?: boolean;
+    lifestealPct?: number;
   };
 }
 
@@ -215,6 +216,78 @@ export const STREET_SNACKS: Record<string, StreetSnackDef> = {
       critChanceBonus: 0.15,
     },
   },
+  // ==================== UPDATE 1.6 RAID-TIER SPIRIT ELIXIRS ====================
+  elixir_naga: {
+    id: 'elixir_naga',
+    name: 'Elixir of the Naga',
+    khmerName: 'ទឹកអម្រឹតនាគរាជ',
+    icon: '🧪',
+    rarity: 'epic',
+    primaryColor: '#06b6d4',
+    buyCoins: 680,
+    sellCoins: 380,
+    cookingXp: 145,
+    ingredients: [
+      { itemId: 'crop_spirit_jasmine_rice', label: 'Spirit Jasmine Rice', quantity: 1 },
+    ],
+    villageHealthy: 45,
+    villageHappy: 20,
+    villageSummary: 'Healthy +45 · Happy +20',
+    dungeonSummary: '+30% Max HP & +10% Lifesteal (5m)',
+    instantHealHp: 120,
+    buffDurationSec: 300,
+    buffStats: {
+      maxHpPct: 0.3,
+      lifestealPct: 0.1,
+    },
+  },
+  elixir_angkor_fury: {
+    id: 'elixir_angkor_fury',
+    name: 'Angkor Fury Brew',
+    khmerName: 'ទឹកបារមីអង្គរក្តៅគគុក',
+    icon: '🔥',
+    rarity: 'legendary',
+    primaryColor: '#ea580c',
+    buyCoins: 920,
+    sellCoins: 540,
+    cookingXp: 185,
+    ingredients: [
+      { itemId: 'crop_inferno_kampot_pepper', label: 'Inferno Kampot Pepper', quantity: 1 },
+    ],
+    villageHealthy: 30,
+    villageHappy: 40,
+    villageSummary: 'Healthy +30 · Happy +40',
+    dungeonSummary: '+35% All Damage & +20% Crit (5m)',
+    buffDurationSec: 300,
+    buffStats: {
+      attackPct: 0.35,
+      critChanceBonus: 0.2,
+    },
+  },
+  elixir_celestial_lotus: {
+    id: 'elixir_celestial_lotus',
+    name: 'Celestial Lotus Draught',
+    khmerName: 'ទឹកផ្កាឈូកទេពសួគ៌ា',
+    icon: '🪷',
+    rarity: 'legendary',
+    primaryColor: '#ec4899',
+    buyCoins: 850,
+    sellCoins: 480,
+    cookingXp: 170,
+    ingredients: [
+      { itemId: 'crop_celestial_pink_lotus', label: 'Celestial Pink Lotus', quantity: 1 },
+    ],
+    villageHealthy: 40,
+    villageHappy: 45,
+    villageSummary: 'Healthy +40 · Happy +45',
+    dungeonSummary: '+25% Speed, +50% Energy Regen & Poison Immunity (6m)',
+    buffDurationSec: 360,
+    buffStats: {
+      moveSpeedPct: 0.25,
+      mpRegenPct: 0.5,
+      poisonImmune: true,
+    },
+  },
 };
 
 export const STREET_SNACK_LIST: StreetSnackDef[] = [
@@ -224,6 +297,9 @@ export const STREET_SNACK_LIST: StreetSnackDef[] = [
   STREET_SNACKS.snack_pepper_skewer,
   STREET_SNACKS.snack_lotus_tea,
   STREET_SNACKS.snack_durian_feast,
+  STREET_SNACKS.elixir_naga,
+  STREET_SNACKS.elixir_angkor_fury,
+  STREET_SNACKS.elixir_celestial_lotus,
 ];
 
 export function countInventoryAnyQuality(inv: InventoryItem[], itemId: string): number {

@@ -117,6 +117,8 @@ interface HUDProps {
   onOpenFestival?: () => void;
   onOpenKrom?: () => void;
   onOpenScryingMirror?: () => void;
+  onOpenTukTukCart?: () => void;
+  onOpenTreasureMap?: () => void;
   onToggleMount?: () => void;
   onFastForwardFarm: () => void;
 }
@@ -167,6 +169,8 @@ export const HUD: React.FC<HUDProps> = ({
   onOpenFestival,
   onOpenKrom,
   onOpenScryingMirror,
+  onOpenTukTukCart,
+  onOpenTreasureMap,
   onToggleMount,
   onFastForwardFarm,
 }) => {
@@ -427,6 +431,29 @@ export const HUD: React.FC<HUDProps> = ({
               className="px-2 py-0.5 rounded-lg bg-amber-500/90 hover:bg-amber-400 text-amber-950 border border-amber-950 font-display font-bold text-[10px] whitespace-nowrap transition cursor-pointer"
             >
               🏛️ TOP 10
+            </button>
+          )}
+          {onOpenTukTukCart &&
+            (player.activeMount === 'mount_mini_tuk_tuk' ||
+              player.currentMapId === 'temple_district' ||
+              player.currentMapId === 'central_plaza') && (
+              <button
+                type="button"
+                onClick={onOpenTukTukCart}
+                title="Set Up Player-Run Tuk-Tuk Food Cart (Sell Hot Combat Buffs & Raid Elixirs!)"
+                className="px-2 py-0.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white border border-orange-950 font-display font-bold text-[10px] whitespace-nowrap transition cursor-pointer"
+              >
+                🚕 Food Cart
+              </button>
+            )}
+          {onOpenTreasureMap && player.activeTreasureMap && (
+            <button
+              type="button"
+              onClick={onOpenTreasureMap}
+              title="Read Active Torn Angkor Treasure Map Clue"
+              className="px-2 py-0.5 rounded-lg bg-amber-700 hover:bg-amber-600 text-amber-50 border border-amber-950 font-display font-bold text-[10px] whitespace-nowrap transition cursor-pointer"
+            >
+              🗺️ Map Clue
             </button>
           )}
         </div>
@@ -749,6 +776,37 @@ export const HUD: React.FC<HUDProps> = ({
                     <Globe2 className="w-4 h-4 text-cyan-700" /> Scrying Mirror (Village Cheer)
                   </button>
                 )}
+                {onOpenTukTukCart && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuDropdownOpen(false);
+                      onOpenTukTukCart();
+                    }}
+                    className="px-3 py-2 rounded-xl hover:bg-orange-100 text-left flex items-center gap-2 text-amber-950"
+                  >
+                    <Store className="w-4 h-4 text-orange-700" /> Set Up Food Cart (Tuk-Tuk)
+                  </button>
+                )}
+                {onOpenTreasureMap && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuDropdownOpen(false);
+                      onOpenTreasureMap();
+                    }}
+                    className="px-3 py-2 rounded-xl hover:bg-amber-200/80 text-left flex items-center justify-between gap-2 text-amber-950"
+                  >
+                    <span className="flex items-center gap-2">
+                      <MapIcon className="w-4 h-4 text-amber-700" /> Torn Angkor Treasure Map
+                    </span>
+                    {player.activeTreasureMap && (
+                      <span className="px-1.5 py-0.5 rounded-full bg-red-600 text-white text-[9px] font-bold">
+                        X
+                      </span>
+                    )}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => {
@@ -985,6 +1043,21 @@ export const HUD: React.FC<HUDProps> = ({
                 }`}
               >
                 ★ Fert ×{countItem('fertilizer')}
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  onSelectFarmSeed(selectedCropId, farmToolMode === 'infuse' ? 'smart' : 'infuse')
+                }
+                title="Infuse Spirit: Click planted Phka Rumduol, Pink Lotus, or Kampot Pepper to mutate into a Spirit-Infused Crop!"
+                className={`px-2 py-0.5 rounded-lg border transition ${
+                  farmToolMode === 'infuse'
+                    ? 'bg-cyan-600 text-white border-cyan-950 ring-2 ring-cyan-300'
+                    : 'bg-cyan-50 text-cyan-950 border-cyan-800/40 hover:bg-cyan-100'
+                }`}
+              >
+                ✨ Infuse Spirit ×{countItem('essence_slime') + countItem('essence_stone') + countItem('essence_naga')}
               </button>
 
               <button

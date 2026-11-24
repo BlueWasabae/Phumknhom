@@ -19,6 +19,7 @@ import {
   getTreeProgress,
   harvestFruitTree,
   harvestPlot,
+  infusePlotWithSpirit,
   plantSeedOnPlot,
   tillPlot,
   unlockPlot,
@@ -526,6 +527,17 @@ export class FarmScene extends Phaser.Scene {
       return;
     }
 
+    if (this.toolMode === 'infuse') {
+      const res = infusePlotWithSpirit(this.player.state, index);
+      if (res.ok) {
+        soundManager.playSfx('magic');
+        this.spawnPopSparkle(visual.cx, visual.cy, 0x22d3ee, '✨ SPIRIT INFUSED!');
+        this.spawnPopSparkle(visual.cx, visual.cy - 6, 0xfacc15, '🌟 MUTATED');
+      }
+      this.commitFarmState(res.state, res.message, res.ok);
+      return;
+    }
+
     const prog = getPlotProgress(plot, now);
     if (prog.ready) {
       const res = harvestPlot(this.player.state, index, now);
@@ -633,13 +645,31 @@ export class FarmScene extends Phaser.Scene {
       pv.gfx.fillCircle(pv.cx + 6, pv.cy - 1, r * 0.75);
       pv.gfx.fillCircle(pv.cx, pv.cy - 4, r);
 
+      // Update 1.6 — Shimmering cyan/gold spirit aura & sparkles on Spirit-Infused plots!
+      if (plot.spiritInfused) {
+        const pulse = 0.55 + Math.sin(now / 260 + pv.index) * 0.35;
+        pv.gfx.lineStyle(2, 0x22d3ee, pulse);
+        pv.gfx.strokeRoundedRect(x0 - 1.5, y0 - 1.5, w + 3, h + 3, 5);
+        pv.gfx.fillStyle(0x38bdf8, 0.24);
+        pv.gfx.fillCircle(pv.cx, pv.cy - 3, r + 5);
+        pv.gfx.fillStyle(0xfef08a, 0.95);
+        const orbit = (now / 450 + pv.index) % (Math.PI * 2);
+        pv.gfx.fillCircle(pv.cx + Math.cos(orbit) * 10, pv.cy - 4 + Math.sin(orbit) * 6, 1.8);
+        pv.gfx.fillStyle(0x67e8f9, 0.95);
+        pv.gfx.fillCircle(pv.cx - Math.cos(orbit) * 10, pv.cy - 2 - Math.sin(orbit) * 6, 1.6);
+      }
+
       if (prog.ready) {
-        pv.gfx.lineStyle(1.6, 0xfef08a, 1);
+        pv.gfx.lineStyle(1.6, plot.spiritInfused ? 0x22d3ee : 0xfef08a, 1);
         pv.gfx.strokeRoundedRect(x0 - 1, y0 - 1, w + 2, h + 2, 5);
-        pv.badgeText.setText('READY!').setColor('#fde047');
+        pv.badgeText
+          .setText(plot.spiritInfused ? '✨ SPIRIT!' : 'READY!')
+          .setColor(plot.spiritInfused ? '#67e8f9' : '#fde047');
       } else {
-        const prefix = `${plot.watered ? '💧' : ''}${plot.fertilized ? '★' : ''}`;
-        pv.badgeText.setText(`${prefix}${formatRemainingTime(prog.remainingMs)}`).setColor('#fef9c3');
+        const prefix = `${plot.spiritInfused ? '✨' : ''}${plot.watered ? '💧' : ''}${plot.fertilized ? '★' : ''}`;
+        pv.badgeText
+          .setText(`${prefix}${formatRemainingTime(prog.remainingMs)}`)
+          .setColor(plot.spiritInfused ? '#67e8f9' : '#fef9c3');
       }
     }
   }

@@ -604,6 +604,16 @@ export class PagodaTowerScene extends Phaser.Scene {
 
     const maxBarW = enemy.isBoss ? 124 : 48;
     enemy.hpFill.width = Math.max(0, Math.round(maxBarW * (enemy.hp / enemy.maxHp)));
+    const bridgeLive = computeVillageToDungeonBridge(this.player.state);
+    if (bridgeLive.snackLifestealPct > 0 && this.player.state.hp < bridgeLive.effectiveMaxHp) {
+      const heal = Math.max(2, Math.min(26, Math.round(dmg * bridgeLive.snackLifestealPct)));
+      this.player.state = {
+        ...this.player.state,
+        hp: Math.min(bridgeLive.effectiveMaxHp, this.player.state.hp + heal),
+      };
+      EventBus.emit('player:state', this.player.state);
+      this.spawnFloatingText(this.player.x, this.player.y - 44, `+${heal} 🧪`, '#22d3ee');
+    }
     this.spawnFloatingText(
       enemy.sprite.x + Phaser.Math.Between(-16, 16),
       enemy.sprite.y - (enemy.isBoss ? 68 : 34),
