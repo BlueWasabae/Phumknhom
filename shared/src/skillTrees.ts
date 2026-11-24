@@ -9,6 +9,7 @@ import {
 import { computeReforgeDeltas } from './balanceFormulas';
 import { aggregateAccessoryBonuses, getCombatArmorSetBonus } from './accessoryFusions';
 import { getMuseumScholarPerks } from './museumCatalog';
+import { computeKromBuffs } from './festivals';
 export { createInitialSkillProfile };
 
 export type SkillCategory = 'life' | 'combat';
@@ -500,6 +501,10 @@ export interface VillageToDungeonBridgeStats {
   activeArmorSetId: string | null;
   museumRareDropLuckPct: number;  // 6+ Museum donations -> +10% Rare Drop Luck
   museumSkillXpBonusPct: number;  // 10+ Museum donations -> +15% All Skill XP
+  kromFarmSpeedPct: number;       // Krom Lv.1–10 -> +5%..+20% Farm Speed
+  kromBossDamagePct: number;      // Krom Lv.1–10 -> +5%..+20% Boss Damage
+  kromCoinDropPct: number;        // Krom Lv.1–10 -> +5%..+20% Coin Drops
+  pchumBenActive: boolean;        // Pchum Ben 10-min +20% All Skill XP & +15% Luck
 }
 
 /**
@@ -647,12 +652,14 @@ export function computeVillageToDungeonBridge(
   const dashCooldownMult = Math.max(0.35, baseDashMult * (1 - acc.dashCooldownReductionPct));
 
   const farmingLv = skills.farming?.level ?? 1;
+  const kromBuffs = computeKromBuffs(player.kromLevel);
+  const pchumBenActive = Boolean(player.pchumBenBlessingUntil && player.pchumBenBlessingUntil > now);
   return {
     activeClassSkillId,
     activeClassSkillLevel,
     healthyHpBonusPct,
     happyCritBonus,
-    classSkillDamagePct,
+    classSkillDamagePct: classSkillDamagePct + kromBuffs.bossDamagePct,
     flatDamageBonus,
     snackAttackPct,
     snackMaxHpPct,
@@ -682,7 +689,11 @@ export function computeVillageToDungeonBridge(
     hasGroundSlamShockwave: Boolean(armorSet?.groundSlamShockwave),
     hasWaterShield: Boolean(armorSet?.waterShieldEvery20s),
     activeArmorSetId: armorSet?.armorId ?? null,
-    museumRareDropLuckPct: museumPerks.rareDropLuckBonusPct,
-    museumSkillXpBonusPct: museumPerks.skillXpBonusPct,
+    museumRareDropLuckPct: museumPerks.rareDropLuckBonusPct + (pchumBenActive ? 0.15 : 0),
+    museumSkillXpBonusPct: museumPerks.skillXpBonusPct + (pchumBenActive ? 0.2 : 0),
+    kromFarmSpeedPct: kromBuffs.farmSpeedPct,
+    kromBossDamagePct: kromBuffs.bossDamagePct,
+    kromCoinDropPct: kromBuffs.coinDropPct,
+    pchumBenActive,
   };
 }

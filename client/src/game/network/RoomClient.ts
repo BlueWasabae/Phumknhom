@@ -21,6 +21,7 @@ export interface RemotePlayerSnapshot {
   areaId: string;
   activeMountId?: string;
   ridingDriverSessionId?: string;
+  kromTag?: string;
 }
 
 export interface AreaChannelInfo {
@@ -52,6 +53,7 @@ interface RawRemotePlayerSchema {
   areaId: string;
   activeMountId?: string;
   ridingDriverSessionId?: string;
+  kromTag?: string;
   onChange?: (cb: () => void) => void;
 }
 
@@ -144,6 +146,7 @@ function toSnapshot(raw: RawRemotePlayerSchema, key: string): RemotePlayerSnapsh
     areaId: raw.areaId || 'AREA 0',
     activeMountId: raw.activeMountId || '',
     ridingDriverSessionId: raw.ridingDriverSessionId || '',
+    kromTag: raw.kromTag || '',
   };
 }
 
@@ -388,6 +391,15 @@ class PlazaRoomClient {
         EventBus.emit('social:notice', msg);
       });
 
+      room.onMessage(
+        'kromChat',
+        (msg: { sessionId: string; name: string; kromTag: string; text: string; timestamp: number }) => {
+          if (msg.sessionId !== room.sessionId) {
+            EventBus.emit('network:kromChat', msg);
+          }
+        }
+      );
+
       room.onLeave(() => {
         if (this.room === room) {
           this.room = null;
@@ -470,7 +482,7 @@ class PlazaRoomClient {
 
   public sendAppearance(
     loadout: EquippedLoadout,
-    meta?: { name?: string; level?: number; stylish?: number } | string
+    meta?: { name?: string; level?: number; stylish?: number; kromTag?: string | null } | string
   ): void {
     if (!this.room || !this.online) return;
     const payload: Record<string, unknown> = {
@@ -482,6 +494,9 @@ class PlazaRoomClient {
       if (meta.name) payload.name = meta.name;
       if (typeof meta.level === 'number') payload.level = meta.level;
       if (typeof meta.stylish === 'number') payload.stylish = meta.stylish;
+      if (typeof meta.kromTag === 'string' || meta.kromTag === null) {
+        payload.kromTag = meta.kromTag ?? '';
+      }
     }
     this.room.send('updateAppearance', payload);
   }
@@ -489,6 +504,12 @@ class PlazaRoomClient {
   public sendChat(text: string): boolean {
     if (!this.room || !this.online) return false;
     this.room.send('chat', { text });
+    return true;
+  }
+
+  public sendKromChat(kromTag: string, text: string): boolean {
+    if (!this.room || !this.online) return false;
+    this.room.send('kromChat', { kromTag, text });
     return true;
   }
 
@@ -650,6 +671,18 @@ class PlazaRoomClient {
       room.onMessage('bossDefeated', () => {
         handlers.onBossDefeatedRemote();
       });
+
+      room.onMessage(
+        'villageCheer',
+        (msg: { senderName?: string; healHp?: number; attackBonusPct?: number; durationMs?: number }) => {
+          EventBus.emit('dungeon:villageCheer', {
+            senderName: msg.senderName || 'Kind Villager',
+            healHp: msg.healHp ?? 80,
+            attackBonusPct: msg.attackBonusPct ?? 0.2,
+            durationMs: msg.durationMs ?? 30_000,
+          });
+        }
+      );
 
       syncBoss();
       return true;

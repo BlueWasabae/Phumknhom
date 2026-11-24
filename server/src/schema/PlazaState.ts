@@ -14,6 +14,7 @@ export class RemotePlayer extends Schema {
   @type('string') areaId: string = 'AREA 0';
   @type('string') activeMountId: string = '';
   @type('string') ridingDriverSessionId: string = '';
+  @type('string') kromTag: string = '';
 }
 
 export class PlazaState extends Schema {

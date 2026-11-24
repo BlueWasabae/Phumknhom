@@ -38,7 +38,9 @@ export function awardSkillXp(
   emitToast = true
 ): SkillXpResult {
   const museumPerks = getMuseumScholarPerks(state.museumDonations);
-  const safeXp = Math.max(0, Math.round(amount * (1 + museumPerks.skillXpBonusPct)));
+  const pchumBenBonus =
+    state.pchumBenBlessingUntil && state.pchumBenBlessingUntil > Date.now() ? 0.2 : 0;
+  const safeXp = Math.max(0, Math.round(amount * (1 + museumPerks.skillXpBonusPct + pchumBenBonus)));
   const curEntry = state.skills.skills[skillId];
   if (!curEntry || safeXp <= 0) {
     return {

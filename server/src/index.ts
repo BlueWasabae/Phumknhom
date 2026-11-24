@@ -5,8 +5,19 @@ import cors from 'cors';
 import { Server, matchMaker } from 'colyseus';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { ALLOWED_AREAS, PlazaRoom } from './rooms/PlazaRoom';
-import { DungeonRoom } from './rooms/DungeonRoom';
+import {
+  DungeonRoom,
+  listActiveDungeonFights,
+  sendVillageCheerToDungeon,
+} from './rooms/DungeonRoom';
 import { ClubRoom } from './rooms/ClubRoom';
+import {
+  createKrom,
+  donateToKrom,
+  getKromById,
+  joinKrom,
+  listKroms,
+} from './economy/kromService';
 import {
   buyMarketListing,
   cancelMarketListing,
@@ -437,6 +448,94 @@ app.post('/api/market/cancel', async (req, res) => {
 app.use('/api/payments', createPaymentRouter());
 app.use('/api/bank', createBankRouter());
 app.use('/api', createReforgeAndBankRouter());
+
+// ==================== UPDATE 1.5 KROM (GUILD) & VILLAGE CHEER REST API ====================
+app.get('/api/kroms', (_req, res) => {
+  res.json({ kroms: listKroms() });
+});
+
+app.get('/api/krom/:id', (req, res) => {
+  const krom = getKromById(req.params.id);
+  if (!krom) {
+    res.status(404).json({ error: 'Krom guild not found.' });
+    return;
+  }
+  res.json({ krom });
+});
+
+app.post('/api/krom/create', (req, res) => {
+  const verified = verifyAuthToken(extractBearerToken(req));
+  const body = (req.body ?? {}) as { name?: string; tag?: string; username?: string };
+  const result = createKrom({
+    name: body.name,
+    tag: body.tag,
+    playerId: verified?.playerId ?? `guest_${Date.now()}`,
+    username: verified?.username ?? body.username ?? 'PhumHero',
+  });
+  if (!result.ok) {
+    res.status(400).json({ error: result.error });
+    return;
+  }
+  res.status(201).json(result);
+});
+
+app.post('/api/krom/join', (req, res) => {
+  const verified = verifyAuthToken(extractBearerToken(req));
+  const body = (req.body ?? {}) as { kromId?: string; tag?: string; username?: string };
+  const result = joinKrom({
+    kromId: body.kromId,
+    tag: body.tag,
+    playerId: verified?.playerId ?? `guest_${Date.now()}`,
+    username: verified?.username ?? body.username ?? 'PhumHero',
+  });
+  if (!result.ok) {
+    res.status(400).json({ error: result.error });
+    return;
+  }
+  res.json(result);
+});
+
+app.post('/api/krom/donate', (req, res) => {
+  const verified = verifyAuthToken(extractBearerToken(req));
+  const body = (req.body ?? {}) as {
+    kromId?: string;
+    username?: string;
+    coins?: number;
+    cropValue?: number;
+  };
+  if (!body.kromId) {
+    res.status(400).json({ error: 'Missing kromId.' });
+    return;
+  }
+  const result = donateToKrom({
+    kromId: body.kromId,
+    playerId: verified?.playerId ?? `guest_${Date.now()}`,
+    username: verified?.username ?? body.username ?? 'PhumHero',
+    coins: Number(body.coins ?? 0),
+    cropValue: Number(body.cropValue ?? 0),
+  });
+  if (!result.ok) {
+    res.status(400).json({ error: result.error });
+    return;
+  }
+  res.json(result);
+});
+
+app.get('/api/dungeon/active', (_req, res) => {
+  res.json({ fights: listActiveDungeonFights() });
+});
+
+app.post('/api/dungeon/cheer', (req, res) => {
+  const verified = verifyAuthToken(extractBearerToken(req));
+  const body = (req.body ?? {}) as { roomId?: string; senderName?: string };
+  const sender = verified?.username ?? (body.senderName || 'Kind Villager');
+  if (!body.roomId) {
+    res.status(400).json({ error: 'Missing roomId.' });
+    return;
+  }
+  const result = sendVillageCheerToDungeon(body.roomId, sender);
+  res.json({ ok: true, ...result, senderName: sender });
+});
 
 const httpServer = http.createServer(app);
 const gameServer = new Server({

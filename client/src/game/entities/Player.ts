@@ -100,13 +100,15 @@ export class Player {
       this.mount.setMount(this.state.activeMount);
     }
 
-    // Nameplate + Overhead Speech Bubble + Emote
+    // Nameplate (with gold [KROM] guild tag when in a Krom!) + Overhead Speech Bubble + Emote
+    const formatDisplayName = (s: PlayerState) =>
+      s.kromTag ? `[${s.kromTag}] ${s.name}` : s.name;
     this.nameTag = scene.add
-      .text(x, y + 14, this.state.name, {
+      .text(x, y + 14, formatDisplayName(this.state), {
         fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
         fontSize: '13px',
         fontStyle: 'bold',
-        color: zone === 'overworld' ? '#ffffff' : '#fef9c3',
+        color: this.state.kromTag ? '#fde047' : zone === 'overworld' ? '#ffffff' : '#fef9c3',
         stroke: '#0f172a',
         strokeThickness: 4,
       })
@@ -174,8 +176,9 @@ export class Player {
   }
 
   public applyLoadoutUpdate(loadout: EquippedLoadout, nextState: PlayerState): void {
-    if (this.state.name !== nextState.name) {
-      this.nameTag.setText(nextState.name);
+    if (this.state.name !== nextState.name || this.state.kromTag !== nextState.kromTag) {
+      this.nameTag.setText(nextState.kromTag ? `[${nextState.kromTag}] ${nextState.name}` : nextState.name);
+      this.nameTag.setColor(nextState.kromTag ? '#fde047' : this.zone === 'overworld' ? '#ffffff' : '#fef9c3');
     }
 
     this.state = {
@@ -212,8 +215,9 @@ export class Player {
       this.state.loadout.eyebrowStyle !== nextState.loadout.eyebrowStyle ||
       this.state.loadout.faceStyle !== nextState.loadout.faceStyle;
 
-    if (this.state.name !== nextState.name) {
-      this.nameTag.setText(nextState.name);
+    if (this.state.name !== nextState.name || this.state.kromTag !== nextState.kromTag) {
+      this.nameTag.setText(nextState.kromTag ? `[${nextState.kromTag}] ${nextState.name}` : nextState.name);
+      this.nameTag.setColor(nextState.kromTag ? '#fde047' : this.zone === 'overworld' ? '#ffffff' : '#fef9c3');
     }
 
     this.state = {

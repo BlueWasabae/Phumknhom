@@ -7,6 +7,7 @@ import { ClubScene } from './scenes/ClubScene';
 import { CavernExploreScene } from './scenes/CavernExploreScene';
 import { HouseInteriorScene } from './scenes/HouseInteriorScene';
 import { PagodaTowerScene } from './scenes/PagodaTowerScene';
+import { FestivalRaceScene } from './scenes/FestivalRaceScene';
 import { DungeonBossScene } from './scenes/DungeonBossScene';
 
 export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameConfig {
@@ -41,6 +42,7 @@ export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameCon
       CavernExploreScene,
       HouseInteriorScene,
       PagodaTowerScene,
+      FestivalRaceScene,
       DungeonBossScene,
     ],
   };

@@ -3,10 +3,13 @@ import {
   INITIAL_PLAYER_STATE,
   createInitialFarmState,
   createInitialSkillProfile,
+  type ActiveDungeonFightInfo,
   type EquippedLoadout,
+  type KromGuild,
   type PlayerState,
   type SkillId,
 } from '@shared/types';
+import { computeKromBuffs } from '@shared/festivals';
 import { ALL_SKILL_IDS, computeVillageToDungeonBridge } from '@shared/skillTrees';
 import {
   normalizeEyeStyleId,
@@ -87,6 +90,12 @@ export interface SavedProfilePayload {
   highestTowerFloor?: number;
   unlockedWeaponAuras?: PlayerState['unlockedWeaponAuras'];
   museumDonations?: string[];
+  kromId?: string | null;
+  kromTag?: string | null;
+  kromName?: string | null;
+  kromLevel?: number;
+  pchumBenBlessingUntil?: number | null;
+  festivalSplashCount?: number;
   hasCompletedCreation?: boolean;
   activeClass: PlayerState['activeClass'];
   weapon: PlayerState['weapon'];
@@ -375,6 +384,12 @@ export function serializePlayerStateForSave(state: PlayerState): SavedProfilePay
     highestTowerFloor: state.highestTowerFloor ?? 0,
     unlockedWeaponAuras: [...(state.unlockedWeaponAuras ?? [])],
     museumDonations: [...(state.museumDonations ?? [])],
+    kromId: state.kromId ?? null,
+    kromTag: state.kromTag ?? null,
+    kromName: state.kromName ?? null,
+    kromLevel: state.kromLevel ?? 0,
+    pchumBenBlessingUntil: state.pchumBenBlessingUntil ?? null,
+    festivalSplashCount: state.festivalSplashCount ?? 0,
     hasCompletedCreation: Boolean(state.hasCompletedCreation ?? state.loadout.hasCompletedCreation),
     activeClass: state.activeClass,
     weapon: { ...state.weapon },
@@ -646,6 +661,15 @@ export function hydratePlayerStateFromSave(
       typeof saved?.highestTowerFloor === 'number' ? Math.max(0, Math.min(50, saved.highestTowerFloor)) : 0,
     unlockedWeaponAuras: Array.isArray(saved?.unlockedWeaponAuras) ? saved.unlockedWeaponAuras : [],
     museumDonations: Array.isArray(saved?.museumDonations) ? saved.museumDonations : [],
+    kromId: typeof saved?.kromId === 'string' ? saved.kromId : null,
+    kromTag: typeof saved?.kromTag === 'string' ? saved.kromTag : null,
+    kromName: typeof saved?.kromName === 'string' ? saved.kromName : null,
+    kromLevel: typeof saved?.kromLevel === 'number' ? saved.kromLevel : 0,
+    pchumBenBlessingUntil:
+      typeof saved?.pchumBenBlessingUntil === 'number' && saved.pchumBenBlessingUntil > Date.now()
+        ? saved.pchumBenBlessingUntil
+        : null,
+    festivalSplashCount: typeof saved?.festivalSplashCount === 'number' ? saved.festivalSplashCount : 0,
     hasCompletedCreation: Boolean(
       saved?.hasCompletedCreation ?? saved?.loadout?.hasCompletedCreation ?? false
     ),
@@ -992,4 +1016,234 @@ export async function fetchTickerEventsApi(): Promise<Array<{ id: string; text: 
   } catch {
     return [];
   }
+}
+
+// ==================== UPDATE 1.5 KROM GUILD & VILLAGE CHEER REST CLIENT ====================
+
+const LOCAL_KROMS_KEY = 'phum_khnhom_local_kroms_v1';
+
+function loadLocalKroms(): KromGuild[] {
+  const now = new Date().toISOString();
+  const seeds: KromGuild[] = [
+    {
+      id: 'krom_angkor_vanguard',
+      name: 'Angkor Vanguard',
+      tag: 'ANGK',
+      leaderName: 'Sovann_Angkor',
+      level: 4,
+      xp: 950,
+      treasuryCoins: 3400,
+      members: [
+        { playerId: 'seed_sovann', username: 'Sovann_Angkor', role: 'leader', donatedCoins: 2400, joinedAt: now },
+        { playerId: 'seed_vireak', username: 'Vireak_Lbokator', role: 'member', donatedCoins: 1000, joinedAt: now },
+      ],
+      createdAt: now,
+    },
+    {
+      id: 'krom_phum_lotus',
+      name: 'Phum Lotus Farmers',
+      tag: 'PHUM',
+      leaderName: 'Bopha_Lotus',
+      level: 3,
+      xp: 620,
+      treasuryCoins: 2150,
+      members: [
+        { playerId: 'seed_bopha', username: 'Bopha_Lotus', role: 'leader', donatedCoins: 1550, joinedAt: now },
+        { playerId: 'seed_kampuchea', username: 'Kampuchea_Farm', role: 'member', donatedCoins: 600, joinedAt: now },
+      ],
+      createdAt: now,
+    },
+  ];
+  if (typeof window === 'undefined' || !window.localStorage) return seeds;
+  try {
+    const raw = window.localStorage.getItem(LOCAL_KROMS_KEY);
+    if (!raw) return seeds;
+    const parsed = JSON.parse(raw) as KromGuild[];
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : seeds;
+  } catch {
+    return seeds;
+  }
+}
+
+function saveLocalKroms(kroms: KromGuild[]): void {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    window.localStorage.setItem(LOCAL_KROMS_KEY, JSON.stringify(kroms));
+  } catch {
+    // Ignore storage quota
+  }
+}
+
+export async function fetchKromsApi(): Promise<KromGuild[]> {
+  try {
+    const res = await fetch(`${getApiBase()}/kroms`);
+    if (res.ok) {
+      const json = (await res.json()) as { kroms?: KromGuild[] };
+      if (Array.isArray(json.kroms)) return json.kroms;
+    }
+  } catch {
+    // Offline fallback
+  }
+  return loadLocalKroms();
+}
+
+export async function fetchKromByIdApi(id: string): Promise<KromGuild | null> {
+  try {
+    const res = await fetch(`${getApiBase()}/krom/${encodeURIComponent(id)}`);
+    if (res.ok) {
+      const json = (await res.json()) as { krom?: KromGuild };
+      if (json.krom) return json.krom;
+    }
+  } catch {
+    // Offline fallback
+  }
+  return loadLocalKroms().find((k) => k.id === id || k.tag.toUpperCase() === id.toUpperCase()) ?? null;
+}
+
+export async function createKromApi(
+  session: AuthSession | null,
+  payload: { name: string; tag: string; username: string }
+): Promise<{ ok: true; krom: KromGuild } | { ok: false; error: string }> {
+  const res = await postJson<{ krom: KromGuild }>('/krom/create', payload, session?.token);
+  if (res.ok) return { ok: true, krom: res.data.krom };
+  // Graceful offline creation when local server isn't running
+  const kroms = loadLocalKroms();
+  const tag = payload.tag.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 4);
+  if (kroms.some((k) => k.tag.toUpperCase() === tag)) {
+    return { ok: false, error: `Guild Tag [${tag}] is already taken.` };
+  }
+  const now = new Date().toISOString();
+  const krom: KromGuild = {
+    id: `krom_${Date.now().toString(36)}`,
+    name: payload.name.trim(),
+    tag,
+    leaderName: payload.username,
+    level: 1,
+    xp: 0,
+    treasuryCoins: 0,
+    members: [
+      {
+        playerId: session?.playerId ?? 'guest',
+        username: payload.username,
+        role: 'leader',
+        donatedCoins: 0,
+        joinedAt: now,
+      },
+    ],
+    createdAt: now,
+  };
+  kroms.push(krom);
+  saveLocalKroms(kroms);
+  return { ok: true, krom };
+}
+
+export async function joinKromApi(
+  session: AuthSession | null,
+  payload: { kromId?: string; tag?: string; username: string }
+): Promise<{ ok: true; krom: KromGuild } | { ok: false; error: string }> {
+  const res = await postJson<{ krom: KromGuild }>('/krom/join', payload, session?.token);
+  if (res.ok) return { ok: true, krom: res.data.krom };
+  const kroms = loadLocalKroms();
+  const target = kroms.find(
+    (k) => (payload.kromId && k.id === payload.kromId) || (payload.tag && k.tag === payload.tag)
+  );
+  if (!target) return { ok: false, error: 'Krom guild not found.' };
+  if (!target.members.some((m) => m.username.toLowerCase() === payload.username.toLowerCase())) {
+    target.members.push({
+      playerId: session?.playerId ?? 'guest',
+      username: payload.username,
+      role: 'member',
+      donatedCoins: 0,
+      joinedAt: new Date().toISOString(),
+    });
+  }
+  saveLocalKroms(kroms);
+  return { ok: true, krom: target };
+}
+
+export async function donateKromApi(
+  session: AuthSession | null,
+  payload: { kromId: string; username: string; coins: number; cropValue?: number }
+): Promise<{ ok: true; krom: KromGuild; leveledUp: boolean } | { ok: false; error: string }> {
+  const res = await postJson<{ krom: KromGuild; leveledUp: boolean }>(
+    '/krom/donate',
+    payload,
+    session?.token
+  );
+  if (res.ok) return { ok: true, krom: res.data.krom, leveledUp: res.data.leveledUp };
+  const kroms = loadLocalKroms();
+  const target = kroms.find((k) => k.id === payload.kromId || k.tag === payload.kromId);
+  if (!target) return { ok: false, error: 'Krom guild not found.' };
+  const add = Math.max(10, Math.floor((payload.coins || 0) + (payload.cropValue || 0)));
+  target.treasuryCoins += add;
+  target.xp += add;
+  let leveledUp = false;
+  while (target.level < 10) {
+    const need = computeKromBuffs(target.level).nextLevelXp;
+    if (target.xp >= need) {
+      target.xp -= need;
+      target.level += 1;
+      leveledUp = true;
+    } else {
+      break;
+    }
+  }
+  const m = target.members.find((mem) => mem.username.toLowerCase() === payload.username.toLowerCase());
+  if (m) m.donatedCoins += add;
+  saveLocalKroms(kroms);
+  return { ok: true, krom: target, leveledUp };
+}
+
+export async function fetchActiveDungeonFightsApi(): Promise<ActiveDungeonFightInfo[]> {
+  try {
+    const res = await fetch(`${getApiBase()}/dungeon/active`);
+    if (res.ok) {
+      const json = (await res.json()) as { fights?: ActiveDungeonFightInfo[] };
+      if (Array.isArray(json.fights) && json.fights.length > 0) {
+        return json.fights;
+      }
+    }
+  } catch {
+    // Offline fallback below
+  }
+  // Always include a live solo/offline simulation fight so players testing alone can drop Village Cheers!
+  return [
+    {
+      roomId: 'sim_yeak_thmor_live',
+      partyId: 'sim_party_1',
+      bossId: 'yeak_thmor',
+      bossName: 'Yeak Thmor Prasat (Stone Guardian)',
+      difficulty: 'mythic',
+      playerName: 'Vireak_Lbokator',
+      bossHp: 11880,
+      bossMaxHp: 27000,
+      playerCount: 2,
+      isSimulation: true,
+    },
+    {
+      roomId: 'sim_sdech_kongkaeb_live',
+      partyId: 'sim_party_2',
+      bossId: 'sdech_kongkaeb',
+      bossName: 'Sdech Kongkaeb (King Frog)',
+      difficulty: 'expert',
+      playerName: 'Bopha_Lotus',
+      bossHp: 3915,
+      bossMaxHp: 6750,
+      playerCount: 1,
+      isSimulation: true,
+    },
+  ];
+}
+
+export async function sendVillageCheerApi(
+  session: AuthSession | null,
+  roomId: string,
+  senderName: string
+): Promise<{ ok: boolean; delivered: boolean }> {
+  const res = await postJson<{ delivered: boolean }>(
+    '/dungeon/cheer',
+    { roomId, senderName },
+    session?.token
+  );
+  return res.ok ? { ok: true, delivered: res.data.delivered } : { ok: true, delivered: false };
 }

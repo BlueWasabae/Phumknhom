@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { getAutoFestivalForSeason, type FestivalId } from '@shared/festivals';
 import { soundManager } from './SoundManager';
 
 export type SeasonId = 'spring' | 'summer' | 'autumn' | 'winter';
@@ -32,6 +33,8 @@ export interface SeasonClockSnapshot {
   lunarIcon: string;
   lunarLabel: string;
   isFullMoon: boolean;
+  /** Update 1.5 — Active Khmer Seasonal Festival (auto from season or manual test trigger) */
+  activeFestival: FestivalId | null;
 }
 
 export const SEASONS: Record<SeasonId, SeasonDefinition> = {
@@ -100,6 +103,7 @@ type ClockListener = (snap: SeasonClockSnapshot) => void;
 class SeasonClockEngine {
   private seasonOverride: SeasonId | null = null;
   private periodOverride: DayPeriod | null = null;
+  private festivalOverride: FestivalId | null = null;
   private listeners = new Set<ClockListener>();
 
   public getSnapshot(now = Date.now()): SeasonClockSnapshot {
@@ -180,7 +184,17 @@ class SeasonClockEngine {
       lunarIcon,
       lunarLabel,
       isFullMoon,
+      activeFestival: this.festivalOverride ?? getAutoFestivalForSeason(season.id),
     };
+  }
+
+  public setFestivalOverride(festival: FestivalId | null): void {
+    this.festivalOverride = festival;
+    this.notify();
+  }
+
+  public getFestivalOverride(): FestivalId | null {
+    return this.festivalOverride;
   }
 
   public setSeasonOverride(season: SeasonId | null): void {

@@ -1,12 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   INITIAL_PLAYER_STATE,
+  type ActiveDungeonFightInfo,
   type BossId,
   type ChatMessage,
   type CombatHitResult,
   type DifficultyMode,
   type EquipSlot,
   type EquippedLoadout,
+  type KromGuild,
   type PlayerState,
   type QualityTier,
   type SkillId,
@@ -15,6 +17,7 @@ import {
 } from '@shared/types';
 import { donateItemToMuseum } from '@shared/museumCatalog';
 import type { ActiveWorldEventSnapshot, NightMarketOffer } from '@shared/worldEvents';
+import type { FestivalId } from '@shared/festivals';
 import { KHMER_CLASSES } from '@shared/khmerClasses';
 import { computeVillageToDungeonBridge } from '@shared/skillTrees';
 import {
@@ -153,8 +156,12 @@ import { LeaderboardModal } from './ui/LeaderboardModal';
 import { PagodaTowerModal } from './ui/PagodaTowerModal';
 import { MuseumModal } from './ui/MuseumModal';
 import { NightMarketModal } from './ui/NightMarketModal';
+import { FestivalModal } from './ui/FestivalModal';
+import { KromModal } from './ui/KromModal';
+import { ScryingMirrorModal } from './ui/ScryingMirrorModal';
 import { getMountSpec } from './game/entities/MountEntity';
 import { soundManager } from './game/systems/SoundManager';
+import { seasonClock } from './game/systems/SeasonClock';
 import { worldEventManager } from './game/systems/WorldEventManager';
 import { supabase } from './lib/supabaseClient';
 
@@ -185,6 +192,9 @@ type ActiveModalType =
   | 'pagodaTower'
   | 'museum'
   | 'nightMarket'
+  | 'festival'
+  | 'krom'
+  | 'scryingMirror'
   | 'characterCreator';
 
 interface FloatingXpBanner extends SkillXpToastPayload {
@@ -218,9 +228,17 @@ export const App: React.FC = () => {
   const [activeWorldEvent, setActiveWorldEvent] = useState<ActiveWorldEventSnapshot | null>(() =>
     worldEventManager.getActiveEvent()
   );
+  const [activeFestival, setActiveFestival] = useState<FestivalId | null>(
+    () => seasonClock.getSnapshot().activeFestival
+  );
 
   useEffect(() => {
-    return worldEventManager.subscribe(setActiveWorldEvent);
+    const u1 = worldEventManager.subscribe(setActiveWorldEvent);
+    const u2 = seasonClock.subscribe((snap) => setActiveFestival(snap.activeFestival));
+    return () => {
+      u1();
+      u2();
+    };
   }, []);
 
   const [zone, setZone] = useState<ZoneType>('overworld');
@@ -1330,6 +1348,12 @@ export const App: React.FC = () => {
           highestTowerFloor: Math.max(nextPlayer.highestTowerFloor ?? 0, prev.highestTowerFloor ?? 0),
           unlockedWeaponAuras: nextPlayer.unlockedWeaponAuras ?? prev.unlockedWeaponAuras,
           museumDonations: nextPlayer.museumDonations ?? prev.museumDonations,
+          kromId: nextPlayer.kromId ?? prev.kromId,
+          kromTag: nextPlayer.kromTag ?? prev.kromTag,
+          kromName: nextPlayer.kromName ?? prev.kromName,
+          kromLevel: nextPlayer.kromLevel ?? prev.kromLevel,
+          pchumBenBlessingUntil: nextPlayer.pchumBenBlessingUntil ?? prev.pchumBenBlessingUntil,
+          festivalSplashCount: nextPlayer.festivalSplashCount ?? prev.festivalSplashCount,
         }));
       }),
       EventBus.on('npc:openDialogue', ({ npcId }) => {
@@ -1495,6 +1519,94 @@ export const App: React.FC = () => {
           }
           return { state: nextState, ok: true, message: label };
         });
+      }),
+      EventBus.on('festival:raceFinished', ({ place, timeSec, coins, gold, fishingXp, unlockedPaddle }) => {
+        runStateAction((prev) => {
+          const nextCoins = prev.currencies.coins + coins;
+          const nextGold = prev.currencies.gold + gold;
+          const nextInv = prev.inventory.map((i) => ({ ...i }));
+          if (unlockedPaddle && !nextInv.some((i) => i.itemId === 'weapon_water_paddle')) {
+            nextInv.push({ itemId: 'weapon_water_paddle', quantity: 1, itemLevel: 3, quality: 'normal' });
+          }
+          const withLoot: PlayerState = {
+            ...prev,
+            coins: nextCoins,
+            currencies: { ...prev.currencies, coins: nextCoins, gold: nextGold },
+            inventory: nextInv,
+          };
+          const xpRes = awardSkillXp(withLoot, 'fishing', fishingXp);
+          return {
+            state: xpRes.state,
+            ok: true,
+            message: `🛶 Bon Om Touk Place #${place} (${timeSec}s)! +${coins}c${
+              gold > 0 ? ` · +${gold} Gold` : ''
+            } · +${fishingXp} Fishing XP${unlockedPaddle ? ' · Unlocked Water Festival Rowing Paddle!' : ''}`,
+          };
+        });
+        if (place === 1) {
+          EventBus.emit('ticker:push', {
+            text: `🛶 ${playerRef.current.name} won 1st Place in the Bon Om Touk Mekong Longboat Race!`,
+            category: 'club',
+          });
+        }
+      }),
+      EventBus.on('festival:waterSplash', ({ targetName }) => {
+        runStateAction((prev) => {
+          const nextSplashes = (prev.festivalSplashCount ?? 0) + 1;
+          const nextCoins = prev.currencies.coins + 45;
+          const nextInv = prev.inventory.map((i) => ({ ...i }));
+          let hatNote = '';
+          if (nextSplashes >= 3 && !nextInv.some((i) => i.itemId === 'hat_jasmine_garland')) {
+            nextInv.push({ itemId: 'hat_jasmine_garland', quantity: 1, itemLevel: 1, quality: 'normal' });
+            hatNote = ' 🌸 Unlocked Jasmine Garland Hat!';
+          }
+          return {
+            state: {
+              ...prev,
+              coins: nextCoins,
+              currencies: { ...prev.currencies, coins: nextCoins },
+              inventory: nextInv,
+              festivalSplashCount: nextSplashes,
+              lifeStats: { ...prev.lifeStats, happy: Math.min(100, prev.lifeStats.happy + 5) },
+            },
+            ok: true,
+            message: `💦 Splashed ${targetName}! +45 New Year Coins (${nextSplashes}/3)${hatNote}`,
+          };
+        });
+      }),
+      EventBus.on('festival:releaseLantern', () => {
+        runStateAction((prev) => {
+          if (prev.currencies.coins < 50) {
+            return { state: prev, ok: false, message: 'Need 50 Coins to release a Floating Pink Lotus Lantern.' };
+          }
+          const nextCoins = prev.currencies.coins - 50;
+          const until = Date.now() + 10 * 60_000;
+          soundManager.playSfx('magic');
+          return {
+            state: {
+              ...prev,
+              coins: nextCoins,
+              currencies: { ...prev.currencies, coins: nextCoins },
+              pchumBenBlessingUntil: until,
+              lifeStats: { ...prev.lifeStats, happy: Math.min(100, prev.lifeStats.happy + 10) },
+            },
+            ok: true,
+            message: '🪷 Released Pink Lotus Lantern! +20% All Skill XP & +15% Drop Luck blessed for 10 minutes!',
+          };
+        });
+      }),
+      EventBus.on('network:kromChat', (msg) => {
+        setMessages((prev) => [
+          ...prev.slice(-39),
+          {
+            id: `krom-in-${msg.timestamp}-${msg.sessionId}`,
+            sender: `[${msg.kromTag}] ${msg.name}`,
+            text: msg.text,
+            timestamp: msg.timestamp,
+            channel: 'krom',
+            kromTag: msg.kromTag,
+          },
+        ]);
       }),
       EventBus.on('portal:proximity', ({ nearPortal: near }) => {
         setNearPortal(near);
@@ -1706,6 +1818,9 @@ export const App: React.FC = () => {
         onOpenPagodaTower={() => setActiveModal('pagodaTower')}
         onOpenMuseum={() => setActiveModal('museum')}
         onOpenNightMarket={() => setActiveModal('nightMarket')}
+        onOpenFestival={() => setActiveModal('festival')}
+        onOpenKrom={() => setActiveModal('krom')}
+        onOpenScryingMirror={() => setActiveModal('scryingMirror')}
         onToggleMount={handleToggleMount}
         onOpenHouseDecor={() => setActiveModal('houseDecor')}
         onInviteFriendsHome={() => {
@@ -1754,6 +1869,7 @@ export const App: React.FC = () => {
       <ChatOverlay
         open={chatOpen}
         playerName={player.name}
+        kromTag={player.kromTag}
         messages={messages}
         draftPrefill={chatDraftPrefill}
         onAddMessage={(msg) => setMessages((prev) => [...prev.slice(-39), msg])}
@@ -2030,6 +2146,108 @@ export const App: React.FC = () => {
             };
           })
         }
+      />
+
+      <FestivalModal
+        open={activeModal === 'festival'}
+        activeFestival={activeFestival}
+        player={player}
+        onClose={() => setActiveModal(null)}
+        onStartBoatRace={() => EventBus.emit('festival:startRace')}
+        onReleaseLotusLantern={() => EventBus.emit('festival:releaseLantern')}
+        onWarpToFestivalMap={(mapId) => {
+          EventBus.emit('travel:execute', {
+            method: 'pylon',
+            destinationLabel: mapId === 'green_park' ? 'Green Park Festival Grounds' : 'Central Plaza Festival',
+            targetZone: 'overworld',
+            mapId,
+          });
+        }}
+        onTriggerFestivalTest={(fid) => {
+          seasonClock.setFestivalOverride(fid);
+          EventBus.emit('ui:toast', { text: `🏮 Festival Activated: ${fid.replace(/_/g, ' ').toUpperCase()}!` });
+        }}
+      />
+
+      <KromModal
+        open={activeModal === 'krom'}
+        player={player}
+        authSession={authSession}
+        onClose={() => setActiveModal(null)}
+        onKromUpdated={(krom: KromGuild, toastMsg: string, coinCost = 0, consumeCropId?: string) => {
+          runStateAction((s) => {
+            const nextCoins = Math.max(0, s.currencies.coins - coinCost);
+            let nextInv = s.inventory.map((i) => ({ ...i }));
+            if (consumeCropId) {
+              const idx = nextInv.findIndex((i) => i.itemId === consumeCropId && i.quantity > 0);
+              if (idx >= 0) {
+                nextInv[idx] = { ...nextInv[idx], quantity: nextInv[idx].quantity - 1 };
+                nextInv = nextInv.filter((i) => i.quantity > 0);
+              }
+            }
+            const nextState: PlayerState = {
+              ...s,
+              coins: nextCoins,
+              currencies: { ...s.currencies, coins: nextCoins },
+              inventory: nextInv,
+              kromId: krom.id,
+              kromTag: krom.tag,
+              kromName: krom.name,
+              kromLevel: krom.level,
+            };
+            soundManager.playSfx('level_up');
+            return { state: nextState, ok: true, message: toastMsg };
+          });
+        }}
+      />
+
+      <ScryingMirrorModal
+        open={activeModal === 'scryingMirror'}
+        player={player}
+        authSession={authSession}
+        onClose={() => setActiveModal(null)}
+        onSendCheerReward={(fight: ActiveDungeonFightInfo) => {
+          runStateAction((s) => {
+            if (s.currencies.coins < 50) {
+              return { state: s, ok: false, message: 'Need 50 Coins to send a Hot Num Pang Care Package.' };
+            }
+            const nextCoins = s.currencies.coins - 50;
+            soundManager.playSfx('coin');
+            return {
+              state: {
+                ...s,
+                coins: nextCoins,
+                currencies: { ...s.currencies, coins: nextCoins },
+                lifeStats: {
+                  ...s.lifeStats,
+                  friendly: Math.min(100, s.lifeStats.friendly + 10),
+                },
+              },
+              ok: true,
+              message: `🥖 Sent a Hot Num Pang Care Package to ${fight.playerName} vs ${fight.bossName}! (-50c, +10 Friendly!)`,
+            };
+          });
+          EventBus.emit('ticker:push', {
+            text: `🥖 ${playerRef.current.name} dropped a Hot Num Pang Care Package to cheer on ${fight.playerName}!`,
+            category: 'club',
+          });
+        }}
+        onEnterPreviewCheerFight={(bossId) => {
+          EventBus.emit('dungeon:enterRequest', {
+            bossId,
+            difficulty: 'normal',
+            partyMode: 'solo',
+          });
+          const sender = playerRef.current.name;
+          window.setTimeout(() => {
+            EventBus.emit('dungeon:villageCheer', {
+              senderName: sender,
+              healHp: 80,
+              attackBonusPct: 0.2,
+              durationMs: 30_000,
+            });
+          }, 1300);
+        }}
       />
 
       <AreaSwitcherModal

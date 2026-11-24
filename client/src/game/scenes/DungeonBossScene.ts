@@ -78,6 +78,18 @@ interface LootBagDrop {
   claimed: boolean;
 }
 
+interface VillageCheerPackage {
+  x: number;
+  y: number;
+  targetY: number;
+  senderName: string;
+  healHp: number;
+  attackBonusPct: number;
+  durationMs: number;
+  container: Phaser.GameObjects.Container;
+  claimed: boolean;
+}
+
 interface RemoteDungeonTeammate {
   sessionId: string;
   x: number;
@@ -179,6 +191,7 @@ export class DungeonBossScene extends Phaser.Scene {
   ];
   private nearExitSent = false;
   private transitioning = false;
+  private cheerPackages: VillageCheerPackage[] = [];
   private unsubs: Array<() => void> = [];
 
   constructor() {
@@ -237,6 +250,7 @@ export class DungeonBossScene extends Phaser.Scene {
     this.cheatDeathUsed = false;
     this.playerDefeated = false;
     this.lootBag = null;
+    this.cheerPackages = [];
   }
 
   create(): void {
@@ -373,6 +387,25 @@ export class DungeonBossScene extends Phaser.Scene {
       EventBus.on('input:fury', () => this.activateFuryBurst()),
       EventBus.on('input:rematch', () => this.restartCurrentBoss()),
       EventBus.on('input:exitDungeon', () => this.returnToOverworld()),
+      EventBus.on('dungeon:enterRequest', (req) => {
+        if (this.transitioning) return;
+        this.transitioning = true;
+        this.scene.restart({
+          playerState: this.player.state,
+          bossId: req.bossId,
+          difficulty: req.difficulty,
+          partyMode: req.partyMode,
+          partyId: req.partyId,
+        });
+      }),
+      EventBus.on('dungeon:villageCheer', (payload) => {
+        this.spawnVillageCheerPackage(
+          payload.senderName,
+          payload.healHp,
+          payload.attackBonusPct,
+          payload.durationMs
+        );
+      }),
       EventBus.on('travel:execute', (req) => {
         if (req.method === 'mirror' || req.targetZone === 'overworld') {
           this.returnToOverworld();
@@ -404,6 +437,8 @@ export class DungeonBossScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.unsubs.forEach((u) => u());
       this.unsubs = [];
+      this.cheerPackages.forEach((cp) => cp.container.destroy());
+      this.cheerPackages = [];
       this.clearYantSigils();
       this.clearTeammates();
       void roomClient.leaveDungeon();
@@ -558,6 +593,121 @@ export class DungeonBossScene extends Phaser.Scene {
         }
       )
       .setDepth(12);
+  }
+
+  private spawnVillageCheerPackage(
+    senderName: string,
+    healHp = 80,
+    attackBonusPct = 0.2,
+    durationMs = 30_000
+  ): void {
+    const dropX = Phaser.Math.Clamp(this.player.x + Phaser.Math.Between(-90, 90), 220, ARENA_W - 220);
+    const startY = 120;
+    const targetY = FLOOR_Y - 26;
+
+    const container = this.add.container(dropX, startY).setDepth(95);
+    // Golden silk parachute canopy + strings + glowing Num Pang parcel
+    const g = this.add.graphics();
+    g.fillStyle(0xfacc15, 0.92);
+    g.fillEllipse(0, -34, 48, 22);
+    g.lineStyle(2, 0xfef08a, 0.9);
+    g.lineBetween(-18, -28, -8, -4);
+    g.lineBetween(18, -28, 8, -4);
+    g.fillStyle(0xb45309, 1);
+    g.fillRoundedRect(-14, -8, 28, 18, 6);
+    g.lineStyle(2.5, 0xfde047, 1);
+    g.strokeRoundedRect(-14, -8, 28, 18, 6);
+
+    const glow = this.add.circle(0, 0, 22, 0xfacc15, 0.28);
+    const icon = this.add.text(0, -1, '🥖', { fontSize: '18px' }).setOrigin(0.5);
+    const lbl = this.add
+      .text(0, 18, `✨ Hot Num Pang (+${healHp} HP · +20% ATK)`, {
+        fontFamily: 'Fredoka, sans-serif',
+        fontSize: '10px',
+        fontStyle: 'bold',
+        color: '#fef08a',
+        backgroundColor: 'rgba(124, 45, 18, 0.92)',
+        padding: { x: 5, y: 2 },
+      })
+      .setOrigin(0.5, 0);
+    container.add([glow, g, icon, lbl]);
+
+    this.cheerPackages.push({
+      x: dropX,
+      y: startY,
+      targetY,
+      senderName,
+      healHp,
+      attackBonusPct,
+      durationMs,
+      container,
+      claimed: false,
+    });
+
+    // Overhead Arena Banner: "<SenderName> sent a Hot Num Pang!" (positioned cleanly below Boss HP bar)
+    soundManager.playSfx('magic');
+    const banner = this.add
+      .text(this.scale.width / 2, 198, `🥖 ${senderName} sent a Hot Num Pang!`, {
+        fontFamily: 'Fredoka, sans-serif',
+        fontSize: '18px',
+        fontStyle: 'bold',
+        color: '#fef08a',
+        stroke: '#451a03',
+        strokeThickness: 5,
+        backgroundColor: 'rgba(124, 45, 18, 0.96)',
+        padding: { x: 16, y: 7 },
+      })
+      .setOrigin(0.5, 0)
+      .setScrollFactor(0)
+      .setDepth(2300);
+    this.tweens.add({
+      targets: banner,
+      y: 184,
+      alpha: 0,
+      delay: 3400,
+      duration: 700,
+      onComplete: () => banner.destroy(),
+    });
+  }
+
+  private claimVillageCheerPackage(pkg: VillageCheerPackage): void {
+    pkg.claimed = true;
+    pkg.container.destroy();
+    soundManager.playSfx('heal');
+
+    const bridge = computeVillageToDungeonBridge(this.player.state);
+    const nextHp = Math.min(bridge.effectiveMaxHp, this.player.state.hp + pkg.healHp);
+    const nowMs = Date.now();
+    const nextBuffs = [
+      ...this.player.state.activeBuffs.filter((b) => b.id !== 'village_cheer_num_pang'),
+      {
+        id: 'village_cheer_num_pang',
+        snackId: 'snack_num_pang',
+        name: 'Hot Num Pang Cheer (+20% ATK)',
+        khmerName: 'នំប៉័ងក្តៅជួយមិត្ត',
+        icon: '🥖',
+        color: '#facc15',
+        startedAt: nowMs,
+        expiresAt: nowMs + pkg.durationMs,
+        attackPct: pkg.attackBonusPct,
+      },
+    ];
+    this.player.state = {
+      ...this.player.state,
+      hp: nextHp,
+      activeBuffs: nextBuffs,
+    };
+    this.emitPlayerState();
+    this.spawnFloatingText(
+      this.player.x,
+      this.player.y - 46,
+      `🥖 +${pkg.healHp} HP · +20% ATK (30s)!`,
+      '#fde047',
+      '16px'
+    );
+    EventBus.emit('ui:toast', {
+      text: `🥖 Picked up ${pkg.senderName}'s Hot Num Pang! +${pkg.healHp} HP & +20% ATK for 30s!`,
+    });
   }
 
   private buildArenaPlatforms(): void {
@@ -2313,6 +2463,22 @@ export class DungeonBossScene extends Phaser.Scene {
     }
 
     this.player.syncVisuals(time, onGround);
+
+    // Update parachuting Golden Num Pang Village Cheer Care Packages
+    for (let i = this.cheerPackages.length - 1; i >= 0; i--) {
+      const pkg = this.cheerPackages[i];
+      if (pkg.claimed) continue;
+      if (pkg.y < pkg.targetY) {
+        pkg.y = Math.min(pkg.targetY, pkg.y + delta * 0.13);
+        pkg.x += Math.sin(time / 240 + i) * 0.55;
+      }
+      pkg.container.setPosition(pkg.x, pkg.y);
+      const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y - 16, pkg.x, pkg.y);
+      if (dist <= 52) {
+        this.claimVillageCheerPackage(pkg);
+        this.cheerPackages.splice(i, 1);
+      }
+    }
 
     // Co-op Dungeon position sync & smooth teammate interpolation
     if (roomClient.isInCoopDungeon) {

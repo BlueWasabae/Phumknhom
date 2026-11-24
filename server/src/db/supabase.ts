@@ -50,6 +50,12 @@ export interface SavedPlayerProfile {
   highestTowerFloor?: number;
   unlockedWeaponAuras?: string[];
   museumDonations?: string[];
+  kromId?: string | null;
+  kromTag?: string | null;
+  kromName?: string | null;
+  kromLevel?: number;
+  pchumBenBlessingUntil?: number | null;
+  festivalSplashCount?: number;
   hasCompletedCreation?: boolean;
   activeClass?: string;
   weapon?: Record<string, unknown>;
@@ -464,6 +470,12 @@ function rowToSavedProfile(row: {
     museumDonations: Array.isArray(meta.museumDonations)
       ? (meta.museumDonations as string[])
       : [],
+    kromId: typeof meta.kromId === 'string' ? meta.kromId : null,
+    kromTag: typeof meta.kromTag === 'string' ? meta.kromTag : null,
+    kromName: typeof meta.kromName === 'string' ? meta.kromName : null,
+    kromLevel: typeof meta.kromLevel === 'number' ? meta.kromLevel : 0,
+    pchumBenBlessingUntil: typeof meta.pchumBenBlessingUntil === 'number' ? meta.pchumBenBlessingUntil : null,
+    festivalSplashCount: typeof meta.festivalSplashCount === 'number' ? meta.festivalSplashCount : 0,
     hasCompletedCreation: Boolean(
       meta.hasCompletedCreation ??
         (loadout as { hasCompletedCreation?: boolean }).hasCompletedCreation ??
@@ -533,6 +545,12 @@ export async function registerPlayer(
     highestTowerFloor: starterProfile?.highestTowerFloor ?? 0,
     unlockedWeaponAuras: starterProfile?.unlockedWeaponAuras ?? [],
     museumDonations: starterProfile?.museumDonations ?? [],
+    kromId: starterProfile?.kromId ?? null,
+    kromTag: starterProfile?.kromTag ?? null,
+    kromName: starterProfile?.kromName ?? null,
+    kromLevel: starterProfile?.kromLevel ?? 0,
+    pchumBenBlessingUntil: starterProfile?.pchumBenBlessingUntil ?? null,
+    festivalSplashCount: starterProfile?.festivalSplashCount ?? 0,
     hasCompletedCreation: Boolean(starterProfile?.hasCompletedCreation ?? false),
     activeClass: starterProfile?.activeClass,
     weapon: starterProfile?.weapon,
@@ -763,6 +781,13 @@ export async function savePlayerProfile(
     highestTowerFloor: typeof profile.highestTowerFloor === 'number' ? profile.highestTowerFloor : 0,
     unlockedWeaponAuras: Array.isArray(profile.unlockedWeaponAuras) ? profile.unlockedWeaponAuras : [],
     museumDonations: Array.isArray(profile.museumDonations) ? profile.museumDonations : [],
+    kromId: typeof profile.kromId === 'string' ? profile.kromId : null,
+    kromTag: typeof profile.kromTag === 'string' ? profile.kromTag : null,
+    kromName: typeof profile.kromName === 'string' ? profile.kromName : null,
+    kromLevel: typeof profile.kromLevel === 'number' ? profile.kromLevel : 0,
+    pchumBenBlessingUntil:
+      typeof profile.pchumBenBlessingUntil === 'number' ? profile.pchumBenBlessingUntil : null,
+    festivalSplashCount: typeof profile.festivalSplashCount === 'number' ? profile.festivalSplashCount : 0,
     hasCompletedCreation: Boolean(
       profile.hasCompletedCreation ??
         (profile.loadout as { hasCompletedCreation?: boolean } | undefined)?.hasCompletedCreation ??

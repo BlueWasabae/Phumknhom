@@ -111,7 +111,7 @@ export class PlazaRoom extends Room<PlazaState> {
       'updateAppearance',
       (
         client,
-        payload: { appearanceJson?: string; name?: string; level?: number; stylish?: number }
+        payload: { appearanceJson?: string; name?: string; level?: number; stylish?: number; kromTag?: string }
       ) => {
         const player = this.state.players.get(client.sessionId);
         if (!player || !payload || typeof payload !== 'object') return;
@@ -129,8 +129,33 @@ export class PlazaRoom extends Room<PlazaState> {
         if (typeof payload.stylish === 'number' && Number.isFinite(payload.stylish)) {
           player.stylish = Math.max(0, Math.floor(payload.stylish));
         }
+        if (typeof payload.kromTag === 'string') {
+          player.kromTag = payload.kromTag.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 4);
+        }
       }
     );
+
+    this.onMessage('kromChat', (client, payload: { kromTag?: string; text?: string }) => {
+      const sender = this.state.players.get(client.sessionId);
+      if (!sender || typeof payload?.text !== 'string') return;
+      const tag = (payload.kromTag || sender.kromTag || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 4);
+      const text = payload.text.replace(/\s+/g, ' ').trim().slice(0, 120);
+      if (!tag || !text) return;
+
+      const msgPayload = {
+        sessionId: client.sessionId,
+        name: sender.name,
+        kromTag: tag,
+        text,
+        timestamp: Date.now(),
+      };
+      for (const peer of this.clients) {
+        const peerState = this.state.players.get(peer.sessionId);
+        if (peerState && peerState.kromTag.toUpperCase() === tag) {
+          peer.send('kromChat', msgPayload);
+        }
+      }
+    });
 
     this.onMessage('chat', (client, payload: { text?: string }) => {
       const player = this.state.players.get(client.sessionId);
@@ -317,6 +342,7 @@ export class PlazaRoom extends Room<PlazaState> {
       facing?: string;
       appearanceJson?: string;
       areaId?: string;
+      kromTag?: string;
     }
   ): void {
     const player = new RemotePlayer();
@@ -334,6 +360,10 @@ export class PlazaRoom extends Room<PlazaState> {
     player.isMoving = false;
     player.appearanceJson = sanitizeAppearance(options?.appearanceJson);
     player.areaId = this.state.areaId;
+    player.kromTag =
+      typeof options?.kromTag === 'string'
+        ? options.kromTag.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 4)
+        : '';
 
     this.state.players.set(client.sessionId, player);
     presenceRegistry.register({

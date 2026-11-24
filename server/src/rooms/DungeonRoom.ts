@@ -30,6 +30,79 @@ function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v));
 }
 
+const BOSS_NAMES: Record<string, string> = {
+  sdech_kongkaeb: 'Sdech Kongkaeb (King Frog)',
+  arp_prey_chrov: 'Arp Prey Chrov (Forest Ghost)',
+  yeak_thmor: 'Yeak Thmor Prasat',
+  neak_reach: 'Neak Reach (Shadow Naga)',
+};
+
+const activeDungeonRooms = new Map<string, DungeonRoom>();
+
+export function listActiveDungeonFights(): Array<{
+  roomId: string;
+  partyId: string;
+  bossId: string;
+  bossName: string;
+  difficulty: string;
+  playerName: string;
+  bossHp: number;
+  bossMaxHp: number;
+  playerCount: number;
+}> {
+  const out: Array<{
+    roomId: string;
+    partyId: string;
+    bossId: string;
+    bossName: string;
+    difficulty: string;
+    playerName: string;
+    bossHp: number;
+    bossMaxHp: number;
+    playerCount: number;
+  }> = [];
+
+  for (const [roomId, room] of activeDungeonRooms.entries()) {
+    if (!room.state?.boss?.alive || room.state.players.size === 0) continue;
+    const firstPlayer = room.state.players.values().next().value as DungeonPlayer | undefined;
+    out.push({
+      roomId,
+      partyId: room.state.partyId,
+      bossId: room.state.bossId,
+      bossName: BOSS_NAMES[room.state.bossId] ?? room.state.bossId,
+      difficulty: room.state.difficulty,
+      playerName: firstPlayer?.name ?? 'Villager',
+      bossHp: room.state.boss.hp,
+      bossMaxHp: room.state.boss.maxHp,
+      playerCount: room.state.players.size,
+    });
+  }
+  return out;
+}
+
+export function sendVillageCheerToDungeon(
+  roomId: string,
+  senderName: string
+): { delivered: boolean; targetPlayerName?: string; bossName?: string } {
+  const room = activeDungeonRooms.get(roomId);
+  if (!room || !room.state?.boss?.alive) {
+    return { delivered: false };
+  }
+  const firstPlayer = room.state.players.values().next().value as DungeonPlayer | undefined;
+  room.broadcast('villageCheer', {
+    senderName: senderName.slice(0, 20),
+    healHp: 80,
+    attackBonusPct: 0.2,
+    durationMs: 30_000,
+    timestamp: Date.now(),
+  });
+  return {
+    delivered: true,
+    targetPlayerName: firstPlayer?.name ?? 'Villager',
+    bossName: BOSS_NAMES[room.state.bossId] ?? room.state.bossId,
+  };
+}
+
 export class DungeonRoom extends Room<DungeonState> {
   maxClients = 4;
   private hostSessionId = '';
@@ -67,6 +140,7 @@ export class DungeonRoom extends Room<DungeonState> {
 
     this.setState(state);
     this.setMetadata({ partyId, bossId, difficulty });
+    activeDungeonRooms.set(this.roomId, this);
 
     this.onMessage(
       'move',
@@ -240,5 +314,9 @@ export class DungeonRoom extends Room<DungeonState> {
     if (this.state.players.size > 0) {
       this.rescaleBossForPartySize();
     }
+  }
+
+  onDispose(): void {
+    activeDungeonRooms.delete(this.roomId);
   }
 }

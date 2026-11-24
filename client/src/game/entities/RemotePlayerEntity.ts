@@ -115,12 +115,13 @@ export class RemotePlayerEntity {
       EventBus.emit('ui:toast', { text: `🚕 Hopped into the back seat of ${this.name}'s Mini Tuk-Tuk! (Move to hop out)` });
     });
 
+    const displayTag = snapshot.kromTag ? `[${snapshot.kromTag}] ${this.name}` : this.name;
     this.nameTag = scene.add
-      .text(this.x, this.y + 11, this.name, {
+      .text(this.x, this.y + 11, displayTag, {
         fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
         fontSize: '13px',
         fontStyle: 'bold',
-        color: '#bae6fd',
+        color: snapshot.kromTag ? '#fde047' : '#bae6fd',
         stroke: '#0f172a',
         strokeThickness: 4,
       })

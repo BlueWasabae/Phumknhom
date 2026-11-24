@@ -1460,6 +1460,41 @@ export const ITEM_CATALOG: Record<string, CatalogItem> = {
     stats: { maxHp: 15, critChance: 0.02 },
   },
 
+  // ==================== UPDATE 1.5: KHMER SEASONAL FESTIVAL EXCLUSIVES ====================
+  weapon_water_paddle: {
+    id: 'weapon_water_paddle',
+    name: 'Water Festival Rowing Paddle',
+    khmerName: 'ច្រវាទូកងបុណ្យអុំទូក',
+    slot: 'weapon',
+    classId: 'lbokator',
+    rarity: 'legendary',
+    stylishScore: 88,
+    description: 'Gilded teak Mekong longboat racing paddle won during Bon Om Touk — slashes with tidal splashes!',
+    primaryColor: '#0284c7',
+    accentColor: '#facc15',
+    styleVariant: 'phkak',
+    stats: {
+      attack: 26,
+      armorPen: 4,
+      critChance: 0.25,
+      attackCooldownMs: 280,
+      knockbackForce: 225,
+    },
+  },
+  hat_jasmine_garland: {
+    id: 'hat_jasmine_garland',
+    name: 'Jasmine Garland',
+    khmerName: 'កម្រងផ្កាម្លិះចូលឆ្នាំ',
+    slot: 'hat',
+    rarity: 'epic',
+    stylishScore: 72,
+    description: 'Fragrant woven white Khmer jasmine blossom crown earned during Chol Chnam Thmey Water Splash Tag.',
+    primaryColor: '#f8fafc',
+    accentColor: '#facc15',
+    styleVariant: 'apsara_crown',
+    stats: { maxHp: 18, critChance: 0.03 },
+  },
+
   // ==================== UPDATE 1.3A: COMBAT ARMOR SETS ====================
   armor_laterite_miner: {
     id: COMBAT_ARMOR_SETS.armor_laterite_miner.id,

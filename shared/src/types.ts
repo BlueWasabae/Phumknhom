@@ -16,7 +16,49 @@ export type {
   StarterOutfitId,
 } from './characterStyles';
 
-export type ZoneType = 'overworld' | 'dungeon' | 'cavern' | 'tower' | 'farm' | 'club' | 'khmer_world' | 'house';
+export type ZoneType =
+  | 'overworld'
+  | 'dungeon'
+  | 'cavern'
+  | 'tower'
+  | 'festival_race'
+  | 'farm'
+  | 'club'
+  | 'khmer_world'
+  | 'house';
+
+export interface KromMember {
+  playerId: string;
+  username: string;
+  role: 'leader' | 'officer' | 'member';
+  donatedCoins: number;
+  joinedAt: string;
+}
+
+export interface KromGuild {
+  id: string;
+  name: string;
+  tag: string; // 3-4 uppercase alphanumeric characters e.g. ANGK, PHUM
+  leaderName: string;
+  level: number; // 1..10
+  xp: number;
+  treasuryCoins: number;
+  members: KromMember[];
+  createdAt: string;
+}
+
+export interface ActiveDungeonFightInfo {
+  roomId: string;
+  partyId: string;
+  bossId: BossId;
+  bossName: string;
+  difficulty: DifficultyMode;
+  playerName: string;
+  bossHp: number;
+  bossMaxHp: number;
+  playerCount: number;
+  isSimulation?: boolean;
+}
 
 export type WeaponAuraId = 'golden_lotus' | 'emerald_naga' | 'celestial_angkor';
 
@@ -271,6 +313,13 @@ export interface PlayerState {
   unlockedWeaponAuras?: WeaponAuraId[];
   /** Update 1.4 — Donated Angkor Relic Museum itemIds */
   museumDonations?: string[];
+  /** Update 1.5 — Krom (Guild/Clan) membership & Festival Blessings */
+  kromId?: string | null;
+  kromTag?: string | null;
+  kromName?: string | null;
+  kromLevel?: number;
+  pchumBenBlessingUntil?: number | null;
+  festivalSplashCount?: number;
   hasCompletedCreation?: boolean;
   skillDamagePct: number;
   armorDamagePct: number;
@@ -291,6 +340,8 @@ export interface ChatMessage {
   sender: string;
   text: string;
   timestamp: number;
+  channel?: 'area' | 'krom' | 'whisper';
+  kromTag?: string;
 }
 
 export const DEFAULT_STARTER_WEAPON: WeaponStats = {
@@ -536,6 +587,12 @@ export const INITIAL_PLAYER_STATE: PlayerState = {
   highestTowerFloor: 0,
   unlockedWeaponAuras: [],
   museumDonations: [],
+  kromId: null,
+  kromTag: null,
+  kromName: null,
+  kromLevel: 0,
+  pchumBenBlessingUntil: null,
+  festivalSplashCount: 0,
   hasCompletedCreation: false,
   skillDamagePct: 0.025,
   armorDamagePct: 0.04,

@@ -60,6 +60,11 @@ import {
   type WorldEventId,
 } from '@shared/worldEvents';
 import {
+  KHMER_FESTIVALS,
+  KHMER_FESTIVAL_LIST,
+  type FestivalId,
+} from '@shared/festivals';
+import {
   SEASONS,
   SEASON_ORDER,
   seasonClock,
@@ -109,6 +114,9 @@ interface HUDProps {
   onOpenPagodaTower?: () => void;
   onOpenMuseum?: () => void;
   onOpenNightMarket?: () => void;
+  onOpenFestival?: () => void;
+  onOpenKrom?: () => void;
+  onOpenScryingMirror?: () => void;
   onToggleMount?: () => void;
   onFastForwardFarm: () => void;
 }
@@ -156,6 +164,9 @@ export const HUD: React.FC<HUDProps> = ({
   onOpenPagodaTower,
   onOpenMuseum,
   onOpenNightMarket,
+  onOpenFestival,
+  onOpenKrom,
+  onOpenScryingMirror,
   onToggleMount,
   onFastForwardFarm,
 }) => {
@@ -315,8 +326,27 @@ export const HUD: React.FC<HUDProps> = ({
             ? '⛏️ Ancient Cavern • Mining & Relics'
             : zone === 'tower'
             ? '🗼 Endless Pagoda Tower (50F)'
+            : zone === 'festival_race'
+            ? '🛶 Bon Om Touk · Longboat Race'
             : 'Ancient Cavern • Dungeon'}
         </span>
+      )}
+
+      {zone === 'festival_race' && (
+        <button
+          type="button"
+          onClick={() =>
+            EventBus.emit('travel:execute', {
+              method: 'mirror',
+              destinationLabel: 'Green Park Pier',
+              targetZone: 'overworld',
+              mapId: 'green_park',
+            })
+          }
+          className="px-2.5 py-0.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white border border-sky-950 font-display font-bold text-[11px] whitespace-nowrap shadow-sm transition cursor-pointer"
+        >
+          ← Exit to Green Park
+        </button>
       )}
 
       {/* House Interior Quick Buttons: Decorate & Invite Friends */}
@@ -432,6 +462,24 @@ export const HUD: React.FC<HUDProps> = ({
           · {formatCountdown(activeWorldEvent.remainingMs)}
         </button>
       )}
+
+      {/* Active Seasonal Khmer Festival Pill (Update 1.5) */}
+      {seasonSnap.activeFestival && onOpenFestival && zone === 'overworld' && (() => {
+        const fDef = KHMER_FESTIVALS[seasonSnap.activeFestival];
+        return (
+          <button
+            type="button"
+            onClick={() => {
+              soundManager.playSfx('click');
+              onOpenFestival();
+            }}
+            title={`${fDef.name} (${fDef.khmerName}) — Click to join the Khmer Festival!`}
+            className={`px-2 py-0.5 rounded-lg border font-display font-bold text-[10px] whitespace-nowrap shadow-sm cursor-pointer transition ${fDef.pillBgClass}`}
+          >
+            {fDef.icon} {fDef.shortTag}
+          </button>
+        );
+      })()}
 
       {/* 4-Season Weather, Day/Night & Chankitek Lunar Phase Badge */}
       <button
@@ -558,7 +606,7 @@ export const HUD: React.FC<HUDProps> = ({
             </button>
 
             {menuDropdownOpen && (
-              <div className="absolute left-0 top-12 w-56 phum-panel rounded-2xl p-1.5 z-30 flex flex-col gap-1 text-xs font-display font-bold">
+              <div className="absolute left-0 top-12 w-56 max-h-[74vh] overflow-y-auto overscroll-contain phum-panel rounded-2xl p-1.5 z-30 flex flex-col gap-1 text-xs font-display font-bold">
                 <button
                   type="button"
                   onClick={() => {
@@ -658,6 +706,47 @@ export const HUD: React.FC<HUDProps> = ({
                     <span className="text-[9px] font-bold text-emerald-800">
                       {(player.museumDonations ?? []).length}/12
                     </span>
+                  </button>
+                )}
+                {onOpenKrom && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuDropdownOpen(false);
+                      onOpenKrom();
+                    }}
+                    className="px-3 py-2 rounded-xl hover:bg-amber-200/80 text-left flex items-center justify-between gap-2 text-amber-950"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Crown className="w-4 h-4 text-amber-600" /> Krom (Guild / Clan)
+                    </span>
+                    <span className="text-[9px] font-bold text-amber-800">
+                      {player.kromTag ? `[${player.kromTag}]` : 'Join'}
+                    </span>
+                  </button>
+                )}
+                {onOpenFestival && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuDropdownOpen(false);
+                      onOpenFestival();
+                    }}
+                    className="px-3 py-2 rounded-xl hover:bg-sky-100 text-left flex items-center gap-2 text-amber-950"
+                  >
+                    <Sparkles className="w-4 h-4 text-sky-700" /> Khmer Seasonal Festivals
+                  </button>
+                )}
+                {onOpenScryingMirror && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuDropdownOpen(false);
+                      onOpenScryingMirror();
+                    }}
+                    className="px-3 py-2 rounded-xl hover:bg-cyan-100 text-left flex items-center gap-2 text-amber-950"
+                  >
+                    <Globe2 className="w-4 h-4 text-cyan-700" /> Scrying Mirror (Village Cheer)
                   </button>
                 )}
                 <button
@@ -1431,6 +1520,55 @@ export const HUD: React.FC<HUDProps> = ({
                     <div className="text-[9px] opacity-80">
                       {Math.round(ev.durationMs / 60000)}m · {ev.targetMaps.join(', ').replace(/_/g, ' ')}
                     </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Update 1.5: Trigger Khmer Seasonal Festival (Test Selector) */}
+          <div className="p-3 rounded-xl bg-amber-50 border border-amber-900/25 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-display font-bold text-amber-950">
+                🏮 Trigger Festival (Test)
+              </span>
+              {seasonClock.getFestivalOverride() && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    soundManager.playSfx('click');
+                    seasonClock.setFestivalOverride(null);
+                  }}
+                  className="px-2 py-0.5 rounded-lg bg-stone-200 hover:bg-stone-300 text-stone-800 font-bold text-[10px] cursor-pointer"
+                >
+                  Auto Season
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+              {KHMER_FESTIVAL_LIST.map((f) => {
+                const active = seasonSnap.activeFestival === f.id;
+                return (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => {
+                      soundManager.playSfx('magic');
+                      seasonClock.setFestivalOverride(f.id as FestivalId);
+                      EventBus.emit('ui:toast', {
+                        text: `${f.icon} Festival Active: ${f.name} (${f.khmerName})!`,
+                      });
+                    }}
+                    className={`p-2 rounded-xl border-2 text-left transition cursor-pointer ${
+                      active
+                        ? 'bg-sky-700 text-amber-50 border-amber-400 shadow'
+                        : 'bg-white hover:bg-amber-100 text-amber-950 border-amber-900/25'
+                    }`}
+                  >
+                    <div className="font-display font-bold text-[11px]">
+                      {f.icon} {f.shortTag}
+                    </div>
+                    <div className="text-[9px] opacity-80 truncate">{f.khmerName}</div>
                   </button>
                 );
               })}

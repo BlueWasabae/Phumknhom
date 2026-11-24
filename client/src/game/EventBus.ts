@@ -219,6 +219,30 @@ export interface EventMap {
     items?: Array<{ itemId: string; quantity: number }>;
     label: string;
   };
+  'festival:startRace': void;
+  'festival:raceFinished': {
+    place: number;
+    timeSec: number;
+    coins: number;
+    gold: number;
+    fishingXp: number;
+    unlockedPaddle: boolean;
+  };
+  'festival:waterSplash': { targetName: string };
+  'festival:releaseLantern': void;
+  'network:kromChat': {
+    sessionId: string;
+    name: string;
+    kromTag: string;
+    text: string;
+    timestamp: number;
+  };
+  'dungeon:villageCheer': {
+    senderName: string;
+    healHp: number;
+    attackBonusPct: number;
+    durationMs: number;
+  };
   'npc:openDialogue': { npcId: KhmerNpcId };
   'house:setDecorateMode': { active: boolean; itemId?: string | null };
   'house:placeQuick': { itemId: string };
@@ -269,7 +293,10 @@ export interface EventMap {
       | 'leaderboard'
       | 'pagodaTower'
       | 'museum'
-      | 'nightMarket';
+      | 'nightMarket'
+      | 'festival'
+      | 'krom'
+      | 'scryingMirror';
     leaderboardCategory?: 'farmer' | 'stylish' | 'slayer' | 'tower';
     farmTab?: 'seeds' | 'livestock' | 'artisan';
     shopTab?: 'primary' | 'secondary';

@@ -22,10 +22,11 @@ import { getMountSpec } from '../entities/MountEntity';
 import { fetchLeaderboard } from '../network/ApiClient';
 import { areaIdToChannel, channelToAreaId, roomClient } from '../network/RoomClient';
 import { soundManager } from '../systems/SoundManager';
-import { SeasonAtmosphereOverlay } from '../systems/SeasonClock';
+import { SeasonAtmosphereOverlay, seasonClock } from '../systems/SeasonClock';
 import { travelManager, type TravelRequestPayload } from '../systems/TravelAndPylons';
 import { worldEventManager } from '../systems/WorldEventManager';
 import type { ActiveWorldEventSnapshot } from '@shared/worldEvents';
+import type { FestivalId } from '@shared/festivals';
 
 // Spacious 1600x1200 connected Phum Khnhom Village & Frontier maps (ZERO overlapping buildings!)
 const MAP_W = 1600;
@@ -116,6 +117,9 @@ export class OverworldScene extends Phaser.Scene {
   private worldEventObjects: Phaser.GameObjects.GameObject[] = [];
   private worldEventMobs: WorldEventMob[] = [];
   private worldEventMerchantLandmark: LandmarkZone | null = null;
+  private festivalObjects: Phaser.GameObjects.GameObject[] = [];
+  private festivalLandmarks: LandmarkZone[] = [];
+  private lastSyncedFestival: FestivalId | null = null;
   private gateLockUntil = 0;
   private nearPortalSent = false;
   private transitioning = false;
@@ -333,13 +337,15 @@ export class OverworldScene extends Phaser.Scene {
         const metaChanged =
           this.player.state.name !== nextState.name ||
           this.player.state.level !== nextState.level ||
-          this.player.state.lifeStats.stylish !== nextState.lifeStats.stylish;
+          this.player.state.lifeStats.stylish !== nextState.lifeStats.stylish ||
+          this.player.state.kromTag !== nextState.kromTag;
         this.player.syncPlayerState({ ...nextState, currentMapId: this.mapId });
         if (metaChanged) {
           roomClient.sendAppearance(this.player.state.loadout, {
             name: nextState.name,
             level: nextState.level,
             stylish: nextState.lifeStats.stylish,
+            kromTag: nextState.kromTag ?? '',
           });
         }
       }),
@@ -361,8 +367,16 @@ export class OverworldScene extends Phaser.Scene {
       EventBus.on('tower:enterRequest', ({ floor, partyMode }) => {
         this.enterPagodaTower(floor, partyMode);
       }),
+      EventBus.on('festival:startRace', () => {
+        this.enterFestivalRace();
+      }),
       EventBus.on('worldEvent:changed', (snap) => {
         this.syncWorldEventVisuals(snap);
+      }),
+      seasonClock.subscribe((snap) => {
+        if (snap.activeFestival !== this.lastSyncedFestival) {
+          this.syncFestivalVisuals(snap.activeFestival);
+        }
       }),
       EventBus.on('travel:execute', (req) => {
         this.handleTravelRequest(req);
@@ -379,9 +393,11 @@ export class OverworldScene extends Phaser.Scene {
     const initialArea = channelToAreaId(this.player.state.areaChannel);
     void this.connectToPlazaArea(initialArea, false);
     this.syncWorldEventVisuals(worldEventManager.getActiveEvent());
+    this.syncFestivalVisuals(seasonClock.getSnapshot().activeFestival);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.clearWorldEventVisuals();
+      this.clearFestivalVisuals();
       this.scale.off('resize', this.applyResponsiveZoom, this);
       this.busTimer?.remove(false);
       this.busTimer = undefined;
@@ -781,6 +797,65 @@ export class OverworldScene extends Phaser.Scene {
       label: 'Press [E] or Click → Spin Royal Lucky Wheel (Coins / Gold)',
       isDungeonPortal: false,
       onInteract: openWheel,
+    });
+
+    // 4B. UPDATE 1.5: KROM GUILD HALL BANNER (West Courtyard) & TEMPLE SCRYING MIRROR (East Courtyard)
+    const kromBanner = this.addBuildingOrProp({
+      texture: 'sv_sign_wood',
+      x: 560,
+      y: 485,
+      scale: 1.55,
+      shadowW: 44,
+      shadowH: 14,
+      label: '🛡️ KROM GUILD HALL',
+      joinArrowY: 438,
+    });
+    kromBanner.setTint(0xfde047);
+    const openKrom = () => {
+      if (typeof document !== 'undefined' && document.querySelector('dialog[open]')) return;
+      EventBus.emit('ui:openModal', { modal: 'krom' });
+    };
+    kromBanner.setInteractive({ useHandCursor: true }).on('pointerdown', openKrom);
+    this.landmarks.push({
+      x: 560,
+      y: 492,
+      radius: 52,
+      label: 'Press [E] or Click → Open Krom Guild Hall (Create/Join, Shrine & Buffs)',
+      isDungeonPortal: false,
+      onInteract: openKrom,
+    });
+
+    const mirrorGlow = this.add
+      .image(1040, 472, 'portal_vortex')
+      .setTint(0x38bdf8)
+      .setScale(0.75)
+      .setAlpha(0.6)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(478);
+    this.tweens.add({ targets: mirrorGlow, alpha: 0.3, scale: 0.88, duration: 920, yoyo: true, repeat: -1 });
+    const scryingMirror = this.addBuildingOrProp({
+      texture: 'na_singha_statue',
+      x: 1040,
+      y: 485,
+      scale: 1.05,
+      shadowW: 42,
+      shadowH: 14,
+      label: '🔮 TEMPLE SCRYING MIRROR',
+      joinArrowY: 435,
+    });
+    scryingMirror.setTint(0x7dd3fc);
+    const openMirror = () => {
+      if (typeof document !== 'undefined' && document.querySelector('dialog[open]')) return;
+      EventBus.emit('ui:openModal', { modal: 'scryingMirror' });
+    };
+    scryingMirror.setInteractive({ useHandCursor: true }).on('pointerdown', openMirror);
+    this.landmarks.push({
+      x: 1040,
+      y: 492,
+      radius: 54,
+      label: 'Press [E] or Click → Gaze into Scrying Mirror (Send Village Cheer Drops!)',
+      isDungeonPortal: false,
+      onInteract: openMirror,
     });
 
     // 5. KHMER STILT HOUSE (Enterable Customizable Interior! West Road Gate enters FarmScene)
@@ -1260,6 +1335,39 @@ export class OverworldScene extends Phaser.Scene {
       label: 'Press [E] or Click → Enter Angkor Relic Hall (Museum & Scholar Perks)',
       isDungeonPortal: false,
       onInteract: () => EventBus.emit('ui:openModal', { modal: 'museum' }),
+    });
+
+    // 5. TEMPLE SCRYING MIRROR (South-West Terrace) — Plaza-to-Dungeon Village Cheer Drops
+    const tmGlow = this.add
+      .image(625, 795, 'portal_vortex')
+      .setTint(0x38bdf8)
+      .setScale(0.75)
+      .setAlpha(0.58)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(798);
+    this.tweens.add({ targets: tmGlow, alpha: 0.28, scale: 0.9, duration: 920, yoyo: true, repeat: -1 });
+    const tmMirror = this.addBuildingOrProp({
+      texture: 'na_singha_statue',
+      x: 625,
+      y: 808,
+      scale: 1.05,
+      shadowW: 42,
+      shadowH: 14,
+      label: '🔮 TEMPLE SCRYING MIRROR',
+      joinArrowY: 758,
+    });
+    tmMirror.setTint(0x7dd3fc);
+    tmMirror.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+      if (typeof document !== 'undefined' && document.querySelector('dialog[open]')) return;
+      EventBus.emit('ui:openModal', { modal: 'scryingMirror' });
+    });
+    this.landmarks.push({
+      x: 625,
+      y: 816,
+      radius: 56,
+      label: 'Press [E] or Click → Temple Scrying Mirror (Send Hot Num Pang Cheer Drops!)',
+      isDungeonPortal: false,
+      onInteract: () => EventBus.emit('ui:openModal', { modal: 'scryingMirror' }),
     });
   }
 
@@ -2164,6 +2272,231 @@ export class OverworldScene extends Phaser.Scene {
         },
       });
     });
+  }
+
+  private enterFestivalRace(): void {
+    if (this.transitioning) return;
+    this.transitioning = true;
+    soundManager.playSfx('splash');
+    this.cameras.main.fadeOut(220, 8, 22, 48);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      this.scene.start('FestivalRaceScene', {
+        playerState: {
+          ...this.player.state,
+          zone: 'festival_race',
+          activeMount: null,
+        },
+      });
+    });
+  }
+
+  // ==================== UPDATE 1.5: KHMER SEASONAL FESTIVALS ====================
+  private clearFestivalVisuals(): void {
+    for (const obj of this.festivalObjects) {
+      if (obj && obj.active) obj.destroy();
+    }
+    this.festivalObjects = [];
+    if (this.festivalLandmarks.length > 0) {
+      const rem = new Set(this.festivalLandmarks);
+      this.landmarks = this.landmarks.filter((lm) => !rem.has(lm));
+      this.festivalLandmarks = [];
+    }
+  }
+
+  private syncFestivalVisuals(festival: FestivalId | null): void {
+    if (!this.scene || !this.scene.isActive('OverworldScene')) return;
+    this.lastSyncedFestival = festival;
+    this.clearFestivalVisuals();
+    if (!festival) return;
+
+    // 1. BON OM TOUK (Water Festival — Longboat Race Pier in Green Park)
+    if (festival === 'bon_om_touk' && this.mapId === 'green_park') {
+      const bx = 630;
+      const by = 785;
+      const glow = this.add
+        .image(bx, by - 10, 'portal_vortex')
+        .setTint(0x0284c7)
+        .setScale(0.95)
+        .setAlpha(0.65)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(by - 2);
+      const boatProp = this.add
+        .image(bx, by, 'na_boat')
+        .setScale(0.95)
+        .setTint(0xfde047)
+        .setDepth(by + 4)
+        .setInteractive({ useHandCursor: true });
+      const arrow = this.add.image(bx, by - 46, 'join_arrow').setScale(0.62).setDepth(by + 16);
+      this.tweens.add({ targets: arrow, y: by - 54, duration: 500, yoyo: true, repeat: -1 });
+      const label = this.add
+        .text(bx, by + 22, '🛶 BON OM TOUK · LONGBOAT RACE [E]', {
+          fontFamily: 'Fredoka, sans-serif',
+          fontSize: '10px',
+          fontStyle: 'bold',
+          color: '#fef08a',
+          backgroundColor: 'rgba(2, 132, 199, 0.92)',
+          padding: { x: 6, y: 2 },
+        })
+        .setResolution(2)
+        .setScale(0.45)
+        .setOrigin(0.5, 0)
+        .setDepth(by + 20);
+      const startRace = () => {
+        if (typeof document !== 'undefined' && document.querySelector('dialog[open]')) return;
+        this.enterFestivalRace();
+      };
+      boatProp.on('pointerdown', startRace);
+      this.festivalObjects.push(glow, boatProp, arrow, label);
+
+      const lm: LandmarkZone = {
+        x: bx,
+        y: by,
+        radius: 68,
+        label: 'Press [E] or Click → Launch Bon Om Touk Longboat Race!',
+        isDungeonPortal: false,
+        onInteract: startRace,
+      };
+      this.festivalLandmarks.push(lm);
+      this.landmarks.push(lm);
+    }
+
+    // 2. CHOL CHNAM THMEY (Khmer New Year — Water Splash Tag Buckets in Central Plaza)
+    if (festival === 'chol_chnam_thmey' && this.mapId === 'central_plaza') {
+      const bucketSpots: Array<[number, number, string]> = [
+        [635, 625, 'West Water Bucket'],
+        [965, 625, 'East Water Bucket'],
+        [800, 790, 'South Splash Fountain'],
+      ];
+      bucketSpots.forEach(([sx, sy, title]) => {
+        const ring = this.add
+          .circle(sx, sy, 18, 0x38bdf8, 0.25)
+          .setStrokeStyle(2, 0x7dd3fc, 0.85)
+          .setDepth(sy - 2);
+        const bucket = this.add
+          .rectangle(sx, sy, 22, 18, 0x0284c7, 0.95)
+          .setStrokeStyle(2, 0xfacc15)
+          .setDepth(sy + 4)
+          .setInteractive({ useHandCursor: true });
+        const lbl = this.add
+          .text(sx, sy + 14, `💦 ${title}`, {
+            fontFamily: 'Fredoka, sans-serif',
+            fontSize: '9px',
+            fontStyle: 'bold',
+            color: '#e0f2fe',
+            backgroundColor: 'rgba(12, 74, 110, 0.88)',
+            padding: { x: 5, y: 1 },
+          })
+          .setResolution(2)
+          .setScale(0.44)
+          .setOrigin(0.5, 0)
+          .setDepth(sy + 14);
+
+        const doSplash = () => {
+          if (typeof document !== 'undefined' && document.querySelector('dialog[open]')) return;
+          soundManager.playSfx('splash');
+          for (let i = 0; i < 10; i++) {
+            const ang = (Math.PI * 2 * i) / 10;
+            const drop = this.add.circle(this.player.x, this.player.y - 10, 4, 0x7dd3fc, 0.92).setDepth(2400);
+            this.tweens.add({
+              targets: drop,
+              x: this.player.x + Math.cos(ang) * 44,
+              y: this.player.y - 10 + Math.sin(ang) * 34,
+              alpha: 0,
+              duration: 420,
+              onComplete: () => drop.destroy(),
+            });
+          }
+          const nearNpc = this.npcs[0]?.def.name ?? 'Festival Villagers';
+          this.spawnFloatingText(this.player.x, this.player.y - 26, '💦 SPLASH! +45 Coins!', '#7dd3fc');
+          EventBus.emit('festival:waterSplash', { targetName: nearNpc });
+        };
+
+        bucket.on('pointerdown', doSplash);
+        this.festivalObjects.push(ring, bucket, lbl);
+        const lm: LandmarkZone = {
+          x: sx,
+          y: sy,
+          radius: 56,
+          label: `Press [E] or Click → 💦 Splash Water Tag! (+45 New Year Coins)`,
+          isDungeonPortal: false,
+          onInteract: doSplash,
+        };
+        this.festivalLandmarks.push(lm);
+        this.landmarks.push(lm);
+      });
+    }
+
+    // 3. PCHUM BEN (Floating Pink Lotus Lanterns on Green Park Twilight River)
+    if (festival === 'pchum_ben' && this.mapId === 'green_park') {
+      const twilight = this.add
+        .rectangle(0, 0, this.scale.width * 2, this.scale.height * 2, 0x312e81, 0.24)
+        .setOrigin(0)
+        .setScrollFactor(0)
+        .setDepth(2115);
+      this.festivalObjects.push(twilight);
+
+      // Drifting glowing Pink Lotus Lanterns on Duck Pond & Mekong Pier
+      for (const [lx, ly] of [[420, 825], [470, 860], [920, 815], [990, 835], [950, 855]]) {
+        const halo = this.add
+          .image(lx, ly, 'torch_glow')
+          .setTint(0xf472b6)
+          .setScale(0.55)
+          .setAlpha(0.55)
+          .setBlendMode(Phaser.BlendModes.ADD)
+          .setDepth(ly + 8);
+        const petal = this.add.circle(lx, ly, 6, 0xf472b6, 0.95).setStrokeStyle(1.5, 0xfef08a).setDepth(ly + 9);
+        this.tweens.add({ targets: [halo, petal], y: ly - 5, duration: 1400, yoyo: true, repeat: -1 });
+        this.festivalObjects.push(halo, petal);
+      }
+
+      const rx = 595;
+      const ry = 785;
+      const shrine = this.add
+        .circle(rx, ry, 14, 0xec4899, 0.92)
+        .setStrokeStyle(2.5, 0xfef08a)
+        .setDepth(ry + 6)
+        .setInteractive({ useHandCursor: true });
+      const lbl = this.add
+        .text(rx, ry + 18, '🪷 RELEASE PINK LOTUS LANTERN (50c) [E]', {
+          fontFamily: 'Fredoka, sans-serif',
+          fontSize: '10px',
+          fontStyle: 'bold',
+          color: '#fbcfe8',
+          backgroundColor: 'rgba(80, 7, 36, 0.9)',
+          padding: { x: 6, y: 2 },
+        })
+        .setResolution(2)
+        .setScale(0.44)
+        .setOrigin(0.5, 0)
+        .setDepth(ry + 18);
+      const releaseLantern = () => {
+        if (typeof document !== 'undefined' && document.querySelector('dialog[open]')) return;
+        soundManager.playSfx('magic');
+        const drifted = this.add.circle(rx - 40, ry + 35, 7, 0xf472b6, 0.95).setStrokeStyle(2, 0xfef08a).setDepth(ry + 22);
+        this.tweens.add({
+          targets: drifted,
+          x: rx - 140,
+          y: ry + 48,
+          alpha: 0,
+          duration: 3200,
+          onComplete: () => drifted.destroy(),
+        });
+        EventBus.emit('festival:releaseLantern');
+      };
+      shrine.on('pointerdown', releaseLantern);
+      this.festivalObjects.push(shrine, lbl);
+
+      const lm: LandmarkZone = {
+        x: rx,
+        y: ry,
+        radius: 62,
+        label: 'Press [E] or Click → 🪷 Release Pink Lotus Lantern (50c → +20% XP & +15% Luck 10m!)',
+        isDungeonPortal: false,
+        onInteract: releaseLantern,
+      };
+      this.festivalLandmarks.push(lm);
+      this.landmarks.push(lm);
+    }
   }
 
   // ==================== UPDATE 1.4: DYNAMIC WORLD EVENTS ====================
