@@ -212,6 +212,8 @@ export interface EventMap {
   'input:secondary': void;
   'input:dash': void;
   'input:grapple': void;
+  'input:toggleMount': void;
+  'input:honkMount': void;
   'input:focus': void;
   'input:fury': void;
   'input:rematch': void;
@@ -240,12 +242,14 @@ export interface EventMap {
       | 'serverCity'
       | 'reforge'
       | 'clubGames'
-      | 'houseDecor';
+      | 'houseDecor'
+      | 'leaderboard';
+    leaderboardCategory?: 'farmer' | 'stylish' | 'slayer';
     farmTab?: 'seeds' | 'livestock' | 'artisan';
     shopTab?: 'primary' | 'secondary';
     friendsTab?: 'friends' | 'inbox';
     reforgeTab?: 'reforge' | 'fusion' | 'shimmer' | 'bank';
-    clubGame?: 'tien_len' | 'ouk_chaktrang';
+    clubGame?: 'kla_klok' | 'ouk_chaktrang' | 'tien_len';
   };
   'ui:toast': { text: string };
 }

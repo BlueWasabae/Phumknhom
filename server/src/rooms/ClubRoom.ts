@@ -70,7 +70,7 @@ export class ClubRoom extends Room<ClubState> {
       });
     });
 
-    this.onMessage('oukMove', (client, payload: { moveNotation?: string; checkmate?: boolean }) => {
+    this.onMessage('oukMove', (client, payload: { moveNotation?: string; checkmate?: boolean; from?: [number, number]; to?: [number, number] }) => {
       const p = this.state.players.get(client.sessionId);
       if (!p) return;
       const move = String(payload?.moveNotation || 'Neang → D4').slice(0, 32);
@@ -83,6 +83,31 @@ export class ClubRoom extends Room<ClubState> {
         game: 'ouk_chaktrang',
         summary: this.state.oukLastMove,
         turnCount: this.state.oukTurnCount,
+        from: payload?.from,
+        to: payload?.to,
+        bySessionId: client.sessionId,
+      });
+    });
+
+    const KLA_KLOK_FACES = ['gourd', 'crab', 'fish', 'rooster', 'shrimp', 'tiger'] as const;
+    this.onMessage('klaKlokRoll', (client, payload: { bets?: Record<string, number> }) => {
+      const p = this.state.players.get(client.sessionId);
+      if (!p) return;
+      const dice = [
+        KLA_KLOK_FACES[Math.floor(Math.random() * 6)],
+        KLA_KLOK_FACES[Math.floor(Math.random() * 6)],
+        KLA_KLOK_FACES[Math.floor(Math.random() * 6)],
+      ];
+      const triple = dice[0] === dice[1] && dice[1] === dice[2];
+      if (triple) {
+        pushTickerEvent(`🎲 ${p.name} rolled a TRIPLE ${dice[0].toUpperCase()} jackpot at Kla Klok in The Club!`, 'club');
+      }
+      this.broadcast('clubTableUpdate', {
+        game: 'kla_klok',
+        roller: p.name,
+        dice,
+        triple,
+        summary: `${p.name} rolled ${dice.join(' · ')}`,
       });
     });
   }

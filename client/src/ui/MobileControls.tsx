@@ -169,15 +169,26 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
             </button>
           </div>
         ) : (
-          <button
-            type="button"
-            onPointerDown={() => EventBus.emit('input:interact')}
-            className={`w-24 h-24 rounded-full phum-btn font-display font-bold text-xs leading-tight whitespace-pre-line ${
-              nearPortal ? 'ring-4 ring-yellow-300 animate-pulse' : ''
-            }`}
-          >
-            {nearPortal ? 'JOIN\nPORTAL' : 'JOIN /\nINTERACT'}
-          </button>
+          <div className="flex items-end gap-2">
+            {zone === 'overworld' && (
+              <button
+                type="button"
+                onPointerDown={() => EventBus.emit('input:toggleMount')}
+                className="w-16 h-16 rounded-full bg-gradient-to-b from-emerald-400 to-teal-600 border-[3px] border-emerald-950 text-white font-display font-bold text-[11px] leading-tight shadow-lg active:scale-95"
+              >
+                {'🚲\nMOUNT'}
+              </button>
+            )}
+            <button
+              type="button"
+              onPointerDown={() => EventBus.emit('input:interact')}
+              className={`w-24 h-24 rounded-full phum-btn font-display font-bold text-xs leading-tight whitespace-pre-line ${
+                nearPortal ? 'ring-4 ring-yellow-300 animate-pulse' : ''
+              }`}
+            >
+              {nearPortal ? 'JOIN\nPORTAL' : 'JOIN /\nINTERACT'}
+            </button>
+          </div>
         )}
       </div>
     </div>

@@ -316,6 +316,44 @@ export class HouseInteriorScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(7);
 
+    // Chankitek 12-Phase Lunar Moon visible inside right shutter window!
+    this.add
+      .text(564, 96, snap.lunarIcon, { fontSize: '16px' })
+      .setOrigin(0.5)
+      .setDepth(7)
+      .setAlpha(snap.nightIntensity > 0.25 ? 0.95 : 0.45);
+
+    // Growing Physical Treasure Chest Stack in NE corner reflecting ATM Bank Vault fortune!
+    const bankCoins = this.initialState.bankCoins ?? 500;
+    const chestCount = bankCoins >= 5000 ? 4 : bankCoins >= 2000 ? 3 : bankCoins >= 500 ? 2 : 1;
+    const chestOffsets: Array<[number, number]> = [
+      [624, 198],
+      [656, 198],
+      [640, 182],
+      [640, 166],
+    ];
+    for (let i = 0; i < chestCount; i++) {
+      const [cx, cy] = chestOffsets[i];
+      if (this.textures.exists('na_chest')) {
+        this.add
+          .image(cx, cy, 'na_chest')
+          .setScale(1.85)
+          .setTint(i >= 2 ? 0xfacc15 : 0xffffff)
+          .setDepth(180 + i);
+      }
+    }
+    this.add
+      .text(640, 218, `🏦 VAULT: ${bankCoins.toLocaleString()}c`, {
+        fontFamily: 'Fredoka, sans-serif',
+        fontSize: '10px',
+        fontStyle: 'bold',
+        color: '#fde047',
+        backgroundColor: 'rgba(15, 23, 42, 0.85)',
+        padding: { x: 5, y: 2 },
+      })
+      .setOrigin(0.5)
+      .setDepth(190);
+
     // Built-in corner resting pillow / lantern warm ambiance
     const warmGlow = this.add
       .image(ROOM_W / 2, 290, 'torch_glow')

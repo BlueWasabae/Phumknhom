@@ -7,9 +7,9 @@ export type AreaId = (typeof ALLOWED_AREAS)[number];
 
 const ALLOWED_FACINGS = new Set(['down', 'up', 'left', 'right']);
 const MAP_MIN_X = 20;
-const MAP_MAX_X = 940;
+const MAP_MAX_X = 1580;
 const MAP_MIN_Y = 86;
-const MAP_MAX_Y = 656;
+const MAP_MAX_Y = 1180;
 const CHAT_COOLDOWN_MS = 650;
 const EMOTE_COOLDOWN_MS = 500;
 
@@ -57,7 +57,7 @@ export class PlazaRoom extends Room<PlazaState> {
     this.setState(state);
     this.setMetadata({ areaId });
 
-    this.onMessage('move', (client, payload: { x?: number; y?: number; facing?: string; isMoving?: boolean }) => {
+    this.onMessage('move', (client, payload: { x?: number; y?: number; facing?: string; isMoving?: boolean; activeMountId?: string }) => {
       const player = this.state.players.get(client.sessionId);
       if (!player || !payload || typeof payload !== 'object') return;
 
@@ -72,6 +72,38 @@ export class PlazaRoom extends Room<PlazaState> {
       }
       if (typeof payload.isMoving === 'boolean') {
         player.isMoving = payload.isMoving;
+      }
+      if (typeof payload.activeMountId === 'string') {
+        player.activeMountId = payload.activeMountId.slice(0, 36);
+      }
+    });
+
+    this.onMessage('mountState', (client, payload: { activeMountId?: string | null }) => {
+      const player = this.state.players.get(client.sessionId);
+      if (!player) return;
+      player.activeMountId = typeof payload?.activeMountId === 'string' ? payload.activeMountId.slice(0, 36) : '';
+      if (player.activeMountId !== 'mount_mini_tuk_tuk') {
+        // Eject any passenger riding in back seat if driver dismounts
+        this.state.players.forEach((other) => {
+          if (other.ridingDriverSessionId === client.sessionId) {
+            other.ridingDriverSessionId = '';
+          }
+        });
+      }
+    });
+
+    this.onMessage('tukTukHop', (client, payload: { driverSessionId?: string | null }) => {
+      const rider = this.state.players.get(client.sessionId);
+      if (!rider) return;
+      const targetDriverId = typeof payload?.driverSessionId === 'string' ? payload.driverSessionId : '';
+      if (!targetDriverId) {
+        rider.ridingDriverSessionId = '';
+        return;
+      }
+      const driver = this.state.players.get(targetDriverId);
+      if (driver && driver.activeMountId === 'mount_mini_tuk_tuk') {
+        rider.ridingDriverSessionId = targetDriverId;
+        rider.activeMountId = '';
       }
     });
 

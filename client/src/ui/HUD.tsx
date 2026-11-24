@@ -99,6 +99,8 @@ interface HUDProps {
   onOpenClubGames: () => void;
   onOpenHouseDecor?: () => void;
   onInviteFriendsHome?: () => void;
+  onOpenLeaderboard?: () => void;
+  onToggleMount?: () => void;
   onFastForwardFarm: () => void;
 }
 
@@ -141,6 +143,8 @@ export const HUD: React.FC<HUDProps> = ({
   onOpenClubGames,
   onOpenHouseDecor,
   onInviteFriendsHome,
+  onOpenLeaderboard,
+  onToggleMount,
   onFastForwardFarm,
 }) => {
   const [menuDropdownOpen, setMenuDropdownOpen] = useState(false);
@@ -343,20 +347,56 @@ export const HUD: React.FC<HUDProps> = ({
         </span>
       </button>
 
-      {/* 4-Season Weather & Day/Night Badge */}
+      {/* Overworld Quick Mount [V] & Plaza TOP TEN Hall of Fame Pills */}
+      {zone === 'overworld' && (
+        <div className="flex items-center gap-1">
+          {onToggleMount && (
+            <button
+              type="button"
+              onClick={onToggleMount}
+              title="Toggle Rideable Khmer Mount [V] (Press [H] to honk Tuk-Tuk horn!)"
+              className={`px-2 py-0.5 rounded-lg border font-display font-bold text-[10px] whitespace-nowrap transition cursor-pointer ${
+                player.activeMount
+                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-950'
+                  : 'bg-amber-100 hover:bg-amber-200 text-amber-950 border-amber-900/35'
+              }`}
+            >
+              {player.activeMount === 'mount_mini_tuk_tuk'
+                ? '🚕 Riding [V]'
+                : player.activeMount === 'mount_water_buffalo'
+                  ? '🐃 Riding [V]'
+                  : player.activeMount === 'mount_village_bicycle'
+                    ? '🚲 Riding [V]'
+                    : '🚲 Mount [V]'}
+            </button>
+          )}
+          {onOpenLeaderboard && (
+            <button
+              type="button"
+              onClick={onOpenLeaderboard}
+              title="View Plaza TOP TEN Hall of Fame"
+              className="px-2 py-0.5 rounded-lg bg-amber-500/90 hover:bg-amber-400 text-amber-950 border border-amber-950 font-display font-bold text-[10px] whitespace-nowrap transition cursor-pointer"
+            >
+              🏛️ TOP 10
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* 4-Season Weather, Day/Night & Chankitek Lunar Phase Badge */}
       <button
         type="button"
         onClick={() => {
           soundManager.playSfx('click');
           setSettingsModalOpen(true);
         }}
-        title={`${seasonSnap.season.name} · Day ${seasonSnap.dayOfSeason}/14 · ${seasonSnap.season.weatherLabel} · ${seasonSnap.periodLabel} (${seasonSnap.timeText}). Click for Weather & Audio Settings.`}
+        title={`${seasonSnap.season.name} · Day ${seasonSnap.dayOfSeason}/14 · ${seasonSnap.lunarLabel} · ${seasonSnap.periodLabel} (${seasonSnap.timeText}). Click for Weather & Audio Settings.`}
         className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-950/10 hover:bg-amber-950/20 text-[10px] font-display font-bold text-amber-950 whitespace-nowrap transition cursor-pointer"
       >
         <span>{seasonSnap.season.icon}</span>
         <span className="hidden sm:inline">{seasonSnap.season.shortLabel}</span>
         <span className="opacity-75">D{seasonSnap.dayOfSeason}</span>
-        <span>{seasonSnap.periodIcon}</span>
+        <span>{seasonSnap.period === 'night' ? seasonSnap.lunarIcon : seasonSnap.periodIcon}</span>
       </button>
 
       <div className="flex items-center gap-2 shrink-0">

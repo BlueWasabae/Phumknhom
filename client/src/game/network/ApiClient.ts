@@ -91,6 +91,210 @@ export interface SavedProfilePayload {
   areaChannel: number;
 }
 
+export type LeaderboardCategory = 'farmer' | 'stylish' | 'slayer';
+
+export interface LeaderboardEntry {
+  rank: number;
+  username: string;
+  score: number;
+  detailLabel: string;
+  loadout: EquippedLoadout;
+}
+
+export interface LeaderboardResponse {
+  farmer: LeaderboardEntry[];
+  stylish: LeaderboardEntry[];
+  slayer: LeaderboardEntry[];
+}
+
+function buildOfflineFallbackLeaderboard(localPlayer?: PlayerState): LeaderboardResponse {
+  const seeds: Array<{
+    username: string;
+    farmLevel: number;
+    coins: number;
+    stylish: number;
+    uniqueBosses: number;
+    totalKills: number;
+    loadout: EquippedLoadout;
+  }> = [
+    {
+      username: 'Sovann_Angkor',
+      farmLevel: 24,
+      coins: 18500,
+      stylish: 485,
+      uniqueBosses: 4,
+      totalKills: 19,
+      loadout: {
+        ...DEFAULT_LOADOUT,
+        hat: 'hat_royal_crown',
+        shirt: 'shirt_apsara_gold',
+        pants: 'pants_sampot_hol',
+        wings: 'wings_garuda',
+        weapon: 'weapon_preah_khan',
+      },
+    },
+    {
+      username: 'Bopha_Lotus',
+      farmLevel: 19,
+      coins: 12400,
+      stylish: 540,
+      uniqueBosses: 3,
+      totalKills: 11,
+      loadout: {
+        ...DEFAULT_LOADOUT,
+        hairStyle: 'braided_royal',
+        hat: 'hat_bopha_lotus_hairpin',
+        shirt: 'shirt_royal_silk',
+        pants: 'pants_sampot_hol',
+        wings: 'wings_yant_halo',
+        weapon: 'weapon_sastra',
+      },
+    },
+    {
+      username: 'Vireak_Lbokator',
+      farmLevel: 14,
+      coins: 9600,
+      stylish: 390,
+      uniqueBosses: 4,
+      totalKills: 26,
+      loadout: {
+        ...DEFAULT_LOADOUT,
+        hairStyle: 'silver_spiky',
+        hat: 'hat_yaksha_mask',
+        shirt: 'shirt_lbokator_gi',
+        pants: 'pants_sampot_hol',
+        wings: 'wings_ember',
+        weapon: 'weapon_stone_club',
+      },
+    },
+    {
+      username: 'Kampuchea_Farm',
+      farmLevel: 21,
+      coins: 14900,
+      stylish: 295,
+      uniqueBosses: 2,
+      totalKills: 7,
+      loadout: { ...DEFAULT_LOADOUT, hat: 'hat_doun', shirt: 'shirt_krama_set', weapon: 'weapon_phkak' },
+    },
+    {
+      username: 'Chann_Shadow',
+      farmLevel: 11,
+      coins: 6800,
+      stylish: 410,
+      uniqueBosses: 3,
+      totalKills: 15,
+      loadout: { ...DEFAULT_LOADOUT, shirt: 'shirt_shadow_cloak', weapon: 'weapon_kambet' },
+    },
+    {
+      username: 'Mekong_Archer',
+      farmLevel: 13,
+      coins: 7200,
+      stylish: 325,
+      uniqueBosses: 3,
+      totalKills: 12,
+      loadout: { ...DEFAULT_LOADOUT, shirt: 'shirt_traveler_vest', weapon: 'weapon_thnu' },
+    },
+    {
+      username: 'Dara_Kampot',
+      farmLevel: 16,
+      coins: 10200,
+      stylish: 350,
+      uniqueBosses: 2,
+      totalKills: 8,
+      loadout: { ...DEFAULT_LOADOUT, shirt: 'shirt_krama_set', weapon: 'weapon_krama_whip' },
+    },
+    {
+      username: 'Nita_PhnomPenh',
+      farmLevel: 9,
+      coins: 5100,
+      stylish: 445,
+      uniqueBosses: 2,
+      totalKills: 6,
+      loadout: { ...DEFAULT_LOADOUT, hairStyle: 'high_ponytail', hat: 'hat_frog_crown', shirt: 'shirt_apsara_gold' },
+    },
+    {
+      username: 'Sokha_SiemReap',
+      farmLevel: 12,
+      coins: 6300,
+      stylish: 280,
+      uniqueBosses: 2,
+      totalKills: 9,
+      loadout: { ...DEFAULT_LOADOUT, shirt: 'shirt_village_tunic', weapon: 'weapon_phkak' },
+    },
+  ];
+
+  if (localPlayer) {
+    const totalKills = Object.values(localPlayer.bossDefeats ?? {}).reduce((a, b) => a + b, 0);
+    seeds.push({
+      username: localPlayer.name,
+      farmLevel: localPlayer.lifeStats.farmLevel,
+      coins: localPlayer.currencies.coins + (localPlayer.bankCoins ?? 0),
+      stylish: localPlayer.lifeStats.stylish,
+      uniqueBosses: localPlayer.clearedBosses.length,
+      totalKills,
+      loadout: { ...localPlayer.loadout },
+    });
+  }
+
+  const farmer = [...seeds]
+    .sort((a, b) => b.farmLevel * 1000 + b.coins - (a.farmLevel * 1000 + a.coins))
+    .slice(0, 10)
+    .map((p, idx) => ({
+      rank: idx + 1,
+      username: p.username,
+      score: p.farmLevel * 1000 + p.coins,
+      detailLabel: `Farm Lv.${p.farmLevel} · ${p.coins.toLocaleString()} Coins`,
+      loadout: p.loadout,
+    }));
+
+  const stylish = [...seeds]
+    .sort((a, b) => b.stylish - a.stylish)
+    .slice(0, 10)
+    .map((p, idx) => ({
+      rank: idx + 1,
+      username: p.username,
+      score: p.stylish,
+      detailLabel: `Stylish Score ${p.stylish} ★`,
+      loadout: p.loadout,
+    }));
+
+  const slayer = [...seeds]
+    .sort((a, b) => b.uniqueBosses * 100 + b.totalKills - (a.uniqueBosses * 100 + a.totalKills))
+    .slice(0, 10)
+    .map((p, idx) => ({
+      rank: idx + 1,
+      username: p.username,
+      score: p.uniqueBosses * 100 + p.totalKills,
+      detailLabel: `${p.uniqueBosses} Unique Bosses · ${p.totalKills} Total Clears`,
+      loadout: p.loadout,
+    }));
+
+  return { farmer, stylish, slayer };
+}
+
+export async function fetchLeaderboard(localPlayer?: PlayerState): Promise<LeaderboardResponse> {
+  try {
+    const res = await fetch(`${getApiBase()}/leaderboard`);
+    if (res.ok) {
+      const json = (await res.json()) as Partial<LeaderboardResponse>;
+      if (Array.isArray(json.farmer) && json.farmer.length > 0 && Array.isArray(json.stylish) && Array.isArray(json.slayer)) {
+        const normalizeRow = (r: LeaderboardEntry): LeaderboardEntry => ({
+          ...r,
+          loadout: { ...DEFAULT_LOADOUT, ...(r.loadout ?? {}) },
+        });
+        return {
+          farmer: json.farmer.map(normalizeRow),
+          stylish: json.stylish.map(normalizeRow),
+          slayer: json.slayer.map(normalizeRow),
+        };
+      }
+    }
+  } catch {
+    // Offline fallback below
+  }
+  return buildOfflineFallbackLeaderboard(localPlayer);
+}
+
 export function getApiBase(): string {
   const envApi = (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '');
   if (envApi) {

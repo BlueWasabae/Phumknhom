@@ -791,9 +791,22 @@ export class PaperDoll extends Phaser.GameObjects.Container {
     }
 
     const wingDef = this.loadout.wings ? ITEM_CATALOG[this.loadout.wings] : undefined;
+    const accList = this.loadout.accessories ?? [];
+    const hasApexAcc =
+      accList.includes('acc_angkor_phantom_stride') ||
+      accList.includes('acc_wind_walker_boots') ||
+      accList.includes('acc_sovereign_aegis_charm');
+
     if (wingDef && wingDef.styleVariant !== 'basket') {
       const tintNum = Number(wingDef.primaryColor.replace('#', '0x'));
       this.auraGlow.setTint(Number.isFinite(tintNum) ? tintNum : 0xfacc15).setAlpha(0.5).setVisible(true);
+    } else if (hasApexAcc) {
+      const accTint = accList.includes('acc_angkor_phantom_stride')
+        ? 0xa855f7
+        : accList.includes('acc_wind_walker_boots')
+          ? 0xf472b6
+          : 0x22c55e;
+      this.auraGlow.setTint(accTint).setAlpha(0.42).setVisible(true);
     } else {
       this.auraGlow.setVisible(false);
     }

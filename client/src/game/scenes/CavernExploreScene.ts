@@ -1226,19 +1226,38 @@ export class CavernExploreScene extends Phaser.Scene {
   }
 
   private spawnStoneBurst(x: number, y: number, color: number, count: number): void {
+    // Physics-simulated bouncing stone/crystal shards that tumble & bounce off the cavern ledge!
     for (let i = 0; i < count; i++) {
-      const chip = this.add.rectangle(x, y, 5, 5, color).setDepth(59);
-      const ang = Phaser.Math.FloatBetween(0, Math.PI * 2);
-      const dist = Phaser.Math.FloatBetween(18, 54);
-      this.tweens.add({
-        targets: chip,
-        x: x + Math.cos(ang) * dist,
-        y: y + Math.sin(ang) * dist + 14,
-        alpha: 0,
-        angle: Phaser.Math.Between(-180, 180),
-        duration: 360,
-        ease: 'Quad.easeOut',
-        onComplete: () => chip.destroy(),
+      const sz = Phaser.Math.Between(4, 7);
+      const chip = this.add.rectangle(x, y, sz, sz, color).setStrokeStyle(1, 0x1c1917).setDepth(59);
+      const vx = Phaser.Math.FloatBetween(-125, 125);
+      let vy = Phaser.Math.FloatBetween(-210, -70);
+      let px = x;
+      let py = y;
+      const floorLine = y + Phaser.Math.Between(16, 26);
+      const spin = Phaser.Math.FloatBetween(-10, 10);
+      let life = 0;
+      const ev = this.time.addEvent({
+        delay: 24,
+        repeat: 24,
+        callback: () => {
+          if (!chip.active) return;
+          life += 1;
+          vy += 26;
+          px += vx * 0.024;
+          py += vy * 0.024;
+          if (py > floorLine) {
+            py = floorLine;
+            vy = -Math.abs(vy) * 0.42;
+          }
+          chip.setPosition(px, py);
+          chip.angle += spin;
+          chip.setAlpha(Math.max(0, 1 - life / 26));
+          if (life >= 24) {
+            chip.destroy();
+            ev.remove(false);
+          }
+        },
       });
     }
   }

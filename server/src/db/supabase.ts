@@ -1340,3 +1340,154 @@ export async function respondFriendRequest(
   writeLocalDb(db);
   return { ok: true, requesterId };
 }
+
+export interface ServerLeaderboardEntry {
+  rank: number;
+  username: string;
+  score: number;
+  detailLabel: string;
+  loadout: Record<string, unknown>;
+}
+
+export async function getTopTenLeaderboards(): Promise<{
+  farmer: ServerLeaderboardEntry[];
+  stylish: ServerLeaderboardEntry[];
+  slayer: ServerLeaderboardEntry[];
+}> {
+  interface RawRecord {
+    username: string;
+    coins: number;
+    life_stats: Record<string, unknown>;
+    appearance: Record<string, unknown>;
+    meta_json: Record<string, unknown>;
+  }
+
+  let rows: RawRecord[] = [];
+  if (supabaseClient) {
+    const { data } = await supabaseClient
+      .from('players')
+      .select('username, coins, life_stats, appearance, meta_json')
+      .limit(100);
+    if (Array.isArray(data)) {
+      rows = data.map((d) => ({
+        username: String(d.username || 'PhumHero'),
+        coins: Number(d.coins) || 0,
+        life_stats: (d.life_stats as Record<string, unknown>) || {},
+        appearance: (d.appearance as Record<string, unknown>) || {},
+        meta_json: (d.meta_json as Record<string, unknown>) || {},
+      }));
+    }
+  } else {
+    const db = readLocalDb();
+    rows = db.players.map((p) => ({
+      username: p.username,
+      coins: p.coins,
+      life_stats: p.life_stats ?? {},
+      appearance: p.appearance ?? {},
+      meta_json: p.meta_json ?? {},
+    }));
+  }
+
+  // Seed iconic Khmer champions if database has fewer than 3 players so Plaza Statues always shine!
+  const seedRows: RawRecord[] = [
+    {
+      username: 'Sovann_Angkor',
+      coins: 18500,
+      life_stats: { farmLevel: 24, stylish: 485 },
+      appearance: {
+        hat: 'hat_royal_crown',
+        shirt: 'shirt_apsara_gold',
+        pants: 'pants_sampot_hol',
+        wings: 'wings_garuda',
+        weapon: 'weapon_preah_khan',
+      },
+      meta_json: { bankCoins: 4500, clearedBosses: ['sdech_kongkaeb', 'arp_prey_chrov', 'yeak_thmor', 'neak_reach'], bossDefeats: { sdech_kongkaeb: 8, yeak_thmor: 6, neak_reach: 5 } },
+    },
+    {
+      username: 'Bopha_Lotus',
+      coins: 12400,
+      life_stats: { farmLevel: 19, stylish: 540 },
+      appearance: {
+        hairStyle: 'braided_royal',
+        hat: 'hat_bopha_lotus_hairpin',
+        shirt: 'shirt_royal_silk',
+        pants: 'pants_sampot_hol',
+        wings: 'wings_yant_halo',
+        weapon: 'weapon_sastra',
+      },
+      meta_json: { bankCoins: 2000, clearedBosses: ['sdech_kongkaeb', 'arp_prey_chrov', 'yeak_thmor'], bossDefeats: { sdech_kongkaeb: 5, yeak_thmor: 4 } },
+    },
+    {
+      username: 'Vireak_Lbokator',
+      coins: 9600,
+      life_stats: { farmLevel: 14, stylish: 390 },
+      appearance: {
+        hairStyle: 'silver_spiky',
+        hat: 'hat_yaksha_mask',
+        shirt: 'shirt_lbokator_gi',
+        pants: 'pants_sampot_hol',
+        wings: 'wings_ember',
+        weapon: 'weapon_stone_club',
+      },
+      meta_json: { bankCoins: 1500, clearedBosses: ['sdech_kongkaeb', 'arp_prey_chrov', 'yeak_thmor', 'neak_reach'], bossDefeats: { sdech_kongkaeb: 9, yeak_thmor: 10, neak_reach: 7 } },
+    },
+  ];
+  const existingNames = new Set(rows.map((r) => r.username.toLowerCase()));
+  for (const s of seedRows) {
+    if (!existingNames.has(s.username.toLowerCase())) rows.push(s);
+  }
+
+  const parsed = rows.map((r) => {
+    const farmLevel = Math.max(1, Number(r.life_stats?.farmLevel) || 1);
+    const stylish = Math.max(0, Number(r.life_stats?.stylish) || 100);
+    const bankCoins = Math.max(0, Number(r.meta_json?.bankCoins) || 0);
+    const totalCoins = Math.max(0, r.coins) + bankCoins;
+    const cleared = Array.isArray(r.meta_json?.clearedBosses) ? r.meta_json.clearedBosses.length : 0;
+    const defeatsObj = (r.meta_json?.bossDefeats as Record<string, number> | undefined) ?? {};
+    const totalKills = Object.values(defeatsObj).reduce((sum, n) => sum + (Number(n) || 0), 0);
+    return {
+      username: r.username,
+      farmLevel,
+      totalCoins,
+      stylish,
+      cleared,
+      totalKills,
+      loadout: r.appearance ?? {},
+    };
+  });
+
+  const farmer = [...parsed]
+    .sort((a, b) => b.farmLevel * 1000 + b.totalCoins - (a.farmLevel * 1000 + a.totalCoins))
+    .slice(0, 10)
+    .map((p, i) => ({
+      rank: i + 1,
+      username: p.username,
+      score: p.farmLevel * 1000 + p.totalCoins,
+      detailLabel: `Farm Lv.${p.farmLevel} · ${p.totalCoins.toLocaleString()} Coins`,
+      loadout: p.loadout,
+    }));
+
+  const stylish = [...parsed]
+    .sort((a, b) => b.stylish - a.stylish)
+    .slice(0, 10)
+    .map((p, i) => ({
+      rank: i + 1,
+      username: p.username,
+      score: p.stylish,
+      detailLabel: `Stylish Score ${p.stylish} ★`,
+      loadout: p.loadout,
+    }));
+
+  const slayer = [...parsed]
+    .sort((a, b) => b.cleared * 100 + b.totalKills - (a.cleared * 100 + a.totalKills))
+    .slice(0, 10)
+    .map((p, i) => ({
+      rank: i + 1,
+      username: p.username,
+      score: p.cleared * 100 + p.totalKills,
+      detailLabel: `${p.cleared} Unique Bosses · ${p.totalKills} Total Clears`,
+      loadout: p.loadout,
+    }));
+
+  return { farmer, stylish, slayer };
+}

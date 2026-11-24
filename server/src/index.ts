@@ -20,6 +20,7 @@ import { presenceRegistry } from './presence';
 import {
   createFriendRequest,
   getStorageMode,
+  getTopTenLeaderboards,
   listFriends,
   loginPlayer,
   registerPlayer,
@@ -126,6 +127,16 @@ app.get('/api/areas', async (_req, res) => {
   } catch (err) {
     console.error('[Phum Server] /api/areas failed:', err);
     res.status(500).json({ error: 'Failed to query areas' });
+  }
+});
+
+app.get('/api/leaderboard', async (_req, res) => {
+  try {
+    const board = await getTopTenLeaderboards();
+    res.json(board);
+  } catch (err) {
+    console.error('[Phum Server] /api/leaderboard failed:', err);
+    res.status(500).json({ error: 'Failed to load Plaza TOP TEN leaderboard' });
   }
 });
 

@@ -33,13 +33,14 @@ const COMBAT_CORE_SLOTS: Array<{ slot: 'weapon' | 'armor'; label: string }> = [
   { slot: 'armor', label: 'Combat Armor Set' },
 ];
 
-const VANITY_SLOTS: Array<{ slot: 'hat' | 'hair' | 'shirt' | 'pants' | 'wings' | 'pet'; label: string }> = [
+const VANITY_SLOTS: Array<{ slot: 'hat' | 'hair' | 'shirt' | 'pants' | 'wings' | 'pet' | 'mount'; label: string }> = [
   { slot: 'hat', label: 'Vanity Hat' },
   { slot: 'hair', label: 'Hair' },
   { slot: 'shirt', label: 'Vanity Shirt / Outfit' },
   { slot: 'pants', label: 'Vanity Pants / Sampot' },
   { slot: 'wings', label: 'Vanity Wings / Back' },
   { slot: 'pet', label: 'Companion Pet' },
+  { slot: 'mount', label: 'Khmer Mount [V]' },
 ];
 
 const RARITY_BADGE: Record<ItemRarity, { border: string; pill: string }> = {
@@ -351,6 +352,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                 ['shirt', 'Outfits'],
                 ['wings', 'Wings'],
                 ['pet', 'Pets'],
+                ['mount', 'Mounts'],
               ] as const
             ).map(([slotKey, label]) => (
               <button

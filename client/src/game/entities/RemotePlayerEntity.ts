@@ -3,7 +3,8 @@ import type { EquippedLoadout } from '@shared/types';
 import { EventBus } from '../EventBus';
 import { PaperDoll, type PaperDollFacing, type PaperDollPose } from './PaperDoll';
 import { Pet } from './Pet';
-import { parseAppearance, type RemotePlayerSnapshot } from '../network/RoomClient';
+import { MountEntity, getMountSpec } from './MountEntity';
+import { parseAppearance, roomClient, type RemotePlayerSnapshot } from '../network/RoomClient';
 
 /**
  * Renders another online player inside OverworldScene using the exact same
@@ -32,6 +33,9 @@ export class RemotePlayerEntity {
   private shadow: Phaser.GameObjects.Image;
   private paperDoll: PaperDoll;
   private pet: Pet | null = null;
+  private mount: MountEntity;
+  public activeMountId = '';
+  private hopInBadge: Phaser.GameObjects.Text;
   private safePrefix: string;
   private nameTag: Phaser.GameObjects.Text;
   private bubbleBg: Phaser.GameObjects.Graphics;
@@ -87,6 +91,29 @@ export class RemotePlayerEntity {
     });
 
     this.syncPetInstance(this.loadout.pet);
+    this.mount = new MountEntity(scene, this.x, this.y);
+    this.activeMountId = snapshot.activeMountId || '';
+    this.mount.setMount(this.activeMountId || null);
+
+    this.hopInBadge = scene.add
+      .text(this.x, this.y - 26, '🚕 Hop In!', {
+        fontFamily: 'Fredoka, sans-serif',
+        fontSize: '11px',
+        fontStyle: 'bold',
+        color: '#fef08a',
+        backgroundColor: 'rgba(21, 128, 61, 0.92)',
+        padding: { x: 6, y: 2 },
+      })
+      .setResolution(2)
+      .setScale(this.uiScale)
+      .setOrigin(0.5, 1)
+      .setDepth(2520)
+      .setVisible(this.activeMountId === 'mount_mini_tuk_tuk')
+      .setInteractive({ useHandCursor: true });
+    this.hopInBadge.on('pointerdown', () => {
+      roomClient.sendTukTukHop(this.sessionId);
+      EventBus.emit('ui:toast', { text: `🚕 Hopped into the back seat of ${this.name}'s Mini Tuk-Tuk! (Move to hop out)` });
+    });
 
     this.nameTag = scene.add
       .text(this.x, this.y + 11, this.name, {
@@ -161,6 +188,12 @@ export class RemotePlayerEntity {
       this.paperDoll.setLoadout(this.loadout);
       this.syncPetInstance(this.loadout.pet);
     }
+    const nextMount = snapshot.activeMountId || '';
+    if (nextMount !== this.activeMountId) {
+      this.activeMountId = nextMount;
+      this.mount.setMount(this.activeMountId || null);
+      this.hopInBadge.setVisible(this.activeMountId === 'mount_mini_tuk_tuk');
+    }
   }
 
   public showSpeechBubble(text: string, durationMs = 4500): void {
@@ -197,8 +230,12 @@ export class RemotePlayerEntity {
         : 'walk2'
       : 'idle';
 
-    this.paperDoll.setPosition(this.x, this.y + 8);
-    this.paperDoll.setPoseAndFacing(pose, this.facing, time);
+    const mSpec = getMountSpec(this.activeMountId);
+    this.mount.update(this.x, this.y, this.facing, movingNow, time);
+    this.hopInBadge.setPosition(this.x, this.y - 24).setVisible(this.activeMountId === 'mount_mini_tuk_tuk');
+
+    this.paperDoll.setPosition(this.x, this.y + 8 + (mSpec ? mSpec.seatOffsetY : 0));
+    this.paperDoll.setPoseAndFacing(mSpec ? 'idle' : pose, this.facing, time);
 
     const depth = this.y + 9;
     this.paperDoll.setDepth(depth);
@@ -263,6 +300,8 @@ export class RemotePlayerEntity {
     this.hitZone.destroy();
     this.paperDoll.destroy();
     this.pet?.destroy();
+    this.mount.destroy();
+    this.hopInBadge.destroy();
     this.pet = null;
     this.shadow.destroy();
     this.nameTag.destroy();

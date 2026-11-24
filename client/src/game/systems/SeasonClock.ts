@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { soundManager } from './SoundManager';
 
 export type SeasonId = 'spring' | 'summer' | 'autumn' | 'winter';
 export type DayPeriod = 'dawn' | 'day' | 'sunset' | 'night';
@@ -26,6 +27,11 @@ export interface SeasonClockSnapshot {
   timeText: string; // e.g. "06:30 PM"
   nightIntensity: number; // 0 (bright day) -> 1 (deep indigo night)
   sunsetIntensity: number; // 0 -> 1 (warm amber sunset glow)
+  /** Chankitek 12-phase Khmer Lunar Cycle */
+  lunarPhaseIndex: number; // 0..11
+  lunarIcon: string;
+  lunarLabel: string;
+  isFullMoon: boolean;
 }
 
 export const SEASONS: Record<SeasonId, SeasonDefinition> = {
@@ -148,6 +154,19 @@ class SeasonClockEngine {
       nightIntensity = t < 0.8 ? 0.65 + Math.sin(t * Math.PI) * 0.35 : 0.65 * (1 - (t - 0.8) / 0.2);
     }
 
+    // Chankitek 12-Phase Khmer Lunar Calendar (Full Moon Penh Boramey on Day 7 & Day 14!)
+    const lunarPhaseIndex = ((dayOfSeason - 1) % 12 + 12) % 12;
+    const isFullMoon = dayOfSeason === 7 || dayOfSeason === 14;
+    const LUNAR_ICONS = ['🌑', '🌒', '🌒', '🌓', '🌔', '🌔', '🌕', '🌖', '🌖', '🌗', '🌘', '🌘'];
+    const lunarIcon = isFullMoon ? '🌕' : LUNAR_ICONS[lunarPhaseIndex];
+    const lunarLabel = isFullMoon
+      ? 'Penh Boramey (Full Moon)'
+      : lunarPhaseIndex === 0
+        ? 'New Moon (Khmer Dark)'
+        : lunarPhaseIndex < 6
+          ? 'Waxing Moon (Kaeut)'
+          : 'Waning Moon (Roch)';
+
     return {
       season,
       dayOfSeason,
@@ -157,6 +176,10 @@ class SeasonClockEngine {
       timeText,
       nightIntensity: Math.max(0, Math.min(1, nightIntensity)),
       sunsetIntensity: Math.max(0, Math.min(1, sunsetIntensity)),
+      lunarPhaseIndex,
+      lunarIcon,
+      lunarLabel,
+      isFullMoon,
     };
   }
 
@@ -234,6 +257,10 @@ export class SeasonAtmosphereOverlay {
   private seasonTintRect: Phaser.GameObjects.Rectangle;
   private sunsetRect: Phaser.GameObjects.Rectangle;
   private nightRect: Phaser.GameObjects.Rectangle;
+  private lightningRect: Phaser.GameObjects.Rectangle;
+  private skyLanterns: Array<{ x: number; y: number; vy: number; sway: number }> = [];
+  private nextThunderAt = 0;
+  private lightningAlpha = 0;
   private particles: WeatherParticle[] = [];
   private activeSeason: SeasonId;
   private lanternGlows: Phaser.GameObjects.Image[] = [];
@@ -260,6 +287,21 @@ export class SeasonAtmosphereOverlay {
     this.nightRect = scene.add
       .rectangle(worldW / 2, worldH / 2, worldW + 80, worldH + 80, 0x1e1b4b, 0)
       .setDepth(2130);
+
+    this.lightningRect = scene.add
+      .rectangle(worldW / 2, worldH / 2, worldW + 80, worldH + 80, 0xe0f2fe, 0)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(2135);
+
+    this.nextThunderAt = scene.time.now + 7500;
+    for (let i = 0; i < 12; i++) {
+      this.skyLanterns.push({
+        x: Math.random() * worldW,
+        y: Math.random() * worldH,
+        vy: 14 + Math.random() * 14,
+        sway: Math.random() * Math.PI * 2,
+      });
+    }
 
     this.seedParticles(this.activeSeason);
   }
@@ -336,9 +378,37 @@ export class SeasonAtmosphereOverlay {
       g.setAlpha(Math.min(0.95, 0.35 + nightBoost + flicker));
     }
 
+    // Live Monsoon Thunderstorms (periodic sky lightning flash + WebAudio rolling thunder!)
+    if (snap.season.id === 'summer' && time >= this.nextThunderAt) {
+      this.nextThunderAt = time + 11000 + Math.random() * 14000;
+      this.lightningAlpha = 0.42;
+      soundManager.playThunder();
+    }
+    if (this.lightningAlpha > 0) {
+      this.lightningAlpha = Math.max(0, this.lightningAlpha - dt * 1.9);
+      this.lightningRect.setAlpha(this.lightningAlpha);
+    } else if (this.lightningRect.alpha !== 0) {
+      this.lightningRect.setAlpha(0);
+    }
+
     // Draw crisp weather particles
     this.particleGfx.clear();
     const s = this.activeSeason;
+    // Full Moon Penh Boramey Sky Lanterns drifting gently across night sky!
+    if (snap.nightIntensity > 0.3 && snap.isFullMoon) {
+      for (const lan of this.skyLanterns) {
+        lan.y -= lan.vy * dt;
+        lan.x += Math.sin(time * 0.0015 + lan.sway) * 10 * dt;
+        if (lan.y < -20) {
+          lan.y = this.worldH + 20;
+          lan.x = Math.random() * this.worldW;
+        }
+        this.particleGfx.fillStyle(0xf59e0b, 0.35);
+        this.particleGfx.fillCircle(lan.x, lan.y, 9);
+        this.particleGfx.fillStyle(0xfef08a, 0.9);
+        this.particleGfx.fillRoundedRect(lan.x - 3, lan.y - 4, 6, 8, 2);
+      }
+    }
     for (const p of this.particles) {
       const sway = s === 'summer' ? 0 : Math.sin(time * 0.002 + p.phase) * 14;
       p.x += (p.vx + sway) * dt;
@@ -380,6 +450,7 @@ export class SeasonAtmosphereOverlay {
     this.seasonTintRect.destroy();
     this.sunsetRect.destroy();
     this.nightRect.destroy();
+    this.lightningRect.destroy();
     this.lanternGlows = [];
   }
 }

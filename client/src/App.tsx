@@ -98,6 +98,7 @@ import {
   type AuthSession,
   type FriendRecord,
   type FriendsListResponse,
+  type LeaderboardCategory,
   type MarketListingClient,
 } from './game/network/ApiClient';
 import { roomClient } from './game/network/RoomClient';
@@ -145,6 +146,8 @@ import { ClubGamesModal, type ClubGameTab } from './ui/ClubGamesModal';
 import { CharacterCreatorModal, type CharacterCreationResult } from './ui/CharacterCreatorModal';
 import { NpcDialogueModal } from './ui/NpcDialogueModal';
 import { HouseDecorModal } from './ui/HouseDecorModal';
+import { LeaderboardModal } from './ui/LeaderboardModal';
+import { getMountSpec } from './game/entities/MountEntity';
 import { soundManager } from './game/systems/SoundManager';
 import { supabase } from './lib/supabaseClient';
 
@@ -171,6 +174,7 @@ type ActiveModalType =
   | 'reforge'
   | 'clubGames'
   | 'houseDecor'
+  | 'leaderboard'
   | 'characterCreator';
 
 interface FloatingXpBanner extends SkillXpToastPayload {
@@ -200,6 +204,7 @@ export const App: React.FC = () => {
 
   const [activeNpcId, setActiveNpcId] = useState<KhmerNpcId | null>(null);
   const [houseDecorateMode, setHouseDecorateMode] = useState(false);
+  const [leaderboardCategory, setLeaderboardCategory] = useState<LeaderboardCategory>('farmer');
 
   const [zone, setZone] = useState<ZoneType>('overworld');
   const [networkStatus, setNetworkStatus] = useState<NetworkStatusPayload>({
@@ -443,6 +448,51 @@ export const App: React.FC = () => {
     },
     [runStateAction]
   );
+
+  const handleToggleMount = useCallback(() => {
+    const cur = playerRef.current;
+    if (cur.zone !== 'overworld') {
+      EventBus.emit('ui:toast', { text: '🚲 Mounts can only be ridden outdoors in Overworld maps!' });
+      return;
+    }
+    if (cur.activeMount) {
+      runStateAction((s) => {
+        roomClient.sendMountState(null);
+        soundManager.playSfx('click');
+        return {
+          state: { ...s, activeMount: null },
+          ok: true,
+          message: 'Dismounted.',
+        };
+      });
+      return;
+    }
+    // Use equipped mount slot, or fall back to first owned mount in inventory/ownedMounts
+    const equippedMount = cur.loadout.mount;
+    const ownedInvMount = cur.inventory.find((i) => ITEM_CATALOG[i.itemId]?.slot === 'mount' && i.quantity > 0)?.itemId;
+    const ownedListMount = (cur.ownedMounts ?? [])[0];
+    const targetMount = equippedMount || ownedInvMount || ownedListMount || null;
+    if (!targetMount) {
+      EventBus.emit('ui:toast', {
+        text: '🚲 No Mount owned yet! Buy Village Bicycle (450c), Water Buffalo (1,200c), or Mini Tuk-Tuk in Fashion Boutique!',
+      });
+      return;
+    }
+    const spec = getMountSpec(targetMount);
+    runStateAction((s) => {
+      roomClient.sendMountState(targetMount);
+      soundManager.playSfx('magic');
+      return {
+        state: {
+          ...s,
+          activeMount: targetMount,
+          loadout: { ...s.loadout, mount: targetMount },
+        },
+        ok: true,
+        message: `Mounted ${spec?.name ?? targetMount} (+${Math.round((spec?.speedBonusPct ?? 0.35) * 100)}% Move Speed${spec?.allowsPassenger ? ' · [H] Horn & 2-Seat!' : ''})!`,
+      };
+    });
+  }, [runStateAction]);
 
   const handleCraftArmorSet = useCallback(
     (armorId: string) => {
@@ -1236,8 +1286,23 @@ export const App: React.FC = () => {
           setBossHud(null);
           setDungeonOutcome(null);
         }
-        // Sync persisted guest/cloud player state immediately onto newly started Phaser scene!
-        EventBus.emit('player:stateSync', playerRef.current);
+        // Automatically dismount when entering caverns, dungeons, club, farm, or house indoors!
+        if (nextZone !== 'overworld' && playerRef.current.activeMount) {
+          const dismounted = { ...playerRef.current, activeMount: null };
+          setPlayer(dismounted);
+          roomClient.sendMountState(null);
+          EventBus.emit('player:stateSync', dismounted);
+        } else {
+          EventBus.emit('player:stateSync', playerRef.current);
+        }
+      }),
+      EventBus.on('input:toggleMount', () => {
+        handleToggleMount();
+      }),
+      EventBus.on('input:honkMount', () => {
+        if (playerRef.current.activeMount === 'mount_mini_tuk_tuk') {
+          EventBus.emit('ui:toast', { text: '🚕 Beep-Beep! Mini Tuk-Tuk horn sounded!' });
+        }
       }),
       EventBus.on('player:state', (nextPlayer) => {
         setPlayer((prev) => ({
@@ -1443,11 +1508,20 @@ export const App: React.FC = () => {
       }),
       EventBus.on(
         'ui:openModal',
-        ({ modal, farmTab, shopTab: requestedShopTab, friendsTab: reqFriendsTab, reforgeTab: reqReforgeTab, clubGame }) => {
+        ({
+          modal,
+          farmTab,
+          shopTab: requestedShopTab,
+          friendsTab: reqFriendsTab,
+          reforgeTab: reqReforgeTab,
+          clubGame,
+          leaderboardCategory: reqLbCat,
+        }) => {
           if (modal === 'farm' && farmTab) setFarmModalTab(farmTab);
           if (modal === 'friends' && reqFriendsTab) setFriendsTab(reqFriendsTab);
           if (modal === 'reforge' && reqReforgeTab) setReforgeTab(reqReforgeTab);
           if (modal === 'clubGames' && clubGame) setClubGameTab(clubGame);
+          if (modal === 'leaderboard' && reqLbCat) setLeaderboardCategory(reqLbCat);
           if (modal === 'wardrobe') {
             setShopTab('secondary');
             setActiveModal('fashionShop');
@@ -1529,9 +1603,14 @@ export const App: React.FC = () => {
           setActiveModal('reforge');
         }}
         onOpenClubGames={() => {
-          setClubGameTab('tien_len');
+          setClubGameTab('kla_klok');
           setActiveModal('clubGames');
         }}
+        onOpenLeaderboard={() => {
+          setLeaderboardCategory('farmer');
+          setActiveModal('leaderboard');
+        }}
+        onToggleMount={handleToggleMount}
         onOpenHouseDecor={() => setActiveModal('houseDecor')}
         onInviteFriendsHome={() => {
           const hostName = playerRef.current.name;
@@ -1729,9 +1808,9 @@ export const App: React.FC = () => {
         initialGame={clubGameTab}
         player={player}
         onClose={() => setActiveModal(null)}
-        onWinClubReward={(coins, happyGain, label) => {
+        onWinClubReward={(coinsDelta, happyGain, label) => {
           runStateAction((s) => {
-            const nextCoins = s.currencies.coins + coins;
+            const nextCoins = Math.max(0, s.currencies.coins + coinsDelta);
             return {
               state: {
                 ...s,
@@ -1743,14 +1822,23 @@ export const App: React.FC = () => {
                 },
               },
               ok: true,
-              message: `🃏 ${label}: +${coins} Coins & +${happyGain} Happy!`,
+              message: label,
             };
           });
-          EventBus.emit('ticker:push', {
-            text: `🃏 ${playerRef.current.name} won ${label} at the Phum Night Club!`,
-            category: 'club',
-          });
+          if (coinsDelta > 0) {
+            EventBus.emit('ticker:push', {
+              text: `🎲 ${playerRef.current.name}: ${label}`,
+              category: 'club',
+            });
+          }
         }}
+      />
+
+      <LeaderboardModal
+        open={activeModal === 'leaderboard'}
+        initialCategory={leaderboardCategory}
+        player={player}
+        onClose={() => setActiveModal(null)}
       />
 
       <AreaSwitcherModal

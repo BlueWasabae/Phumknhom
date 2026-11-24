@@ -15,8 +15,11 @@ import {
 import { getNpcsForMap } from '@shared/npcSchedules';
 import { EventBus, type JoystickVector } from '../EventBus';
 import { Player } from '../entities/Player';
+import { PaperDoll } from '../entities/PaperDoll';
 import { NpcVillager } from '../entities/NpcVillager';
 import { RemotePlayerEntity } from '../entities/RemotePlayerEntity';
+import { getMountSpec } from '../entities/MountEntity';
+import { fetchLeaderboard } from '../network/ApiClient';
 import { areaIdToChannel, channelToAreaId, roomClient } from '../network/RoomClient';
 import { soundManager } from '../systems/SoundManager';
 import { SeasonAtmosphereOverlay } from '../systems/SeasonClock';
@@ -83,12 +86,13 @@ export class OverworldScene extends Phaser.Scene {
   private glowLights: Phaser.GameObjects.Image[] = [];
 
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
-  private keys!: Record<'W' | 'A' | 'S' | 'D' | 'E', Phaser.Input.Keyboard.Key>;
+  private keys!: Record<'W' | 'A' | 'S' | 'D' | 'E' | 'V' | 'H', Phaser.Input.Keyboard.Key>;
   private joystick: JoystickVector = { x: 0, y: 0 };
   private landmarks: LandmarkZone[] = [];
   private mapPortals: VillageMapPortalDef[] = [];
   private gatherNodes: GatherNode[] = [];
   private npcs: NpcVillager[] = [];
+  private statueDolls: PaperDoll[] = [];
   private miniBoss: FrontierMiniBoss | null = null;
   private gateLockUntil = 0;
   private nearPortalSent = false;
@@ -278,8 +282,8 @@ export class OverworldScene extends Phaser.Scene {
     }
 
     this.cursors = this.input.keyboard!.createCursorKeys();
-    this.keys = this.input.keyboard!.addKeys('W,A,S,D,E') as Record<
-      'W' | 'A' | 'S' | 'D' | 'E',
+    this.keys = this.input.keyboard!.addKeys('W,A,S,D,E,V,H') as Record<
+      'W' | 'A' | 'S' | 'D' | 'E' | 'V' | 'H',
       Phaser.Input.Keyboard.Key
     >;
 
@@ -356,6 +360,8 @@ export class OverworldScene extends Phaser.Scene {
       this.clearRemotePlayers();
       this.npcs.forEach((n) => n.destroy());
       this.npcs = [];
+      this.statueDolls.forEach((d) => d.destroy());
+      this.statueDolls = [];
       this.atmosphere?.destroy();
       this.atmosphere = undefined;
       void roomClient.leavePlaza(false);
@@ -769,6 +775,118 @@ export class OverworldScene extends Phaser.Scene {
       isDungeonPortal: false,
       onInteract: () => this.enterHouseInterior(),
     });
+
+    // 6. PHYSICAL PLAZA "TOP TEN" HALL OF FAME — 3 LIVE #1 AVATAR STATUES (North Terrace!)
+    this.buildPlazaHallOfFameStatues();
+  }
+
+  private buildPlazaHallOfFameStatues(): void {
+    const podiums: Array<{
+      category: 'farmer' | 'stylish' | 'slayer';
+      x: number;
+      y: number;
+      title: string;
+      tint: number;
+    }> = [
+      { category: 'farmer', x: 695, y: 455, title: '🌾 #1 GREATEST FARMER', tint: 0x4ade80 },
+      { category: 'stylish', x: 800, y: 440, title: '👑 #1 MOST STYLISH', tint: 0xfacc15 },
+      { category: 'slayer', x: 905, y: 455, title: '⚔️ #1 BOSS SLAYER', tint: 0xf43f5e },
+    ];
+
+    // Carved stone Hall of Fame banner behind center podium
+    this.add
+      .text(800, 384, '🏛️ PLAZA HALL OF FAME · TOP TEN STATUES', {
+        fontFamily: 'Fredoka, sans-serif',
+        fontSize: '11px',
+        fontStyle: 'bold',
+        color: '#fef08a',
+        backgroundColor: 'rgba(15, 23, 42, 0.88)',
+        padding: { x: 8, y: 3 },
+      })
+      .setResolution(2)
+      .setScale(0.46)
+      .setOrigin(0.5)
+      .setDepth(210);
+
+    const nameTexts: Record<'farmer' | 'stylish' | 'slayer', Phaser.GameObjects.Text> = {} as Record<
+      'farmer' | 'stylish' | 'slayer',
+      Phaser.GameObjects.Text
+    >;
+
+    for (const p of podiums) {
+      // Glowing sandstone pedestal
+      const glow = this.add
+        .image(p.x, p.y - 12, 'torch_glow')
+        .setTint(p.tint)
+        .setScale(0.68)
+        .setAlpha(0.52)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(p.y - 4);
+      this.glowLights.push(glow);
+
+      const ped = this.add
+        .rectangle(p.x, p.y, 44, 18, 0x78716c)
+        .setStrokeStyle(2, p.tint)
+        .setDepth(p.y - 2)
+        .setInteractive({ useHandCursor: true });
+      const openBoard = () => {
+        if (typeof document !== 'undefined' && document.querySelector('dialog[open]')) return;
+        EventBus.emit('ui:openModal', { modal: 'leaderboard', leaderboardCategory: p.category });
+      };
+      ped.on('pointerdown', openBoard);
+
+      this.add
+        .text(p.x, p.y + 11, p.title, {
+          fontFamily: 'Fredoka, sans-serif',
+          fontSize: '9px',
+          fontStyle: 'bold',
+          color: '#fef08a',
+          backgroundColor: 'rgba(15, 23, 42, 0.86)',
+          padding: { x: 4, y: 1 },
+        })
+        .setResolution(2)
+        .setScale(0.42)
+        .setOrigin(0.5, 0)
+        .setDepth(p.y + 12);
+
+      nameTexts[p.category] = this.add
+        .text(p.x, p.y + 21, 'Loading...', {
+          fontFamily: 'Fredoka, sans-serif',
+          fontSize: '9px',
+          fontStyle: 'bold',
+          color: '#e2e8f0',
+          backgroundColor: 'rgba(15, 23, 42, 0.78)',
+          padding: { x: 4, y: 1 },
+        })
+        .setResolution(2)
+        .setScale(0.42)
+        .setOrigin(0.5, 0)
+        .setDepth(p.y + 12);
+
+      this.landmarks.push({
+        x: p.x,
+        y: p.y + 8,
+        radius: 48,
+        label: `Press [E] or Click → View Plaza TOP TEN Leaderboard (${p.title})`,
+        isDungeonPortal: false,
+        onInteract: openBoard,
+      });
+    }
+
+    // Fetch live #1 avatars from /api/leaderboard (with offline fallback) & render real Human PaperDolls!
+    void fetchLeaderboard(this.initialState).then((board) => {
+      if (!this.scene || !this.scene.isActive('OverworldScene') || this.mapId !== 'central_plaza') return;
+      for (const p of podiums) {
+        const champ = board[p.category]?.[0];
+        if (!champ) continue;
+        nameTexts[p.category]?.setText(champ.username);
+        const doll = new PaperDoll(this, p.x, p.y - 4, champ.loadout, `statue_${p.category}`);
+        doll.setScale(0.52);
+        doll.setDepth(p.y + 6);
+        doll.setPoseAndFacing('idle', 'down', 0);
+        this.statueDolls.push(doll);
+      }
+    });
   }
 
   // ==================== MAP 2: MARKET STREET (WIDE LANTERN AVENUE) ====================
@@ -912,7 +1030,7 @@ export class OverworldScene extends Phaser.Scene {
       shadowH: 22,
       bodyW: 64,
       bodyH: 28,
-      label: 'PHUM CLUB · TIEN LEN & OUK',
+      label: 'PHUM CLUB · KLA KLOK & OUK',
       joinArrowY: 742,
     });
     club.setInteractive({ useHandCursor: true }).on('pointerdown', () => this.enterClub());
@@ -920,7 +1038,7 @@ export class OverworldScene extends Phaser.Scene {
       x: 1060,
       y: 830,
       radius: 62,
-      label: 'Press [E] or Click → Enter Phum Club (Tien Len & Ouk Chaktrang)',
+      label: 'Press [E] or Click → Enter Phum Club (Kla Klok, Ouk Chaktrang & Tien Len)',
       isDungeonPortal: true,
       onInteract: () => this.enterClub(),
     });
@@ -2053,8 +2171,14 @@ export class OverworldScene extends Phaser.Scene {
   }
 
   update(time: number, delta: number): void {
+    const modalOpen = Boolean(document.querySelector('dialog[open]'));
+    if (this.input.enabled === modalOpen) {
+      this.input.enabled = !modalOpen;
+    }
     const typing =
-      document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA';
+      modalOpen ||
+      document.activeElement?.tagName === 'INPUT' ||
+      document.activeElement?.tagName === 'TEXTAREA';
 
     let vx = this.joystick.x;
     let vy = this.joystick.y;
@@ -2068,13 +2192,21 @@ export class OverworldScene extends Phaser.Scene {
       if (Phaser.Input.Keyboard.JustDown(this.keys.E)) {
         this.tryInteractNearest();
       }
+      if (Phaser.Input.Keyboard.JustDown(this.keys.V)) {
+        EventBus.emit('input:toggleMount');
+      }
+      if (Phaser.Input.Keyboard.JustDown(this.keys.H)) {
+        this.player.mount?.honkHorn();
+        EventBus.emit('input:honkMount');
+      }
     }
 
     const len = Math.hypot(vx, vy);
     const isMoving = len > 0.1;
     if (isMoving) {
       const bridge = computeVillageToDungeonBridge(this.player.state);
-      const mountMult = this.player.state.activeMount === 'mount_mini_tuk_tuk' ? 1.4 : 1.0;
+      const mountSpec = getMountSpec(this.player.state.activeMount);
+      const mountMult = 1 + (mountSpec?.speedBonusPct ?? 0);
       const speed = 135 * (1 + Math.min(0.45, bridge.moveSpeedBonusPct)) * mountMult;
       const nx = vx / Math.max(1, len);
       const ny = vy / Math.max(1, len);
@@ -2106,7 +2238,14 @@ export class OverworldScene extends Phaser.Scene {
       mb.nameText.setPosition(mb.sprite.x, mb.sprite.y - 42);
     }
 
-    roomClient.sendMove(this.player.x, this.player.y, this.player.facing, isMoving, time);
+    roomClient.sendMove(
+      this.player.x,
+      this.player.y,
+      this.player.facing,
+      isMoving,
+      time,
+      this.player.state.activeMount ?? ''
+    );
     this.remotePlayers.forEach((remote) => remote.update(time, delta));
     this.npcs.forEach((npc) => npc.update(time, delta, this.player.x, this.player.y));
     this.atmosphere?.update(time, delta);

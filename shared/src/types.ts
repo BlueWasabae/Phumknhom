@@ -97,6 +97,7 @@ export type EquipSlot =
   | 'pet'
   | 'weapon'
   | 'armor'
+  | 'mount'
   | 'accessory';
 
 export type ItemRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
@@ -139,6 +140,8 @@ export interface PlayerAppearance {
   petId?: string | null;
   weapon: string | null;
   armor: string | null;
+  /** Equipped Rideable Khmer Mount (Village Bicycle, Water Buffalo, Mini Tuk-Tuk) */
+  mount?: string | null;
   /** 5 dedicated combat/utility accessory slots (Update 1.3A) */
   accessories?: (string | null)[];
   /** When true (default), Vanity slots (Hat/Shirt/Pants/Wings) override Combat Armor visuals */
@@ -312,6 +315,7 @@ export const DEFAULT_LOADOUT: EquippedLoadout = {
   petId: null,
   weapon: 'weapon_phkak',
   armor: 'armor_rattan_guard',
+  mount: null,
   accessories: [null, null, null, null, null],
   showVanityOverArmor: true,
   hasCompletedCreation: false,

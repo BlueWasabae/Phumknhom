@@ -23,13 +23,19 @@ export const NativeDialog: React.FC<NativeDialogProps> = ({
   children,
 }) => {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const closingProgrammaticallyRef = useRef(false);
   const titleId = useId();
 
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
-    if (open && !dialog.open) dialog.showModal();
-    else if (!open && dialog.open) dialog.close();
+    if (open && !dialog.open) {
+      closingProgrammaticallyRef.current = false;
+      dialog.showModal();
+    } else if (!open && dialog.open) {
+      closingProgrammaticallyRef.current = true;
+      dialog.close();
+    }
   }, [open]);
 
   useEffect(() => {
@@ -38,6 +44,10 @@ export const NativeDialog: React.FC<NativeDialogProps> = ({
 
     const handleClose = () => {
       dialog.returnValue = '';
+      if (closingProgrammaticallyRef.current) {
+        closingProgrammaticallyRef.current = false;
+        return;
+      }
       onClose();
     };
     dialog.addEventListener('close', handleClose);
@@ -74,6 +84,8 @@ export const NativeDialog: React.FC<NativeDialogProps> = ({
       ref={dialogRef}
       aria-labelledby={titleId}
       {...({ closedby: 'any' } as Record<string, string>)}
+      onPointerDown={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
       className="m-auto rounded-2xl overflow-visible shadow-2xl"
     >
       <div className={`${maxWidthClass} max-h-[88dvh] phum-panel rounded-2xl overflow-hidden flex flex-col`}>

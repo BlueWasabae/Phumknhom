@@ -184,6 +184,42 @@ class SoundManagerEngine {
     return this.settings.muted;
   }
 
+  public setBgmEnabled(enabled: boolean): void {
+    this.setBgmVolume(enabled ? Math.max(0.28, this.settings.bgmVolume || 0.35) : 0);
+  }
+
+  public playThunder(): void {
+    if (this.settings.muted || this.settings.sfxVolume <= 0) return;
+    const ctx = this.ensureContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const dur = 1.65 + Math.random() * 0.7;
+    const sampleRate = ctx.sampleRate;
+    const buf = ctx.createBuffer(1, Math.floor(sampleRate * dur), sampleRate);
+    const data = buf.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < data.length; i++) {
+      const white = Math.random() * 2 - 1;
+      // Brownian low-frequency rolling rumble
+      last = (last + 0.03 * white) / 1.03;
+      const env = Math.pow(1 - i / data.length, 1.4);
+      data[i] = last * 4.5 * env;
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(140 + Math.random() * 75, now);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.linearRampToValueAtTime(Math.min(0.42, this.settings.sfxVolume * 0.45), now + 0.08);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+    src.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+    src.start(now);
+  }
+
   public setBgmVolume(vol: number): void {
     this.settings.bgmVolume = Math.max(0, Math.min(1, vol));
     if (this.settings.bgmVolume > 0 && this.settings.muted) {

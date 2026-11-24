@@ -12,6 +12,8 @@ export class RemotePlayer extends Schema {
   @type('boolean') isMoving: boolean = false;
   @type('string') appearanceJson: string = '{}';
   @type('string') areaId: string = 'AREA 0';
+  @type('string') activeMountId: string = '';
+  @type('string') ridingDriverSessionId: string = '';
 }
 
 export class PlazaState extends Schema {

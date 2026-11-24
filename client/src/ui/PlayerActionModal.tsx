@@ -21,6 +21,7 @@ const DISPLAY_SLOTS: Array<{ slot: Exclude<EquipSlot, 'accessory'>; label: strin
   { slot: 'pants', label: 'Sampot' },
   { slot: 'wings', label: 'Wings' },
   { slot: 'pet', label: 'Pet' },
+  { slot: 'mount', label: 'Mount' },
   { slot: 'armor', label: 'Armor' },
 ];
 

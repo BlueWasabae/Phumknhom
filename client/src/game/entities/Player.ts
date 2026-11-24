@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import type { EquippedLoadout, PlayerState, ZoneType } from '@shared/types';
 import { PaperDoll, type PaperDollFacing, type PaperDollPose } from './PaperDoll';
 import { Pet } from './Pet';
+import { MountEntity, getMountSpec } from './MountEntity';
 
 export type FacingDirection = PaperDollFacing;
 
@@ -20,6 +21,7 @@ export class Player {
   public readonly shadow: Phaser.GameObjects.Image;
   public readonly paperDoll: PaperDoll;
   public pet: Pet | null = null;
+  public mount: MountEntity | null = null;
   public state: PlayerState;
   public facing: FacingDirection = 'down';
 
@@ -91,6 +93,12 @@ export class Player {
 
     // Companion Pet Entity — NEVER instantiate when loadout.pet is null!
     this.syncPetInstance(this.state.loadout.pet);
+
+    // Rideable Khmer Mount Entity (active in Overworld maps only; auto-dismounted indoors/dungeons/caverns)
+    if (zone === 'overworld') {
+      this.mount = new MountEntity(scene, x, y);
+      this.mount.setMount(this.state.activeMount);
+    }
 
     // Nameplate + Overhead Speech Bubble + Emote
     this.nameTag = scene.add
@@ -182,6 +190,7 @@ export class Player {
     };
     this.paperDoll.setLoadout(loadout);
     this.syncPetInstance(loadout.pet);
+    this.mount?.setMount(this.zone === 'overworld' ? this.state.activeMount : null);
   }
 
   public syncPlayerState(nextState: PlayerState): void {
@@ -222,6 +231,7 @@ export class Player {
       this.paperDoll.setLoadout(this.state.loadout);
       this.syncPetInstance(this.state.loadout.pet);
     }
+    this.mount?.setMount(this.zone === 'overworld' ? this.state.activeMount : null);
   }
 
   public showSpeechBubble(text: string, durationMs = 4500): void {
@@ -268,9 +278,14 @@ export class Player {
     this.squashY += (1 - this.squashY) * 0.22;
     this.paperDoll.setScale(this.baseDollScale * this.squashX, this.baseDollScale * this.squashY);
 
-    const dollOffsetY = this.zone === 'overworld' ? 8 : 21;
+    const activeMountSpec = this.zone === 'overworld' ? getMountSpec(this.state.activeMount) : null;
+    const isMoving = Math.hypot(this.body.velocity.x, this.body.velocity.y) > 12;
+    this.mount?.update(this.sprite.x, this.sprite.y, this.facing, isMoving, time);
+
+    const dollOffsetY =
+      this.zone === 'overworld' ? 8 + (activeMountSpec ? activeMountSpec.seatOffsetY : 0) : 21;
     this.paperDoll.setPosition(this.sprite.x, this.sprite.y + dollOffsetY);
-    this.paperDoll.setPoseAndFacing(this.currentPose, this.facing, time);
+    this.paperDoll.setPoseAndFacing(activeMountSpec ? 'idle' : this.currentPose, this.facing, time);
 
     if (this.zone === 'overworld') {
       const depth = this.sprite.y + 9;
@@ -345,6 +360,8 @@ export class Player {
     this.paperDoll.destroy();
     this.pet?.destroy();
     this.pet = null;
+    this.mount?.destroy();
+    this.mount = null;
     this.shadow.destroy();
     this.nameTag.destroy();
     this.bubbleBg.destroy();

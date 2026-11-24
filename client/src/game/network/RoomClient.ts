@@ -19,6 +19,8 @@ export interface RemotePlayerSnapshot {
   isMoving: boolean;
   appearanceJson: string;
   areaId: string;
+  activeMountId?: string;
+  ridingDriverSessionId?: string;
 }
 
 export interface AreaChannelInfo {
@@ -48,6 +50,8 @@ interface RawRemotePlayerSchema {
   isMoving: boolean;
   appearanceJson: string;
   areaId: string;
+  activeMountId?: string;
+  ridingDriverSessionId?: string;
   onChange?: (cb: () => void) => void;
 }
 
@@ -138,6 +142,8 @@ function toSnapshot(raw: RawRemotePlayerSchema, key: string): RemotePlayerSnapsh
     isMoving: Boolean(raw.isMoving),
     appearanceJson: raw.appearanceJson || '{}',
     areaId: raw.areaId || 'AREA 0',
+    activeMountId: raw.activeMountId || '',
+    ridingDriverSessionId: raw.ridingDriverSessionId || '',
   };
 }
 
@@ -421,7 +427,14 @@ class PlazaRoomClient {
     }
   }
 
-  public sendMove(x: number, y: number, facing: string, isMoving: boolean, nowMs: number): void {
+  public sendMove(
+    x: number,
+    y: number,
+    facing: string,
+    isMoving: boolean,
+    nowMs: number,
+    activeMountId = ''
+  ): void {
     if (!this.room || !this.online) return;
     if (nowMs - this.lastMoveSentAt < 55) return; // ~18 updates/sec throttle
 
@@ -442,7 +455,17 @@ class PlazaRoomClient {
     this.lastSentFacing = facing;
     this.lastSentMoving = isMoving;
 
-    this.room.send('move', { x: rx, y: ry, facing, isMoving });
+    this.room.send('move', { x: rx, y: ry, facing, isMoving, activeMountId });
+  }
+
+  public sendMountState(activeMountId: string | null): void {
+    if (!this.room || !this.online) return;
+    this.room.send('mountState', { activeMountId: activeMountId ?? '' });
+  }
+
+  public sendTukTukHop(driverSessionId: string | null): void {
+    if (!this.room || !this.online) return;
+    this.room.send('tukTukHop', { driverSessionId });
   }
 
   public sendAppearance(

@@ -366,6 +366,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({
                 ['hair', 'Premium Salon'],
                 ['wings', 'Wings & Auras'],
                 ['pet', 'Pets'],
+                ['mount', '🚲 Mounts'],
               ] as const
             ).map(([slotKey, label]) => (
               <button

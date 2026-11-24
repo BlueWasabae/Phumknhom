@@ -8,10 +8,14 @@ const ROOM_W = 800;
 const ROOM_H = 540;
 const EXIT_X = 400;
 const EXIT_Y = 492;
-const TIEN_LEN_X = 245;
-const TIEN_LEN_Y = 300;
-const OUK_X = 555;
-const OUK_Y = 300;
+const KLA_KLOK_X = 185;
+const KLA_KLOK_Y = 342;
+const OUK_X = 400;
+const OUK_Y = 336;
+const TIEN_LEN_X = 615;
+const TIEN_LEN_Y = 342;
+const MUSIC_X = 400;
+const MUSIC_Y = 236;
 
 /**
  * Indoor Phum Village Club Hangout Scene:
@@ -148,14 +152,14 @@ export class ClubScene extends Phaser.Scene {
       g.lineBetween(42, y, ROOM_W - 42, y);
     }
 
-    // Center Carpet & Stage Banner
+    // Center Carpet & Stage Banner (positioned cleanly below the top HUD bar)
     g.fillStyle(0x7c2d12, 0.72);
-    g.fillRoundedRect(310, 140, 180, 56, 10);
+    g.fillRoundedRect(306, 206, 188, 52, 10);
     g.lineStyle(2, 0xfacc15, 0.85);
-    g.strokeRoundedRect(310, 140, 180, 56, 10);
+    g.strokeRoundedRect(306, 206, 188, 52, 10);
 
     this.add
-      .text(400, 168, '✨ PHUM NIGHT CLUB · ក្លឹបភូមិខ្ញុំ ✨', {
+      .text(400, 220, '✨ PHUM NIGHT CLUB · ក្លឹបភូមិខ្ញុំ ✨', {
         fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
         fontSize: '14px',
         fontStyle: 'bold',
@@ -166,44 +170,74 @@ export class ClubScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(10);
 
-    // Pulsing neon stage spotlights
-    const leftLight = this.add.circle(245, 295, 76, 0xec4899, 0.16).setBlendMode(Phaser.BlendModes.ADD).setDepth(4);
-    const rightLight = this.add.circle(555, 295, 76, 0x38bdf8, 0.16).setBlendMode(Phaser.BlendModes.ADD).setDepth(4);
-    this.tweens.add({ targets: [leftLight, rightLight], alpha: 0.28, scale: 1.12, duration: 1300, yoyo: true, repeat: -1 });
-
-    // Table 1: Tien Len (13-Card Khmer Poker) Table
-    const t1 = this.add.graphics().setDepth(20);
-    t1.fillStyle(0x065f46, 1);
-    t1.lineStyle(4, 0xd97706, 1);
-    t1.fillEllipse(TIEN_LEN_X, TIEN_LEN_Y, 128, 84);
-    t1.strokeEllipse(TIEN_LEN_X, TIEN_LEN_Y, 128, 84);
-    // Decorative cards on felt
-    t1.fillStyle(0xffffff, 1);
-    t1.fillRect(TIEN_LEN_X - 18, TIEN_LEN_Y - 8, 12, 16);
-    t1.fillRect(TIEN_LEN_X + 6, TIEN_LEN_Y - 10, 12, 16);
-    const t1Hit = this.add.rectangle(TIEN_LEN_X, TIEN_LEN_Y, 128, 84, 0, 0).setDepth(30).setInteractive({ useHandCursor: true });
-    t1Hit.on('pointerdown', () => EventBus.emit('ui:openModal', { modal: 'clubGames', clubGame: 'tien_len' }));
-    this.add
-      .text(TIEN_LEN_X, TIEN_LEN_Y + 52, '🃏 TIEN LEN TABLE (13-Card)', {
+    // Interactive Club Music Jukebox Toggle
+    const isBgmOn = () => {
+      const s = soundManager.getSettings();
+      return !s.muted && s.bgmVolume > 0;
+    };
+    const musicLabel = this.add
+      .text(MUSIC_X, MUSIC_Y + 6, isBgmOn() ? '🎵 Club Music: ON [Click]' : '🔇 Club Music: OFF [Click]', {
         fontFamily: 'Fredoka, sans-serif',
-        fontSize: '12px',
+        fontSize: '11px',
         fontStyle: 'bold',
         color: '#a7f3d0',
         backgroundColor: 'rgba(15,23,42,0.85)',
+        padding: { x: 8, y: 2 },
+      })
+      .setResolution(2)
+      .setScale(0.55)
+      .setOrigin(0.5)
+      .setDepth(25)
+      .setInteractive({ useHandCursor: true });
+    musicLabel.on('pointerdown', () => {
+      const cur = isBgmOn();
+      soundManager.setBgmEnabled(!cur);
+      musicLabel.setText(!cur ? '🎵 Club Music: ON [Click]' : '🔇 Club Music: OFF [Click]');
+      EventBus.emit('ui:toast', { text: !cur ? '🎵 Club Lounge Music ON!' : '🔇 Club Lounge Music Muted.' });
+    });
+
+    // Warm lantern-lit spotlights across all 3 wooden game tables
+    const l1 = this.add.circle(KLA_KLOK_X, KLA_KLOK_Y - 6, 72, 0xf59e0b, 0.16).setBlendMode(Phaser.BlendModes.ADD).setDepth(4);
+    const l2 = this.add.circle(OUK_X, OUK_Y - 6, 72, 0x38bdf8, 0.15).setBlendMode(Phaser.BlendModes.ADD).setDepth(4);
+    const l3 = this.add.circle(TIEN_LEN_X, TIEN_LEN_Y - 6, 72, 0xec4899, 0.15).setBlendMode(Phaser.BlendModes.ADD).setDepth(4);
+    this.tweens.add({ targets: [l1, l2, l3], alpha: 0.28, scale: 1.12, duration: 1300, yoyo: true, repeat: -1 });
+
+    // Table 1 (Left): Kla Klok (Khmer Traditional 3-Dice Board)
+    const t0 = this.add.graphics().setDepth(20);
+    t0.fillStyle(0x7c2d12, 1);
+    t0.lineStyle(4, 0xfacc15, 1);
+    t0.fillRoundedRect(KLA_KLOK_X - 58, KLA_KLOK_Y - 38, 116, 76, 10);
+    t0.strokeRoundedRect(KLA_KLOK_X - 58, KLA_KLOK_Y - 38, 116, 76, 10);
+    // 6-symbol grid squares on Kla Klok mat
+    const kkColors = [0xf59e0b, 0xef4444, 0x38bdf8, 0xfde047, 0xf472b6, 0x22c55e];
+    for (let i = 0; i < 6; i++) {
+      const rx = KLA_KLOK_X - 42 + (i % 3) * 30;
+      const ry = KLA_KLOK_Y - 22 + Math.floor(i / 3) * 24;
+      t0.fillStyle(kkColors[i], 0.9);
+      t0.fillRoundedRect(rx, ry, 24, 18, 3);
+    }
+    const t0Hit = this.add.rectangle(KLA_KLOK_X, KLA_KLOK_Y, 124, 84, 0, 0).setDepth(30).setInteractive({ useHandCursor: true });
+    t0Hit.on('pointerdown', () => EventBus.emit('ui:openModal', { modal: 'clubGames', clubGame: 'kla_klok' }));
+    this.add
+      .text(KLA_KLOK_X, KLA_KLOK_Y + 50, '🎲 KLA KLOK (3-Dice)', {
+        fontFamily: 'Fredoka, sans-serif',
+        fontSize: '12px',
+        fontStyle: 'bold',
+        color: '#fef08a',
+        backgroundColor: 'rgba(15,23,42,0.88)',
         padding: { x: 7, y: 2 },
       })
       .setResolution(2)
-      .setScale(0.58)
+      .setScale(0.56)
       .setOrigin(0.5)
       .setDepth(30);
 
-    // Table 2: Ouk Chaktrang (Khmer Chess) Table
+    // Table 2 (Center): Ouk Chaktrang (8x8 Khmer Chess) Table
     const t2 = this.add.graphics().setDepth(20);
     t2.fillStyle(0x78350f, 1);
     t2.lineStyle(4, 0xfacc15, 1);
     t2.fillRoundedRect(OUK_X - 58, OUK_Y - 40, 116, 80, 10);
     t2.strokeRoundedRect(OUK_X - 58, OUK_Y - 40, 116, 80, 10);
-    // Mini 4x4 checkerboard pattern
     for (let r = 0; r < 4; r++) {
       for (let c = 0; c < 4; c++) {
         t2.fillStyle((r + c) % 2 === 0 ? 0xfef3c7 : 0x92400e, 1);
@@ -213,22 +247,47 @@ export class ClubScene extends Phaser.Scene {
     const t2Hit = this.add.rectangle(OUK_X, OUK_Y, 120, 84, 0, 0).setDepth(30).setInteractive({ useHandCursor: true });
     t2Hit.on('pointerdown', () => EventBus.emit('ui:openModal', { modal: 'clubGames', clubGame: 'ouk_chaktrang' }));
     this.add
-      .text(OUK_X, OUK_Y + 52, '♟️ OUK CHAKTRANG (Khmer Chess)', {
+      .text(OUK_X, OUK_Y + 50, '♟️ OUK CHAKTRANG (8×8 Chess)', {
         fontFamily: 'Fredoka, sans-serif',
         fontSize: '12px',
         fontStyle: 'bold',
         color: '#fde68a',
-        backgroundColor: 'rgba(15,23,42,0.85)',
+        backgroundColor: 'rgba(15,23,42,0.88)',
         padding: { x: 7, y: 2 },
       })
       .setResolution(2)
-      .setScale(0.58)
+      .setScale(0.56)
       .setOrigin(0.5)
       .setDepth(30);
 
-    // Exit Door back to Phum Village
+    // Table 3 (Right): Tien Len (13-Card Khmer Poker) Table
+    const t1 = this.add.graphics().setDepth(20);
+    t1.fillStyle(0x065f46, 1);
+    t1.lineStyle(4, 0xd97706, 1);
+    t1.fillEllipse(TIEN_LEN_X, TIEN_LEN_Y, 124, 80);
+    t1.strokeEllipse(TIEN_LEN_X, TIEN_LEN_Y, 124, 80);
+    t1.fillStyle(0xffffff, 1);
+    t1.fillRect(TIEN_LEN_X - 18, TIEN_LEN_Y - 8, 12, 16);
+    t1.fillRect(TIEN_LEN_X + 6, TIEN_LEN_Y - 10, 12, 16);
+    const t1Hit = this.add.rectangle(TIEN_LEN_X, TIEN_LEN_Y, 124, 84, 0, 0).setDepth(30).setInteractive({ useHandCursor: true });
+    t1Hit.on('pointerdown', () => EventBus.emit('ui:openModal', { modal: 'clubGames', clubGame: 'tien_len' }));
+    this.add
+      .text(TIEN_LEN_X, TIEN_LEN_Y + 50, '🃏 TIEN LEN (13-Card)', {
+        fontFamily: 'Fredoka, sans-serif',
+        fontSize: '12px',
+        fontStyle: 'bold',
+        color: '#a7f3d0',
+        backgroundColor: 'rgba(15,23,42,0.88)',
+        padding: { x: 7, y: 2 },
+      })
+      .setResolution(2)
+      .setScale(0.56)
+      .setOrigin(0.5)
+      .setDepth(30);
+
+    // Back Exit Door to Market Street
     const exitMat = this.add
-      .rectangle(EXIT_X, EXIT_Y, 84, 28, 0x991b1b, 0.9)
+      .rectangle(EXIT_X, EXIT_Y, 88, 28, 0x991b1b, 0.9)
       .setStrokeStyle(2, 0xfacc15)
       .setDepth(15)
       .setInteractive({ useHandCursor: true });
@@ -236,7 +295,7 @@ export class ClubScene extends Phaser.Scene {
     const exitArrow = this.add.image(EXIT_X, EXIT_Y - 26, 'join_arrow').setScale(0.58).setDepth(35);
     this.tweens.add({ targets: exitArrow, y: EXIT_Y - 32, duration: 540, yoyo: true, repeat: -1 });
     this.add
-      .text(EXIT_X, EXIT_Y + 18, 'EXIT TO PHUM PLAZA', {
+      .text(EXIT_X, EXIT_Y + 18, 'EXIT TO MARKET STREET [E]', {
         fontFamily: 'Fredoka, sans-serif',
         fontSize: '12px',
         fontStyle: 'bold',
@@ -255,15 +314,19 @@ export class ClubScene extends Phaser.Scene {
       this.returnToOverworld();
       return;
     }
-    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, TIEN_LEN_X, TIEN_LEN_Y) < 90) {
-      EventBus.emit('ui:openModal', { modal: 'clubGames', clubGame: 'tien_len' });
+    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, KLA_KLOK_X, KLA_KLOK_Y) < 92) {
+      EventBus.emit('ui:openModal', { modal: 'clubGames', clubGame: 'kla_klok' });
       return;
     }
-    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, OUK_X, OUK_Y) < 90) {
+    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, OUK_X, OUK_Y) < 92) {
       EventBus.emit('ui:openModal', { modal: 'clubGames', clubGame: 'ouk_chaktrang' });
       return;
     }
-    EventBus.emit('ui:openModal', { modal: 'clubGames', clubGame: 'tien_len' });
+    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, TIEN_LEN_X, TIEN_LEN_Y) < 92) {
+      EventBus.emit('ui:openModal', { modal: 'clubGames', clubGame: 'tien_len' });
+      return;
+    }
+    EventBus.emit('ui:openModal', { modal: 'clubGames', clubGame: 'kla_klok' });
   }
 
   private returnToOverworld(
@@ -287,8 +350,14 @@ export class ClubScene extends Phaser.Scene {
   }
 
   update(time: number): void {
+    const modalOpen = Boolean(document.querySelector('dialog[open]'));
+    if (this.input.enabled === modalOpen) {
+      this.input.enabled = !modalOpen;
+    }
     const typing =
-      document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA';
+      modalOpen ||
+      document.activeElement?.tagName === 'INPUT' ||
+      document.activeElement?.tagName === 'TEXTAREA';
     let vx = this.joystick.x;
     let vy = this.joystick.y;
     if (!typing && !this.transitioning) {
@@ -315,12 +384,14 @@ export class ClubScene extends Phaser.Scene {
 
     this.player.syncVisuals(time, true);
 
-    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, TIEN_LEN_X, TIEN_LEN_Y) < 90) {
+    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, KLA_KLOK_X, KLA_KLOK_Y) < 92) {
+      this.promptText.setPosition(KLA_KLOK_X, KLA_KLOK_Y - 48).setText('Press [E] or Click → Play Kla Klok (3-Dice)!').setVisible(true);
+    } else if (Phaser.Math.Distance.Between(this.player.x, this.player.y, OUK_X, OUK_Y) < 92) {
+      this.promptText.setPosition(OUK_X, OUK_Y - 48).setText('Press [E] or Click → Play Ouk Chaktrang (8×8)!').setVisible(true);
+    } else if (Phaser.Math.Distance.Between(this.player.x, this.player.y, TIEN_LEN_X, TIEN_LEN_Y) < 92) {
       this.promptText.setPosition(TIEN_LEN_X, TIEN_LEN_Y - 48).setText('Press [E] or Click → Play Tien Len!').setVisible(true);
-    } else if (Phaser.Math.Distance.Between(this.player.x, this.player.y, OUK_X, OUK_Y) < 90) {
-      this.promptText.setPosition(OUK_X, OUK_Y - 48).setText('Press [E] or Click → Play Ouk Chaktrang!').setVisible(true);
     } else if (Phaser.Math.Distance.Between(this.player.x, this.player.y, EXIT_X, EXIT_Y) < 56) {
-      this.promptText.setPosition(EXIT_X, EXIT_Y - 40).setText('Press [E] or Click → Exit to Phum Plaza').setVisible(true);
+      this.promptText.setPosition(EXIT_X, EXIT_Y - 40).setText('Press [E] or Click → Exit to Market Street').setVisible(true);
     } else {
       this.promptText.setVisible(false);
     }
