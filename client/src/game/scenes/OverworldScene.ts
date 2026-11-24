@@ -12,8 +12,10 @@ import {
   type VillageMapId,
   type VillageMapPortalDef,
 } from '@shared/worldMapData';
+import { getNpcsForMap } from '@shared/npcSchedules';
 import { EventBus, type JoystickVector } from '../EventBus';
 import { Player } from '../entities/Player';
+import { NpcVillager } from '../entities/NpcVillager';
 import { RemotePlayerEntity } from '../entities/RemotePlayerEntity';
 import { areaIdToChannel, channelToAreaId, roomClient } from '../network/RoomClient';
 import { soundManager } from '../systems/SoundManager';
@@ -86,6 +88,7 @@ export class OverworldScene extends Phaser.Scene {
   private landmarks: LandmarkZone[] = [];
   private mapPortals: VillageMapPortalDef[] = [];
   private gatherNodes: GatherNode[] = [];
+  private npcs: NpcVillager[] = [];
   private miniBoss: FrontierMiniBoss | null = null;
   private gateLockUntil = 0;
   private nearPortalSent = false;
@@ -219,6 +222,15 @@ export class OverworldScene extends Phaser.Scene {
     this.physics.add.collider(this.player.sprite, this.colliders);
     this.gateLockUntil = this.time.now + 850;
 
+    // 8B. Living Khmer Villager NPCs patrolling this map!
+    this.npcs = getNpcsForMap(this.mapId).map(
+      (npcDef) =>
+        new NpcVillager(this, npcDef, (npcId) => {
+          soundManager.playSfx('click');
+          EventBus.emit('npc:openDialogue', { npcId });
+        })
+    );
+
     // 9. Scheduled Animated Green Village Bus in Central Plaza
     if (this.mapId === 'central_plaza') {
       this.time.delayedCall(3500, () => {
@@ -342,6 +354,8 @@ export class OverworldScene extends Phaser.Scene {
       this.unsubs.forEach((u) => u());
       this.unsubs = [];
       this.clearRemotePlayers();
+      this.npcs.forEach((n) => n.destroy());
+      this.npcs = [];
       this.atmosphere?.destroy();
       this.atmosphere = undefined;
       void roomClient.leavePlaza(false);
@@ -733,7 +747,7 @@ export class OverworldScene extends Phaser.Scene {
       onInteract: openWheel,
     });
 
-    // 5. KHMER STILT HOUSE (West Homestead Gate Preview leading into FarmScene!)
+    // 5. KHMER STILT HOUSE (Enterable Customizable Interior! West Road Gate enters FarmScene)
     const homeImg = this.addBuildingOrProp({
       texture: 'khmer_stilt_house',
       x: 280,
@@ -743,17 +757,17 @@ export class OverworldScene extends Phaser.Scene {
       shadowH: 26,
       bodyW: 68,
       bodyH: 30,
-      label: 'MY KHMER HOME · FARM',
+      label: 'MY KHMER HOME · ENTER',
       joinArrowY: 375,
     });
-    homeImg.setInteractive({ useHandCursor: true }).on('pointerdown', () => this.enterFarm());
+    homeImg.setInteractive({ useHandCursor: true }).on('pointerdown', () => this.enterHouseInterior());
     this.landmarks.push({
       x: 280,
       y: 498,
-      radius: 60,
-      label: 'Press [E] or Click → Enter Personal Homestead Farm',
-      isDungeonPortal: true,
-      onInteract: () => this.enterFarm(),
+      radius: 66,
+      label: 'Press [E] or Click → Enter My Khmer Stilt House (Decorate & Rest)',
+      isDungeonPortal: false,
+      onInteract: () => this.enterHouseInterior(),
     });
   }
 
@@ -1920,6 +1934,22 @@ export class OverworldScene extends Phaser.Scene {
     });
   }
 
+  private enterHouseInterior(): void {
+    if (this.transitioning) return;
+    this.transitioning = true;
+    this.cameras.main.fadeOut(200, 12, 10, 8);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      this.scene.start('HouseInteriorScene', {
+        returnZone: 'overworld',
+        playerState: {
+          ...this.player.state,
+          zone: 'house',
+          currentMapId: this.mapId,
+        },
+      });
+    });
+  }
+
   private enterCavernExplore(returnMapId: 'wild_frontier' | 'temple_district' = 'wild_frontier'): void {
     if (this.transitioning) return;
     this.transitioning = true;
@@ -1981,6 +2011,19 @@ export class OverworldScene extends Phaser.Scene {
     return best;
   }
 
+  private findNearestNpc(): NpcVillager | null {
+    let best: NpcVillager | null = null;
+    let bestDist = Infinity;
+    for (const npc of this.npcs) {
+      const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, npc.x, npc.y);
+      if (d <= 68 && d < bestDist) {
+        bestDist = d;
+        best = npc;
+      }
+    }
+    return best;
+  }
+
   private tryInteractNearest(): void {
     // Allow striking the Wild Frontier mini-boss with [E] when nearby!
     if (
@@ -1989,6 +2032,13 @@ export class OverworldScene extends Phaser.Scene {
       Phaser.Math.Distance.Between(this.player.x, this.player.y, this.miniBoss.sprite.x, this.miniBoss.sprite.y) <= 95
     ) {
       this.damageFrontierMiniBoss();
+      return;
+    }
+
+    const nearNpc = this.findNearestNpc();
+    if (nearNpc) {
+      soundManager.playSfx('click');
+      EventBus.emit('npc:openDialogue', { npcId: nearNpc.def.id });
       return;
     }
 
@@ -2058,6 +2108,7 @@ export class OverworldScene extends Phaser.Scene {
 
     roomClient.sendMove(this.player.x, this.player.y, this.player.facing, isMoving, time);
     this.remotePlayers.forEach((remote) => remote.update(time, delta));
+    this.npcs.forEach((npc) => npc.update(time, delta, this.player.x, this.player.y));
     this.atmosphere?.update(time, delta);
 
     // Smooth walk-through trigger on Road Portals!
@@ -2079,8 +2130,12 @@ export class OverworldScene extends Phaser.Scene {
       this.promptText.setPosition(this.miniBoss.sprite.x, this.miniBoss.sprite.y - 52);
       this.promptText.setText('Press [E] or Click → Strike Laterite Boar Chieftain!').setVisible(true);
     } else {
+      const nearNpc = this.findNearestNpc();
       const nearest = this.findNearestLandmark();
-      if (nearest) {
+      if (nearNpc) {
+        this.promptText.setPosition(nearNpc.x, nearNpc.y - 38);
+        this.promptText.setText(`Press [E] or Click → Talk to ${nearNpc.def.name} (${nearNpc.def.khmerName}) ❤️`).setVisible(true);
+      } else if (nearest) {
         this.promptText.setPosition(nearest.x, nearest.y - 36);
         this.promptText.setText(nearest.label).setVisible(true);
       } else {

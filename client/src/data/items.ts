@@ -189,6 +189,19 @@ export const ITEM_CATALOG: Record<string, CatalogItem> = {
   },
 
   // ==================== HATS ====================
+  hat_bopha_lotus_hairpin: {
+    id: 'hat_bopha_lotus_hairpin',
+    name: 'Bopha Lotus Hairpin',
+    khmerName: 'ស្នៀតសក់ផ្កាឈូកបុប្ផា',
+    slot: 'hat',
+    rarity: 'epic',
+    stylishScore: 76,
+    description: 'Exclusive hand-carved pink lotus silk hairpin gifted by Bopha at 6 Friendship Hearts!',
+    primaryColor: '#ec4899',
+    accentColor: '#facc15',
+    styleVariant: 'crown',
+    stats: { maxHp: 10 },
+  },
   hat_doun: {
     id: 'hat_doun',
     name: 'Farmer Conical Hat',

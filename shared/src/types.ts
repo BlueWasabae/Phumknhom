@@ -16,7 +16,21 @@ export type {
   StarterOutfitId,
 } from './characterStyles';
 
-export type ZoneType = 'overworld' | 'dungeon' | 'cavern' | 'farm' | 'club' | 'khmer_world';
+export type ZoneType = 'overworld' | 'dungeon' | 'cavern' | 'farm' | 'club' | 'khmer_world' | 'house';
+
+export interface NpcFriendshipEntry {
+  hearts: number; // 0..10 (supports 0.2 / 0.5 / 1.0 increments)
+  lastGiftDay: string | null; // YYYY-MM-DD
+  claimedRewards?: number[]; // e.g. [3, 6]
+}
+
+export interface PlacedHouseDecor {
+  uid: string;
+  itemId: string;
+  x: number;
+  y: number;
+  rotation?: number; // 0 | 90 | 180 | 270
+}
 
 export type DifficultyMode = 'normal' | 'expert' | 'mythic' | 'death';
 
@@ -241,6 +255,9 @@ export interface PlayerState {
   weaponPrefix?: string | null;
   armorPrefix?: string | null;
   shimmerBlessings?: string[];
+  npcFriendships?: Record<string, NpcFriendshipEntry>;
+  houseDecor?: PlacedHouseDecor[];
+  ownedFurniture?: Record<string, number>;
   hasCompletedCreation?: boolean;
   skillDamagePct: number;
   armorDamagePct: number;
@@ -485,6 +502,20 @@ export const INITIAL_PLAYER_STATE: PlayerState = {
   weaponPrefix: 'keen',
   armorPrefix: 'armored',
   shimmerBlessings: [],
+  npcFriendships: {},
+  houseDecor: [
+    { uid: 'starter_mat', itemId: 'furn_reed_mat', x: 400, y: 368, rotation: 0 },
+    { uid: 'starter_table', itemId: 'furn_teak_table', x: 400, y: 348, rotation: 0 },
+    { uid: 'starter_hammock', itemId: 'furn_hammock', x: 208, y: 248, rotation: 0 },
+  ],
+  ownedFurniture: {
+    furn_reed_mat: 2,
+    furn_teak_table: 2,
+    furn_lotus_lamp: 2,
+    furn_hammock: 1,
+    furn_krama_tapestry: 2,
+    furn_banana_plant: 2,
+  },
   hasCompletedCreation: false,
   skillDamagePct: 0.025,
   armorDamagePct: 0.04,

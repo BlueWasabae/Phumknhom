@@ -14,7 +14,9 @@ import {
   HAIR_COLORS,
   SKIN_TONES,
 } from '@shared/characterStyles';
-import { Coins, ChefHat, Crown, Sparkles, UtensilsCrossed } from 'lucide-react';
+import { Armchair, Coins, ChefHat, Crown, Sparkles, UtensilsCrossed } from 'lucide-react';
+import { HOUSE_FURNITURE_LIST, getOwnedFurnitureCount } from '@shared/houseDecor';
+import { getNpcPerkFlags } from '@shared/npcSchedules';
 import { FASHION_SHOP_ITEMS, ITEM_CATALOG } from '../data/items';
 import { STREET_SNACK_LIST, countInventoryAnyQuality } from '../data/recipes';
 import { NativeDialog } from './NativeDialog';
@@ -33,6 +35,7 @@ interface ShopModalProps {
   onEatSnack: (snackId: string) => void;
   onAssignQuickSlot: (slotIndex: 0 | 1 | 2, snackId: string) => void;
   onBuyFashion: (itemId: string) => void;
+  onBuyFurniture?: (itemId: string) => void;
   onEquipFashion: (itemId: string) => void;
   onCustomizeLook: (patch: Partial<EquippedLoadout>) => void;
 }
@@ -56,12 +59,15 @@ export const ShopModal: React.FC<ShopModalProps> = ({
   onEatSnack,
   onAssignQuickSlot,
   onBuyFashion,
+  onBuyFurniture,
   onEquipFashion,
   onCustomizeLook,
 }) => {
-  const [tab, setTab] = useState<'primary' | 'secondary'>(initialTab);
+  const [tab, setTab] = useState<'primary' | 'secondary' | 'furniture'>(initialTab);
   const [fashionFilter, setFashionFilter] = useState<'all' | EquipSlot>('all');
   const [previewItemId, setPreviewItemId] = useState<string | null>(null);
+  const npcPerks = getNpcPerkFlags(player);
+  const starterFurniture = HOUSE_FURNITURE_LIST.filter((f) => f.category === 'starter');
 
   useEffect(() => {
     if (open) {
@@ -163,6 +169,20 @@ export const ShopModal: React.FC<ShopModalProps> = ({
               </>
             )}
           </button>
+
+          {mode === 'fashion' && (
+            <button
+              type="button"
+              onClick={() => setTab('furniture')}
+              className={`px-3.5 py-1.5 rounded-xl font-display font-bold text-xs border-2 flex items-center gap-1.5 transition ${
+                tab === 'furniture'
+                  ? 'bg-amber-800 text-amber-50 border-amber-950'
+                  : 'bg-amber-50 text-amber-950 border-amber-900/35 hover:bg-amber-100'
+              }`}
+            >
+              <Armchair className="w-3.5 h-3.5" /> Home Furniture ({starterFurniture.length})
+            </button>
+          )}
         </div>
 
         <div className="flex items-center gap-2 text-xs font-display font-bold">
@@ -644,6 +664,51 @@ export const ShopModal: React.FC<ShopModalProps> = ({
                 })}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+      {/* FASHION TAB 3: KHMER STILT HOUSE FURNITURE SHOP */}
+      {mode === 'fashion' && tab === 'furniture' && (
+        <div className="space-y-2.5 text-xs">
+          {npcPerks.boutiqueDiscountPct > 0 && (
+            <div className="px-3 py-1.5 rounded-xl bg-emerald-100 border border-emerald-600/40 text-emerald-950 font-bold text-[11px]">
+              ❤️ Bopha 3-Heart Friendship Active: 15% Boutique &amp; Furniture Discount applied!
+            </div>
+          )}
+          <div className="grid sm:grid-cols-2 gap-2 max-h-[52dvh] overflow-y-auto pr-1">
+            {starterFurniture.map((furn) => {
+              const owned = getOwnedFurnitureCount(player, furn.id);
+              const rawPrice = furn.buyCoins ?? 200;
+              const finalPrice = Math.max(1, Math.round(rawPrice * (1 - npcPerks.boutiqueDiscountPct)));
+              return (
+                <div
+                  key={furn.id}
+                  className="p-3 rounded-xl bg-amber-50/95 border-2 border-amber-900/30 flex flex-col justify-between gap-2"
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="font-display font-bold text-xs text-amber-950">
+                        {furn.icon} {furn.name}
+                      </span>
+                      <span className="px-2 py-0.5 rounded bg-amber-200 text-amber-950 text-[10px] font-bold">
+                        Owned ×{owned}
+                      </span>
+                    </div>
+                    <div className="text-[10px] font-bold text-amber-700">{furn.khmerName}</div>
+                    <p className="text-[10px] text-amber-900/90 mt-1 leading-snug">{furn.description}</p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={!onBuyFurniture || player.currencies.coins < finalPrice}
+                    onClick={() => onBuyFurniture?.(furn.id)}
+                    className="w-full phum-btn py-1.5 rounded-xl font-display font-bold text-xs disabled:opacity-45"
+                  >
+                    Buy for {finalPrice.toLocaleString()} Coins
+                    {npcPerks.boutiqueDiscountPct > 0 ? ' (-15% ❤️)' : ''}
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

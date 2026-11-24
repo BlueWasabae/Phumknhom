@@ -5,6 +5,7 @@ import { KhmerWorldScene } from './scenes/KhmerWorldScene';
 import { FarmScene } from './scenes/FarmScene';
 import { ClubScene } from './scenes/ClubScene';
 import { CavernExploreScene } from './scenes/CavernExploreScene';
+import { HouseInteriorScene } from './scenes/HouseInteriorScene';
 import { DungeonBossScene } from './scenes/DungeonBossScene';
 
 export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameConfig {
@@ -30,7 +31,16 @@ export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameCon
         debug: false,
       },
     },
-    scene: [BootScene, OverworldScene, KhmerWorldScene, FarmScene, ClubScene, CavernExploreScene, DungeonBossScene],
+    scene: [
+      BootScene,
+      OverworldScene,
+      KhmerWorldScene,
+      FarmScene,
+      ClubScene,
+      CavernExploreScene,
+      HouseInteriorScene,
+      DungeonBossScene,
+    ],
   };
 }
 

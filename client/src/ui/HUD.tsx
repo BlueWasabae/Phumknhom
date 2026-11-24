@@ -97,6 +97,8 @@ interface HUDProps {
   onOpenServerCity: () => void;
   onOpenReforge: () => void;
   onOpenClubGames: () => void;
+  onOpenHouseDecor?: () => void;
+  onInviteFriendsHome?: () => void;
   onFastForwardFarm: () => void;
 }
 
@@ -137,6 +139,8 @@ export const HUD: React.FC<HUDProps> = ({
   onOpenServerCity,
   onOpenReforge,
   onOpenClubGames,
+  onOpenHouseDecor,
+  onInviteFriendsHome,
   onFastForwardFarm,
 }) => {
   const [menuDropdownOpen, setMenuDropdownOpen] = useState(false);
@@ -273,6 +277,8 @@ export const HUD: React.FC<HUDProps> = ({
           className={`font-display font-bold px-2 py-0.5 rounded-lg text-[11px] whitespace-nowrap border ${
             zone === 'farm'
               ? 'bg-amber-700 text-amber-50 border-amber-950'
+              : zone === 'house'
+              ? 'bg-orange-800 text-amber-50 border-orange-950'
               : zone === 'club'
               ? 'bg-pink-800 text-amber-50 border-pink-950'
               : 'bg-purple-800 text-amber-100 border-purple-950'
@@ -280,12 +286,38 @@ export const HUD: React.FC<HUDProps> = ({
         >
           {zone === 'farm'
             ? `My Homestead • Farm Lv.${player.lifeStats.farmLevel}`
+            : zone === 'house'
+            ? '🏡 My Khmer Stilt House • Interior'
             : zone === 'club'
             ? 'Phum Night Club • Lounge'
             : zone === 'cavern'
             ? '⛏️ Ancient Cavern • Mining & Relics'
             : 'Ancient Cavern • Dungeon'}
         </span>
+      )}
+
+      {/* House Interior Quick Buttons: Decorate & Invite Friends */}
+      {zone === 'house' && (
+        <div className="flex items-center gap-1.5">
+          {onOpenHouseDecor && (
+            <button
+              type="button"
+              onClick={onOpenHouseDecor}
+              className="px-2.5 py-0.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-amber-950 border border-amber-950 font-display font-bold text-[11px] whitespace-nowrap shadow-sm transition cursor-pointer"
+            >
+              🛋️ Decorate
+            </button>
+          )}
+          {onInviteFriendsHome && (
+            <button
+              type="button"
+              onClick={onInviteFriendsHome}
+              className="px-2.5 py-0.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white border border-sky-950 font-display font-bold text-[11px] whitespace-nowrap shadow-sm transition cursor-pointer"
+            >
+              👥 Invite Friends
+            </button>
+          )}
+        </div>
       )}
 
       {/* Tiny Green/Gray Connection Status Dot */}

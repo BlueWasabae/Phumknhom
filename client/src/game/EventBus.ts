@@ -5,10 +5,12 @@ import type {
   EmoteSymbol,
   EquippedLoadout,
   KhmerClassId,
+  PlacedHouseDecor,
   PlayerState,
   SkillId,
   ZoneType,
 } from '@shared/types';
+import type { KhmerNpcId } from '@shared/npcSchedules';
 import type { TravelRequestPayload } from './systems/TravelAndPylons';
 
 export interface JoystickVector {
@@ -194,6 +196,13 @@ export interface EventMap {
     items?: Array<{ itemId: string; quantity: number }>;
     label: string;
   };
+  'npc:openDialogue': { npcId: KhmerNpcId };
+  'house:setDecorateMode': { active: boolean; itemId?: string | null };
+  'house:placeQuick': { itemId: string };
+  'house:rotateDecor': { uid: string };
+  'house:removeDecor': { uid: string };
+  'house:decorUpdated': { houseDecor: PlacedHouseDecor[]; toast?: string };
+  'house:restHeal': void;
   'ticker:push': { text: string; category?: 'boss' | 'reforge' | 'weather' | 'club' | 'market' };
   'shrine:pray': void;
   'mobile:joystick': JoystickVector;
@@ -230,7 +239,8 @@ export interface EventMap {
       | 'worldMap'
       | 'serverCity'
       | 'reforge'
-      | 'clubGames';
+      | 'clubGames'
+      | 'houseDecor';
     farmTab?: 'seeds' | 'livestock' | 'artisan';
     shopTab?: 'primary' | 'secondary';
     friendsTab?: 'friends' | 'inbox';

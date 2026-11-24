@@ -820,4 +820,15 @@ export const FARM_ITEMS: Record<string, FarmItemMeta> = {
     primaryColor: '#c084fc',
     description: 'Shimmering subterranean essence dropped by wandering cavern beasts.',
   },
+  // Update 1.3B Rithy 6-Heart Gift
+  tool_master_bamboo_rod: {
+    id: 'tool_master_bamboo_rod',
+    name: 'Master Bamboo Rod',
+    khmerName: 'ដងសន្ទូចឫស្សីឯក',
+    kind: 'artisan',
+    rarity: 'epic',
+    sellCoins: 0,
+    primaryColor: '#22c55e',
+    description: 'Prized hand-lacquered bamboo fishing rod gifted by Rithy at 6 Hearts. Widens your Riverside Fishing catch zone!',
+  },
 };

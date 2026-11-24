@@ -81,6 +81,9 @@ export interface SavedProfilePayload {
   weaponPrefix?: string | null;
   armorPrefix?: string | null;
   shimmerBlessings?: string[];
+  npcFriendships?: PlayerState['npcFriendships'];
+  houseDecor?: PlayerState['houseDecor'];
+  ownedFurniture?: PlayerState['ownedFurniture'];
   hasCompletedCreation?: boolean;
   activeClass: PlayerState['activeClass'];
   weapon: PlayerState['weapon'];
@@ -131,6 +134,9 @@ export function serializePlayerStateForSave(state: PlayerState): SavedProfilePay
     weaponPrefix: state.weaponPrefix ?? 'keen',
     armorPrefix: state.armorPrefix ?? 'armored',
     shimmerBlessings: [...(state.shimmerBlessings ?? [])],
+    npcFriendships: { ...(state.npcFriendships ?? {}) },
+    houseDecor: state.houseDecor ? state.houseDecor.map((d) => ({ ...d })) : undefined,
+    ownedFurniture: state.ownedFurniture ? { ...state.ownedFurniture } : undefined,
     hasCompletedCreation: Boolean(state.hasCompletedCreation ?? state.loadout.hasCompletedCreation),
     activeClass: state.activeClass,
     weapon: { ...state.weapon },
@@ -140,6 +146,30 @@ export function serializePlayerStateForSave(state: PlayerState): SavedProfilePay
 }
 
 const GUEST_CREATION_KEY = 'phum_khnhom_guest_creation_v1';
+const GUEST_PROGRESS_KEY = 'phum_khnhom_guest_progress_v1';
+
+export function saveGuestProgressSnapshot(state: PlayerState): void {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    const payload = serializePlayerStateForSave(state);
+    window.localStorage.setItem(GUEST_PROGRESS_KEY, JSON.stringify(payload));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
+export function loadGuestProgressSnapshot(): SavedProfilePayload | null {
+  if (typeof window === 'undefined' || !window.localStorage) return null;
+  try {
+    const raw = window.localStorage.getItem(GUEST_PROGRESS_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as SavedProfilePayload;
+    if (!parsed || typeof parsed !== 'object' || !parsed.name) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
 
 export interface SavedGuestCreation {
   name: string;
@@ -364,6 +394,16 @@ export function hydratePlayerStateFromSave(
     weaponPrefix: typeof saved?.weaponPrefix === 'string' ? saved.weaponPrefix : 'keen',
     armorPrefix: typeof saved?.armorPrefix === 'string' ? saved.armorPrefix : 'armored',
     shimmerBlessings: Array.isArray(saved?.shimmerBlessings) ? saved.shimmerBlessings : [],
+    npcFriendships:
+      saved?.npcFriendships && typeof saved.npcFriendships === 'object' ? saved.npcFriendships : {},
+    houseDecor:
+      Array.isArray(saved?.houseDecor)
+        ? saved.houseDecor
+        : INITIAL_PLAYER_STATE.houseDecor,
+    ownedFurniture:
+      saved?.ownedFurniture && typeof saved.ownedFurniture === 'object'
+        ? saved.ownedFurniture
+        : INITIAL_PLAYER_STATE.ownedFurniture,
     hasCompletedCreation: Boolean(
       saved?.hasCompletedCreation ?? saved?.loadout?.hasCompletedCreation ?? false
     ),

@@ -44,6 +44,9 @@ export interface SavedPlayerProfile {
   weaponPrefix?: string | null;
   armorPrefix?: string | null;
   shimmerBlessings?: string[];
+  npcFriendships?: Record<string, { hearts: number; lastGiftDay: string | null; claimedRewards?: number[] }>;
+  houseDecor?: Array<{ uid: string; itemId: string; x: number; y: number; rotation?: number }>;
+  ownedFurniture?: Record<string, number>;
   hasCompletedCreation?: boolean;
   activeClass?: string;
   weapon?: Record<string, unknown>;
@@ -440,6 +443,17 @@ function rowToSavedProfile(row: {
     weaponPrefix: typeof meta.weaponPrefix === 'string' ? meta.weaponPrefix : 'keen',
     armorPrefix: typeof meta.armorPrefix === 'string' ? meta.armorPrefix : 'armored',
     shimmerBlessings: Array.isArray(meta.shimmerBlessings) ? (meta.shimmerBlessings as string[]) : [],
+    npcFriendships:
+      typeof meta.npcFriendships === 'object' && meta.npcFriendships
+        ? (meta.npcFriendships as Record<string, { hearts: number; lastGiftDay: string | null; claimedRewards?: number[] }>)
+        : {},
+    houseDecor: Array.isArray(meta.houseDecor)
+      ? (meta.houseDecor as Array<{ uid: string; itemId: string; x: number; y: number; rotation?: number }>)
+      : undefined,
+    ownedFurniture:
+      typeof meta.ownedFurniture === 'object' && meta.ownedFurniture
+        ? (meta.ownedFurniture as Record<string, number>)
+        : undefined,
     hasCompletedCreation: Boolean(
       meta.hasCompletedCreation ??
         (loadout as { hasCompletedCreation?: boolean }).hasCompletedCreation ??
@@ -730,6 +744,9 @@ export async function savePlayerProfile(
     weaponPrefix: profile.weaponPrefix ?? 'keen',
     armorPrefix: profile.armorPrefix ?? 'armored',
     shimmerBlessings: profile.shimmerBlessings ?? [],
+    npcFriendships: profile.npcFriendships ?? {},
+    houseDecor: profile.houseDecor,
+    ownedFurniture: profile.ownedFurniture,
     hasCompletedCreation: Boolean(
       profile.hasCompletedCreation ??
         (profile.loadout as { hasCompletedCreation?: boolean } | undefined)?.hasCompletedCreation ??

@@ -264,11 +264,30 @@ export class FarmScene extends Phaser.Scene {
   };
 
   private buildHomesteadLandmarks(): void {
-    // 1. Custom Khmer Stilt Farmhouse (North-Center)
+    // 1. Custom Khmer Stilt Farmhouse (North-Center — Enterable Interior!)
     this.add.image(330, 198, 'soft_shadow').setDisplaySize(96, 26).setDepth(194);
-    this.add.image(330, 200, 'khmer_stilt_house').setOrigin(0.5, 0.92).setScale(0.72).setDepth(200);
+    const houseImg = this.add
+      .image(330, 200, 'khmer_stilt_house')
+      .setOrigin(0.5, 0.92)
+      .setScale(0.72)
+      .setDepth(200)
+      .setInteractive({ useHandCursor: true });
+    houseImg.on('pointerdown', () => this.enterHouseInterior());
     const houseCol = this.add.rectangle(330, 184, 70, 32, 0x000000, 0);
     this.colliders.add(houseCol);
+    this.add
+      .text(330, 204, '🏡 ENTER HOME [E]', {
+        fontFamily: 'Fredoka, sans-serif',
+        fontSize: '10px',
+        fontStyle: 'bold',
+        color: '#fef08a',
+        backgroundColor: 'rgba(15, 23, 42, 0.85)',
+        padding: { x: 5, y: 2 },
+      })
+      .setResolution(2)
+      .setScale(0.45)
+      .setOrigin(0.5, 0)
+      .setDepth(210);
 
     // 2. Farm Seed & Artisan Stall (Next to Farmhouse — opens FarmModal)
     this.add.image(STALL_X, STALL_Y, 'soft_shadow').setDisplaySize(54, 18).setDepth(192);
@@ -827,6 +846,10 @@ export class FarmScene extends Phaser.Scene {
       this.returnToOverworld();
       return;
     }
+    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, 330, 212) < 58) {
+      this.enterHouseInterior();
+      return;
+    }
     if (Phaser.Math.Distance.Between(this.player.x, this.player.y, STALL_X, STALL_Y) < 52) {
       EventBus.emit('ui:openModal', { modal: 'farm', farmTab: 'seeds' });
       return;
@@ -847,6 +870,25 @@ export class FarmScene extends Phaser.Scene {
     }
     // Otherwise open Farm Stall modal for convenience
     EventBus.emit('ui:openModal', { modal: 'farm', farmTab: 'seeds' });
+  }
+
+  private enterHouseInterior(): void {
+    if (this.transitioning) return;
+    this.transitioning = true;
+    this.cameras.main.fadeOut(200, 12, 10, 8);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      this.scene.start('HouseInteriorScene', {
+        returnZone: 'farm',
+        playerState: {
+          ...this.player.state,
+          zone: 'house',
+          weapon: { ...this.player.state.weapon },
+          loadout: { ...this.player.state.loadout },
+          currencies: { ...this.player.state.currencies },
+          lifeStats: { ...this.player.state.lifeStats },
+        },
+      });
+    });
   }
 
   private returnToOverworld(

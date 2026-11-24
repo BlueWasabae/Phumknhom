@@ -21,6 +21,12 @@ import {
 } from '@shared/accessoryFusions';
 import { craftCombatArmorSet } from './data/armorSets';
 import {
+  getNpcPerkFlags,
+  giveGiftToNpc,
+  type KhmerNpcId,
+} from '@shared/npcSchedules';
+import { buyHouseFurniture } from '@shared/houseDecor';
+import {
   getScaledReforgeCost,
   rollReforgeModifier,
   type ReforgeCategory,
@@ -78,12 +84,15 @@ import {
   createMarketListingApi,
   declineFriendRequestApi,
   fetchFriends,
+  hydratePlayerStateFromSave,
   loadGuestCreationProfile,
+  loadGuestProgressSnapshot,
   reforgeItemApi,
   sandboxTopUpApi,
   sanitizeLegacyLocalStoragePets,
   saveAccountProfile,
   saveGuestCreationProfile,
+  saveGuestProgressSnapshot,
   sendFriendRequestApi,
   syncGoogleAccount,
   type AuthSession,
@@ -134,6 +143,8 @@ import { ServerTickerBanner } from './ui/ServerTickerBanner';
 import { ReforgeModal, type ReforgeTab } from './ui/ReforgeModal';
 import { ClubGamesModal, type ClubGameTab } from './ui/ClubGamesModal';
 import { CharacterCreatorModal, type CharacterCreationResult } from './ui/CharacterCreatorModal';
+import { NpcDialogueModal } from './ui/NpcDialogueModal';
+import { HouseDecorModal } from './ui/HouseDecorModal';
 import { soundManager } from './game/systems/SoundManager';
 import { supabase } from './lib/supabaseClient';
 
@@ -159,6 +170,7 @@ type ActiveModalType =
   | 'serverCity'
   | 'reforge'
   | 'clubGames'
+  | 'houseDecor'
   | 'characterCreator';
 
 interface FloatingXpBanner extends SkillXpToastPayload {
@@ -168,17 +180,26 @@ interface FloatingXpBanner extends SkillXpToastPayload {
 export const App: React.FC = () => {
   const mountRef = useRef<HTMLDivElement>(null);
 
-  const [player, setPlayer] = useState<PlayerState>(() => ({
-    ...INITIAL_PLAYER_STATE,
-    name: `PhumHero_${Math.floor(10 + Math.random() * 89)}`,
-    weapon: { ...INITIAL_PLAYER_STATE.weapon },
-    loadout: { ...INITIAL_PLAYER_STATE.loadout },
-    currencies: { ...INITIAL_PLAYER_STATE.currencies },
-    lifeStats: {
-      ...INITIAL_PLAYER_STATE.lifeStats,
-      stylish: computeStylishScore(INITIAL_PLAYER_STATE.loadout),
-    },
-  }));
+  const [player, setPlayer] = useState<PlayerState>(() => {
+    const savedGuest = loadGuestProgressSnapshot();
+    if (savedGuest) {
+      return hydratePlayerStateFromSave(savedGuest, savedGuest.name);
+    }
+    return {
+      ...INITIAL_PLAYER_STATE,
+      name: `PhumHero_${Math.floor(10 + Math.random() * 89)}`,
+      weapon: { ...INITIAL_PLAYER_STATE.weapon },
+      loadout: { ...INITIAL_PLAYER_STATE.loadout },
+      currencies: { ...INITIAL_PLAYER_STATE.currencies },
+      lifeStats: {
+        ...INITIAL_PLAYER_STATE.lifeStats,
+        stylish: computeStylishScore(INITIAL_PLAYER_STATE.loadout),
+      },
+    };
+  });
+
+  const [activeNpcId, setActiveNpcId] = useState<KhmerNpcId | null>(null);
+  const [houseDecorateMode, setHouseDecorateMode] = useState(false);
 
   const [zone, setZone] = useState<ZoneType>('overworld');
   const [networkStatus, setNetworkStatus] = useState<NetworkStatusPayload>({
@@ -485,9 +506,15 @@ export const App: React.FC = () => {
     setFriendsData(data);
   }, []);
 
-  // Debounced auto-save whenever player harvests, buys/sells, equips, levels a skill, defeats a boss, or switches zones
+  // Debounced auto-save whenever player harvests, buys/sells, equips, gifts NPCs, decorates home, or switches zones
   useEffect(() => {
-    if (!authSession) return;
+    if (!authSession) {
+      // Persist Guest / Offline progress (friendships, house decor, accessories, coins, inventory) cleanly in localStorage
+      const guestTimer = window.setTimeout(() => {
+        saveGuestProgressSnapshot(playerRef.current);
+      }, 450);
+      return () => window.clearTimeout(guestTimer);
+    }
     if (skipNextAutoSaveRef.current) {
       skipNextAutoSaveRef.current = false;
       return;
@@ -507,6 +534,8 @@ export const App: React.FC = () => {
       const sess = authSessionRef.current;
       if (sess) {
         void saveAccountProfile(sess, playerRef.current, true);
+      } else {
+        saveGuestProgressSnapshot(playerRef.current);
       }
     };
     window.addEventListener('beforeunload', onUnload);
@@ -1200,13 +1229,59 @@ export const App: React.FC = () => {
       EventBus.on('scene:ready', ({ zone: nextZone }) => {
         setZone(nextZone);
         setNearPortal(false);
+        if (nextZone !== 'house') {
+          setHouseDecorateMode(false);
+        }
         if (nextZone !== 'dungeon') {
           setBossHud(null);
           setDungeonOutcome(null);
         }
+        // Sync persisted guest/cloud player state immediately onto newly started Phaser scene!
+        EventBus.emit('player:stateSync', playerRef.current);
       }),
       EventBus.on('player:state', (nextPlayer) => {
-        setPlayer(nextPlayer);
+        setPlayer((prev) => ({
+          ...nextPlayer,
+          npcFriendships: nextPlayer.npcFriendships ?? prev.npcFriendships,
+          houseDecor: nextPlayer.houseDecor ?? prev.houseDecor,
+          ownedFurniture: nextPlayer.ownedFurniture ?? prev.ownedFurniture,
+        }));
+      }),
+      EventBus.on('npc:openDialogue', ({ npcId }) => {
+        setActiveNpcId(npcId);
+      }),
+      EventBus.on('house:decorUpdated', ({ houseDecor, toast }) => {
+        setPlayer((prev) => {
+          const nextState: PlayerState = {
+            ...prev,
+            houseDecor: houseDecor.map((d) => ({ ...d })),
+          };
+          if (!authSessionRef.current) {
+            saveGuestProgressSnapshot(nextState);
+          }
+          return nextState;
+        });
+        if (toast) {
+          EventBus.emit('ui:toast', { text: toast });
+        }
+      }),
+      EventBus.on('house:restHeal', () => {
+        runStateAction((prev) => {
+          const bridge = computeVillageToDungeonBridge(prev);
+          return {
+            state: {
+              ...prev,
+              hp: bridge.effectiveMaxHp,
+              lifeStats: {
+                ...prev.lifeStats,
+                healthy: Math.min(100, prev.lifeStats.healthy + 10),
+                happy: Math.min(100, prev.lifeStats.happy + 10),
+              },
+            },
+            ok: true,
+            message: `🛏️ Rested in your Khmer Stilt House! HP restored to ${bridge.effectiveMaxHp}/${bridge.effectiveMaxHp} (Healthy +10, Happy +10)!`,
+          };
+        });
       }),
       EventBus.on('frontier:gather', ({ skillId, xp, coins, itemId, label }) => {
         runStateAction((prev) => {
@@ -1456,6 +1531,18 @@ export const App: React.FC = () => {
         onOpenClubGames={() => {
           setClubGameTab('tien_len');
           setActiveModal('clubGames');
+        }}
+        onOpenHouseDecor={() => setActiveModal('houseDecor')}
+        onInviteFriendsHome={() => {
+          const hostName = playerRef.current.name;
+          roomClient.sendChat(`🏡 [HOME INVITE] Come visit ${hostName}'s decorated Khmer Stilt House!`);
+          EventBus.emit('ticker:push', {
+            text: `🏡 ${hostName} invited friends to hang out inside their decorated Khmer Stilt House!`,
+            category: 'club',
+          });
+          EventBus.emit('ui:toast', {
+            text: `👥 Sent live Home Invite to online friends in ${networkStatus.areaId}!`,
+          });
         }}
         onFastForwardFarm={() => runFarmAction((s) => fastForwardFarmTimers(s, 60))}
       />
@@ -1941,8 +2028,62 @@ export const App: React.FC = () => {
             return res;
           })
         }
+        onBuyFurniture={(itemId) =>
+          runStateAction((s) => {
+            const perks = getNpcPerkFlags(s);
+            const res = buyHouseFurniture(s, itemId, perks.boutiqueDiscountPct);
+            if (res.ok) soundManager.playSfx('coin');
+            return res;
+          })
+        }
         onEquipFashion={handleEquipItem}
         onCustomizeLook={(patch) => applyLoadoutPatch(patch)}
+      />
+
+      <NpcDialogueModal
+        open={Boolean(activeNpcId)}
+        npcId={activeNpcId}
+        player={player}
+        onClose={() => setActiveNpcId(null)}
+        onGiveGift={(npcId, itemId) => {
+          const res = giveGiftToNpc(playerRef.current, npcId, itemId);
+          EventBus.emit('ui:toast', { text: res.message });
+          if (res.ok) {
+            soundManager.playSfx('level_up');
+            setPlayer(res.state);
+            EventBus.emit('player:stateSync', res.state);
+            if (!authSessionRef.current) {
+              saveGuestProgressSnapshot(res.state);
+            }
+          }
+          return { ok: res.ok, reactionLine: res.reactionLine };
+        }}
+      />
+
+      <HouseDecorModal
+        open={activeModal === 'houseDecor'}
+        player={player}
+        decorateMode={houseDecorateMode}
+        onToggleDecorateMode={(active, itemId) => {
+          setHouseDecorateMode(active);
+          EventBus.emit('house:setDecorateMode', { active, itemId: itemId ?? null });
+        }}
+        onBuyFurniture={(itemId) =>
+          runStateAction((s) => {
+            const perks = getNpcPerkFlags(s);
+            const res = buyHouseFurniture(s, itemId, perks.boutiqueDiscountPct);
+            if (res.ok) soundManager.playSfx('coin');
+            return res;
+          })
+        }
+        onInviteFriendsHome={() => {
+          const hostName = playerRef.current.name;
+          roomClient.sendChat(`🏡 [HOME INVITE] Come visit ${hostName}'s decorated Khmer Stilt House!`);
+          EventBus.emit('ui:toast', {
+            text: `👥 Sent live Home Invite to online friends in ${networkStatus.areaId}!`,
+          });
+        }}
+        onClose={() => setActiveModal(null)}
       />
 
       <SkillTreeModal
