@@ -19,6 +19,7 @@ export interface DiamondShopItemDef {
   badge: string;
   description: string;
   itemId?: string;
+  itemIds?: string[];
   mountId?: string;
   bagSlotsBonus?: number;
 }
@@ -70,26 +71,40 @@ export const MONTHLY_VILLAGE_PASS = {
  */
 export const DIAMOND_SHOP_ITEMS: DiamondShopItemDef[] = [
   {
-    id: 'shop_kny_royal',
-    name: 'Khmer New Year Royal Set',
-    khmerName: 'ឈុតសង្ក្រាន្តរាជវង្ស',
+    id: 'shop_royal_angkor_set',
+    name: 'Royal Golden Angkor Armor Set',
+    khmerName: 'ឈុតគ្រឿងក្រោះមាសអង្គររាជវង្ស',
     category: 'cosmetic',
-    diamondCost: 250,
-    icon: '👘',
-    badge: 'Prestige Cosmetic',
-    description: 'Gold-brocade Khmer New Year royal attire (+110 Stylish, 0 combat stats).',
-    itemId: 'shirt_kny_royal',
+    diamondCost: 280,
+    icon: '👑',
+    badge: '3-Piece Prestige Set',
+    description: 'Full Royal Golden Angkor Crown, Gilded Armor & Greaves (+300 Stylish, 0 combat stats).',
+    itemId: 'shirt_royal_angkor',
+    itemIds: ['hat_royal_angkor', 'shirt_royal_angkor', 'pants_royal_angkor'],
   },
   {
     id: 'shop_cyber_apsara',
-    name: 'Cyber-Apsara Suit',
-    khmerName: 'ឈុតអប្សរាអនាគត',
+    name: 'Cyber-Apsara Neon Set',
+    khmerName: 'ឈុតអប្សរាអនាគតនីអុង',
     category: 'cosmetic',
     diamondCost: 300,
     icon: '✨',
-    badge: 'Prestige Cosmetic',
-    description: 'Neon-cyan & gold futuristic Angkorian celestial suit (+120 Stylish, 0 combat stats).',
+    badge: '3-Piece Prestige Set',
+    description: 'Neon-cyan & gold Cyber-Apsara Crown, Suit & Leggings (+295 Stylish, 0 combat stats).',
     itemId: 'shirt_cyber_apsara',
+    itemIds: ['hat_cyber_apsara', 'shirt_cyber_apsara', 'pants_cyber_apsara'],
+  },
+  {
+    id: 'shop_celestial_naga_set',
+    name: 'Celestial Naga Sovereign Set',
+    khmerName: 'ឈុតស្តេចនាគទេព',
+    category: 'cosmetic',
+    diamondCost: 360,
+    icon: '🐉',
+    badge: 'Mythic 3-Piece Set',
+    description: 'Sovereign Naga Crown, Emerald Vestments & Sacred Back Halo (+385 Stylish, 0 combat stats).',
+    itemId: 'shirt_celestial_naga',
+    itemIds: ['hat_celestial_naga', 'shirt_celestial_naga', 'wings_celestial_naga'],
   },
   {
     id: 'shop_angel_demon_wings',
@@ -181,8 +196,13 @@ export function purchaseDiamondShopItem(
   let nextActiveMount = state.activeMount ?? null;
   let nextBagSlots = state.extraBagSlots ?? 0;
 
-  if (def.itemId) {
-    nextInv.push({ itemId: def.itemId, quantity: 1, itemLevel: 1 });
+  const grantIds = def.itemIds && def.itemIds.length > 0 ? def.itemIds : def.itemId ? [def.itemId] : [];
+  if (grantIds.length > 0) {
+    for (const id of grantIds) {
+      if (!nextInv.some((i) => i.itemId === id && i.quantity > 0)) {
+        nextInv.push({ itemId: id, quantity: 1, itemLevel: 1 });
+      }
+    }
   }
   if (def.mountId) {
     nextMounts.push(def.mountId);

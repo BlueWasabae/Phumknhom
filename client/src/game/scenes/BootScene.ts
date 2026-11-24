@@ -5,24 +5,6 @@ const NA = '/assets/packs/ninja-adventure/Ninja Adventure - Asset Pack';
 const SV = '/assets/packs/serene-village/SERENE_VILLAGE_REVAMPED';
 const LF = '/assets/packs/legacy-fantasy/Legacy-Fantasy - High Forest 2.3';
 
-/**
- * Verified 16x16 4-directional Ninja Adventure character sprite sheets (64x112 = 4 cols x 7 rows):
- * Col 0=down, 1=up, 2=left, 3=right | Rows 0-3=walk, Row 4=attack, Row 5=jump
- */
-export const HERO_CHARACTER_SHEETS = [
-  'char_boy',
-  'char_fighter',
-  'char_hunter',
-  'char_monk',
-  'char_ninja',
-  'char_sultan',
-  'char_knight',
-  'char_princess',
-  'char_master',
-] as const;
-
-export type HeroCharacterKey = (typeof HERO_CHARACTER_SHEETS)[number];
-
 export class BootScene extends Phaser.Scene {
   constructor() {
     super('BootScene');
@@ -52,23 +34,8 @@ export class BootScene extends Phaser.Scene {
       label.destroy();
     });
 
-    // ---- 1. NINJA ADVENTURE: VERIFIED 16x16 CHIBI CHARACTER SPRITESHEETS (64x112) ----
-    const charPaths: Record<HeroCharacterKey, string> = {
-      char_boy: `${NA}/Actor/Character/Boy/SpriteSheet.png`,
-      char_fighter: `${NA}/Actor/Character/FighterRed/SpriteSheet.png`,
-      char_hunter: `${NA}/Actor/Character/Hunter/SpriteSheet.png`,
-      char_monk: `${NA}/Actor/Character/Monk/SpriteSheet.png`,
-      char_ninja: `${NA}/Actor/Character/NinjaDark/SpriteSheet.png`,
-      char_sultan: `${NA}/Actor/Character/Sultan/SpriteSheet.png`,
-      char_knight: `${NA}/Actor/Character/KnightGold/SpriteSheet.png`,
-      char_princess: `${NA}/Actor/Character/Princess/SpriteSheet.png`,
-      char_master: `${NA}/Actor/Character/Master/SpriteSheet.png`,
-    };
-    for (const [key, url] of Object.entries(charPaths)) {
-      this.load.spritesheet(key, url, { frameWidth: 16, frameHeight: 16 });
-    }
-    // Keep player_boy alias for legacy Arcade physics body reference
-    this.load.spritesheet('player_boy', `${NA}/Actor/Character/Boy/SpriteSheet.png`, {
+    // ---- 1. VILLAGE NPC SPRITE (Master Somnang Blacksmith — players use 10-layer Human Chibi PaperDoll!) ----
+    this.load.spritesheet('char_master', `${NA}/Actor/Character/Master/SpriteSheet.png`, {
       frameWidth: 16,
       frameHeight: 16,
     });
@@ -393,6 +360,14 @@ export class BootScene extends Phaser.Scene {
   }
 
   private generateLightAndUiOverlays(): void {
+    // Transparent 16x16 Arcade Physics hitbox anchor for Human Chibi Player
+    if (!this.textures.exists('player_collider')) {
+      const tex = this.textures.createCanvas('player_collider', 16, 16);
+      if (tex) {
+        tex.refresh();
+      }
+    }
+
     // Crisp Yellow Downward "JOIN" Arrow UI indicator
     if (!this.textures.exists('join_arrow')) {
       const tex = this.textures.createCanvas('join_arrow', 34, 36);
@@ -538,24 +513,6 @@ export class BootScene extends Phaser.Scene {
   }
 
   private registerAnimations(): void {
-    // Register 4-directional walk animations for ALL 9 verified Ninja Adventure character sheets!
-    const dirs: Array<[string, number[]]> = [
-      ['down', [0, 4, 8, 12]],
-      ['up', [1, 5, 9, 13]],
-      ['left', [2, 6, 10, 14]],
-      ['right', [3, 7, 11, 15]],
-    ];
-    for (const key of HERO_CHARACTER_SHEETS) {
-      for (const [d, frames] of dirs) {
-        this.safeCreateAnim(`${key}_walk_${d}`, key, frames, 9, -1);
-      }
-    }
-
-    // Legacy boy_walk_* aliases
-    for (const [d, frames] of dirs) {
-      this.safeCreateAnim(`boy_walk_${d}`, 'player_boy', frames, 9, -1);
-    }
-
     // Real Boss idle animations (GiantFrog 5 frames, GiantSpirit 5 frames)
     this.safeCreateAnim('boss_frog_idle', 'boss_giant_frog_idle', [0, 1, 2, 3, 4], 7, -1);
     this.safeCreateAnim('boss_spirit_idle', 'boss_giant_spirit_idle', [0, 1, 2, 3, 4], 7, -1);

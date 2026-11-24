@@ -73,6 +73,7 @@ export interface SavedProfilePayload {
   weaponPrefix?: string | null;
   armorPrefix?: string | null;
   shimmerBlessings?: string[];
+  hasCompletedCreation?: boolean;
   activeClass: PlayerState['activeClass'];
   weapon: PlayerState['weapon'];
   defense: number;
@@ -122,11 +123,48 @@ export function serializePlayerStateForSave(state: PlayerState): SavedProfilePay
     weaponPrefix: state.weaponPrefix ?? 'keen',
     armorPrefix: state.armorPrefix ?? 'armored',
     shimmerBlessings: [...(state.shimmerBlessings ?? [])],
+    hasCompletedCreation: Boolean(state.hasCompletedCreation ?? state.loadout.hasCompletedCreation),
     activeClass: state.activeClass,
     weapon: { ...state.weapon },
     defense: state.defense,
     areaChannel: state.areaChannel,
   };
+}
+
+const GUEST_CREATION_KEY = 'phum_khnhom_guest_creation_v1';
+
+export interface SavedGuestCreation {
+  name: string;
+  loadout: EquippedLoadout;
+  activeClass: PlayerState['activeClass'];
+  hasCompletedCreation: boolean;
+}
+
+export function loadGuestCreationProfile(): SavedGuestCreation | null {
+  if (typeof window === 'undefined' || !window.localStorage) return null;
+  try {
+    const raw = window.localStorage.getItem(GUEST_CREATION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<SavedGuestCreation>;
+    if (!parsed.hasCompletedCreation || !parsed.loadout) return null;
+    return {
+      name: typeof parsed.name === 'string' && parsed.name.trim() ? parsed.name.trim() : 'PhumHero',
+      loadout: { ...DEFAULT_LOADOUT, ...parsed.loadout, pet: null, petId: null, hasCompletedCreation: true },
+      activeClass: parsed.activeClass ?? 'lbokator',
+      hasCompletedCreation: true,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function saveGuestCreationProfile(data: SavedGuestCreation): void {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    window.localStorage.setItem(GUEST_CREATION_KEY, JSON.stringify(data));
+  } catch {
+    // Ignore storage quota issues
+  }
 }
 
 const LEGACY_STARTER_PET_IDS = new Set(['mini_naga', 'pet_mini_naga']);
@@ -305,6 +343,9 @@ export function hydratePlayerStateFromSave(
     weaponPrefix: typeof saved?.weaponPrefix === 'string' ? saved.weaponPrefix : 'keen',
     armorPrefix: typeof saved?.armorPrefix === 'string' ? saved.armorPrefix : 'armored',
     shimmerBlessings: Array.isArray(saved?.shimmerBlessings) ? saved.shimmerBlessings : [],
+    hasCompletedCreation: Boolean(
+      saved?.hasCompletedCreation ?? saved?.loadout?.hasCompletedCreation ?? false
+    ),
   };
 
   const bridge = computeVillageToDungeonBridge(provisional);

@@ -60,7 +60,7 @@ export class Player {
     this.facing = zone === 'dungeon' ? 'right' : 'down';
     this.uiScale = zone === 'overworld' ? 0.44 : 1;
 
-    this.sprite = scene.physics.add.sprite(x, y, 'player_boy', 0);
+    this.sprite = scene.physics.add.sprite(x, y, 'player_collider', 0);
     this.sprite.setVisible(false);
     this.sprite.setCollideWorldBounds(true);
 
@@ -80,8 +80,8 @@ export class Player {
       .setAlpha(0.75)
       .setDepth(zone === 'overworld' ? y + 6 : 48);
 
-    // 8-Layer Modular 16-Bit Chibi Paper-Doll
-    this.baseDollScale = zone === 'overworld' ? 0.45 : 1.02;
+    // 10-Layer Modular 24x32 Pixel-Art Human Chibi Paper-Doll
+    this.baseDollScale = zone === 'overworld' ? 0.48 : 1.08;
     this.paperDoll = new PaperDoll(scene, x, y, this.state.loadout, `pd_${zone}`);
     this.paperDoll.setScale(this.baseDollScale);
     if (zone === 'dungeon') {
@@ -195,7 +195,11 @@ export class Player {
       this.state.loadout.hairStyle !== nextState.loadout.hairStyle ||
       this.state.loadout.hairColor !== nextState.loadout.hairColor ||
       this.state.loadout.skinColor !== nextState.loadout.skinColor ||
-      this.state.loadout.eyeStyle !== nextState.loadout.eyeStyle;
+      this.state.loadout.skinTone !== nextState.loadout.skinTone ||
+      this.state.loadout.eyeStyle !== nextState.loadout.eyeStyle ||
+      this.state.loadout.eyeColor !== nextState.loadout.eyeColor ||
+      this.state.loadout.eyebrowStyle !== nextState.loadout.eyebrowStyle ||
+      this.state.loadout.faceStyle !== nextState.loadout.faceStyle;
 
     if (this.state.name !== nextState.name) {
       this.nameTag.setText(nextState.name);

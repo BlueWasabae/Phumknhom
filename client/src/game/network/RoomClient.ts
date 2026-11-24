@@ -63,10 +63,15 @@ interface RawPlazaStateSchema {
 
 export function serializeAppearance(loadout: EquippedLoadout): string {
   return JSON.stringify({
+    skinTone: loadout.skinTone,
     skinColor: loadout.skinColor,
     eyeStyle: loadout.eyeStyle,
+    eyeColor: loadout.eyeColor,
+    eyebrowStyle: loadout.eyebrowStyle,
+    faceStyle: loadout.faceStyle,
     hairStyle: loadout.hairStyle,
     hairColor: loadout.hairColor,
+    starterOutfit: loadout.starterOutfit,
     hat: loadout.hat,
     hair: loadout.hair,
     shirt: loadout.shirt,

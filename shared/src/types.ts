@@ -1,3 +1,21 @@
+import type {
+  EyebrowStyleId,
+  EyeStyleId,
+  FaceStyleId,
+  HairStyleId,
+  SkinToneId,
+  StarterOutfitId,
+} from './characterStyles';
+
+export type {
+  EyebrowStyleId,
+  EyeStyleId,
+  FaceStyleId,
+  HairStyleId,
+  SkinToneId,
+  StarterOutfitId,
+} from './characterStyles';
+
 export type ZoneType = 'overworld' | 'dungeon' | 'farm' | 'club';
 
 export type DifficultyMode = 'normal' | 'expert' | 'mythic' | 'death';
@@ -68,10 +86,6 @@ export type EquipSlot =
 
 export type ItemRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 
-export type HairStyleId = 'hair_short' | 'hair_bob' | 'hair_spiky' | 'hair_long';
-
-export type EyeStyleId = 'cheerful' | 'classic' | 'cool' | 'starry';
-
 export type QualityTier = 'normal' | 'gold_star';
 
 export type PagodaBundleProgress = Record<string, string[]>;
@@ -91,20 +105,29 @@ export interface LifeStats {
   healthy: number;  // 0..100
 }
 
-export interface EquippedLoadout {
+export interface PlayerAppearance {
+  skinTone: SkinToneId;
   skinColor: string;
-  eyeStyle: EyeStyleId;
   hairStyle: HairStyleId;
   hairColor: string;
+  eyeStyle: EyeStyleId;
+  eyeColor: string;
+  eyebrowStyle: EyebrowStyleId;
+  faceStyle: FaceStyleId;
+  starterOutfit: StarterOutfitId;
   hat: string | null;
   hair: string | null;
   shirt: string | null;
   pants: string | null;
   wings: string | null;
   pet: string | null;
+  petId?: string | null;
   weapon: string | null;
   armor: string | null;
+  hasCompletedCreation?: boolean;
 }
+
+export type EquippedLoadout = PlayerAppearance;
 
 export interface InventoryItem {
   itemId: string;
@@ -211,6 +234,7 @@ export interface PlayerState {
   weaponPrefix?: string | null;
   armorPrefix?: string | null;
   shimmerBlessings?: string[];
+  hasCompletedCreation?: boolean;
   skillDamagePct: number;
   armorDamagePct: number;
   snackBuffPct: number;
@@ -246,18 +270,25 @@ export const DEFAULT_STARTER_WEAPON: WeaponStats = {
 };
 
 export const DEFAULT_LOADOUT: EquippedLoadout = {
-  skinColor: '#f4c29f',
-  eyeStyle: 'cheerful',
-  hairStyle: 'hair_short',
+  skinTone: 'golden_khmer',
+  skinColor: '#c88858',
+  eyeStyle: 'classic_round',
+  eyeColor: '#1c1917',
+  eyebrowStyle: 'normal',
+  faceStyle: 'warm_smile',
+  hairStyle: 'short_neat',
   hairColor: '#1e1b24',
-  hat: 'hat_doun',
-  hair: 'hair_item_short',
+  starterOutfit: 'krama_shirt',
+  hat: null,
+  hair: null,
   shirt: 'shirt_krama_set',
   pants: 'pants_village_shorts',
   wings: null,
   pet: null,
+  petId: null,
   weapon: 'weapon_phkak',
   armor: 'armor_rattan_guard',
+  hasCompletedCreation: false,
 };
 
 export function createInitialFarmState(now = Date.now()): FarmState {
@@ -384,14 +415,17 @@ export const INITIAL_PLAYER_STATE: PlayerState = {
     { itemId: 'hair_item_short', quantity: 1, itemLevel: 1 },
     { itemId: 'hair_item_spiky', quantity: 1, itemLevel: 1 },
     { itemId: 'hair_item_long', quantity: 1, itemLevel: 1 },
-    // Outfits / Shirts
+    // Outfits / Shirts (4 Free Starter Outfits + Starter Class Styles)
     { itemId: 'shirt_village_tunic', quantity: 1, itemLevel: 1 },
+    { itemId: 'shirt_casual_tee', quantity: 1, itemLevel: 1 },
     { itemId: 'shirt_krama_set', quantity: 1, itemLevel: 2 },
+    { itemId: 'shirt_traveler_vest', quantity: 1, itemLevel: 1 },
     { itemId: 'shirt_lbokator_gi', quantity: 1, itemLevel: 4 },
     { itemId: 'shirt_achar_robe', quantity: 1, itemLevel: 4 },
     { itemId: 'shirt_shadow_cloak', quantity: 1, itemLevel: 4 },
     // Pants
     { itemId: 'pants_village_shorts', quantity: 1, itemLevel: 1 },
+    { itemId: 'pants_casual_jeans', quantity: 1, itemLevel: 1 },
     { itemId: 'pants_sampot_hol', quantity: 1, itemLevel: 5 },
     // Armor
     { itemId: 'armor_rattan_guard', quantity: 1, itemLevel: 1 },
@@ -442,6 +476,7 @@ export const INITIAL_PLAYER_STATE: PlayerState = {
   weaponPrefix: 'keen',
   armorPrefix: 'armored',
   shimmerBlessings: [],
+  hasCompletedCreation: false,
   skillDamagePct: 0.025,
   armorDamagePct: 0.04,
   snackBuffPct: 0,

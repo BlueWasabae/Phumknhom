@@ -1,6 +1,12 @@
 import Phaser from 'phaser';
 import type { EquippedLoadout } from '@shared/types';
-import type { HeroCharacterKey } from '../scenes/BootScene';
+import {
+  normalizeEyeStyleId,
+  normalizeEyebrowStyleId,
+  normalizeFaceStyleId,
+  normalizeHairStyleId,
+  resolveSkinToneDef,
+} from '@shared/characterStyles';
 import { ITEM_CATALOG } from '../../data/items';
 
 export type PaperDollPose =
@@ -16,18 +22,6 @@ export type PaperDollFacing = 'down' | 'up' | 'left' | 'right';
 
 const NA_BASE = '/assets/packs/ninja-adventure/Ninja Adventure - Asset Pack';
 
-const CHAR_SHEET_URLS: Record<HeroCharacterKey, string> = {
-  char_boy: `${NA_BASE}/Actor/Character/Boy/SpriteSheet.png`,
-  char_fighter: `${NA_BASE}/Actor/Character/FighterRed/SpriteSheet.png`,
-  char_hunter: `${NA_BASE}/Actor/Character/Hunter/SpriteSheet.png`,
-  char_monk: `${NA_BASE}/Actor/Character/Monk/SpriteSheet.png`,
-  char_ninja: `${NA_BASE}/Actor/Character/NinjaDark/SpriteSheet.png`,
-  char_sultan: `${NA_BASE}/Actor/Character/Sultan/SpriteSheet.png`,
-  char_knight: `${NA_BASE}/Actor/Character/KnightGold/SpriteSheet.png`,
-  char_princess: `${NA_BASE}/Actor/Character/Princess/SpriteSheet.png`,
-  char_master: `${NA_BASE}/Actor/Character/Master/SpriteSheet.png`,
-};
-
 const WEAPON_URLS: Record<string, string> = {
   wp_axe: `${NA_BASE}/Items/Weapons/Axe/SpriteInHand.png`,
   wp_bigsword: `${NA_BASE}/Items/Weapons/BigSword/SpriteInHand.png`,
@@ -41,6 +35,10 @@ const WEAPON_URLS: Record<string, string> = {
   wp_club: `${NA_BASE}/Items/Weapons/Club/SpriteInHand.png`,
 };
 
+const OUTLINE = '#2b1b17';
+const CANVAS_W = 36;
+const CANVAS_H = 40;
+
 const previewImgCache = new Map<string, HTMLImageElement>();
 function getCachedHtmlImg(url: string): HTMLImageElement | null {
   let img = previewImgCache.get(url);
@@ -53,30 +51,7 @@ function getCachedHtmlImg(url: string): HTMLImageElement | null {
 }
 
 /**
- * Maps equipped wardrobe shirt / Khmer class loadout to a real 16x16 Ninja Adventure chibi sheet.
- */
-export function resolveHeroSheetKey(loadout: EquippedLoadout): HeroCharacterKey {
-  if (loadout.shirt === 'shirt_kny_royal') return 'char_knight';
-  if (loadout.shirt === 'shirt_cyber_apsara') return 'char_princess';
-  if (loadout.shirt === 'shirt_lbokator_gi') return 'char_fighter';
-  if (loadout.shirt === 'shirt_achar_robe') return 'char_monk';
-  if (loadout.shirt === 'shirt_shadow_cloak') return 'char_ninja';
-  if (loadout.shirt === 'shirt_krama_set') return 'char_sultan';
-
-  const weaponDef = loadout.weapon ? ITEM_CATALOG[loadout.weapon] : undefined;
-  const cls = weaponDef?.classId;
-  if (cls === 'archer') return 'char_hunter';
-  if (cls === 'mystic') return 'char_monk';
-  if (cls === 'shadow') return 'char_ninja';
-  if (cls === 'tamer') return 'char_princess';
-  if (loadout.weapon === 'weapon_preah_khan' || loadout.weapon === 'weapon_evolving_angkor_blade') {
-    return 'char_fighter';
-  }
-  return 'char_boy';
-}
-
-/**
- * Maps equipped Khmer weapon to a real Ninja Adventure weapon sprite key & optional elemental tint.
+ * Maps equipped Khmer weapon to a real pixel-art Ninja Adventure weapon sprite key & elemental tint.
  */
 export function resolveWeaponSprite(weaponId: string | null): { key: string; tint?: number } | null {
   if (!weaponId) return null;
@@ -104,23 +79,570 @@ export function resolveWeaponSprite(weaponId: string | null): { key: string; tin
   return { key: 'wp_axe' };
 }
 
-/**
- * Computes exact 16x16 frame index inside Ninja Adventure 4x7 SpriteSheet (64x112):
- * Col 0=down, 1=up, 2=left, 3=right | Rows 0..3=walk, Row 4=attack, Row 5=jump
- */
-function frameIndexFor(pose: PaperDollPose, facing: PaperDollFacing): number {
-  const col = facing === 'down' ? 0 : facing === 'up' ? 1 : facing === 'left' ? 2 : 3;
-  if (pose === 'attack' || pose === 'parry') return 16 + col;
-  if (pose === 'jump') return 20 + col;
-  if (pose === 'walk1') return 4 + col;
-  if (pose === 'walk2') return 8 + col;
-  if (pose === 'walk3') return 12 + col;
-  return col;
+function clampByte(n: number): number {
+  return Math.max(0, Math.min(255, Math.round(n)));
+}
+
+function shiftHex(hex: string, delta: number): string {
+  const clean = hex.replace('#', '');
+  if (clean.length !== 6) return hex;
+  const r = clampByte(parseInt(clean.slice(0, 2), 16) + delta);
+  const g = clampByte(parseInt(clean.slice(2, 4), 16) + delta);
+  const b = clampByte(parseInt(clean.slice(4, 6), 16) + delta);
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b
+    .toString(16)
+    .padStart(2, '0')}`;
+}
+
+function px(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, color: string): void {
+  ctx.fillStyle = color;
+  ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
+}
+
+function buildLoadoutSignature(loadout: EquippedLoadout): string {
+  return [
+    loadout.skinTone || loadout.skinColor,
+    loadout.hairStyle,
+    loadout.hairColor,
+    loadout.eyeStyle,
+    loadout.eyeColor,
+    loadout.eyebrowStyle,
+    loadout.faceStyle,
+    loadout.hat ?? '',
+    loadout.hair ?? '',
+    loadout.shirt ?? '',
+    loadout.pants ?? '',
+    loadout.wings ?? '',
+    loadout.armor ?? '',
+  ].join('|');
 }
 
 /**
- * Draws the REAL Ninja Adventure chibi sprite + real weapon sprite onto React UI preview canvases
- * (ProfileModal, Wardrobe, PlayerActionModal). Zero procedural rectangles!
+ * Renders the 24x32 pixel-art Human Chibi Paper-Doll onto a 36x40 pixel-snapped canvas (layers 1..9).
+ * Layer 10 (held Khmer weapon) is drawn separately by the caller for live swing rotation & sprite crispness.
+ */
+function renderHumanChibiPixels(
+  ctx: CanvasRenderingContext2D,
+  loadout: EquippedLoadout,
+  pose: PaperDollPose,
+  facing: PaperDollFacing
+): void {
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+
+  // Origin: character feet sit at y = 36, horizontal center at x = 18
+  const cx = 18;
+  const isSide = facing === 'left' || facing === 'right';
+  const isUp = facing === 'up';
+  const flipSide = facing === 'left';
+
+  const walkStep =
+    pose === 'walk1' ? 1 : pose === 'walk2' ? 0 : pose === 'walk3' ? -1 : pose === 'walk4' ? 0 : 0;
+  const bodyBob =
+    pose === 'walk1' || pose === 'walk3' ? -1 : pose === 'jump' ? -2 : pose === 'attack' ? 0 : 0;
+
+  const skin = resolveSkinToneDef(loadout.skinTone || loadout.skinColor);
+  const hairItem = loadout.hair ? ITEM_CATALOG[loadout.hair] : undefined;
+  const hairStyle = normalizeHairStyleId(hairItem?.hairStyleOverride ?? loadout.hairStyle);
+  const hairMain =
+    hairStyle === 'silver_spiky' && loadout.hair === 'hair_silver_spiky'
+      ? '#e2e8f0'
+      : loadout.hairColor || '#1e1b24';
+  const hairShade = shiftHex(hairMain, -40);
+  const hairHi = shiftHex(hairMain, 48);
+
+  const eyeStyle = normalizeEyeStyleId(loadout.eyeStyle);
+  const eyeColor = eyeStyle === 'glowing_gold' ? '#facc15' : loadout.eyeColor || '#1c1917';
+  const browStyle = normalizeEyebrowStyleId(loadout.eyebrowStyle);
+  const faceStyle = normalizeFaceStyleId(loadout.faceStyle);
+
+  const shirtDef = loadout.shirt ? ITEM_CATALOG[loadout.shirt] : ITEM_CATALOG.shirt_village_tunic;
+  const pantsDef = loadout.pants ? ITEM_CATALOG[loadout.pants] : ITEM_CATALOG.pants_village_shorts;
+  const hatDef = loadout.hat ? ITEM_CATALOG[loadout.hat] : undefined;
+  const wingsDef = loadout.wings ? ITEM_CATALOG[loadout.wings] : undefined;
+
+  const shirtMain = shirtDef?.primaryColor ?? '#3b82f6';
+  const shirtAccent = shirtDef?.accentColor ?? '#fef3c7';
+  const shirtShade = shiftHex(shirtMain, -36);
+  const shirtHi = shiftHex(shirtMain, 26);
+
+  const pantsMain = pantsDef?.primaryColor ?? '#334155';
+  const pantsAccent = pantsDef?.accentColor ?? '#64748b';
+  const pantsShade = shiftHex(pantsMain, -30);
+
+  ctx.save();
+  if (flipSide) {
+    ctx.translate(CANVAS_W, 0);
+    ctx.scale(-1, 1);
+  }
+
+  const headY = 9 + bodyBob;
+  const torsoY = 21 + bodyBob;
+  const legY = 29 + bodyBob;
+
+  // ==================== LAYER 1: WINGS / BACK ====================
+  if (wingsDef) {
+    const wMain = wingsDef.primaryColor;
+    const wAcc = wingsDef.accentColor;
+    const wVar = wingsDef.styleVariant;
+    if (wVar === 'basket') {
+      px(ctx, cx - 5, torsoY - 1, 10, 8, OUTLINE);
+      px(ctx, cx - 4, torsoY, 8, 6, wMain);
+      px(ctx, cx - 4, torsoY + 1, 8, 1, wAcc);
+      px(ctx, cx - 4, torsoY + 4, 8, 1, wAcc);
+    } else if (wVar === 'yant_halo' || wVar === 'lotus_aura' || wVar === 'celestial_naga') {
+      // Sacred glowing mandala ring behind shoulders
+      px(ctx, cx - 10, headY + 4, 20, 2, wMain);
+      px(ctx, cx - 11, headY + 6, 2, 10, wMain);
+      px(ctx, cx + 9, headY + 6, 2, 10, wMain);
+      px(ctx, cx - 10, headY + 16, 20, 2, wMain);
+      px(ctx, cx - 9, headY + 5, 2, 2, wAcc);
+      px(ctx, cx + 7, headY + 5, 2, 2, wAcc);
+      px(ctx, cx - 9, headY + 15, 2, 2, wAcc);
+      px(ctx, cx + 7, headY + 15, 2, 2, wAcc);
+    } else {
+      // Feathered / Ember / Garuda / Angel-Demon / Naga Wings
+      const leftColor = wVar === 'angel_demon' ? '#f8fafc' : wMain;
+      const rightColor = wVar === 'angel_demon' ? '#e11d48' : wMain;
+      // Left wing
+      px(ctx, cx - 15, torsoY - 4, 9, 10, OUTLINE);
+      px(ctx, cx - 14, torsoY - 3, 7, 7, leftColor);
+      px(ctx, cx - 13, torsoY - 2, 5, 2, wAcc);
+      px(ctx, cx - 14, torsoY + 4, 4, 2, OUTLINE);
+      // Right wing
+      px(ctx, cx + 6, torsoY - 4, 9, 10, OUTLINE);
+      px(ctx, cx + 7, torsoY - 3, 7, 7, rightColor);
+      px(ctx, cx + 8, torsoY - 2, 5, 2, wAcc);
+      px(ctx, cx + 10, torsoY + 4, 4, 2, OUTLINE);
+    }
+  }
+
+  // ==================== BACK HAIR LAYER (behind body/shoulders) ====================
+  if (
+    hairStyle === 'long_straight' ||
+    hairStyle === 'braided_royal' ||
+    hairStyle === 'high_ponytail' ||
+    hairStyle === 'bob_cut'
+  ) {
+    if (hairStyle === 'long_straight' || hairStyle === 'braided_royal') {
+      px(ctx, cx - 8, headY + 4, 16, 16, OUTLINE);
+      px(ctx, cx - 7, headY + 5, 14, 14, hairShade);
+      px(ctx, cx - 6, headY + 6, 12, 12, hairMain);
+      if (hairStyle === 'braided_royal') {
+        px(ctx, cx - 7, headY + 13, 2, 6, '#facc15');
+        px(ctx, cx + 5, headY + 13, 2, 6, '#facc15');
+      }
+    } else if (hairStyle === 'bob_cut') {
+      px(ctx, cx - 8, headY + 4, 16, 10, OUTLINE);
+      px(ctx, cx - 7, headY + 5, 14, 8, hairShade);
+    } else if (hairStyle === 'high_ponytail') {
+      const tailX = isSide ? cx - 9 : cx - 3;
+      px(ctx, tailX - 1, headY - 1, 7, 13, OUTLINE);
+      px(ctx, tailX, headY, 5, 11, hairMain);
+      px(ctx, tailX + 1, headY + 1, 2, 8, hairHi);
+      px(ctx, tailX, headY + 2, 5, 1, '#facc15');
+    }
+  }
+
+  // ==================== LAYER 2: HUMAN BODY & SKIN TONE + LAYER 3: PANTS & BOOTS ====================
+  // Legs & Boots (animated 4-frame walk cycle)
+  const leftLegY = legY + (walkStep === 1 ? -1 : 0);
+  const rightLegY = legY + (walkStep === -1 ? -1 : 0);
+  const leftLegX = isSide ? cx - 3 + walkStep * 2 : cx - 4;
+  const rightLegX = isSide ? cx - 1 - walkStep * 2 : cx + 1;
+
+  const isSampot = pantsDef?.styleVariant === 'sampot';
+  if (isSampot && !isSide) {
+    // Flowing Khmer Sampot Hol wrap
+    px(ctx, cx - 5, legY - 1, 10, 6, OUTLINE);
+    px(ctx, cx - 4, legY, 8, 4, pantsMain);
+    px(ctx, cx - 4, legY + 3, 8, 1, pantsAccent);
+    // Feet below Sampot
+    px(ctx, leftLegX, leftLegY + 4, 3, 3, OUTLINE);
+    px(ctx, leftLegX + 1, leftLegY + 5, 1, 1, '#5c3a21');
+    px(ctx, rightLegX, rightLegY + 4, 3, 3, OUTLINE);
+    px(ctx, rightLegX + 1, rightLegY + 5, 1, 1, '#5c3a21');
+  } else {
+    // Left Leg
+    px(ctx, leftLegX - 1, leftLegY - 1, 5, 8, OUTLINE);
+    px(ctx, leftLegX, leftLegY, 3, 4, pantsMain);
+    px(ctx, leftLegX, leftLegY + 3, 3, 1, pantsShade);
+    // Left Shoe / Boot
+    px(ctx, leftLegX, leftLegY + 4, 3, 2, '#4a2c1d');
+    px(ctx, leftLegX, leftLegY + 4, 2, 1, '#78442a');
+
+    // Right Leg
+    px(ctx, rightLegX - 1, rightLegY - 1, 5, 8, OUTLINE);
+    px(ctx, rightLegX, rightLegY, 3, 4, pantsMain);
+    px(ctx, rightLegX, rightLegY + 3, 3, 1, pantsShade);
+    // Right Shoe / Boot
+    px(ctx, rightLegX, rightLegY + 4, 3, 2, '#4a2c1d');
+    px(ctx, rightLegX, rightLegY + 4, 2, 1, '#78442a');
+  }
+
+  // Torso Base (Human Body)
+  const torsoW = isSide ? 8 : 10;
+  const torsoX = cx - Math.floor(torsoW / 2);
+  px(ctx, torsoX - 1, torsoY - 1, torsoW + 2, 10, OUTLINE);
+  px(ctx, torsoX, torsoY, torsoW, 8, skin.hex);
+
+  // ==================== LAYER 4: SHIRT / ARMOR / FULL SET ====================
+  px(ctx, torsoX, torsoY, torsoW, 8, shirtMain);
+  px(ctx, torsoX, torsoY + 6, torsoW, 2, shirtShade);
+  px(ctx, torsoX + 1, torsoY + 1, torsoW - 2, 2, shirtHi);
+
+  const sVar = shirtDef?.styleVariant ?? 'tunic';
+  if (sVar === 'krama_set') {
+    // Cream shirt + iconic red/white checkered Khmer Krama scarf!
+    px(ctx, torsoX, torsoY, torsoW, 8, '#fef3c7');
+    px(ctx, torsoX, torsoY + 6, torsoW, 2, '#e5d4a6');
+    for (let kx = 0; kx < torsoW; kx++) {
+      px(ctx, torsoX + kx, torsoY, 1, 2, kx % 2 === 0 ? '#dc2626' : '#ffffff');
+      px(ctx, torsoX + kx, torsoY + 1, 1, 1, kx % 2 === 1 ? '#dc2626' : '#ffffff');
+    }
+    if (!isUp) {
+      px(ctx, cx + 1, torsoY + 2, 2, 4, '#dc2626');
+      px(ctx, cx + 1, torsoY + 3, 1, 1, '#ffffff');
+      px(ctx, cx + 2, torsoY + 5, 1, 1, '#ffffff');
+    }
+  } else if (sVar === 'lbokator_gi' || sVar === 'crimson_lbokator') {
+    // Martial-arts crossed sash + golden belt
+    px(ctx, torsoX, torsoY + 5, torsoW, 2, shirtAccent);
+    px(ctx, torsoX + 2, torsoY, 2, 6, shirtAccent);
+  } else if (sVar === 'angkor_explorer') {
+    // Tan explorer jacket + leather cross-strap & brass buckle
+    px(ctx, torsoX + 3, torsoY, 4, 7, '#fef3c7');
+    px(ctx, torsoX + 1, torsoY + 1, 2, 6, shirtMain);
+    px(ctx, torsoX + torsoW - 3, torsoY + 1, 2, 6, shirtMain);
+    px(ctx, torsoX, torsoY + 5, torsoW, 1, '#451a03');
+    px(ctx, cx - 1, torsoY + 5, 2, 1, '#facc15');
+  } else if (sVar === 'neon_hoodie') {
+    // Streetwear dark hoodie + glowing neon cyan/pink trim + pocket
+    px(ctx, torsoX + 2, torsoY + 1, 1, 4, shirtAccent);
+    px(ctx, torsoX + torsoW - 3, torsoY + 1, 1, 4, shirtAccent);
+    px(ctx, torsoX + 2, torsoY + 5, torsoW - 4, 2, shirtShade);
+    px(ctx, torsoX, torsoY + 7, torsoW, 1, shirtAccent);
+  } else if (sVar === 'royal_angkor' || sVar === 'achar_robe' || sVar === 'festive_silk') {
+    // Golden royal brocade sash & collar trim
+    px(ctx, torsoX, torsoY, torsoW, 2, shirtAccent);
+    px(ctx, cx - 1, torsoY + 1, 2, 7, shirtAccent);
+    px(ctx, torsoX, torsoY + 6, torsoW, 1, shirtAccent);
+  } else if (sVar === 'cyber_apsara') {
+    // Futuristic neon-cyan circuit plating & gold core
+    px(ctx, torsoX + 1, torsoY + 2, torsoW - 2, 1, '#22d3ee');
+    px(ctx, cx - 1, torsoY + 1, 2, 5, '#facc15');
+    px(ctx, torsoX, torsoY + 6, torsoW, 1, '#22d3ee');
+  } else if (sVar === 'celestial_naga') {
+    // Emerald & gold sovereign armor sash
+    px(ctx, torsoX, torsoY, torsoW, 2, '#facc15');
+    px(ctx, torsoX + 2, torsoY + 2, torsoW - 4, 4, '#34d399');
+    px(ctx, cx - 1, torsoY + 3, 2, 2, '#facc15');
+  } else if (sVar === 'shadow_cloak' || sVar === 'midnight_cloak') {
+    // High twilight collar + purple/silver clasp
+    px(ctx, torsoX, torsoY, torsoW, 2, shirtShade);
+    px(ctx, cx - 1, torsoY + 1, 2, 2, shirtAccent);
+  } else if (sVar === 'traveler_vest') {
+    // Cream shirt under warm brown traveler vest
+    px(ctx, torsoX + 3, torsoY, torsoW - 6, 7, '#fef3c7');
+    px(ctx, torsoX, torsoY + 6, torsoW, 1, '#451a03');
+  } else if (sVar === 'casual_tee') {
+    // Crisp collar & chest stripe
+    px(ctx, torsoX + 2, torsoY, torsoW - 4, 1, '#ffffff');
+    px(ctx, torsoX, torsoY + 3, torsoW, 1, shirtAccent);
+  } else {
+    // Classic collar + belt
+    px(ctx, torsoX + 2, torsoY, torsoW - 4, 1, shirtAccent);
+    px(ctx, torsoX, torsoY + 6, torsoW, 1, '#5c3a21');
+  }
+
+  // Animated Arms (Left & Right)
+  const armSwingL = walkStep;
+  const armSwingR = pose === 'attack' ? -2 : -walkStep;
+  if (!isSide) {
+    // Left arm
+    px(ctx, torsoX - 3, torsoY + armSwingL, 3, 7, OUTLINE);
+    px(ctx, torsoX - 2, torsoY + 1 + armSwingL, 2, 3, shirtMain);
+    px(ctx, torsoX - 2, torsoY + 4 + armSwingL, 2, 2, skin.hex);
+    // Right arm
+    px(ctx, torsoX + torsoW, torsoY + armSwingR, 3, 7, OUTLINE);
+    px(ctx, torsoX + torsoW, torsoY + 1 + armSwingR, 2, 3, shirtMain);
+    px(ctx, torsoX + torsoW, torsoY + 4 + armSwingR, 2, 2, skin.hex);
+  } else {
+    // Side profile arm swinging across torso
+    const sideArmX = cx - 1 + armSwingR;
+    px(ctx, sideArmX - 1, torsoY, 4, 7, OUTLINE);
+    px(ctx, sideArmX, torsoY + 1, 2, 3, shirtMain);
+    px(ctx, sideArmX, torsoY + 4, 2, 2, skin.hex);
+  }
+
+  // Neck
+  px(ctx, cx - 2, torsoY - 2, 4, 2, skin.shade);
+
+  // ==================== HUMAN CHIBI HEAD (Crisp 14x12 with 1px dark-brown outline) ====================
+  const headW = isSide ? 12 : 14;
+  const headX = cx - Math.floor(headW / 2);
+
+  // Rounded pixel-art head outline
+  px(ctx, headX + 1, headY - 1, headW - 2, 1, OUTLINE);
+  px(ctx, headX, headY, headW, 11, OUTLINE);
+  px(ctx, headX + 1, headY + 11, headW - 2, 1, OUTLINE);
+
+  // Head skin fill + subtle shading
+  px(ctx, headX + 1, headY, headW - 2, 11, skin.hex);
+  px(ctx, headX + 2, headY + 1, headW - 4, 2, skin.highlight);
+  px(ctx, headX + 1, headY + 9, headW - 2, 2, skin.shade);
+
+  // Cute pixel ears
+  if (!isSide) {
+    px(ctx, headX - 1, headY + 5, 2, 3, OUTLINE);
+    px(ctx, headX, headY + 6, 1, 1, skin.shade);
+    px(ctx, headX + headW - 1, headY + 5, 2, 3, OUTLINE);
+    px(ctx, headX + headW - 1, headY + 6, 1, 1, skin.shade);
+  } else {
+    px(ctx, headX + 2, headY + 5, 2, 3, skin.shade);
+  }
+
+  // ==================== LAYERS 5, 6, 7: EYES, EYEBROWS & FACE/MOUTH (Front & Side Views) ====================
+  if (!isUp) {
+    const faceOffsetX = isSide ? 2 : 0;
+    const eyeY = headY + 5;
+    const leftEyeX = isSide ? cx + 1 : cx - 4;
+    const rightEyeX = cx + 2;
+
+    const drawSingleEye = (ex: number) => {
+      if (eyeStyle === 'happy_curve') {
+        px(ctx, ex, eyeY + 1, 3, 1, OUTLINE);
+        px(ctx, ex + 1, eyeY, 1, 1, OUTLINE);
+      } else if (eyeStyle === 'chill_sleepy') {
+        px(ctx, ex, eyeY, 3, 1, OUTLINE);
+        px(ctx, ex, eyeY + 1, 3, 1, '#ffffff');
+        px(ctx, ex + 1, eyeY + 1, 2, 1, eyeColor);
+      } else if (eyeStyle === 'sharp_fierce') {
+        px(ctx, ex, eyeY, 3, 2, '#ffffff');
+        px(ctx, ex + 1, eyeY, 2, 2, eyeColor);
+        px(ctx, ex, eyeY, 3, 1, OUTLINE);
+        px(ctx, ex + 1, eyeY + 1, 1, 1, '#ffffff');
+      } else if (eyeStyle === 'bright_big') {
+        px(ctx, ex, eyeY - 1, 3, 3, '#ffffff');
+        px(ctx, ex, eyeY, 3, 2, eyeColor);
+        px(ctx, ex + 1, eyeY, 1, 1, '#ffffff');
+      } else if (eyeStyle === 'almond') {
+        px(ctx, ex, eyeY, 3, 2, '#ffffff');
+        px(ctx, ex + 1, eyeY, 2, 2, eyeColor);
+        px(ctx, ex + 1, eyeY, 1, 1, '#ffffff');
+      } else if (eyeStyle === 'glowing_gold') {
+        px(ctx, ex, eyeY, 3, 2, '#fef08a');
+        px(ctx, ex + 1, eyeY, 2, 2, '#f59e0b');
+        px(ctx, ex + 1, eyeY, 1, 1, '#ffffff');
+      } else {
+        // classic_round
+        px(ctx, ex, eyeY, 2, 2, eyeColor);
+        px(ctx, ex, eyeY, 1, 1, '#ffffff');
+      }
+    };
+
+    if (isSide) {
+      drawSingleEye(leftEyeX);
+    } else {
+      drawSingleEye(leftEyeX);
+      drawSingleEye(rightEyeX);
+    }
+
+    // Layer 6: Eyebrows
+    const browColor = shiftHex(hairMain, -25);
+    const drawBrow = (bx: number, isRight: boolean) => {
+      if (browStyle === 'thick') {
+        px(ctx, bx, eyeY - 2, 3, 2, browColor);
+      } else if (browStyle === 'arched') {
+        px(ctx, bx, eyeY - 2, 1, 1, browColor);
+        px(ctx, bx + 1, eyeY - 3, 1, 1, browColor);
+        px(ctx, bx + 2, eyeY - 2, 1, 1, browColor);
+      } else if (browStyle === 'determined') {
+        px(ctx, bx, isRight ? eyeY - 2 : eyeY - 3, 2, 1, browColor);
+        px(ctx, bx + 1, isRight ? eyeY - 3 : eyeY - 2, 2, 1, browColor);
+      } else if (browStyle === 'soft') {
+        px(ctx, bx, eyeY - 2, 2, 1, shiftHex(hairMain, 10));
+      } else {
+        px(ctx, bx, eyeY - 2, 3, 1, browColor);
+      }
+    };
+    if (isSide) {
+      drawBrow(leftEyeX, false);
+    } else {
+      drawBrow(leftEyeX, false);
+      drawBrow(rightEyeX, true);
+    }
+
+    // Layer 7: Face / Mouth & Blush
+    const mouthX = cx - 1 + faceOffsetX;
+    const mouthY = headY + 9;
+    if (faceStyle === 'rosy_blush') {
+      if (!isSide) {
+        px(ctx, cx - 5, headY + 7, 2, 1, '#fb7185');
+        px(ctx, cx + 3, headY + 7, 2, 1, '#fb7185');
+      } else {
+        px(ctx, cx + 1, headY + 7, 2, 1, '#fb7185');
+      }
+      px(ctx, mouthX, mouthY, 2, 1, '#9f4a3c');
+    } else if (faceStyle === 'cheerful_open') {
+      px(ctx, mouthX - 1, mouthY - 1, 4, 2, '#991b1b');
+      px(ctx, mouthX, mouthY, 2, 1, '#fca5a5');
+    } else if (faceStyle === 'confident_smirk') {
+      px(ctx, mouthX, mouthY, 2, 1, OUTLINE);
+      px(ctx, mouthX + 2, mouthY - 1, 1, 1, OUTLINE);
+    } else if (faceStyle === 'neutral') {
+      px(ctx, mouthX, mouthY, 3, 1, '#7c3f34');
+    } else if (faceStyle === 'fierce_scar') {
+      // Diagonal battle scar across cheek + determined mouth
+      px(ctx, mouthX, mouthY, 3, 1, OUTLINE);
+      px(ctx, cx + 2, headY + 6, 1, 1, '#be123c');
+      px(ctx, cx + 3, headY + 7, 1, 1, '#be123c');
+      px(ctx, cx + 4, headY + 8, 1, 1, '#be123c');
+    } else {
+      // warm_smile
+      px(ctx, mouthX - 1, mouthY - 1, 1, 1, '#9f4a3c');
+      px(ctx, mouthX, mouthY, 2, 1, '#9f4a3c');
+      px(ctx, mouthX + 2, mouthY - 1, 1, 1, '#9f4a3c');
+    }
+  }
+
+  // ==================== LAYER 8: HAIR STYLE (8 Free + 2 Premium Salon) ====================
+  if (isUp) {
+    // Back of head covered completely in hair with glossy highlight band
+    px(ctx, headX, headY - 2, headW, 12, OUTLINE);
+    px(ctx, headX + 1, headY - 1, headW - 2, 10, hairMain);
+    px(ctx, headX + 2, headY + 1, headW - 4, 2, hairHi);
+    px(ctx, headX + 1, headY + 7, headW - 2, 2, hairShade);
+  } else {
+    // Top hair crown & side locks
+    px(ctx, headX, headY - 2, headW, 5, OUTLINE);
+    px(ctx, headX + 1, headY - 1, headW - 2, 4, hairMain);
+    px(ctx, headX + 2, headY, headW - 4, 1, hairHi);
+    // Sideburns
+    px(ctx, headX, headY + 2, 2, 5, OUTLINE);
+    px(ctx, headX + 1, headY + 2, 1, 4, hairMain);
+    if (!isSide) {
+      px(ctx, headX + headW - 2, headY + 2, 2, 5, OUTLINE);
+      px(ctx, headX + headW - 2, headY + 2, 1, 4, hairMain);
+    }
+
+    // Style-specific bangs & silhouettes
+    if (hairStyle === 'side_part') {
+      px(ctx, headX + 2, headY + 2, 6, 2, hairMain);
+      px(ctx, headX + 8, headY + 1, 2, 2, skin.hex); // Clean side part notch
+    } else if (hairStyle === 'messy_fringe') {
+      px(ctx, headX + 2, headY + 2, 2, 2, hairMain);
+      px(ctx, headX + 5, headY + 2, 3, 3, hairMain);
+      px(ctx, headX + 9, headY + 2, 2, 2, hairMain);
+      px(ctx, headX + 4, headY - 3, 2, 2, hairMain);
+      px(ctx, headX + 8, headY - 3, 2, 2, hairMain);
+    } else if (hairStyle === 'bob_cut') {
+      px(ctx, headX - 1, headY + 2, 2, 9, OUTLINE);
+      px(ctx, headX, headY + 2, 2, 8, hairMain);
+      if (!isSide) {
+        px(ctx, headX + headW - 1, headY + 2, 2, 9, OUTLINE);
+        px(ctx, headX + headW - 2, headY + 2, 2, 8, hairMain);
+      }
+      px(ctx, headX + 2, headY + 2, headW - 4, 2, hairMain);
+    } else if (hairStyle === 'long_straight' || hairStyle === 'braided_royal') {
+      px(ctx, headX + 2, headY + 2, 3, 2, hairMain);
+      px(ctx, headX + headW - 5, headY + 2, 3, 2, hairMain);
+      if (hairStyle === 'braided_royal') {
+        // Golden royal hair ornament band
+        px(ctx, headX + 2, headY - 1, headW - 4, 1, '#facc15');
+      }
+    } else if (hairStyle === 'twin_buns') {
+      // Cute double hair buns on top corners
+      px(ctx, headX - 2, headY - 4, 5, 5, OUTLINE);
+      px(ctx, headX - 1, headY - 3, 3, 3, hairMain);
+      px(ctx, headX, headY - 3, 1, 1, hairHi);
+      if (!isSide) {
+        px(ctx, headX + headW - 3, headY - 4, 5, 5, OUTLINE);
+        px(ctx, headX + headW - 2, headY - 3, 3, 3, hairMain);
+        px(ctx, headX + headW - 1, headY - 3, 1, 1, hairHi);
+      }
+    } else if (hairStyle === 'classic_topknot') {
+      // Traditional Khmer topknot bun centered on crown
+      px(ctx, cx - 3, headY - 6, 6, 5, OUTLINE);
+      px(ctx, cx - 2, headY - 5, 4, 3, hairMain);
+      px(ctx, cx - 2, headY - 2, 4, 1, '#facc15');
+    } else if (hairStyle === 'silver_spiky') {
+      // Premium dramatic anime spikes
+      px(ctx, headX - 1, headY - 4, 4, 4, OUTLINE);
+      px(ctx, cx - 2, headY - 6, 5, 5, OUTLINE);
+      px(ctx, headX + headW - 3, headY - 4, 4, 4, OUTLINE);
+      px(ctx, headX, headY - 3, 3, 3, hairMain);
+      px(ctx, cx - 1, headY - 5, 3, 4, hairHi);
+      px(ctx, headX + headW - 3, headY - 3, 3, 3, hairMain);
+      px(ctx, headX + 3, headY + 2, 3, 3, hairMain);
+      px(ctx, headX + 8, headY + 2, 2, 2, hairMain);
+    } else {
+      // short_neat / high_ponytail front bangs
+      px(ctx, headX + 2, headY + 2, headW - 4, 1, hairMain);
+    }
+  }
+
+  // ==================== LAYER 9: HAT / HEADGEAR (Optional) ====================
+  if (hatDef) {
+    const hMain = hatDef.primaryColor;
+    const hAcc = hatDef.accentColor;
+    const hVar = hatDef.styleVariant;
+
+    if (hVar === 'doun' || hVar === 'sun_straw') {
+      // Conical Khmer Farmer Hat / Wide Straw Hat
+      px(ctx, cx - 9, headY - 2, 18, 3, OUTLINE);
+      px(ctx, cx - 8, headY - 1, 16, 1, hMain);
+      px(ctx, cx - 6, headY - 4, 12, 3, OUTLINE);
+      px(ctx, cx - 5, headY - 3, 10, 2, hMain);
+      px(ctx, cx - 3, headY - 6, 6, 3, OUTLINE);
+      px(ctx, cx - 2, headY - 5, 4, 2, hMain);
+      px(ctx, cx - 5, headY - 2, 10, 1, hAcc);
+    } else if (hVar === 'krama_bandana' || hVar === 'crimson_headband') {
+      // Martial arts headband tied across forehead
+      px(ctx, headX, headY + 1, headW, 3, OUTLINE);
+      for (let bx = 0; bx < headW - 2; bx++) {
+        px(ctx, headX + 1 + bx, headY + 2, 1, 1, bx % 2 === 0 ? hMain : hAcc);
+      }
+      // Trailing knot tails on side
+      px(ctx, headX + headW, headY + 2, 2, 3, hMain);
+    } else if (hVar === 'angkor_explorer') {
+      // Wide-brim explorer adventure hat
+      px(ctx, cx - 9, headY - 1, 18, 2, OUTLINE);
+      px(ctx, cx - 8, headY - 1, 16, 1, hMain);
+      px(ctx, cx - 5, headY - 5, 10, 4, OUTLINE);
+      px(ctx, cx - 4, headY - 4, 8, 3, hMain);
+      px(ctx, cx - 4, headY - 2, 8, 1, hAcc);
+    } else if (hVar === 'midnight_hood') {
+      // Sleek shadow hood framing head
+      px(ctx, headX - 1, headY - 3, headW + 2, 6, OUTLINE);
+      px(ctx, headX, headY - 2, headW, 4, hMain);
+      px(ctx, headX + 1, headY - 1, headW - 2, 1, hAcc);
+    } else if (hVar === 'yaksha_mask') {
+      // Ornate carved Yaksha ceremonial crown-mask
+      px(ctx, cx - 6, headY - 5, 12, 6, OUTLINE);
+      px(ctx, cx - 5, headY - 4, 10, 4, hMain);
+      px(ctx, cx - 2, headY - 7, 4, 3, hAcc);
+      px(ctx, cx - 4, headY - 2, 2, 1, hAcc);
+      px(ctx, cx + 2, headY - 2, 2, 1, hAcc);
+    } else {
+      // Royal Crown / Angkor Mokot Spire / Apsara Tiara / Cyber Visor / Naga Crest / Frog Crown
+      px(ctx, cx - 6, headY - 3, 12, 4, OUTLINE);
+      px(ctx, cx - 5, headY - 2, 10, 2, hMain);
+      px(ctx, cx - 3, headY - 6, 6, 4, OUTLINE);
+      px(ctx, cx - 2, headY - 5, 4, 3, hMain);
+      px(ctx, cx - 1, headY - 8, 2, 3, hMain);
+      px(ctx, cx - 1, headY - 2, 2, 1, hAcc);
+      px(ctx, cx - 4, headY - 2, 1, 1, hAcc);
+      px(ctx, cx + 3, headY - 2, 1, 1, hAcc);
+    }
+  }
+
+  ctx.restore();
+}
+
+/**
+ * Draws the 10-layer pixel-art Human Chibi Paper-Doll + held Khmer weapon onto any React UI canvas
+ * (Character Creator, Wardrobe Mirror, Fashion Boutique Try-On, Profile Card, Inventory).
  */
 export function drawFullPaperDollToCanvas(
   ctx: CanvasRenderingContext2D,
@@ -129,49 +651,58 @@ export function drawFullPaperDollToCanvas(
   facing: PaperDollFacing = 'down',
   timeMs = 0
 ): void {
-  const sheetKey = resolveHeroSheetKey(loadout);
-  const charImg = getCachedHtmlImg(CHAR_SHEET_URLS[sheetKey]);
+  const scratch = document.createElement('canvas');
+  scratch.width = CANVAS_W;
+  scratch.height = CANVAS_H;
+  const sctx = scratch.getContext('2d');
+  if (!sctx) return;
+
+  renderHumanChibiPixels(sctx, loadout, pose, facing);
+
+  const bob = pose === 'idle' && Math.sin(timeMs / 340) > 0.25 ? -1 : 0;
   const weaponInfo = resolveWeaponSprite(loadout.weapon);
   const weaponImg = weaponInfo ? getCachedHtmlImg(WEAPON_URLS[weaponInfo.key]) : null;
-  const bob = Math.sin(timeMs / 320) > 0.25 ? -1 : 0;
 
   ctx.save();
   ctx.imageSmoothingEnabled = false;
-  // Soft ground shadow
-  ctx.fillStyle = 'rgba(15, 23, 42, 0.28)';
-  ctx.beginPath();
-  ctx.ellipse(32, 60, 14, 5, 0, 0, Math.PI * 2);
-  ctx.fill();
 
-  if (charImg) {
-    const col = facing === 'down' ? 0 : facing === 'up' ? 1 : facing === 'left' ? 2 : 3;
-    const row = pose === 'walk1' ? 1 : pose === 'walk2' ? 2 : pose === 'walk3' ? 3 : 0;
-    ctx.drawImage(charImg, col * 16, row * 16, 16, 16, 10, 16 + bob, 44, 44);
-  }
-  if (weaponImg) {
+  // Draw crisp 36x40 pixel-art human chibi scaled cleanly into the 64x64 preview coordinate frame
+  ctx.drawImage(scratch, 0, 0, CANVAS_W, CANVAS_H, 8, 5 + bob, 48, 53);
+
+  // Layer 10: Held Khmer Class Weapon
+  if (weaponImg && facing !== 'up') {
+    const dir = facing === 'left' ? -1 : 1;
     ctx.save();
-    ctx.translate(48, 42 + bob);
-    ctx.rotate(-0.35);
-    ctx.drawImage(weaponImg, -weaponImg.width, -weaponImg.height * 1.4, weaponImg.width * 2.2, weaponImg.height * 2.2);
+    ctx.translate(facing === 'left' ? 16 : 49, 41 + bob);
+    ctx.scale(dir, 1);
+    ctx.rotate(-0.32);
+    ctx.drawImage(
+      weaponImg,
+      -weaponImg.width * 0.9,
+      -weaponImg.height * 1.45,
+      weaponImg.width * 2.1,
+      weaponImg.height * 2.1
+    );
     ctx.restore();
   }
   ctx.restore();
 }
 
 /**
- * REAL Ninja Adventure 16x16 Animated Chibi Character Container + Real Held Weapon Sprite.
- * Replaces all procedural body/face/hat rectangles with crisp pixelArt:true sprites!
+ * High-detail 10-layer Pixel-Art Human Chibi Paper-Doll Container for Phaser scenes
+ * (OverworldScene, FarmScene, ClubScene, DungeonBossScene, and Multiplayer Remote Players).
+ * Caches generated pixel-snapped CanvasTextures per (appearance, pose, facing) for 60 FPS performance.
  */
 export class PaperDoll extends Phaser.GameObjects.Container {
-  private heroSprite: Phaser.GameObjects.Sprite;
+  private bodySprite: Phaser.GameObjects.Image;
   private weaponSprite: Phaser.GameObjects.Image;
   private auraGlow: Phaser.GameObjects.Image;
   private parryArc: Phaser.GameObjects.Arc;
 
   private loadout: EquippedLoadout;
-  private currentSheet: HeroCharacterKey;
   private currentPose: PaperDollPose = 'idle';
   private currentFacing: PaperDollFacing = 'down';
+  private lastTexKey = '';
   private isStealth = false;
 
   constructor(
@@ -183,50 +714,62 @@ export class PaperDoll extends Phaser.GameObjects.Container {
   ) {
     super(scene, x, y);
     this.loadout = { ...loadout };
-    this.currentSheet = resolveHeroSheetKey(loadout);
 
-    // Subtle back aura when magical wings/halo are equipped
     this.auraGlow = scene.add
-      .image(0, -18, 'torch_glow')
-      .setScale(0.36)
+      .image(0, -20, 'torch_glow')
+      .setScale(0.38)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setVisible(false);
 
-    // Real 16x16 Ninja Adventure Chibi Sprite scaled crisply 2.5x inside container
-    const initialTex = scene.textures.exists(this.currentSheet) ? this.currentSheet : 'player_boy';
-    this.heroSprite = scene.add
-      .sprite(0, 0, initialTex, 0)
-      .setOrigin(0.5, 0.94)
-      .setScale(2.5);
-    console.log(`[PaperDoll] Loaded sprite key: ${initialTex}`);
+    const initKey = this.ensureFrameTexture('idle', 'down');
+    this.lastTexKey = initKey;
 
-    // Real Ninja Adventure Weapon Sprite positioned at character's hand
+    this.bodySprite = scene.add
+      .image(0, 0, initKey)
+      .setOrigin(0.5, 0.9)
+      .setScale(1.38);
+
     this.weaponSprite = scene.add
-      .image(14, -14, 'wp_axe')
+      .image(15, -14, 'wp_axe')
       .setOrigin(0.5, 0.8)
-      .setScale(2.15)
+      .setScale(2.05)
       .setVisible(false);
 
-    // Golden Angkor Parry Guard arc (visible only during 0.35s Preah Khan parry!)
     this.parryArc = scene.add
       .arc(12, -16, 22, -70, 70, false, 0xfacc15, 0.35)
       .setStrokeStyle(3, 0xfef9c3, 1)
       .setVisible(false);
 
-    this.add([this.auraGlow, this.heroSprite, this.weaponSprite, this.parryArc]);
-    this.applyVisualLoadout();
+    this.add([this.auraGlow, this.bodySprite, this.weaponSprite, this.parryArc]);
+    this.applyWeaponAndAura();
     scene.add.existing(this);
   }
 
-  private applyVisualLoadout(): void {
-    const nextSheet = resolveHeroSheetKey(this.loadout);
-    if (nextSheet !== this.currentSheet && this.scene.textures.exists(nextSheet)) {
-      this.currentSheet = nextSheet;
-      this.heroSprite.setTexture(nextSheet, frameIndexFor(this.currentPose, this.currentFacing));
-      console.log(`[PaperDoll] Loaded sprite key: ${this.currentSheet}`);
+  private ensureFrameTexture(pose: PaperDollPose, facing: PaperDollFacing): string {
+    const normalizedPose: PaperDollPose =
+      pose === 'walk1' || pose === 'walk3' || pose === 'jump' || pose === 'attack' ? pose : 'idle';
+    const sig = buildLoadoutSignature(this.loadout);
+    // Short deterministic hash so texture keys stay compact and cached globally across frames
+    let h = 2166136261;
+    for (let i = 0; i < sig.length; i++) {
+      h ^= sig.charCodeAt(i);
+      h = Math.imul(h, 16777619);
     }
+    const texKey = `human_chibi_${(h >>> 0).toString(36)}_${normalizedPose}_${facing}`;
 
-    // Real held weapon sprite
+    if (!this.scene.textures.exists(texKey)) {
+      const canvasTex = this.scene.textures.createCanvas(texKey, CANVAS_W, CANVAS_H);
+      if (canvasTex) {
+        const ctx = canvasTex.getContext();
+        renderHumanChibiPixels(ctx, this.loadout, normalizedPose, facing);
+        canvasTex.refresh();
+        canvasTex.setFilter(Phaser.Textures.FilterMode.NEAREST);
+      }
+    }
+    return texKey;
+  }
+
+  private applyWeaponAndAura(): void {
     const wInfo = resolveWeaponSprite(this.loadout.weapon);
     if (wInfo && this.scene.textures.exists(wInfo.key)) {
       this.weaponSprite.setTexture(wInfo.key).setVisible(true);
@@ -236,7 +779,6 @@ export class PaperDoll extends Phaser.GameObjects.Container {
       this.weaponSprite.setVisible(false);
     }
 
-    // Subtle additive wing/halo aura when legendary back cosmetic equipped
     const wingDef = this.loadout.wings ? ITEM_CATALOG[this.loadout.wings] : undefined;
     if (wingDef && wingDef.styleVariant !== 'basket') {
       const tintNum = Number(wingDef.primaryColor.replace('#', '0x'));
@@ -244,39 +786,38 @@ export class PaperDoll extends Phaser.GameObjects.Container {
     } else {
       this.auraGlow.setVisible(false);
     }
+
+    // Refresh current body frame immediately
+    const nextKey = this.ensureFrameTexture(this.currentPose, this.currentFacing);
+    if (nextKey !== this.lastTexKey) {
+      this.lastTexKey = nextKey;
+      this.bodySprite.setTexture(nextKey);
+    }
   }
 
   public setLoadout(next: EquippedLoadout): void {
     this.loadout = { ...next };
-    this.applyVisualLoadout();
+    this.applyWeaponAndAura();
   }
 
   public setPoseAndFacing(pose: PaperDollPose, facing: PaperDollFacing, time: number): void {
     this.currentPose = pose;
     this.currentFacing = facing;
 
-    const isWalking = pose === 'walk1' || pose === 'walk2' || pose === 'walk3' || pose === 'walk4';
-    const walkAnimKey = `${this.currentSheet}_walk_${facing}`;
-
-    if (isWalking && this.scene.anims.exists(walkAnimKey)) {
-      if (this.heroSprite.anims.currentAnim?.key !== walkAnimKey || !this.heroSprite.anims.isPlaying) {
-        this.heroSprite.play(walkAnimKey, true);
-      }
-    } else {
-      if (this.heroSprite.anims.isPlaying) {
-        this.heroSprite.stop();
-      }
-      this.heroSprite.setFrame(frameIndexFor(pose, facing));
+    const nextKey = this.ensureFrameTexture(pose, facing);
+    if (nextKey !== this.lastTexKey) {
+      this.lastTexKey = nextKey;
+      this.bodySprite.setTexture(nextKey);
     }
 
-    // Crisp 1px idle breathing bob
+    const isWalking = pose === 'walk1' || pose === 'walk2' || pose === 'walk3' || pose === 'walk4';
     const idleBob = !isWalking && pose === 'idle' ? (Math.sin(time / 340) > 0.25 ? -1 : 0) : 0;
-    this.heroSprite.setY(idleBob);
+    this.bodySprite.setY(idleBob);
 
-    // Position real held weapon cleanly at the character's right hand & swing on attack!
+    // Layer 10: Held Khmer Weapon positioned cleanly at character's hand & swung on attack
     const dir = facing === 'left' ? -1 : 1;
     const isUp = facing === 'up';
-    const handX = facing === 'down' ? 14 : facing === 'up' ? -14 : dir * 16;
+    const handX = facing === 'down' ? 15 : facing === 'up' ? -14 : dir * 16;
     const handY = (pose === 'attack' ? -16 : -12) + idleBob;
 
     this.weaponSprite.setPosition(handX, handY);
@@ -299,11 +840,11 @@ export class PaperDoll extends Phaser.GameObjects.Container {
   public setStealthTint(stealthFull: boolean): void {
     this.isStealth = stealthFull;
     if (stealthFull) {
-      this.heroSprite.setTint(0xc084fc);
+      this.bodySprite.setTint(0xc084fc);
       this.weaponSprite.setTint(0xc084fc);
       this.setAlpha(0.48);
     } else {
-      this.heroSprite.clearTint();
+      this.bodySprite.clearTint();
       const wInfo = resolveWeaponSprite(this.loadout.weapon);
       if (wInfo?.tint) this.weaponSprite.setTint(wInfo.tint);
       else this.weaponSprite.clearTint();
@@ -312,7 +853,7 @@ export class PaperDoll extends Phaser.GameObjects.Container {
   }
 
   public flashWhite(durationMs = 110): void {
-    this.heroSprite.setTintFill(0xffffff);
+    this.bodySprite.setTintFill(0xffffff);
     this.weaponSprite.setTintFill(0xffffff);
     this.scene.time.delayedCall(durationMs, () => {
       if (!this.scene) return;

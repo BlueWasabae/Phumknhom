@@ -72,10 +72,12 @@ import {
   createMarketListingApi,
   declineFriendRequestApi,
   fetchFriends,
+  loadGuestCreationProfile,
   reforgeItemApi,
   sandboxTopUpApi,
   sanitizeLegacyLocalStoragePets,
   saveAccountProfile,
+  saveGuestCreationProfile,
   sendFriendRequestApi,
   type AuthSession,
   type FriendRecord,
@@ -124,6 +126,7 @@ import { ServerCityModal } from './ui/ServerCityModal';
 import { ServerTickerBanner } from './ui/ServerTickerBanner';
 import { ReforgeModal, type ReforgeTab } from './ui/ReforgeModal';
 import { ClubGamesModal, type ClubGameTab } from './ui/ClubGamesModal';
+import { CharacterCreatorModal, type CharacterCreationResult } from './ui/CharacterCreatorModal';
 import { soundManager } from './game/systems/SoundManager';
 
 type ActiveModalType =
@@ -147,7 +150,8 @@ type ActiveModalType =
   | 'worldMap'
   | 'serverCity'
   | 'reforge'
-  | 'clubGames';
+  | 'clubGames'
+  | 'characterCreator';
 
 interface FloatingXpBanner extends SkillXpToastPayload {
   uid: number;
@@ -287,9 +291,16 @@ export const App: React.FC = () => {
     (itemId: string) => {
       const def = ITEM_CATALOG[itemId];
       if (!def) return;
-      const patch: Partial<EquippedLoadout> = { [def.slot]: def.id };
-      if (def.hairStyleOverride) {
-        patch.hairStyle = def.hairStyleOverride;
+      const patch: Partial<EquippedLoadout> = {};
+      if (def.eyeStyleOverride) {
+        patch.eyeStyle = def.eyeStyleOverride;
+      } else if (def.faceStyleOverride) {
+        patch.faceStyle = def.faceStyleOverride;
+      } else {
+        patch[def.slot] = def.id;
+        if (def.hairStyleOverride) {
+          patch.hairStyle = def.hairStyleOverride;
+        }
       }
       const clsTag = def.classId ? ` → ${KHMER_CLASSES[def.classId].englishName}` : '';
       applyLoadoutPatch(patch, `Equipped ${def.name}${clsTag}!`);
@@ -389,20 +400,98 @@ export const App: React.FC = () => {
       setAuthSession(session);
       setSaveStatus('saved');
       setPlayer(loadedState);
-      setActiveModal(null);
+      const needsCreation = !(
+        loadedState.hasCompletedCreation ?? loadedState.loadout.hasCompletedCreation
+      );
+      setActiveModal(needsCreation ? 'characterCreator' : null);
       EventBus.emit('player:stateSync', loadedState);
       EventBus.emit('auth:identityChanged', {
         playerId: session.playerId,
         playerState: loadedState,
       });
       EventBus.emit('ui:toast', {
-        text: `Welcome back, ${session.username}! Cloud Save synced (${
-          session.storageMode === 'supabase' ? 'Supabase' : 'Local DB'
-        }).`,
+        text: needsCreation
+          ? `Account ready, ${session.username}! Customize your Hero & Khmer Class.`
+          : `Welcome back, ${session.username}! Cloud Save synced (${
+              session.storageMode === 'supabase' ? 'Supabase' : 'Local DB'
+            }).`,
       });
       void refreshFriends(session.playerId);
     },
     [refreshFriends]
+  );
+
+  const handleCompleteCharacterCreation = useCallback(
+    (result: CharacterCreationResult) => {
+      const nextLoadout: EquippedLoadout = {
+        ...result.loadout,
+        weapon: result.starterWeaponId,
+        pet: null,
+        petId: null,
+        hasCompletedCreation: true,
+      };
+      let updatedSnapshot: PlayerState | null = null;
+      setPlayer((prev) => {
+        const nextWeapon = buildWeaponStatsFromItem(result.starterWeaponId);
+        const derived = computeLoadoutDefenseAndHp(nextLoadout, prev.level);
+        const stylish = computeStylishScore(nextLoadout);
+        const provisional: PlayerState = {
+          ...prev,
+          name: result.name,
+          activeClass: result.selectedClass,
+          hasCompletedCreation: true,
+          weapon: {
+            ...nextWeapon,
+            baseDamage: nextWeapon.baseDamage + derived.bonusFlatAtk,
+            critChance: Math.min(0.65, nextWeapon.critChance + derived.bonusCrit),
+          },
+          defense: derived.defense,
+          maxHp: derived.maxHp,
+          loadout: nextLoadout,
+          lifeStats: {
+            ...prev.lifeStats,
+            stylish,
+          },
+        };
+        const bridge = computeVillageToDungeonBridge(provisional);
+        const nextState: PlayerState = {
+          ...provisional,
+          hp: bridge.effectiveMaxHp,
+          skillDamagePct: bridge.classSkillDamagePct,
+          snackBuffPct: bridge.snackAttackPct,
+        };
+        updatedSnapshot = nextState;
+        EventBus.emit('player:loadoutChanged', {
+          loadout: nextLoadout,
+          activeClass: result.selectedClass,
+          playerState: nextState,
+        });
+        EventBus.emit('player:stateSync', nextState);
+        return nextState;
+      });
+
+      saveGuestCreationProfile({
+        name: result.name,
+        loadout: nextLoadout,
+        activeClass: result.selectedClass,
+        hasCompletedCreation: true,
+      });
+
+      const sess = authSessionRef.current;
+      if (sess && updatedSnapshot) {
+        setSaveStatus('saving');
+        void saveAccountProfile(sess, updatedSnapshot).then((res) => {
+          if (res.ok) setSaveStatus('saved');
+        });
+      }
+
+      setActiveModal(null);
+      const clsName = KHMER_CLASSES[result.selectedClass].englishName;
+      EventBus.emit('ui:toast', {
+        text: `Welcome to ភូមិខ្ញុំ, ${result.name} (${clsName})!`,
+      });
+    },
+    []
   );
 
   const handleOpenWhisper = useCallback((username: string) => {
@@ -1370,11 +1459,25 @@ export const App: React.FC = () => {
         starterState={player}
         onAuthenticated={handleAuthenticated}
         onPlayGuest={() => {
-          setActiveModal(null);
-          EventBus.emit('ui:toast', {
-            text: 'Playing as Guest — sign in anytime from MENU → Login / Cloud Save.',
-          });
+          const savedGuest = loadGuestCreationProfile();
+          if (savedGuest) {
+            handleCompleteCharacterCreation({
+              name: savedGuest.name,
+              loadout: savedGuest.loadout,
+              selectedClass: savedGuest.activeClass,
+              starterWeaponId:
+                savedGuest.loadout.weapon ?? KHMER_CLASSES[savedGuest.activeClass].starterWeaponId,
+            });
+            return;
+          }
+          setActiveModal('characterCreator');
         }}
+      />
+
+      <CharacterCreatorModal
+        open={activeModal === 'characterCreator'}
+        initialPlayer={player}
+        onConfirm={handleCompleteCharacterCreation}
       />
 
       <PlayerActionModal

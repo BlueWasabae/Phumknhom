@@ -2,11 +2,18 @@ import React, { useEffect, useState } from 'react';
 import type {
   EquipSlot,
   EquippedLoadout,
-  EyeStyleId,
-  HairStyleId,
   ItemRarity,
   PlayerState,
 } from '@shared/types';
+import {
+  ALL_EYE_STYLES,
+  ALL_FACE_STYLES,
+  ALL_HAIR_STYLES,
+  EYE_COLORS,
+  EYEBROW_STYLES,
+  HAIR_COLORS,
+  SKIN_TONES,
+} from '@shared/characterStyles';
 import { Coins, ChefHat, Crown, Sparkles, UtensilsCrossed } from 'lucide-react';
 import { FASHION_SHOP_ITEMS, ITEM_CATALOG } from '../data/items';
 import { STREET_SNACK_LIST, countInventoryAnyQuality } from '../data/recipes';
@@ -29,21 +36,6 @@ interface ShopModalProps {
   onEquipFashion: (itemId: string) => void;
   onCustomizeLook: (patch: Partial<EquippedLoadout>) => void;
 }
-
-const SKIN_TONES = ['#fde2c4', '#f4c29f', '#e5a97c', '#c68658', '#8d5524'];
-const HAIR_COLORS = ['#1e1b24', '#451a03', '#7c2d12', '#1d4ed8', '#db2777', '#eab308', '#10b981'];
-const HAIR_STYLES: Array<{ id: HairStyleId; label: string }> = [
-  { id: 'hair_short', label: 'Short' },
-  { id: 'hair_bob', label: 'Bob' },
-  { id: 'hair_spiky', label: 'Spiky' },
-  { id: 'hair_long', label: 'Long' },
-];
-const EYE_STYLES: Array<{ id: EyeStyleId; label: string }> = [
-  { id: 'cheerful', label: 'Cheerful' },
-  { id: 'classic', label: 'Classic' },
-  { id: 'cool', label: 'Cool' },
-  { id: 'starry', label: 'Starry' },
-];
 
 const RARITY_STYLES: Record<ItemRarity, { border: string; pill: string }> = {
   common: { border: 'border-stone-500/60', pill: 'bg-stone-600 text-white' },
@@ -85,7 +77,16 @@ export const ShopModal: React.FC<ShopModalProps> = ({
     if (!previewItemId) return player.loadout;
     const def = ITEM_CATALOG[previewItemId];
     if (!def) return player.loadout;
-    return { ...player.loadout, [def.slot]: def.id };
+    const next: EquippedLoadout = { ...player.loadout };
+    if (def.eyeStyleOverride) {
+      next.eyeStyle = def.eyeStyleOverride;
+    } else if (def.faceStyleOverride) {
+      next.faceStyle = def.faceStyleOverride;
+    } else {
+      next[def.slot] = def.id;
+      if (def.hairStyleOverride) next.hairStyle = def.hairStyleOverride;
+    }
+    return next;
   })();
 
   const isOwned = (itemId: string) =>
@@ -93,7 +94,10 @@ export const ShopModal: React.FC<ShopModalProps> = ({
 
   const isEquipped = (itemId: string) => {
     const def = ITEM_CATALOG[itemId];
-    return def ? player.loadout[def.slot] === itemId : false;
+    if (!def) return false;
+    if (def.eyeStyleOverride) return player.loadout.eyeStyle === def.eyeStyleOverride;
+    if (def.faceStyleOverride) return player.loadout.faceStyle === def.faceStyleOverride;
+    return player.loadout[def.slot] === itemId;
   };
 
   const filteredFashion = FASHION_SHOP_ITEMS.filter(
@@ -337,7 +341,8 @@ export const ShopModal: React.FC<ShopModalProps> = ({
                 ['all', 'All Boutique'],
                 ['hat', 'Hats'],
                 ['shirt', 'Outfits'],
-                ['pants', 'Sampot'],
+                ['pants', 'Sampot & Bottoms'],
+                ['hair', 'Premium Salon'],
                 ['wings', 'Wings & Auras'],
                 ['pet', 'Pets'],
               ] as const
@@ -480,25 +485,26 @@ export const ShopModal: React.FC<ShopModalProps> = ({
 
       {/* ==================== FASHION BOUTIQUE: WARDROBE MIRROR ==================== */}
       {mode === 'fashion' && tab === 'secondary' && (
-        <div className="grid sm:grid-cols-[164px_1fr] gap-4 items-center">
+        <div className="grid sm:grid-cols-[164px_1fr] gap-4 items-start">
           <div className="flex flex-col items-center gap-2">
             <PaperDollPreview loadout={player.loadout} width={156} height={156} includePet />
             <span className="text-[11px] font-bold text-amber-900">Updates in Village Live!</span>
           </div>
 
-          <div className="space-y-3 text-xs">
+          <div className="space-y-2.5 text-xs max-h-[54dvh] overflow-y-auto pr-1">
             <div>
-              <div className="font-display font-bold text-amber-950 mb-1.5">Skin Tone</div>
-              <div className="flex flex-wrap gap-2">
-                {SKIN_TONES.map((color) => (
+              <div className="font-display font-bold text-amber-950 mb-1">Skin Tone</div>
+              <div className="flex flex-wrap gap-1.5">
+                {SKIN_TONES.map((s) => (
                   <button
-                    key={color}
+                    key={s.id}
                     type="button"
-                    onClick={() => onCustomizeLook({ skinColor: color })}
-                    style={{ backgroundColor: color }}
-                    aria-label={`Skin ${color}`}
+                    title={s.label}
+                    onClick={() => onCustomizeLook({ skinTone: s.id, skinColor: s.hex })}
+                    style={{ backgroundColor: s.hex }}
+                    aria-label={`Skin ${s.label}`}
                     className={`w-7 h-7 rounded-full border-2 transition ${
-                      player.loadout.skinColor === color
+                      player.loadout.skinColor === s.hex || player.loadout.skinTone === s.id
                         ? 'border-amber-950 scale-110 ring-2 ring-amber-500'
                         : 'border-amber-900/40'
                     }`}
@@ -508,37 +514,41 @@ export const ShopModal: React.FC<ShopModalProps> = ({
             </div>
 
             <div>
-              <div className="font-display font-bold text-amber-950 mb-1.5">Hair Style</div>
-              <div className="flex flex-wrap gap-1.5">
-                {HAIR_STYLES.map((h) => (
-                  <button
-                    key={h.id}
-                    type="button"
-                    onClick={() => onCustomizeLook({ hairStyle: h.id, hair: null })}
-                    className={`px-3 py-1.5 rounded-xl font-bold border-2 ${
-                      player.loadout.hairStyle === h.id && !player.loadout.hair
-                        ? 'bg-amber-800 text-amber-50 border-amber-950'
-                        : 'bg-amber-50 text-amber-950 border-amber-900/35'
-                    }`}
-                  >
-                    {h.label}
-                  </button>
-                ))}
+              <div className="font-display font-bold text-amber-950 mb-1">Hair Style &amp; Color</div>
+              <div className="flex flex-wrap gap-1">
+                {ALL_HAIR_STYLES.map((h) => {
+                  const unlocked = !h.premiumItemId || isOwned(h.premiumItemId);
+                  return (
+                    <button
+                      key={h.id}
+                      type="button"
+                      disabled={!unlocked}
+                      onClick={() =>
+                        onCustomizeLook({ hairStyle: h.id, hair: h.premiumItemId ?? null })
+                      }
+                      className={`px-2.5 py-1 rounded-xl font-bold border-2 text-[11px] disabled:opacity-45 ${
+                        player.loadout.hairStyle === h.id
+                          ? 'bg-amber-800 text-amber-50 border-amber-950'
+                          : 'bg-amber-50 text-amber-950 border-amber-900/35'
+                      }`}
+                    >
+                      {h.premiumItemId ? `★ ${h.label}` : h.label}
+                      {!unlocked ? ' 🔒' : ''}
+                    </button>
+                  );
+                })}
               </div>
-            </div>
-
-            <div>
-              <div className="font-display font-bold text-amber-950 mb-1.5">Hair Color</div>
-              <div className="flex flex-wrap gap-2">
-                {HAIR_COLORS.map((color) => (
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {HAIR_COLORS.map((c) => (
                   <button
-                    key={color}
+                    key={c.id}
                     type="button"
-                    onClick={() => onCustomizeLook({ hairColor: color })}
-                    style={{ backgroundColor: color }}
-                    aria-label={`Hair color ${color}`}
-                    className={`w-7 h-7 rounded-full border-2 transition ${
-                      player.loadout.hairColor === color
+                    title={c.label}
+                    onClick={() => onCustomizeLook({ hairColor: c.hex })}
+                    style={{ backgroundColor: c.hex }}
+                    aria-label={`Hair color ${c.label}`}
+                    className={`w-6 h-6 rounded-full border-2 transition ${
+                      player.loadout.hairColor === c.hex
                         ? 'border-amber-950 scale-110 ring-2 ring-amber-500'
                         : 'border-amber-900/40'
                     }`}
@@ -548,22 +558,89 @@ export const ShopModal: React.FC<ShopModalProps> = ({
             </div>
 
             <div>
-              <div className="font-display font-bold text-amber-950 mb-1.5">Eyes & Expression</div>
-              <div className="flex flex-wrap gap-1.5">
-                {EYE_STYLES.map((ey) => (
+              <div className="font-display font-bold text-amber-950 mb-1">Eyes &amp; Color</div>
+              <div className="flex flex-wrap gap-1">
+                {ALL_EYE_STYLES.map((ey) => {
+                  const unlocked = !ey.premiumItemId || isOwned(ey.premiumItemId);
+                  return (
+                    <button
+                      key={ey.id}
+                      type="button"
+                      disabled={!unlocked}
+                      onClick={() => onCustomizeLook({ eyeStyle: ey.id })}
+                      className={`px-2.5 py-1 rounded-xl font-bold border-2 text-[11px] disabled:opacity-45 ${
+                        player.loadout.eyeStyle === ey.id
+                          ? 'bg-amber-800 text-amber-50 border-amber-950'
+                          : 'bg-amber-50 text-amber-950 border-amber-900/35'
+                      }`}
+                    >
+                      {ey.premiumItemId ? `★ ${ey.label}` : ey.label}
+                      {!unlocked ? ' 🔒' : ''}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {EYE_COLORS.map((c) => (
                   <button
-                    key={ey.id}
+                    key={c.id}
                     type="button"
-                    onClick={() => onCustomizeLook({ eyeStyle: ey.id })}
-                    className={`px-3 py-1.5 rounded-xl font-bold border-2 ${
-                      player.loadout.eyeStyle === ey.id
+                    title={c.label}
+                    onClick={() => onCustomizeLook({ eyeColor: c.hex })}
+                    style={{ backgroundColor: c.hex }}
+                    aria-label={`Eye color ${c.label}`}
+                    className={`w-6 h-6 rounded-full border-2 transition ${
+                      player.loadout.eyeColor === c.hex
+                        ? 'border-amber-950 scale-110 ring-2 ring-amber-500'
+                        : 'border-amber-900/40'
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <div className="font-display font-bold text-amber-950 mb-1">Eyebrows</div>
+              <div className="flex flex-wrap gap-1">
+                {EYEBROW_STYLES.map((b) => (
+                  <button
+                    key={b.id}
+                    type="button"
+                    onClick={() => onCustomizeLook({ eyebrowStyle: b.id })}
+                    className={`px-2.5 py-1 rounded-xl font-bold border-2 text-[11px] ${
+                      player.loadout.eyebrowStyle === b.id
                         ? 'bg-amber-800 text-amber-50 border-amber-950'
                         : 'bg-amber-50 text-amber-950 border-amber-900/35'
                     }`}
                   >
-                    {ey.label}
+                    {b.label}
                   </button>
                 ))}
+              </div>
+            </div>
+
+            <div>
+              <div className="font-display font-bold text-amber-950 mb-1">Face &amp; Expression</div>
+              <div className="flex flex-wrap gap-1">
+                {ALL_FACE_STYLES.map((f) => {
+                  const unlocked = !f.premiumItemId || isOwned(f.premiumItemId);
+                  return (
+                    <button
+                      key={f.id}
+                      type="button"
+                      disabled={!unlocked}
+                      onClick={() => onCustomizeLook({ faceStyle: f.id })}
+                      className={`px-2.5 py-1 rounded-xl font-bold border-2 text-[11px] disabled:opacity-45 ${
+                        player.loadout.faceStyle === f.id
+                          ? 'bg-amber-800 text-amber-50 border-amber-950'
+                          : 'bg-amber-50 text-amber-950 border-amber-900/35'
+                      }`}
+                    >
+                      {f.premiumItemId ? `★ ${f.label}` : f.label}
+                      {!unlocked ? ' 🔒' : ''}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
