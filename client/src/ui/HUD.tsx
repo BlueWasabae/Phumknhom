@@ -361,8 +361,8 @@ export const HUD: React.FC<HUDProps> = ({
 
   return (
     <>
-      <div className="pointer-events-none fixed inset-x-0 top-6 z-20 w-full max-w-full box-border px-3 pt-1.5 flex flex-col gap-1.5">
-        <div className="w-full flex items-center justify-between gap-2 min-w-0">
+      <div className="pointer-events-none fixed inset-x-0 top-6 z-20 w-full max-w-full box-border px-2 sm:px-3 pt-1.5 flex flex-col gap-1.5 overflow-x-clip">
+        <div className="w-full max-w-full flex flex-wrap items-center justify-between gap-1.5 sm:gap-2 min-w-0">
           {/* TOP-LEFT */}
           <div className="pointer-events-auto flex items-center gap-1.5 shrink-0 relative">
             <button
@@ -623,11 +623,11 @@ export const HUD: React.FC<HUDProps> = ({
             )}
           </div>
 
-          {/* TOP-CENTER */}
-          <div className="hidden lg:flex justify-center min-w-0 flex-1 px-2">{zonePill}</div>
+          {/* TOP-CENTER (inline only on wide 2xl+ screens so left/right buttons never clip!) */}
+          <div className="hidden 2xl:flex justify-center min-w-0 flex-1 px-2">{zonePill}</div>
 
           {/* TOP-RIGHT */}
-          <div className="pointer-events-auto flex items-center gap-1.5 shrink-0 relative">
+          <div className="pointer-events-auto flex items-center gap-1 sm:gap-1.5 shrink-0 relative max-w-full">
             <button
               type="button"
               onClick={() => soundManager.toggleMute()}
@@ -685,7 +685,7 @@ export const HUD: React.FC<HUDProps> = ({
           </div>
         </div>
 
-        <div className="flex lg:hidden justify-center w-full">{zonePill}</div>
+        <div className="flex 2xl:hidden justify-center w-full max-w-full">{zonePill}</div>
 
         {/* FARM QUICK SEED, FERTILIZER & FAST-FORWARD BAR */}
         {zone === 'farm' && (

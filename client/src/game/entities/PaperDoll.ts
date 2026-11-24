@@ -193,11 +193,12 @@ export class PaperDoll extends Phaser.GameObjects.Container {
       .setVisible(false);
 
     // Real 16x16 Ninja Adventure Chibi Sprite scaled crisply 2.5x inside container
+    const initialTex = scene.textures.exists(this.currentSheet) ? this.currentSheet : 'player_boy';
     this.heroSprite = scene.add
-      .sprite(0, 0, this.currentSheet, 0)
+      .sprite(0, 0, initialTex, 0)
       .setOrigin(0.5, 0.94)
       .setScale(2.5);
-    console.log(`[PaperDoll] Loaded sprite key: ${this.currentSheet}`);
+    console.log(`[PaperDoll] Loaded sprite key: ${initialTex}`);
 
     // Real Ninja Adventure Weapon Sprite positioned at character's hand
     this.weaponSprite = scene.add

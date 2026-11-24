@@ -40,6 +40,9 @@ export class BootScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
+    this.load.on('loaderror', (file: Phaser.Loader.File) => {
+      console.error('[BootScene] Failed to load:', file.key, file.url);
+    });
     this.load.on('progress', (p: number) => {
       barFill.width = 252 * p;
     });
@@ -200,9 +203,21 @@ export class BootScene extends Phaser.Scene {
   }
 
   private finalizeBoot(): void {
-    this.sliceAtlasSubTextures();
-    this.generateLightAndUiOverlays();
-    this.registerAnimations();
+    try {
+      this.sliceAtlasSubTextures();
+    } catch (err) {
+      console.error('[BootScene] sliceAtlasSubTextures error:', err);
+    }
+    try {
+      this.generateLightAndUiOverlays();
+    } catch (err) {
+      console.error('[BootScene] generateLightAndUiOverlays error:', err);
+    }
+    try {
+      this.registerAnimations();
+    } catch (err) {
+      console.error('[BootScene] registerAnimations error:', err);
+    }
 
     const tabSuffix = Math.floor(10 + Math.random() * 89);
     this.scene.start('OverworldScene', {
@@ -223,7 +238,13 @@ export class BootScene extends Phaser.Scene {
     sh: number
   ): void {
     if (this.textures.exists(dstKey) || !this.textures.exists(srcKey)) return;
-    const srcImg = this.textures.get(srcKey).getSourceImage() as HTMLImageElement | HTMLCanvasElement;
+    const srcTex = this.textures.get(srcKey);
+    if (!srcTex || srcTex.key === '__MISSING') return;
+    const srcImg = srcTex.getSourceImage() as HTMLImageElement | HTMLCanvasElement | null;
+    if (!srcImg) return;
+    const imgW = 'naturalWidth' in srcImg ? srcImg.naturalWidth : srcImg.width;
+    const imgH = 'naturalHeight' in srcImg ? srcImg.naturalHeight : srcImg.height;
+    if (!imgW || !imgH) return;
     const canvasTex = this.textures.createCanvas(dstKey, sw, sh);
     if (!canvasTex) return;
     const ctx = canvasTex.getContext();
@@ -493,6 +514,29 @@ export class BootScene extends Phaser.Scene {
     }
   }
 
+  private safeCreateAnim(
+    animKey: string,
+    texKey: string,
+    frames: number[],
+    frameRate: number,
+    repeat: number
+  ): void {
+    if (this.anims.exists(animKey) || !this.textures.exists(texKey)) return;
+    const tex = this.textures.get(texKey);
+    if (!tex || tex.key === '__MISSING') return;
+    const validFrames = frames.filter((f) => tex.has(String(f)));
+    if (validFrames.length === 0) {
+      console.warn(`[BootScene] Skipping anim "${animKey}": texture "${texKey}" has no matching frames.`);
+      return;
+    }
+    this.anims.create({
+      key: animKey,
+      frames: validFrames.map((frame) => ({ key: texKey, frame })),
+      frameRate,
+      repeat,
+    });
+  }
+
   private registerAnimations(): void {
     // Register 4-directional walk animations for ALL 9 verified Ninja Adventure character sheets!
     const dirs: Array<[string, number[]]> = [
@@ -503,48 +547,18 @@ export class BootScene extends Phaser.Scene {
     ];
     for (const key of HERO_CHARACTER_SHEETS) {
       for (const [d, frames] of dirs) {
-        const animKey = `${key}_walk_${d}`;
-        if (!this.anims.exists(animKey)) {
-          this.anims.create({
-            key: animKey,
-            frames: frames.map((frame) => ({ key, frame })),
-            frameRate: 9,
-            repeat: -1,
-          });
-        }
+        this.safeCreateAnim(`${key}_walk_${d}`, key, frames, 9, -1);
       }
     }
 
     // Legacy boy_walk_* aliases
     for (const [d, frames] of dirs) {
-      const k = `boy_walk_${d}`;
-      if (!this.anims.exists(k)) {
-        this.anims.create({
-          key: k,
-          frames: frames.map((frame) => ({ key: 'player_boy', frame })),
-          frameRate: 9,
-          repeat: -1,
-        });
-      }
+      this.safeCreateAnim(`boy_walk_${d}`, 'player_boy', frames, 9, -1);
     }
 
     // Real Boss idle animations (GiantFrog 5 frames, GiantSpirit 5 frames)
-    if (!this.anims.exists('boss_frog_idle')) {
-      this.anims.create({
-        key: 'boss_frog_idle',
-        frames: [0, 1, 2, 3, 4].map((frame) => ({ key: 'boss_giant_frog_idle', frame })),
-        frameRate: 7,
-        repeat: -1,
-      });
-    }
-    if (!this.anims.exists('boss_spirit_idle')) {
-      this.anims.create({
-        key: 'boss_spirit_idle',
-        frames: [0, 1, 2, 3, 4].map((frame) => ({ key: 'boss_giant_spirit_idle', frame })),
-        frameRate: 7,
-        repeat: -1,
-      });
-    }
+    this.safeCreateAnim('boss_frog_idle', 'boss_giant_frog_idle', [0, 1, 2, 3, 4], 7, -1);
+    this.safeCreateAnim('boss_spirit_idle', 'boss_giant_spirit_idle', [0, 1, 2, 3, 4], 7, -1);
 
     // Real Pet animations
     const petAnims: Array<[string, string, number[], number]> = [
@@ -556,72 +570,16 @@ export class BootScene extends Phaser.Scene {
       ['pet_lantern_idle', 'pet_lantern', [0, 4, 8, 12], 7],
     ];
     for (const [animKey, texKey, frames, frameRate] of petAnims) {
-      if (!this.anims.exists(animKey)) {
-        this.anims.create({
-          key: animKey,
-          frames: frames.map((frame) => ({ key: texKey, frame })),
-          frameRate,
-          repeat: -1,
-        });
-      }
+      this.safeCreateAnim(animKey, texKey, frames, frameRate, -1);
     }
 
-    // Real Campfires, Shimmer Water Ripples & Slash FX
-    if (!this.anims.exists('slash_curved')) {
-      this.anims.create({
-        key: 'slash_curved',
-        frames: [0, 1, 2, 3].map((frame) => ({ key: 'fx_slash', frame })),
-        frameRate: 22,
-        repeat: 0,
-      });
-    }
-    if (!this.anims.exists('campfire_burn')) {
-      this.anims.create({
-        key: 'campfire_burn',
-        frames: [0, 1, 2, 3].map((frame) => ({ key: 'sv_campfire_16', frame })),
-        frameRate: 7,
-        repeat: -1,
-      });
-    }
-    if (!this.anims.exists('campfire_burn_32')) {
-      this.anims.create({
-        key: 'campfire_burn_32',
-        frames: [0, 1, 2, 3].map((frame) => ({ key: 'sv_campfire_32', frame })),
-        frameRate: 8,
-        repeat: -1,
-      });
-    }
-    if (!this.anims.exists('shimmer_ripple')) {
-      this.anims.create({
-        key: 'shimmer_ripple',
-        frames: [0, 1, 2, 3].map((frame) => ({ key: 'na_water_purple', frame })),
-        frameRate: 5,
-        repeat: -1,
-      });
-    }
-    if (!this.anims.exists('lucky_wheel_spin')) {
-      this.anims.create({
-        key: 'lucky_wheel_spin',
-        frames: [0, 1, 2, 3].map((frame) => ({ key: 'na_wheel_prop', frame })),
-        frameRate: 5,
-        repeat: -1,
-      });
-    }
-    if (!this.anims.exists('boar_idle_anim')) {
-      this.anims.create({
-        key: 'boar_idle_anim',
-        frames: [0, 1, 2, 3].map((frame) => ({ key: 'boar_idle', frame })),
-        frameRate: 6,
-        repeat: -1,
-      });
-    }
-    if (!this.anims.exists('boar_hit_anim')) {
-      this.anims.create({
-        key: 'boar_hit_anim',
-        frames: [0, 1, 2, 3].map((frame) => ({ key: 'boar_hit', frame })),
-        frameRate: 14,
-        repeat: 0,
-      });
-    }
+    // Real Campfires, Shimmer Water Ripples, Lucky Wheel & Slash FX
+    this.safeCreateAnim('slash_curved', 'fx_slash', [0, 1, 2, 3], 22, 0);
+    this.safeCreateAnim('campfire_burn', 'sv_campfire_16', [0, 1, 2, 3], 7, -1);
+    this.safeCreateAnim('campfire_burn_32', 'sv_campfire_32', [0, 1, 2, 3], 8, -1);
+    this.safeCreateAnim('shimmer_ripple', 'na_water_purple', [0, 1, 2, 3], 5, -1);
+    this.safeCreateAnim('lucky_wheel_spin', 'na_wheel_prop', [0, 1, 2, 3], 5, -1);
+    this.safeCreateAnim('boar_idle_anim', 'boar_idle', [0, 1, 2, 3], 6, -1);
+    this.safeCreateAnim('boar_hit_anim', 'boar_hit', [0, 1, 2, 3], 14, 0);
   }
 }
