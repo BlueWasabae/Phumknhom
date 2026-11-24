@@ -1,6 +1,13 @@
 import React, { useState } from 'react';
 import type { EquipSlot, ItemRarity, PlayerState, QualityTier } from '@shared/types';
 import { KHMER_CLASSES } from '@shared/khmerClasses';
+import {
+  ACCESSORY_DEFS,
+  ACCESSORY_SLOT_COUNT,
+  aggregateAccessoryBonuses,
+  normalizeAccessorySlots,
+} from '@shared/accessoryFusions';
+import { COMBAT_ARMOR_SETS } from '../data/armorSets';
 import { ITEM_CATALOG } from '../data/items';
 import { FARM_ITEMS } from '../data/cropsAndArtisan';
 import { STREET_SNACKS } from '../data/recipes';
@@ -14,20 +21,25 @@ interface InventoryModalProps {
   onClose: () => void;
   onEquip: (itemId: string) => void;
   onUnequip: (slot: EquipSlot) => void;
+  onUnequipAccessory: (slotIndex: number) => void;
+  onToggleVanityOverride: (showVanity: boolean) => void;
   onSellFarmItem: (itemId: string, quality: QualityTier, qty?: number) => void;
   onEatSnack?: (snackId: string) => void;
   onUseMagicMirror?: () => void;
 }
 
-const WEARING_SLOTS: Array<{ slot: EquipSlot; label: string }> = [
-  { slot: 'hat', label: 'Hat / Headgear' },
-  { slot: 'hair', label: 'Hair' },
-  { slot: 'shirt', label: 'Shirt / Outfit' },
-  { slot: 'pants', label: 'Pants / Sampot' },
-  { slot: 'wings', label: 'Wings / Back' },
-  { slot: 'pet', label: 'Companion Pet' },
+const COMBAT_CORE_SLOTS: Array<{ slot: 'weapon' | 'armor'; label: string }> = [
   { slot: 'weapon', label: 'Class Weapon' },
-  { slot: 'armor', label: 'Armor Guard' },
+  { slot: 'armor', label: 'Combat Armor Set' },
+];
+
+const VANITY_SLOTS: Array<{ slot: 'hat' | 'hair' | 'shirt' | 'pants' | 'wings' | 'pet'; label: string }> = [
+  { slot: 'hat', label: 'Vanity Hat' },
+  { slot: 'hair', label: 'Hair' },
+  { slot: 'shirt', label: 'Vanity Shirt / Outfit' },
+  { slot: 'pants', label: 'Vanity Pants / Sampot' },
+  { slot: 'wings', label: 'Vanity Wings / Back' },
+  { slot: 'pet', label: 'Companion Pet' },
 ];
 
 const RARITY_BADGE: Record<ItemRarity, { border: string; pill: string }> = {
@@ -47,6 +59,8 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
   onClose,
   onEquip,
   onUnequip,
+  onUnequipAccessory,
+  onToggleVanityOverride,
   onSellFarmItem,
   onEatSnack,
   onUseMagicMirror,
@@ -55,9 +69,17 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
   const [filterSlot, setFilterSlot] = useState<ContainerFilter>('all');
   const [selectedKey, setSelectedKey] = useState<string>(player.loadout.weapon ?? 'weapon_phkak');
 
+  const accessorySlots = normalizeAccessorySlots(player.loadout.accessories);
+  const accSummary = aggregateAccessoryBonuses(accessorySlots);
+  const vanityOverride = player.loadout.showVanityOverArmor !== false;
+  const activeArmorSet = player.loadout.armor ? COMBAT_ARMOR_SETS[player.loadout.armor] : undefined;
+
   const isEquipped = (itemId: string): boolean => {
     const def = ITEM_CATALOG[itemId];
     if (!def) return false;
+    if (def.slot === 'accessory') {
+      return accessorySlots.includes(itemId);
+    }
     return player.loadout[def.slot] === itemId;
   };
 
@@ -101,7 +123,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                 : 'bg-amber-50 text-amber-950 border-amber-900/35'
             }`}
           >
-            Wearing (8 Slots)
+            Wearing (Combat + 5 Acc + Vanity)
           </button>
           <button
             type="button"
@@ -121,57 +143,194 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
         </span>
       </div>
 
-      {/* WEARING TAB */}
+      {/* WEARING TAB: COMBAT ARMOR + 5 ACCESSORIES + VANITY OVERRIDE */}
       {tab === 'wearing' && (
-        <div className="grid sm:grid-cols-[164px_1fr] gap-4 items-start">
+        <div className="grid sm:grid-cols-[172px_1fr] gap-4 items-start max-h-[60dvh] overflow-y-auto pr-1">
           <div className="flex flex-col items-center gap-2">
             <PaperDollPreview loadout={player.loadout} width={156} height={156} includePet />
             <div className="text-center text-xs font-display font-bold text-amber-950">
               Stylish Score: {player.lifeStats.stylish}
             </div>
+            <button
+              type="button"
+              onClick={() => onToggleVanityOverride(!vanityOverride)}
+              className={`w-full px-2.5 py-1.5 rounded-xl text-[11px] font-display font-bold border-2 transition ${
+                vanityOverride
+                  ? 'bg-pink-600 text-white border-pink-950'
+                  : 'bg-slate-800 text-amber-200 border-slate-950'
+              }`}
+            >
+              {vanityOverride ? '🎭 Vanity Look: ON' : '🛡️ Showing Combat Armor'}
+            </button>
+            <div className="text-[10px] text-center text-amber-900/85 leading-snug">
+              {vanityOverride
+                ? 'Vanity fashion overrides visual style while Combat Armor grants full stats & set bonuses!'
+                : 'Displaying Combat Armor visuals directly on your character.'}
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {WEARING_SLOTS.map(({ slot, label }) => {
-              const eqId = player.loadout[slot];
-              const def = eqId ? ITEM_CATALOG[eqId] : null;
-              const style = def ? RARITY_BADGE[def.rarity] : null;
-              return (
-                <div
-                  key={slot}
-                  className={`p-2.5 rounded-xl bg-amber-50/95 border-2 ${style?.border ?? 'border-amber-900/25'} flex items-center justify-between gap-2`}
-                >
-                  <div className="flex items-center gap-2 min-w-0">
+          <div className="space-y-3">
+            {/* COMBAT GEAR: WEAPON + COMBAT ARMOR SET */}
+            <div className="space-y-1.5">
+              <div className="text-[11px] font-display font-bold uppercase tracking-wide text-amber-950">
+                ⚔️ Combat Equipment (Stats & Set Bonuses)
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {COMBAT_CORE_SLOTS.map(({ slot, label }) => {
+                  const eqId = player.loadout[slot];
+                  const def = eqId ? ITEM_CATALOG[eqId] : null;
+                  const style = def ? RARITY_BADGE[def.rarity] : null;
+                  return (
                     <div
-                      className="w-9 h-9 rounded-lg border-2 border-amber-950/40 shrink-0"
-                      style={{ backgroundColor: def?.primaryColor || '#e7dcc3' }}
-                    />
-                    <div className="min-w-0">
-                      <div className="text-[10px] font-bold uppercase text-amber-800/80">{label}</div>
-                      <div className="font-display font-bold text-xs text-amber-950 truncate">
-                        {def ? def.name : 'Empty'}
-                      </div>
-                      {def && (
-                        <div className="text-[10px] text-amber-800 truncate">
-                          Stylish +{def.stylishScore}
-                          {def.stats.attack ? ` · ATK +${def.stats.attack}` : ''}
-                          {def.stats.defense ? ` · DEF +${def.stats.defense}` : ''}
+                      key={slot}
+                      className={`p-2 rounded-xl bg-slate-900 text-amber-50 border-2 ${style?.border ?? 'border-amber-600/40'} flex items-center justify-between gap-2`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div
+                          className="w-8 h-8 rounded-lg border border-amber-300/50 shrink-0"
+                          style={{ backgroundColor: def?.primaryColor || '#334155' }}
+                        />
+                        <div className="min-w-0">
+                          <div className="text-[9px] font-bold uppercase text-amber-300/90">{label}</div>
+                          <div className="font-display font-bold text-xs text-white truncate">
+                            {def ? def.name : 'Empty'}
+                          </div>
+                          {def && (
+                            <div className="text-[10px] text-amber-200 truncate">
+                              {def.stats.attack ? `ATK +${def.stats.attack} ` : ''}
+                              {def.stats.defense ? `DEF +${def.stats.defense} ` : ''}
+                              {def.stats.maxHp ? `HP +${def.stats.maxHp}` : ''}
+                            </div>
+                          )}
                         </div>
+                      </div>
+                      {def && slot !== 'weapon' && (
+                        <button
+                          type="button"
+                          onClick={() => onUnequip(slot)}
+                          className="px-2 py-1 rounded-lg bg-slate-700 hover:bg-red-600 text-[10px] font-bold text-white shrink-0 transition"
+                        >
+                          Remove
+                        </button>
                       )}
                     </div>
-                  </div>
-                  {def && slot !== 'weapon' && (
-                    <button
-                      type="button"
-                      onClick={() => onUnequip(slot)}
-                      className="px-2 py-1 rounded-lg bg-amber-900/15 hover:bg-red-600 hover:text-white text-[11px] font-bold text-amber-950 shrink-0 transition"
-                    >
-                      Remove
-                    </button>
-                  )}
+                  );
+                })}
+              </div>
+              {activeArmorSet && (
+                <div className="px-2.5 py-1.5 rounded-xl bg-emerald-950/90 text-emerald-200 border border-emerald-500/50 text-[10px] font-semibold">
+                  ★ <strong>{activeArmorSet.setBonusTitle}:</strong> {activeArmorSet.setBonusDescription}
                 </div>
-              );
-            })}
+              )}
+            </div>
+
+            {/* 5 DEDICATED ACCESSORY SLOTS */}
+            <div className="space-y-1.5">
+              <div className="flex flex-wrap items-center justify-between gap-1">
+                <span className="text-[11px] font-display font-bold uppercase tracking-wide text-amber-950">
+                  💍 Accessories ({accSummary.equippedIds.length}/{ACCESSORY_SLOT_COUNT} Slots)
+                </span>
+                <span className="text-[10px] font-bold text-emerald-800">
+                  {[
+                    accSummary.moveSpeedPct > 0 ? `+${Math.round(accSummary.moveSpeedPct * 100)}% Spd` : null,
+                    accSummary.hasDoubleJump ? '🌸 Double-Jump' : null,
+                    accSummary.dashCooldownReductionPct > 0
+                      ? `-${Math.round(accSummary.dashCooldownReductionPct * 100)}% Dash CD`
+                      : null,
+                    accSummary.defenseFlat > 0 ? `+${accSummary.defenseFlat} DEF` : null,
+                    accSummary.poisonImmune ? '🟢 Poison Immune' : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ') || 'Find in Caverns or Fuse at Blacksmith!'}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                {accessorySlots.map((accId, idx) => {
+                  const accDef = accId ? ACCESSORY_DEFS[accId] : null;
+                  const style = accDef ? RARITY_BADGE[accDef.rarity] : null;
+                  return (
+                    <div
+                      key={idx}
+                      className={`p-2 rounded-xl bg-amber-50/95 border-2 ${style?.border ?? 'border-dashed border-amber-900/30'} flex items-center justify-between gap-2`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div
+                          className="w-7 h-7 rounded-lg border border-amber-950/35 shrink-0 flex items-center justify-center text-sm"
+                          style={{ backgroundColor: accDef?.primaryColor || '#f5eedc' }}
+                        >
+                          {accDef ? accDef.icon : idx + 1}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-[9px] font-bold uppercase text-amber-800/80">
+                            Accessory Slot {idx + 1}
+                          </div>
+                          <div className="font-display font-bold text-[11px] text-amber-950 truncate">
+                            {accDef ? accDef.name : 'Empty Slot'}
+                          </div>
+                          {accDef && (
+                            <div className="text-[9px] text-emerald-800 font-semibold truncate">{accDef.summary}</div>
+                          )}
+                        </div>
+                      </div>
+                      {accDef && (
+                        <button
+                          type="button"
+                          onClick={() => onUnequipAccessory(idx)}
+                          className="px-2 py-1 rounded-lg bg-amber-900/15 hover:bg-red-600 hover:text-white text-[10px] font-bold text-amber-950 shrink-0 transition"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* COSMETIC VANITY SLOTS */}
+            <div className="space-y-1.5">
+              <div className="text-[11px] font-display font-bold uppercase tracking-wide text-amber-950">
+                🎭 Vanity & Companion Slots (Visual Style Override)
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {VANITY_SLOTS.map(({ slot, label }) => {
+                  const eqId = player.loadout[slot];
+                  const def = eqId ? ITEM_CATALOG[eqId] : null;
+                  const style = def ? RARITY_BADGE[def.rarity] : null;
+                  return (
+                    <div
+                      key={slot}
+                      className={`p-2 rounded-xl bg-amber-50/95 border-2 ${style?.border ?? 'border-amber-900/25'} flex items-center justify-between gap-2`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div
+                          className="w-8 h-8 rounded-lg border-2 border-amber-950/40 shrink-0"
+                          style={{ backgroundColor: def?.primaryColor || '#e7dcc3' }}
+                        />
+                        <div className="min-w-0">
+                          <div className="text-[9px] font-bold uppercase text-amber-800/80">{label}</div>
+                          <div className="font-display font-bold text-xs text-amber-950 truncate">
+                            {def ? def.name : 'Empty'}
+                          </div>
+                          {def && (
+                            <div className="text-[10px] text-amber-800 truncate">Stylish +{def.stylishScore}</div>
+                          )}
+                        </div>
+                      </div>
+                      {def && (
+                        <button
+                          type="button"
+                          onClick={() => onUnequip(slot)}
+                          className="px-2 py-1 rounded-lg bg-amber-900/15 hover:bg-red-600 hover:text-white text-[10px] font-bold text-amber-950 shrink-0 transition"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -183,9 +342,11 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
             {(
               [
                 ['all', 'All'],
-                ['weapon', '5 Weapons'],
+                ['weapon', 'Weapons'],
+                ['armor', 'Combat Armor'],
+                ['accessory', 'Accessories'],
                 ['snacks', 'Snacks'],
-                ['farm_goods', 'Farm & Artisan'],
+                ['farm_goods', 'Ores & Farm'],
                 ['hat', 'Hats'],
                 ['shirt', 'Outfits'],
                 ['wings', 'Wings'],
@@ -298,6 +459,17 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                       <div className="text-center py-1.5 rounded-xl bg-emerald-700 text-white font-display font-bold text-xs">
                         Active Class Weapon
                       </div>
+                    ) : selectedEquipDef.slot === 'accessory' ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const idx = accessorySlots.indexOf(selectedEquipDef.id);
+                          if (idx >= 0) onUnequipAccessory(idx);
+                        }}
+                        className="w-full py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-display font-bold text-xs"
+                      >
+                        Unequip Accessory
+                      </button>
                     ) : (
                       <button
                         type="button"

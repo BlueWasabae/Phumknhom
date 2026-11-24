@@ -8,6 +8,7 @@ import {
   resolveSkinToneDef,
 } from '@shared/characterStyles';
 import { ITEM_CATALOG } from '../../data/items';
+import { COMBAT_ARMOR_SETS } from '../../data/armorSets';
 
 export type PaperDollPose =
   | 'idle'
@@ -116,6 +117,7 @@ function buildLoadoutSignature(raw: EquippedLoadout | null | undefined): string 
     loadout.pants ?? '',
     loadout.wings ?? '',
     loadout.armor ?? '',
+    loadout.showVanityOverArmor === false ? 'armor_vis' : 'vanity_vis',
   ].join('|');
 }
 
@@ -159,18 +161,24 @@ function renderHumanChibiPixels(
   const browStyle = normalizeEyebrowStyleId(loadout.eyebrowStyle);
   const faceStyle = normalizeFaceStyleId(loadout.faceStyle);
 
+  const showVanity = loadout.showVanityOverArmor !== false;
+  const combatArmorSet = loadout.armor ? COMBAT_ARMOR_SETS[loadout.armor] : undefined;
+
   const shirtDef = loadout.shirt ? ITEM_CATALOG[loadout.shirt] : ITEM_CATALOG.shirt_village_tunic;
   const pantsDef = loadout.pants ? ITEM_CATALOG[loadout.pants] : ITEM_CATALOG.pants_village_shorts;
   const hatDef = loadout.hat ? ITEM_CATALOG[loadout.hat] : undefined;
   const wingsDef = loadout.wings ? ITEM_CATALOG[loadout.wings] : undefined;
 
-  const shirtMain = shirtDef?.primaryColor ?? '#3b82f6';
-  const shirtAccent = shirtDef?.accentColor ?? '#fef3c7';
+  // Vanity items ALWAYS override visual style when showVanity is ON (default).
+  // When toggled OFF and a Combat Armor Set is worn, display its combat armor plates!
+  const useCombatArmorLook = !showVanity && Boolean(combatArmorSet);
+  const shirtMain = useCombatArmorLook ? combatArmorSet!.primaryColor : (shirtDef?.primaryColor ?? '#3b82f6');
+  const shirtAccent = useCombatArmorLook ? combatArmorSet!.accentColor : (shirtDef?.accentColor ?? '#fef3c7');
   const shirtShade = shiftHex(shirtMain, -36);
   const shirtHi = shiftHex(shirtMain, 26);
 
-  const pantsMain = pantsDef?.primaryColor ?? '#334155';
-  const pantsAccent = pantsDef?.accentColor ?? '#64748b';
+  const pantsMain = useCombatArmorLook ? combatArmorSet!.pantsColor : (pantsDef?.primaryColor ?? '#334155');
+  const pantsAccent = useCombatArmorLook ? combatArmorSet!.accentColor : (pantsDef?.accentColor ?? '#64748b');
   const pantsShade = shiftHex(pantsMain, -30);
 
   ctx.save();

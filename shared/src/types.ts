@@ -16,7 +16,7 @@ export type {
   StarterOutfitId,
 } from './characterStyles';
 
-export type ZoneType = 'overworld' | 'dungeon' | 'farm' | 'club' | 'khmer_world';
+export type ZoneType = 'overworld' | 'dungeon' | 'cavern' | 'farm' | 'club' | 'khmer_world';
 
 export type DifficultyMode = 'normal' | 'expert' | 'mythic' | 'death';
 
@@ -82,7 +82,8 @@ export type EquipSlot =
   | 'wings'
   | 'pet'
   | 'weapon'
-  | 'armor';
+  | 'armor'
+  | 'accessory';
 
 export type ItemRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 
@@ -124,6 +125,10 @@ export interface PlayerAppearance {
   petId?: string | null;
   weapon: string | null;
   armor: string | null;
+  /** 5 dedicated combat/utility accessory slots (Update 1.3A) */
+  accessories?: (string | null)[];
+  /** When true (default), Vanity slots (Hat/Shirt/Pants/Wings) override Combat Armor visuals */
+  showVanityOverArmor?: boolean;
   hasCompletedCreation?: boolean;
 }
 
@@ -290,6 +295,8 @@ export const DEFAULT_LOADOUT: EquippedLoadout = {
   petId: null,
   weapon: 'weapon_phkak',
   armor: 'armor_rattan_guard',
+  accessories: [null, null, null, null, null],
+  showVanityOverArmor: true,
   hasCompletedCreation: false,
 };
 

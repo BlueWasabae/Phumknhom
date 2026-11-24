@@ -317,6 +317,9 @@ export class OverworldScene extends Phaser.Scene {
       EventBus.on('dungeon:enterRequest', ({ bossId, difficulty, partyMode, partyId }) => {
         this.enterDungeon(bossId, difficulty, partyMode ?? 'solo', partyId);
       }),
+      EventBus.on('cavern:enterRequest', ({ returnMapId }) => {
+        this.enterCavernExplore(returnMapId);
+      }),
       EventBus.on('travel:execute', (req) => {
         this.handleTravelRequest(req);
       }),
@@ -1023,6 +1026,14 @@ export class OverworldScene extends Phaser.Scene {
           EventBus.emit('ui:openModal', { modal: 'modeSelector' });
         },
       },
+      {
+        x: 1335,
+        y: 385,
+        tint: 0x10b981,
+        title: 'MINING CAVERNS · ORES',
+        prompt: 'Press [E] or Click → Enter Side-Scrolling Underground Caverns (Ores, Relic Chests & Grapple)',
+        onEnter: () => this.enterCavernExplore('temple_district'),
+      },
     ];
 
     for (const arch of portalHallEntries) {
@@ -1408,6 +1419,36 @@ export class OverworldScene extends Phaser.Scene {
       label: 'Press [E] or Click → Hidden Apsara Shimmer Spring (Permanent Blessings & Relic Cycle)',
       isDungeonPortal: false,
       onInteract: openShimmer,
+    });
+
+    // 3B. CAVERN ENTRANCE PORTAL (North-West Cliffside → Side-Scrolling Explorable Caverns!)
+    const cavGlow = this.add
+      .image(285, 295, 'portal_vortex')
+      .setTint(0x10b981)
+      .setScale(1.0)
+      .setAlpha(0.65)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(292);
+    this.tweens.add({ targets: cavGlow, alpha: 0.28, scale: 1.18, duration: 820, yoyo: true, repeat: -1 });
+    const cavGate = this.addBuildingOrProp({
+      texture: this.textures.exists('lf_cave_entrance') ? 'lf_cave_entrance' : 'angkor_arch_gate',
+      x: 285,
+      y: 315,
+      scale: this.textures.exists('lf_cave_entrance') ? 0.56 : 1.18,
+      shadowW: 66,
+      shadowH: 18,
+      label: 'CAVERN ENTRANCE · ORES & RELICS',
+      joinArrowY: 230,
+    });
+    const enterFrontierCavern = () => this.enterCavernExplore('wild_frontier');
+    cavGate.setInteractive({ useHandCursor: true }).on('pointerdown', enterFrontierCavern);
+    this.landmarks.push({
+      x: 285,
+      y: 332,
+      radius: 68,
+      label: 'Press [E] or Click → Enter Side-Scrolling Underground Caverns (Mine Ores, Grapple & Relic Chests)',
+      isDungeonPortal: true,
+      onInteract: enterFrontierCavern,
     });
 
     // 4. WANDERING FRONTIER MINI-BOSS (Laterite Boar Chieftain patrolling eastern clearing!)
@@ -1874,6 +1915,22 @@ export class OverworldScene extends Phaser.Scene {
           loadout: { ...this.player.state.loadout },
           currencies: { ...this.player.state.currencies },
           lifeStats: { ...this.player.state.lifeStats },
+        },
+      });
+    });
+  }
+
+  private enterCavernExplore(returnMapId: 'wild_frontier' | 'temple_district' = 'wild_frontier'): void {
+    if (this.transitioning) return;
+    this.transitioning = true;
+    this.cameras.main.fadeOut(200, 8, 12, 22);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      this.scene.start('CavernExploreScene', {
+        returnMapId,
+        playerState: {
+          ...this.player.state,
+          zone: 'cavern',
+          currentMapId: returnMapId,
         },
       });
     });

@@ -7,6 +7,7 @@ import {
   type SkillProfile,
 } from './types';
 import { computeReforgeDeltas } from './balanceFormulas';
+import { aggregateAccessoryBonuses, getCombatArmorSetBonus } from './accessoryFusions';
 export { createInitialSkillProfile };
 
 export type SkillCategory = 'life' | 'combat';
@@ -488,8 +489,14 @@ export interface VillageToDungeonBridgeStats {
   botanicalVenomPowerPct: number; // +0.2% per Farming Lv
   seethingLifestealChance: number;// Melee lifesteal talent
   castSpeedMult: number;          // Arcane Frenzy + Weapon/Accessory Reforge Speed
-  effectiveDefense: number;       // Base Defense + Warding/Guarding/Hard + Shimmer Ward
+  effectiveDefense: number;       // Base Defense + Warding/Guarding/Hard + Shimmer Ward + Accessories + Armor Set Bonus
   weaponSizeMult: number;         // 1.0 + Legendary (+10%) / Superior (+5%)
+  hasDoubleJump: boolean;         // Lotus Jump Charm / Wind-Walker Boots / Angkor Phantom Stride
+  miningSpeedPct: number;         // Laterite Miner Set (+25%) + Accessories
+  armorDamagePctBonus: number;    // Naga Scale Set (+15% All Damage)
+  hasGroundSlamShockwave: boolean;// Yeak Thmor Stone Set hard-landing shockwave
+  hasWaterShield: boolean;        // Naga Scale Set orbiting water shield (blocks 1 hit / 20s)
+  activeArmorSetId: string | null;
 }
 
 /**
@@ -569,6 +576,10 @@ export function computeVillageToDungeonBridge(
   if (hasTalent(player.skills, 'vitality', 'vit_ancients')) rawDRBonus += 0.12;
 
   const reforge = computeReforgeDeltas(player.weaponPrefix, player.armorPrefix);
+  const acc = aggregateAccessoryBonuses(player.loadout.accessories);
+  const armorSet = getCombatArmorSetBonus(player.loadout.armor);
+  if (acc.poisonImmune) poisonImmune = true;
+
   const shimmer = player.shimmerBlessings ?? [];
   const shimmerHpBonus =
     (shimmer.includes('blessing_durian_hp') ? 20 : 0) +
@@ -581,7 +592,11 @@ export function computeVillageToDungeonBridge(
   const foragingLv = skills.foraging?.level ?? 1;
   const rogueLv = skills.rogue?.level ?? 1;
   let moveSpeedBonusPct =
-    snackMoveSpeedPct + (foragingLv - 1) * 0.003 + (rogueLv - 1) * 0.001 + reforge.moveSpeedPct;
+    snackMoveSpeedPct +
+    (foragingLv - 1) * 0.003 +
+    (rogueLv - 1) * 0.001 +
+    reforge.moveSpeedPct +
+    acc.moveSpeedPct;
   let jumpPowerBonusPct = snackJumpPowerPct;
   if (hasTalent(player.skills, 'foraging', 'forage_stride')) moveSpeedBonusPct += 0.1;
   if (hasTalent(player.skills, 'rogue', 'rogue_toes')) {
@@ -589,9 +604,14 @@ export function computeVillageToDungeonBridge(
     jumpPowerBonusPct += 0.1;
   }
 
-  // Vitality & Summoning Max HP bonuses + Reforge + Permanent Shimmer Fruit Blessings
+  // Vitality & Summoning Max HP bonuses + Reforge + Shimmer + Accessories + Armor Set Bonus
   const vitalityLv = skills.vitality?.level ?? 1;
-  let flatHpBonus = (vitalityLv - 1) * 2 + reforge.maxHpFlat + shimmerHpBonus;
+  let flatHpBonus =
+    (vitalityLv - 1) * 2 +
+    reforge.maxHpFlat +
+    shimmerHpBonus +
+    acc.maxHpFlat +
+    (armorSet?.bonusMaxHpFlat ?? 0);
   if (hasTalent(player.skills, 'vitality', 'vit_stayin_alive')) flatHpBonus += 25;
   if (player.loadout.pet && hasTalent(player.skills, 'summoning', 'summon_tough_gang')) {
     flatHpBonus += 30;
@@ -608,11 +628,18 @@ export function computeVillageToDungeonBridge(
       snackCritBonus +
       talentCritBonus +
       reforge.critBonus +
-      shimmerLuckCrit
+      shimmerLuckCrit +
+      acc.critChanceBonus
   );
-  const effectiveDefense = Math.max(0, player.defense + reforge.defenseFlat + shimmerDefBonus);
+  const effectiveDefense = Math.max(
+    0,
+    player.defense + reforge.defenseFlat + shimmerDefBonus + acc.defenseFlat + (armorSet?.bonusDefenseFlat ?? 0)
+  );
   const baseCastMult =
     player.activeClass === 'mystic' && hasTalent(player.skills, 'magic', 'magic_frenzy') ? 1.15 : 1;
+
+  const baseDashMult = hasTalent(player.skills, 'rogue', 'rogue_escape') ? 0.8 : 1;
+  const dashCooldownMult = Math.max(0.35, baseDashMult * (1 - acc.dashCooldownReductionPct));
 
   const farmingLv = skills.farming?.level ?? 1;
   return {
@@ -634,7 +661,7 @@ export function computeVillageToDungeonBridge(
     critMultiplier,
     rawDRBonus,
     stealthRateBonusPct: hasTalent(player.skills, 'rogue', 'rogue_stealth') ? 0.25 : 0,
-    dashCooldownMult: hasTalent(player.skills, 'rogue', 'rogue_escape') ? 0.8 : 1,
+    dashCooldownMult,
     petAttackSpeedMult: hasTalent(player.skills, 'summoning', 'summon_ferocious') ? 1.2 : 1,
     petDamageBonusPct: hasTalent(player.skills, 'summoning', 'summon_extra_spirit') ? 0.25 : 0,
     botanicalVenomChance: hasTalent(player.skills, 'farming', 'farm_botanical_venom') ? 0.15 : 0,
@@ -644,5 +671,11 @@ export function computeVillageToDungeonBridge(
     castSpeedMult: Math.max(0.65, baseCastMult + reforge.attackSpeedPct),
     effectiveDefense,
     weaponSizeMult: 1 + reforge.sizePct,
+    hasDoubleJump: acc.hasDoubleJump,
+    miningSpeedPct: acc.miningSpeedPct + (armorSet?.miningSpeedPct ?? 0),
+    armorDamagePctBonus: armorSet?.bonusAllDamagePct ?? 0,
+    hasGroundSlamShockwave: Boolean(armorSet?.groundSlamShockwave),
+    hasWaterShield: Boolean(armorSet?.waterShieldEvery20s),
+    activeArmorSetId: armorSet?.armorId ?? null,
   };
 }

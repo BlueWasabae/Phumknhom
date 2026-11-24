@@ -14,7 +14,7 @@ interface PlayerActionModalProps {
   onInviteDungeon: (target: InspectedRemotePlayer) => void;
 }
 
-const DISPLAY_SLOTS: Array<{ slot: EquipSlot; label: string }> = [
+const DISPLAY_SLOTS: Array<{ slot: Exclude<EquipSlot, 'accessory'>; label: string }> = [
   { slot: 'weapon', label: 'Weapon' },
   { slot: 'hat', label: 'Hat' },
   { slot: 'shirt', label: 'Outfit' },

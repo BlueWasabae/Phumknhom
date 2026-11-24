@@ -57,7 +57,8 @@ export class Player {
       lifeStats: { ...state.lifeStats },
     };
     this.zone = zone;
-    this.facing = zone === 'dungeon' ? 'right' : 'down';
+    const isPlatformer = zone === 'dungeon' || zone === 'cavern';
+    this.facing = isPlatformer ? 'right' : 'down';
     this.uiScale = zone === 'overworld' ? 0.44 : 1;
 
     this.sprite = scene.physics.add.sprite(x, y, 'player_collider', 0);
@@ -84,7 +85,7 @@ export class Player {
     this.baseDollScale = zone === 'overworld' ? 0.48 : 1.08;
     this.paperDoll = new PaperDoll(scene, x, y, this.state.loadout, `pd_${zone}`);
     this.paperDoll.setScale(this.baseDollScale);
-    if (zone === 'dungeon') {
+    if (isPlatformer) {
       this.paperDoll.setDepth(50);
     }
 
@@ -192,6 +193,7 @@ export class Player {
       this.state.loadout.pet !== nextState.loadout.pet ||
       this.state.loadout.weapon !== nextState.loadout.weapon ||
       this.state.loadout.armor !== nextState.loadout.armor ||
+      this.state.loadout.showVanityOverArmor !== nextState.loadout.showVanityOverArmor ||
       this.state.loadout.hairStyle !== nextState.loadout.hairStyle ||
       this.state.loadout.hairColor !== nextState.loadout.hairColor ||
       this.state.loadout.skinColor !== nextState.loadout.skinColor ||
@@ -251,8 +253,8 @@ export class Player {
   }
 
   public syncVisuals(time: number, onGround = true): void {
-    // Automatic squash-and-stretch on landing in side-scrolling Dungeon arenas!
-    if (this.zone === 'dungeon') {
+    // Automatic squash-and-stretch on landing in side-scrolling Dungeon & Cavern arenas!
+    if (this.zone === 'dungeon' || this.zone === 'cavern') {
       if (!this.wasOnGround && onGround) {
         this.triggerSquash(1.22, 0.8);
       } else if (this.wasOnGround && !onGround && this.body.velocity.y < -80) {

@@ -149,16 +149,34 @@ export class DungeonBossScene extends Phaser.Scene {
   // Platformer & Controls
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keys!: Record<
-    'A' | 'D' | 'W' | 'E' | 'J' | 'L' | 'F' | 'Q' | 'R' | 'SHIFT' | 'SPACE',
+    'A' | 'D' | 'W' | 'E' | 'G' | 'J' | 'L' | 'F' | 'Q' | 'R' | 'SHIFT' | 'SPACE',
     Phaser.Input.Keyboard.Key
   >;
   private joystick: JoystickVector = { x: 0, y: 0 };
   private jumpsUsed = 0;
+  private prevOnGround = true;
+  private peakAirVy = 0;
   private dashActiveUntil = 0;
   private dashCooldownUntil = 0;
   private invulnerableUntil = 0;
   private attackCooldownUntil = 0;
   private attackAnimUntil = 0;
+  // Bamboo Vine Grapple & Naga Water Shield (Update 1.3A)
+  private grappleActive = false;
+  private grappleTargetX = 0;
+  private grappleTargetY = 0;
+  private grappleEndAt = 0;
+  private grappleCooldownUntil = 0;
+  private grappleGraphics!: Phaser.GameObjects.Graphics;
+  private waterShieldReadyAt = 0;
+  private waterShieldOrb!: Phaser.GameObjects.Arc;
+  private waterShieldRing!: Phaser.GameObjects.Arc;
+  private arenaPlatforms: Array<{ x: number; y: number; w: number }> = [
+    { x: 460, y: 500, w: 224 },
+    { x: 780, y: 395, w: 240 },
+    { x: 1120, y: 485, w: 224 },
+    { x: 1460, y: 365, w: 240 },
+  ];
   private nearExitSent = false;
   private transitioning = false;
   private unsubs: Array<() => void> = [];
@@ -196,6 +214,11 @@ export class DungeonBossScene extends Phaser.Scene {
       : { ...INITIAL_PLAYER_STATE, zone: 'dungeon', difficulty: this.difficulty };
 
     this.jumpsUsed = 0;
+    this.prevOnGround = true;
+    this.peakAirVy = 0;
+    this.grappleActive = false;
+    this.grappleCooldownUntil = 0;
+    this.waterShieldReadyAt = 0;
     this.nearExitSent = false;
     this.transitioning = false;
     this.joystick = { x: 0, y: 0 };
@@ -245,9 +268,17 @@ export class DungeonBossScene extends Phaser.Scene {
         const p = playerObj as Phaser.Physics.Arcade.Sprite;
         const plat = platObj as Phaser.GameObjects.Rectangle;
         const body = p.body as Phaser.Physics.Arcade.Body;
-        return body.velocity.y >= 0 && body.bottom <= plat.y - plat.height / 2 + 14;
+        return !this.grappleActive && body.velocity.y >= 0 && body.bottom <= plat.y - plat.height / 2 + 14;
       }
     );
+
+    this.grappleGraphics = this.add.graphics().setDepth(65);
+    this.waterShieldOrb = this.add.circle(this.player.x, this.player.y, 7, 0x38bdf8, 0.92).setDepth(62).setVisible(false);
+    this.waterShieldRing = this.add
+      .circle(this.player.x, this.player.y, 10, 0x7dd3fc, 0)
+      .setStrokeStyle(2, 0xbae6fd, 0.85)
+      .setDepth(61)
+      .setVisible(false);
 
     this.bossCtrl = new BossController(
       this,
@@ -291,8 +322,8 @@ export class DungeonBossScene extends Phaser.Scene {
     this.cameras.main.fadeIn(240, 8, 10, 20);
 
     this.cursors = this.input.keyboard!.createCursorKeys();
-    this.keys = this.input.keyboard!.addKeys('A,D,W,E,J,L,F,Q,R,SHIFT,SPACE') as Record<
-      'A' | 'D' | 'W' | 'E' | 'J' | 'L' | 'F' | 'Q' | 'R' | 'SHIFT' | 'SPACE',
+    this.keys = this.input.keyboard!.addKeys('A,D,W,E,G,J,L,F,Q,R,SHIFT,SPACE') as Record<
+      'A' | 'D' | 'W' | 'E' | 'G' | 'J' | 'L' | 'F' | 'Q' | 'R' | 'SHIFT' | 'SPACE',
       Phaser.Input.Keyboard.Key
     >;
 
@@ -337,6 +368,7 @@ export class DungeonBossScene extends Phaser.Scene {
       EventBus.on('input:attack', () => this.performClassAttack()),
       EventBus.on('input:secondary', () => this.performSecondaryWeaponAction()),
       EventBus.on('input:dash', () => this.performClassDash()),
+      EventBus.on('input:grapple', () => this.performBambooGrapple()),
       EventBus.on('input:focus', () => this.activateFocusBurst()),
       EventBus.on('input:fury', () => this.activateFuryBurst()),
       EventBus.on('input:rematch', () => this.restartCurrentBoss()),
@@ -1143,16 +1175,24 @@ export class DungeonBossScene extends Phaser.Scene {
 
     const bridge = computeVillageToDungeonBridge(this.player.state, Date.now(), this.consecutiveMeleeHits);
 
-    // Coconut Water Anti-Venom Counter (negates Shadow Naga poison pools & venom spits!)
+    // Naga Scale Set: Orbiting Water Shield blocks 1 hit every 20s!
+    if (bridge.hasWaterShield && now >= this.waterShieldReadyAt) {
+      this.waterShieldReadyAt = now + 20_000;
+      this.invulnerableUntil = now + 900;
+      soundManager.playSfx('magic');
+      this.spawnFloatingText(this.player.x, this.player.y - 48, '💧 WATER SHIELD BLOCKED HIT!', '#38bdf8', '16px');
+      return;
+    }
+
+    // Coconut Water / Jade Poison Ward / Sovereign Aegis Anti-Venom Counter
     if (isPoison && bridge.poisonImmune) {
       this.invulnerableUntil = now + 520;
       soundManager.playSfx('magic');
-      this.spawnFloatingText(this.player.x, this.player.y - 44, '🥥 ANTI-VENOM IMMUNE!', '#67e8f9', '15px');
+      this.spawnFloatingText(this.player.x, this.player.y - 44, '🟢 POISON IMMUNE!', '#67e8f9', '15px');
       return;
     }
-    const shimmerDef = (this.player.state.shimmerBlessings ?? []).includes('blessing_sandstone_ward') ? 5 : 0;
     const wardDef = this.arenaStations.angkorWard ? 6 : 0;
-    const totalDefense = this.player.state.defense + shimmerDef + wardDef;
+    const totalDefense = bridge.effectiveDefense + wardDef;
     const effectiveDefense =
       now < this.defenseCrackedUntil
         ? Math.max(0, Math.round(totalDefense * 0.75))
@@ -1231,6 +1271,10 @@ export class DungeonBossScene extends Phaser.Scene {
   // ==================== PLAYER CONTROLS & 5-CLASS COMBAT ====================
   private performJump(): void {
     if (this.transitioning || this.playerDefeated) return;
+    if (this.grappleActive) {
+      this.grappleActive = false;
+      this.grappleGraphics.clear();
+    }
     const bridge = computeVillageToDungeonBridge(this.player.state, Date.now(), this.consecutiveMeleeHits);
     const jumpMult = 1 + bridge.jumpPowerBonusPct;
     const onGround = this.player.body.blocked.down || this.player.body.touching.down;
@@ -1239,8 +1283,91 @@ export class DungeonBossScene extends Phaser.Scene {
       this.player.body.setVelocityY(-495 * jumpMult);
     } else if (this.jumpsUsed < 2) {
       this.jumpsUsed = 2;
-      this.player.body.setVelocityY(-460 * jumpMult);
-      this.spawnFloatingText(this.player.x, this.player.y - 26, 'Double Jump!', '#38bdf8', '13px');
+      const lotusBoost = bridge.hasDoubleJump ? 1.1 : 1;
+      this.player.body.setVelocityY(-460 * jumpMult * lotusBoost);
+      if (bridge.hasDoubleJump) {
+        this.spawnLotusPetalBurst(this.player.x, this.player.y + 12);
+        this.spawnFloatingText(this.player.x, this.player.y - 28, '🌸 Lotus Double-Jump!', '#f472b6', '13px');
+      } else {
+        this.spawnFloatingText(this.player.x, this.player.y - 26, 'Double Jump!', '#38bdf8', '13px');
+      }
+    }
+  }
+
+  private spawnLotusPetalBurst(x: number, y: number): void {
+    for (let i = 0; i < 8; i++) {
+      const angle = (Math.PI * 2 * i) / 8;
+      const petal = this.add
+        .ellipse(x, y, 8, 4, i % 2 === 0 ? 0xf472b6 : 0xfce7f3, 0.95)
+        .setRotation(angle)
+        .setDepth(60);
+      this.tweens.add({
+        targets: petal,
+        x: x + Math.cos(angle) * 38,
+        y: y + Math.sin(angle) * 20 + 10,
+        alpha: 0,
+        scale: 0.4,
+        duration: 360,
+        ease: 'Cubic.easeOut',
+        onComplete: () => petal.destroy(),
+      });
+    }
+  }
+
+  private performBambooGrapple(): void {
+    const now = this.time.now;
+    if (now < this.grappleCooldownUntil || this.transitioning || this.playerDefeated) return;
+    const px = this.player.x;
+    const py = this.player.y;
+    const dir = this.player.facingRight ? 1 : -1;
+
+    let best: { x: number; y: number; w: number } | null = null;
+    let bestScore = Infinity;
+    for (const p of this.arenaPlatforms) {
+      const anchorX = Phaser.Math.Clamp(px + dir * 48, p.x - p.w / 2 + 18, p.x + p.w / 2 - 18);
+      const anchorY = p.y - 10;
+      const dy = py - anchorY;
+      const dist = Phaser.Math.Distance.Between(px, py, anchorX, anchorY);
+      if (dy < 36 || dist > 380) continue;
+      const score = dist * (Math.sign(anchorX - px) === dir ? 0.72 : 1.05);
+      if (score < bestScore) {
+        bestScore = score;
+        best = p;
+      }
+    }
+    if (!best) {
+      this.spawnFloatingText(px, py - 34, '🌿 No overhead ledge in Grapple range!', '#86efac', '11px');
+      return;
+    }
+
+    this.grappleActive = true;
+    this.grappleTargetX = Phaser.Math.Clamp(px + dir * 40, best.x - best.w / 2 + 24, best.x + best.w / 2 - 24);
+    this.grappleTargetY = best.y - 34;
+    this.grappleEndAt = now + 380;
+    this.grappleCooldownUntil = now + 1150;
+    this.jumpsUsed = 1;
+    soundManager.playSfx('swing');
+    this.spawnFloatingText(px, py - 34, '🌿 Bamboo Vine Grapple!', '#4ade80', '13px');
+  }
+
+  private triggerGroundSlamShockwave(): void {
+    soundManager.playSfx('hit');
+    this.cameras.main.shake(140, 0.007);
+    const ring = this.add
+      .circle(this.player.x, this.player.y + 18, 16, 0xf59e0b, 0.28)
+      .setStrokeStyle(4, 0xfde047, 0.95)
+      .setDepth(58);
+    this.tweens.add({
+      targets: ring,
+      scaleX: 7.2,
+      scaleY: 2.2,
+      alpha: 0,
+      duration: 360,
+      onComplete: () => ring.destroy(),
+    });
+    this.spawnFloatingText(this.player.x, this.player.y - 38, '🪨 YAKSHA GROUND-SLAM!', '#fbbf24', '14px');
+    if (this.bossCtrl.alive && Phaser.Math.Distance.Between(this.player.x, this.player.y, this.bossCtrl.x, this.bossCtrl.y) < 240) {
+      this.damageBoss(this.player.facingRight ? 1 : -1, { bonusMult: 1.15, tag: 'Ground-Slam' });
     }
   }
 
@@ -1633,7 +1760,7 @@ export class DungeonBossScene extends Phaser.Scene {
       upgradeLevel: weapon.upgradeLevel,
       flatBonuses: bridge.flatDamageBonus,
       skillPct: bridge.classSkillDamagePct,
-      armorPct: armorDamagePct,
+      armorPct: armorDamagePct + bridge.armorDamagePctBonus,
       snackBuffPct: bridge.snackAttackPct,
       weaponPrefix: this.player.state.weaponPrefix,
       armorPrefix: this.player.state.armorPrefix,
@@ -1902,6 +2029,21 @@ export class DungeonBossScene extends Phaser.Scene {
       );
     }
 
+    // Update 1.3A Combat Armor Set Boss Drops (Yeak Thmor -> Stone Set, Neak Reach -> Naga Scale Set)
+    if (this.bossId === 'yeak_thmor') {
+      const armorRes = this.addItemToInventory(nextInv, 'armor_yeak_thmor_stone', 1, true);
+      nextInv = armorRes.nextInv;
+      if (armorRes.duplicateBonusCoins === 0) {
+        lootLabels.push('🛡️ Yeak Thmor Stone Set (Combat Armor)');
+      }
+    } else if (this.bossId === 'neak_reach') {
+      const armorRes = this.addItemToInventory(nextInv, 'armor_naga_scale', 1, true);
+      nextInv = armorRes.nextInv;
+      if (armorRes.duplicateBonusCoins === 0) {
+        lootLabels.push('🛡️ Naga Scale Set (Combat Armor)');
+      }
+    }
+
     const totalCoins = rolled.coins + extraDupCoins;
     soundManager.playSfx('coin');
     this.player.state.inventory = nextInv;
@@ -2014,9 +2156,56 @@ export class DungeonBossScene extends Phaser.Scene {
     const typing =
       document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA';
     const onGround = this.player.body.blocked.down || this.player.body.touching.down;
-    if (onGround) this.jumpsUsed = 0;
-
     const bridge = computeVillageToDungeonBridge(this.player.state, Date.now(), this.consecutiveMeleeHits);
+    if (!onGround) {
+      this.peakAirVy = Math.max(this.peakAirVy, this.player.body.velocity.y);
+    } else {
+      if (!this.prevOnGround && this.peakAirVy > 420 && bridge.hasGroundSlamShockwave && !this.playerDefeated) {
+        this.triggerGroundSlamShockwave();
+      }
+      this.jumpsUsed = 0;
+      this.peakAirVy = 0;
+    }
+    this.prevOnGround = onGround;
+
+    // Naga Scale Set Orbiting Water Shield Visual
+    const shieldReady = bridge.hasWaterShield && time >= this.waterShieldReadyAt && !this.playerDefeated;
+    this.waterShieldOrb.setVisible(shieldReady);
+    this.waterShieldRing.setVisible(shieldReady);
+    if (shieldReady) {
+      const ang = time * 0.0042;
+      const ox = this.player.x + Math.cos(ang) * 34;
+      const oy = this.player.y - 6 + Math.sin(ang) * 18;
+      this.waterShieldOrb.setPosition(ox, oy);
+      this.waterShieldRing.setPosition(ox, oy);
+    }
+
+    // Bamboo Vine Grapple Zip Physics
+    this.grappleGraphics.clear();
+    if (this.grappleActive && !this.playerDefeated) {
+      const dx = this.grappleTargetX - this.player.x;
+      const dy = this.grappleTargetY - this.player.y;
+      const dist = Math.hypot(dx, dy);
+      this.grappleGraphics.lineStyle(4, 0x166534, 1);
+      this.grappleGraphics.beginPath();
+      this.grappleGraphics.moveTo(this.player.x, this.player.y - 8);
+      this.grappleGraphics.lineTo(this.grappleTargetX, this.grappleTargetY + 14);
+      this.grappleGraphics.strokePath();
+      this.grappleGraphics.lineStyle(2, 0x4ade80, 0.95);
+      this.grappleGraphics.beginPath();
+      this.grappleGraphics.moveTo(this.player.x, this.player.y - 8);
+      this.grappleGraphics.lineTo(this.grappleTargetX, this.grappleTargetY + 14);
+      this.grappleGraphics.strokePath();
+      this.grappleGraphics.fillStyle(0xf472b6, 1);
+      this.grappleGraphics.fillCircle(this.grappleTargetX, this.grappleTargetY + 14, 5);
+
+      if (dist < 24 || time >= this.grappleEndAt) {
+        this.grappleActive = false;
+        this.player.body.setVelocity(dx * 1.4, -220);
+      } else {
+        this.player.body.setVelocity((dx / dist) * 760, (dy / dist) * 760);
+      }
+    }
 
     // Mythic Focus (fills when taking 0 damage) & Fury (fills when fighting close to boss)
     if (this.difficulty === 'mythic' && this.bossCtrl.alive && !this.playerDefeated) {
@@ -2066,7 +2255,7 @@ export class DungeonBossScene extends Phaser.Scene {
       );
     }
 
-    if (!this.playerDefeated && time > this.dashActiveUntil && !this.transitioning) {
+    if (!this.playerDefeated && time > this.dashActiveUntil && !this.grappleActive && !this.transitioning) {
       let moveX = this.joystick.x;
       if (!typing) {
         if (this.cursors.left.isDown || this.keys.A.isDown) moveX -= 1;
@@ -2078,6 +2267,9 @@ export class DungeonBossScene extends Phaser.Scene {
           Phaser.Input.Keyboard.JustDown(this.cursors.up)
         ) {
           this.performJump();
+        }
+        if (Phaser.Input.Keyboard.JustDown(this.keys.G)) {
+          this.performBambooGrapple();
         }
         if (Phaser.Input.Keyboard.JustDown(this.keys.SHIFT) || Phaser.Input.Keyboard.JustDown(this.keys.L)) {
           this.performClassDash();

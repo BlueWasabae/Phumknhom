@@ -9,6 +9,8 @@ import type {
   PlayerState,
   WeaponStats,
 } from '@shared/types';
+import { ACCESSORY_DEFS, normalizeAccessorySlots } from '@shared/accessoryFusions';
+import { COMBAT_ARMOR_SETS } from './armorSets';
 
 export interface ItemStats {
   attack?: number;
@@ -1359,6 +1361,83 @@ export const ITEM_CATALOG: Record<string, CatalogItem> = {
       knockbackForce: 165,
     },
   },
+
+  // ==================== UPDATE 1.3A: COMBAT ARMOR SETS ====================
+  armor_laterite_miner: {
+    id: COMBAT_ARMOR_SETS.armor_laterite_miner.id,
+    name: COMBAT_ARMOR_SETS.armor_laterite_miner.name,
+    khmerName: COMBAT_ARMOR_SETS.armor_laterite_miner.khmerName,
+    slot: 'armor',
+    rarity: COMBAT_ARMOR_SETS.armor_laterite_miner.rarity,
+    stylishScore: COMBAT_ARMOR_SETS.armor_laterite_miner.stylishScore,
+    description: `${COMBAT_ARMOR_SETS.armor_laterite_miner.setBonusTitle}: ${COMBAT_ARMOR_SETS.armor_laterite_miner.setBonusDescription}`,
+    primaryColor: COMBAT_ARMOR_SETS.armor_laterite_miner.primaryColor,
+    accentColor: COMBAT_ARMOR_SETS.armor_laterite_miner.accentColor,
+    styleVariant: 'laterite_miner',
+    setName: 'Laterite Miner Set',
+    stats: {
+      defense: COMBAT_ARMOR_SETS.armor_laterite_miner.baseDefense,
+      maxHp: COMBAT_ARMOR_SETS.armor_laterite_miner.baseMaxHp,
+    },
+  },
+  armor_yeak_thmor_stone: {
+    id: COMBAT_ARMOR_SETS.armor_yeak_thmor_stone.id,
+    name: COMBAT_ARMOR_SETS.armor_yeak_thmor_stone.name,
+    khmerName: COMBAT_ARMOR_SETS.armor_yeak_thmor_stone.khmerName,
+    slot: 'armor',
+    rarity: COMBAT_ARMOR_SETS.armor_yeak_thmor_stone.rarity,
+    stylishScore: COMBAT_ARMOR_SETS.armor_yeak_thmor_stone.stylishScore,
+    description: `${COMBAT_ARMOR_SETS.armor_yeak_thmor_stone.setBonusTitle}: ${COMBAT_ARMOR_SETS.armor_yeak_thmor_stone.setBonusDescription}`,
+    primaryColor: COMBAT_ARMOR_SETS.armor_yeak_thmor_stone.primaryColor,
+    accentColor: COMBAT_ARMOR_SETS.armor_yeak_thmor_stone.accentColor,
+    styleVariant: 'yeak_thmor_stone',
+    setName: 'Yeak Thmor Stone Set',
+    stats: {
+      defense: COMBAT_ARMOR_SETS.armor_yeak_thmor_stone.baseDefense,
+      maxHp: COMBAT_ARMOR_SETS.armor_yeak_thmor_stone.baseMaxHp,
+    },
+  },
+  armor_naga_scale: {
+    id: COMBAT_ARMOR_SETS.armor_naga_scale.id,
+    name: COMBAT_ARMOR_SETS.armor_naga_scale.name,
+    khmerName: COMBAT_ARMOR_SETS.armor_naga_scale.khmerName,
+    slot: 'armor',
+    rarity: COMBAT_ARMOR_SETS.armor_naga_scale.rarity,
+    stylishScore: COMBAT_ARMOR_SETS.armor_naga_scale.stylishScore,
+    description: `${COMBAT_ARMOR_SETS.armor_naga_scale.setBonusTitle}: ${COMBAT_ARMOR_SETS.armor_naga_scale.setBonusDescription}`,
+    primaryColor: COMBAT_ARMOR_SETS.armor_naga_scale.primaryColor,
+    accentColor: COMBAT_ARMOR_SETS.armor_naga_scale.accentColor,
+    styleVariant: 'naga_scale',
+    setName: 'Naga Scale Set',
+    stats: {
+      defense: COMBAT_ARMOR_SETS.armor_naga_scale.baseDefense,
+      maxHp: COMBAT_ARMOR_SETS.armor_naga_scale.baseMaxHp,
+    },
+  },
+
+  // ==================== UPDATE 1.3A: 5-SLOT ACCESSORIES & FUSED RELICS ====================
+  ...Object.fromEntries(
+    Object.values(ACCESSORY_DEFS).map((acc) => [
+      acc.id,
+      {
+        id: acc.id,
+        name: acc.name,
+        khmerName: acc.khmerName,
+        slot: 'accessory' as const,
+        rarity: acc.rarity,
+        stylishScore: acc.stylishScore,
+        description: acc.description,
+        primaryColor: acc.primaryColor,
+        accentColor: acc.accentColor,
+        styleVariant: acc.id,
+        stats: {
+          defense: acc.effects.defenseFlat,
+          maxHp: acc.effects.maxHpFlat,
+          critChance: acc.effects.critChanceBonus,
+        },
+      } satisfies CatalogItem,
+    ])
+  ),
 };
 
 export const FASHION_SHOP_ITEMS: CatalogItem[] = Object.values(ITEM_CATALOG).filter(
@@ -1413,12 +1492,26 @@ export function buyFashionItem(
 }
 
 export function computeStylishScore(loadout: EquippedLoadout): number {
-  const slots: EquipSlot[] = ['hat', 'hair', 'shirt', 'pants', 'wings', 'pet', 'weapon', 'armor'];
+  const slots: Array<'hat' | 'hair' | 'shirt' | 'pants' | 'wings' | 'pet' | 'weapon' | 'armor'> = [
+    'hat',
+    'hair',
+    'shirt',
+    'pants',
+    'wings',
+    'pet',
+    'weapon',
+    'armor',
+  ];
   let total = 0;
   for (const s of slots) {
     const id = loadout[s];
     if (id && ITEM_CATALOG[id]) {
       total += ITEM_CATALOG[id].stylishScore;
+    }
+  }
+  for (const accId of normalizeAccessorySlots(loadout.accessories)) {
+    if (accId && ITEM_CATALOG[accId]) {
+      total += ITEM_CATALOG[accId].stylishScore;
     }
   }
   return total;
@@ -1446,7 +1539,14 @@ export function computeLoadoutDefenseAndHp(
   loadout: EquippedLoadout,
   baseLevel: number
 ): { defense: number; maxHp: number; bonusCrit: number; bonusFlatAtk: number } {
-  const slots: EquipSlot[] = ['hat', 'shirt', 'pants', 'wings', 'pet', 'armor'];
+  const slots: Array<'hat' | 'shirt' | 'pants' | 'wings' | 'pet' | 'armor'> = [
+    'hat',
+    'shirt',
+    'pants',
+    'wings',
+    'pet',
+    'armor',
+  ];
   let defense = 5 + baseLevel * 2;
   let maxHp = 120 + (baseLevel - 1) * 15;
   let bonusCrit = 0;

@@ -11,10 +11,11 @@ import {
   SHIMMER_RECIPES,
   countShimmerInputs,
 } from '../data/khmerArsenal';
-import { Gift, Hammer, Landmark, Shield, Sparkles, Swords } from 'lucide-react';
+import { Gift, Hammer, Landmark, Layers, Shield, Sparkles, Swords } from 'lucide-react';
 import { NativeDialog } from './NativeDialog';
+import { AccessoryFusionPanel } from './AccessoryFusionModal';
 
-export type ReforgeTab = 'reforge' | 'shimmer' | 'bank';
+export type ReforgeTab = 'reforge' | 'fusion' | 'shimmer' | 'bank';
 
 interface ReforgeModalProps {
   open: boolean;
@@ -27,6 +28,11 @@ interface ReforgeModalProps {
   onCraftArsenalWeapon: (itemId: string) => void;
   onClaimStarterChest: () => void;
   onEquipWeapon: (itemId: string) => void;
+  onFuseAccessory: (recipeId: string) => void;
+  onBuyBaseAccessory: (accId: string) => void;
+  onEquipAccessory: (accId: string) => void;
+  onCraftArmorSet: (armorId: string) => void;
+  onEquipArmorSet: (armorId: string) => void;
 }
 
 export const ReforgeModal: React.FC<ReforgeModalProps> = ({
@@ -40,6 +46,11 @@ export const ReforgeModal: React.FC<ReforgeModalProps> = ({
   onCraftArsenalWeapon,
   onClaimStarterChest,
   onEquipWeapon,
+  onFuseAccessory,
+  onBuyBaseAccessory,
+  onEquipAccessory,
+  onCraftArmorSet,
+  onEquipArmorSet,
 }) => {
   const [tab, setTab] = useState<ReforgeTab>(initialTab);
   const [busy, setBusy] = useState(false);
@@ -100,10 +111,11 @@ export const ReforgeModal: React.FC<ReforgeModalProps> = ({
       maxWidthClass="w-[min(96vw,780px)]"
     >
       <div className="space-y-3 text-xs">
-        <div className="grid grid-cols-3 gap-1.5">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
           {(
             [
-              ['reforge', 'Blacksmith & Arsenal', Hammer],
+              ['reforge', 'Reforge & Arsenal', Hammer],
+              ['fusion', 'Fuse Relics & Armor', Layers],
               ['shimmer', 'Apsara Shimmer', Sparkles],
               ['bank', 'ATM Bank Vault', Landmark],
             ] as const
@@ -282,7 +294,19 @@ export const ReforgeModal: React.FC<ReforgeModalProps> = ({
             </>
           )}
 
-          {/* TAB 2: SACRED APSARA SHIMMER SPRING */}
+          {/* TAB 2: BLACKSMITH ACCESSORY FUSION & COMBAT ARMOR FORGE */}
+          {tab === 'fusion' && (
+            <AccessoryFusionPanel
+              player={player}
+              onFuseAccessory={onFuseAccessory}
+              onBuyBaseAccessory={onBuyBaseAccessory}
+              onEquipAccessory={onEquipAccessory}
+              onCraftArmorSet={onCraftArmorSet}
+              onEquipArmorSet={onEquipArmorSet}
+            />
+          )}
+
+          {/* TAB 3: SACRED APSARA SHIMMER SPRING */}
           {tab === 'shimmer' && (
             <div className="space-y-3">
               <div className="p-2.5 rounded-xl bg-gradient-to-r from-purple-950 via-indigo-950 to-fuchsia-950 text-purple-100 border border-purple-400/50 text-[11px]">

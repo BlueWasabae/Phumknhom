@@ -82,7 +82,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({
       next.eyeStyle = def.eyeStyleOverride;
     } else if (def.faceStyleOverride) {
       next.faceStyle = def.faceStyleOverride;
-    } else {
+    } else if (def.slot !== 'accessory') {
       next[def.slot] = def.id;
       if (def.hairStyleOverride) next.hairStyle = def.hairStyleOverride;
     }
@@ -97,6 +97,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({
     if (!def) return false;
     if (def.eyeStyleOverride) return player.loadout.eyeStyle === def.eyeStyleOverride;
     if (def.faceStyleOverride) return player.loadout.faceStyle === def.faceStyleOverride;
+    if (def.slot === 'accessory') return (player.loadout.accessories ?? []).includes(itemId);
     return player.loadout[def.slot] === itemId;
   };
 

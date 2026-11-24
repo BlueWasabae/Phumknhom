@@ -15,6 +15,12 @@ import {
 import { KHMER_CLASSES } from '@shared/khmerClasses';
 import { computeVillageToDungeonBridge } from '@shared/skillTrees';
 import {
+  ACCESSORY_DEFS,
+  fuseAccessoryRecipe,
+  normalizeAccessorySlots,
+} from '@shared/accessoryFusions';
+import { craftCombatArmorSet } from './data/armorSets';
+import {
   getScaledReforgeCost,
   rollReforgeModifier,
   type ReforgeCategory,
@@ -293,6 +299,22 @@ export const App: React.FC = () => {
     (itemId: string) => {
       const def = ITEM_CATALOG[itemId];
       if (!def) return;
+      if (def.slot === 'accessory') {
+        const curSlots = normalizeAccessorySlots(playerRef.current.loadout.accessories);
+        if (curSlots.includes(def.id)) {
+          EventBus.emit('ui:toast', { text: `${def.name} is already equipped in an Accessory slot!` });
+          return;
+        }
+        const emptyIdx = curSlots.findIndex((s) => s === null);
+        const nextSlots = [...curSlots];
+        const targetIdx = emptyIdx >= 0 ? emptyIdx : nextSlots.length - 1;
+        nextSlots[targetIdx] = def.id;
+        applyLoadoutPatch(
+          { accessories: nextSlots },
+          `Equipped ${def.name} in Accessory Slot ${targetIdx + 1}!`
+        );
+        return;
+      }
       const patch: Partial<EquippedLoadout> = {};
       if (def.eyeStyleOverride) {
         patch.eyeStyle = def.eyeStyleOverride;
@@ -312,10 +334,104 @@ export const App: React.FC = () => {
 
   const handleUnequipSlot = useCallback(
     (slot: EquipSlot) => {
-      if (slot === 'weapon') return;
+      if (slot === 'weapon' || slot === 'accessory') return;
       applyLoadoutPatch({ [slot]: null }, `Unequipped ${slot}.`);
     },
     [applyLoadoutPatch]
+  );
+
+  const handleUnequipAccessory = useCallback(
+    (slotIndex: number) => {
+      const curSlots = normalizeAccessorySlots(playerRef.current.loadout.accessories);
+      const removedId = curSlots[slotIndex];
+      if (!removedId) return;
+      const nextSlots = [...curSlots];
+      nextSlots[slotIndex] = null;
+      const name = ACCESSORY_DEFS[removedId]?.name ?? 'Accessory';
+      applyLoadoutPatch({ accessories: nextSlots }, `Removed ${name} from Slot ${slotIndex + 1}.`);
+    },
+    [applyLoadoutPatch]
+  );
+
+  const handleToggleVanityOverride = useCallback(
+    (showVanity: boolean) => {
+      applyLoadoutPatch(
+        { showVanityOverArmor: showVanity },
+        showVanity
+          ? '🎭 Vanity Override ON — fashion outfits display over Combat Armor!'
+          : '🛡️ Displaying Combat Armor visuals directly!'
+      );
+    },
+    [applyLoadoutPatch]
+  );
+
+  const handleFuseAccessory = useCallback(
+    (recipeId: string) => {
+      runStateAction((s) => {
+        const res = fuseAccessoryRecipe(s, recipeId);
+        if (res.ok) {
+          soundManager.playSfx('level_up');
+          const bridge = computeVillageToDungeonBridge(res.state);
+          const nextState: PlayerState = {
+            ...res.state,
+            hp: Math.min(res.state.hp, bridge.effectiveMaxHp),
+          };
+          EventBus.emit('player:loadoutChanged', {
+            loadout: nextState.loadout,
+            activeClass: nextState.activeClass,
+            playerState: nextState,
+          });
+          return { ...res, state: nextState };
+        }
+        return res;
+      });
+    },
+    [runStateAction]
+  );
+
+  const handleBuyBaseAccessory = useCallback(
+    (accId: string) => {
+      runStateAction((s) => {
+        const def = ACCESSORY_DEFS[accId];
+        if (!def || !def.buyCoins) {
+          return { state: s, ok: false, message: 'Accessory cannot be purchased directly.' };
+        }
+        if (s.currencies.coins < def.buyCoins) {
+          return { state: s, ok: false, message: `Need ${def.buyCoins} Coins to buy ${def.name}.` };
+        }
+        const nextCoins = s.currencies.coins - def.buyCoins;
+        const nextInv = [...s.inventory];
+        const idx = nextInv.findIndex((i) => i.itemId === def.id);
+        if (idx >= 0) {
+          nextInv[idx] = { ...nextInv[idx], quantity: nextInv[idx].quantity + 1 };
+        } else {
+          nextInv.push({ itemId: def.id, quantity: 1, itemLevel: 2 });
+        }
+        soundManager.playSfx('coin');
+        return {
+          state: {
+            ...s,
+            coins: nextCoins,
+            currencies: { ...s.currencies, coins: nextCoins },
+            inventory: nextInv,
+          },
+          ok: true,
+          message: `Bought ${def.icon} ${def.name} (-${def.buyCoins}c)! Added to Container.`,
+        };
+      });
+    },
+    [runStateAction]
+  );
+
+  const handleCraftArmorSet = useCallback(
+    (armorId: string) => {
+      runStateAction((s) => {
+        const res = craftCombatArmorSet(s, armorId);
+        if (res.ok) soundManager.playSfx('level_up');
+        return res;
+      });
+    },
+    [runStateAction]
   );
 
   const handleSelectFarmSeed = useCallback((cropId: string, toolMode: FarmToolMode) => {
@@ -1116,6 +1232,37 @@ export const App: React.FC = () => {
           };
         });
       }),
+      EventBus.on('cavern:reward', ({ skillId, xp, coins, items, label }) => {
+        runStateAction((prev) => {
+          const gainedCoins = coins ?? 0;
+          const nextCoins = prev.currencies.coins + gainedCoins;
+          const nextInv = prev.inventory.map((i) => ({ ...i }));
+          if (items && items.length > 0) {
+            for (const drop of items) {
+              const existing = nextInv.find(
+                (i) => i.itemId === drop.itemId && (i.quality ?? 'normal') === 'normal'
+              );
+              if (existing) existing.quantity += drop.quantity;
+              else nextInv.push({ itemId: drop.itemId, quantity: drop.quantity, itemLevel: 1, quality: 'normal' });
+            }
+          }
+          let nextState: PlayerState = {
+            ...prev,
+            coins: nextCoins,
+            currencies: { ...prev.currencies, coins: nextCoins },
+            inventory: nextInv,
+          };
+          if (skillId && xp && xp > 0) {
+            const xpRes = awardSkillXp(nextState, skillId, xp);
+            nextState = xpRes.state;
+          }
+          return {
+            state: nextState,
+            ok: true,
+            message: label,
+          };
+        });
+      }),
       EventBus.on('portal:proximity', ({ nearPortal: near }) => {
         setNearPortal(near);
       }),
@@ -1483,6 +1630,11 @@ export const App: React.FC = () => {
           })
         }
         onEquipWeapon={handleEquipItem}
+        onFuseAccessory={handleFuseAccessory}
+        onBuyBaseAccessory={handleBuyBaseAccessory}
+        onEquipAccessory={handleEquipItem}
+        onCraftArmorSet={handleCraftArmorSet}
+        onEquipArmorSet={handleEquipItem}
       />
 
       <ClubGamesModal
@@ -1743,6 +1895,8 @@ export const App: React.FC = () => {
         onClose={() => setActiveModal(null)}
         onEquip={handleEquipItem}
         onUnequip={handleUnequipSlot}
+        onUnequipAccessory={handleUnequipAccessory}
+        onToggleVanityOverride={handleToggleVanityOverride}
         onSellFarmItem={(itemId, quality, qty = 1) =>
           runFarmAction((s) => sellFarmProduce(s, itemId, quality, qty))
         }

@@ -282,6 +282,8 @@ export const HUD: React.FC<HUDProps> = ({
             ? `My Homestead • Farm Lv.${player.lifeStats.farmLevel}`
             : zone === 'club'
             ? 'Phum Night Club • Lounge'
+            : zone === 'cavern'
+            ? '⛏️ Ancient Cavern • Mining & Relics'
             : 'Ancient Cavern • Dungeon'}
         </span>
       )}

@@ -32,7 +32,7 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
     const maxR = rect.width / 2 - 16;
 
     let dx = clientX - cx;
-    let dy = zone === 'dungeon' ? 0 : clientY - cy;
+    let dy = zone === 'dungeon' || zone === 'cavern' ? 0 : clientY - cy;
     const dist = Math.hypot(dx, dy);
     if (dist > maxR) {
       dx = (dx / dist) * maxR;
@@ -74,9 +74,9 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
       </div>
 
       <div className="pointer-events-auto flex items-end gap-2">
-        {zone === 'dungeon' ? (
+        {zone === 'dungeon' || zone === 'cavern' ? (
           <div className="flex flex-col items-end gap-2">
-            {bossHud?.difficulty === 'mythic' && (bossHud.focusPct >= 100 || bossHud.furyPct >= 100) && (
+            {zone === 'dungeon' && bossHud?.difficulty === 'mythic' && (bossHud.focusPct >= 100 || bossHud.furyPct >= 100) && (
               <div className="flex items-center gap-2">
                 {bossHud.focusPct >= 100 && !bossHud.focusActive && (
                   <button
@@ -108,16 +108,24 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
               </button>
             )}
             <div className="flex items-end gap-2">
-              {(equippedWeaponId === 'weapon_preah_khan' ||
-                equippedWeaponId === 'weapon_golden_riel_shot') && (
-                <button
-                  type="button"
-                  onPointerDown={() => EventBus.emit('input:secondary')}
-                  className="w-14 h-14 rounded-full bg-gradient-to-b from-amber-300 to-yellow-500 border-[3px] border-amber-950 text-amber-950 font-display font-bold text-[10px] leading-tight shadow-lg active:scale-95"
-                >
-                  {equippedWeaponId === 'weapon_preah_khan' ? '🛡️\nPARRY' : '🪙\nCOIN'}
-                </button>
-              )}
+              {zone === 'dungeon' &&
+                (equippedWeaponId === 'weapon_preah_khan' ||
+                  equippedWeaponId === 'weapon_golden_riel_shot') && (
+                  <button
+                    type="button"
+                    onPointerDown={() => EventBus.emit('input:secondary')}
+                    className="w-14 h-14 rounded-full bg-gradient-to-b from-amber-300 to-yellow-500 border-[3px] border-amber-950 text-amber-950 font-display font-bold text-[10px] leading-tight shadow-lg active:scale-95"
+                  >
+                    {equippedWeaponId === 'weapon_preah_khan' ? '🛡️\nPARRY' : '🪙\nCOIN'}
+                  </button>
+                )}
+              <button
+                type="button"
+                onPointerDown={() => EventBus.emit('input:grapple')}
+                className="w-14 h-14 rounded-full bg-gradient-to-b from-emerald-400 to-green-600 border-[3px] border-emerald-950 text-white font-display font-bold text-[10px] leading-tight shadow-lg active:scale-95"
+              >
+                🌿{'\n'}GRAPPLE
+              </button>
               <button
                 type="button"
                 onPointerDown={() => EventBus.emit('input:dash')}
@@ -130,7 +138,7 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
                 onPointerDown={() => EventBus.emit('input:attack')}
                 className="w-16 h-16 rounded-full bg-gradient-to-b from-rose-400 to-red-600 border-[3px] border-amber-950 text-white font-display font-bold text-xs shadow-lg active:scale-95"
               >
-                ATTACK
+                {zone === 'cavern' ? 'MINE' : 'ATTACK'}
               </button>
               <button
                 type="button"

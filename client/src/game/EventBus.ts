@@ -184,6 +184,16 @@ export interface EventMap {
     itemId?: string;
     label: string;
   };
+  'cavern:enterRequest': {
+    returnMapId: 'wild_frontier' | 'temple_district';
+  };
+  'cavern:reward': {
+    skillId?: SkillId;
+    xp?: number;
+    coins?: number;
+    items?: Array<{ itemId: string; quantity: number }>;
+    label: string;
+  };
   'ticker:push': { text: string; category?: 'boss' | 'reforge' | 'weather' | 'club' | 'market' };
   'shrine:pray': void;
   'mobile:joystick': JoystickVector;
@@ -192,6 +202,7 @@ export interface EventMap {
   'input:attack': void;
   'input:secondary': void;
   'input:dash': void;
+  'input:grapple': void;
   'input:focus': void;
   'input:fury': void;
   'input:rematch': void;
@@ -223,7 +234,7 @@ export interface EventMap {
     farmTab?: 'seeds' | 'livestock' | 'artisan';
     shopTab?: 'primary' | 'secondary';
     friendsTab?: 'friends' | 'inbox';
-    reforgeTab?: 'reforge' | 'shimmer' | 'bank';
+    reforgeTab?: 'reforge' | 'fusion' | 'shimmer' | 'bank';
     clubGame?: 'tien_len' | 'ouk_chaktrang';
   };
   'ui:toast': { text: string };
