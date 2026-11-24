@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import type { EquippedLoadout, KhmerClassId, PlayerState } from '@shared/types';
+import { DEFAULT_LOADOUT, type EquippedLoadout, type KhmerClassId, type PlayerState } from '@shared/types';
 import {
   EYE_COLORS,
   EYEBROW_STYLES,
@@ -9,6 +9,11 @@ import {
   HAIR_COLORS,
   SKIN_TONES,
   STARTER_OUTFITS,
+  normalizeEyeStyleId,
+  normalizeEyebrowStyleId,
+  normalizeFaceStyleId,
+  normalizeHairStyleId,
+  resolveSkinToneDef,
   type StarterOutfitId,
 } from '@shared/characterStyles';
 import { KHMER_CLASSES, KHMER_CLASS_LIST } from '@shared/khmerClasses';
@@ -55,36 +60,52 @@ export const CharacterCreatorModal: React.FC<CharacterCreatorModalProps> = ({
   initialPlayer,
   onConfirm,
 }) => {
+  const sanitizeDraftLoadout = (raw?: Partial<EquippedLoadout> | null): EquippedLoadout => {
+    const merged = { ...DEFAULT_LOADOUT, ...(raw ?? {}) };
+    const skin = resolveSkinToneDef(merged.skinTone || merged.skinColor);
+    return {
+      ...merged,
+      skinTone: skin.id,
+      skinColor: skin.hex,
+      hairStyle: normalizeHairStyleId(merged.hairStyle),
+      eyeStyle: normalizeEyeStyleId(merged.eyeStyle),
+      eyebrowStyle: normalizeEyebrowStyleId(merged.eyebrowStyle),
+      faceStyle: normalizeFaceStyleId(merged.faceStyle),
+      hat: null,
+      hair: null,
+      pet: null,
+      petId: null,
+    };
+  };
+
   const [tab, setTab] = useState<'appearance' | 'class'>('appearance');
   const [facingIdx, setFacingIdx] = useState(0);
   const [walkPreview, setWalkPreview] = useState(false);
-  const [name, setName] = useState(initialPlayer.name);
-  const [selectedClass, setSelectedClass] = useState<KhmerClassId>(initialPlayer.activeClass);
-  const [draftLoadout, setDraftLoadout] = useState<EquippedLoadout>(() => ({
-    ...initialPlayer.loadout,
-    hat: null,
-    hair: null,
-    pet: null,
-    petId: null,
-  }));
+  const [name, setName] = useState(initialPlayer?.name || 'PhumHero');
+  const [selectedClass, setSelectedClass] = useState<KhmerClassId>(
+    initialPlayer?.activeClass && initialPlayer.activeClass in KHMER_CLASSES
+      ? initialPlayer.activeClass
+      : 'lbokator'
+  );
+  const [draftLoadout, setDraftLoadout] = useState<EquippedLoadout>(() =>
+    sanitizeDraftLoadout(initialPlayer?.loadout)
+  );
 
   useEffect(() => {
     if (!open) return;
     setTab('appearance');
     setFacingIdx(0);
-    setName(initialPlayer.name);
-    setSelectedClass(initialPlayer.activeClass);
-    setDraftLoadout({
-      ...initialPlayer.loadout,
-      hat: null,
-      hair: null,
-      pet: null,
-      petId: null,
-    });
+    setName(initialPlayer?.name || 'PhumHero');
+    setSelectedClass(
+      initialPlayer?.activeClass && initialPlayer.activeClass in KHMER_CLASSES
+        ? initialPlayer.activeClass
+        : 'lbokator'
+    );
+    setDraftLoadout(sanitizeDraftLoadout(initialPlayer?.loadout));
   }, [open, initialPlayer]);
 
   const facing = FACING_ORDER[facingIdx];
-  const activeClassDef = KHMER_CLASSES[selectedClass];
+  const activeClassDef = KHMER_CLASSES[selectedClass] ?? KHMER_CLASSES.lbokator;
 
   const handleSelectOutfit = (outfitId: StarterOutfitId) => {
     const def = STARTER_OUTFITS.find((o) => o.id === outfitId);

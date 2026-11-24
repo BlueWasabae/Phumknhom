@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import type { EquippedLoadout } from '@shared/types';
+import { DEFAULT_LOADOUT, type EquippedLoadout } from '@shared/types';
 import {
   normalizeEyeStyleId,
   normalizeEyebrowStyleId,
@@ -83,7 +83,8 @@ function clampByte(n: number): number {
   return Math.max(0, Math.min(255, Math.round(n)));
 }
 
-function shiftHex(hex: string, delta: number): string {
+function shiftHex(hex: string | undefined | null, delta: number): string {
+  if (typeof hex !== 'string') return '#1e1b24';
   const clean = hex.replace('#', '');
   if (clean.length !== 6) return hex;
   const r = clampByte(parseInt(clean.slice(0, 2), 16) + delta);
@@ -99,15 +100,16 @@ function px(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: n
   ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
 }
 
-function buildLoadoutSignature(loadout: EquippedLoadout): string {
+function buildLoadoutSignature(raw: EquippedLoadout | null | undefined): string {
+  const loadout = { ...DEFAULT_LOADOUT, ...(raw ?? {}) };
   return [
-    loadout.skinTone || loadout.skinColor,
-    loadout.hairStyle,
-    loadout.hairColor,
-    loadout.eyeStyle,
-    loadout.eyeColor,
-    loadout.eyebrowStyle,
-    loadout.faceStyle,
+    loadout.skinTone || loadout.skinColor || '',
+    loadout.hairStyle || '',
+    loadout.hairColor || '',
+    loadout.eyeStyle || '',
+    loadout.eyeColor || '',
+    loadout.eyebrowStyle || '',
+    loadout.faceStyle || '',
     loadout.hat ?? '',
     loadout.hair ?? '',
     loadout.shirt ?? '',
@@ -123,10 +125,11 @@ function buildLoadoutSignature(loadout: EquippedLoadout): string {
  */
 function renderHumanChibiPixels(
   ctx: CanvasRenderingContext2D,
-  loadout: EquippedLoadout,
+  rawLoadout: EquippedLoadout | null | undefined,
   pose: PaperDollPose,
   facing: PaperDollFacing
 ): void {
+  const loadout: EquippedLoadout = { ...DEFAULT_LOADOUT, ...(rawLoadout ?? {}) };
   ctx.imageSmoothingEnabled = false;
   ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
 

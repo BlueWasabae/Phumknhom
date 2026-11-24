@@ -83,6 +83,29 @@ export class OverworldScene extends Phaser.Scene {
   }
 
   create(): void {
+    try {
+      this.createSceneContent();
+    } catch (err) {
+      console.error('[OverworldScene] create() runtime error:', err);
+      this.showFatalErrorBanner(err);
+    }
+  }
+
+  private showFatalErrorBanner(err: unknown): void {
+    if (typeof document === 'undefined') return;
+    const message = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    let banner = document.getElementById('phum-scene-error-banner');
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'phum-scene-error-banner';
+      banner.style.cssText =
+        'position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:99999;max-width:92vw;background:#991b1b;color:#fef2f2;border:2px solid #fca5a5;border-radius:12px;padding:10px 16px;font:bold 12px/1.4 monospace;box-shadow:0 8px 24px rgba(0,0,0,0.45);';
+      document.body.appendChild(banner);
+    }
+    banner.textContent = `[OverworldScene Error] ${message}`;
+  }
+
+  private createSceneContent(): void {
     // 2D Social Village RPG Mode: Top-Down 2.5D (gravity = 0)
     this.physics.world.gravity.y = 0;
     this.physics.world.setBounds(0, HORIZON_H, MAP_W, MAP_H - HORIZON_H);

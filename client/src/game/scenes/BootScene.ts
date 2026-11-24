@@ -6,11 +6,15 @@ const SV = '/assets/packs/serene-village/SERENE_VILLAGE_REVAMPED';
 const LF = '/assets/packs/legacy-fantasy/Legacy-Fantasy - High Forest 2.3';
 
 export class BootScene extends Phaser.Scene {
+  private bootFinalized = false;
+  private failsafeTimerId: number | null = null;
+
   constructor() {
     super('BootScene');
   }
 
   preload(): void {
+    this.bootFinalized = false;
     const { width, height } = this.scale;
     const barBg = this.add.rectangle(width / 2, height / 2, 260, 14, 0x1e293b).setStrokeStyle(2, 0xf59e0b);
     const barFill = this.add.rectangle(width / 2 - 126, height / 2, 0, 8, 0xfacc15).setOrigin(0, 0.5);
@@ -22,16 +26,40 @@ export class BootScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
+    const cleanupLoaderUi = () => {
+      if (barBg.active) barBg.destroy();
+      if (barFill.active) barFill.destroy();
+      if (label.active) label.destroy();
+    };
+
+    const clearFailsafe = () => {
+      if (this.failsafeTimerId !== null && typeof window !== 'undefined') {
+        window.clearTimeout(this.failsafeTimerId);
+        this.failsafeTimerId = null;
+      }
+    };
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, clearFailsafe);
+    this.events.once(Phaser.Scenes.Events.DESTROY, clearFailsafe);
+
+    // 5-second hard failsafe so the game NEVER freezes at ~95% even if an asset stalls on slow CDN/network
+    if (typeof window !== 'undefined') {
+      this.failsafeTimerId = window.setTimeout(() => {
+        if (!this.bootFinalized && this.sys && this.scene?.isActive('BootScene')) {
+          console.warn('[BootScene] 5s loader failsafe triggered — transitioning cleanly to OverworldScene.');
+          cleanupLoaderUi();
+          this.finalizeBoot();
+        }
+      }, 5000);
+    }
+
     this.load.on('loaderror', (file: Phaser.Loader.File) => {
       console.error('[BootScene] Failed to load:', file.key, file.url);
     });
     this.load.on('progress', (p: number) => {
-      barFill.width = 252 * p;
+      if (barFill.active) barFill.width = 252 * p;
     });
     this.load.once('complete', () => {
-      barBg.destroy();
-      barFill.destroy();
-      label.destroy();
+      cleanupLoaderUi();
     });
 
     // ---- 1. VILLAGE NPC SPRITE (Master Somnang Blacksmith — players use 10-layer Human Chibi PaperDoll!) ----
@@ -178,26 +206,41 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
-    const manifest = this.cache.json.get('khmer_manifest') as Record<string, string> | undefined;
-    const extraEntries = manifest
-      ? Object.entries(manifest).filter(([key]) => !this.textures.exists(key))
-      : [];
+    try {
+      const manifest = this.cache.json.get('khmer_manifest') as Record<string, string> | undefined;
+      const extraEntries =
+        manifest && typeof manifest === 'object'
+          ? Object.entries(manifest).filter(
+              ([key, url]) => typeof url === 'string' && !this.textures.exists(key)
+            )
+          : [];
 
-    if (extraEntries.length > 0) {
-      for (const [key, url] of extraEntries) {
-        this.load.image(key, url);
+      if (extraEntries.length > 0) {
+        for (const [key, url] of extraEntries) {
+          this.load.image(key, url);
+        }
+        this.load.once(Phaser.Loader.Events.COMPLETE, () => {
+          this.finalizeBoot();
+        });
+        this.load.start();
+        return;
       }
-      this.load.once(Phaser.Loader.Events.COMPLETE, () => {
-        this.finalizeBoot();
-      });
-      this.load.start();
-      return;
-    }
 
-    this.finalizeBoot();
+      this.finalizeBoot();
+    } catch (err) {
+      console.error('[BootScene] create() error — forcing transition to OverworldScene:', err);
+      this.finalizeBoot();
+    }
   }
 
   private finalizeBoot(): void {
+    if (this.bootFinalized) return;
+    this.bootFinalized = true;
+    if (this.failsafeTimerId !== null && typeof window !== 'undefined') {
+      window.clearTimeout(this.failsafeTimerId);
+      this.failsafeTimerId = null;
+    }
+
     try {
       this.sliceAtlasSubTextures();
     } catch (err) {

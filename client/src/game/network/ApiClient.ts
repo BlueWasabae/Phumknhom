@@ -9,6 +9,13 @@ import {
 } from '@shared/types';
 import { ALL_SKILL_IDS, computeVillageToDungeonBridge } from '@shared/skillTrees';
 import {
+  normalizeEyeStyleId,
+  normalizeEyebrowStyleId,
+  normalizeFaceStyleId,
+  normalizeHairStyleId,
+  resolveSkinToneDef,
+} from '@shared/characterStyles';
+import {
   ITEM_CATALOG,
   buildWeaponStatsFromItem,
   computeLoadoutDefenseAndHp,
@@ -147,9 +154,22 @@ export function loadGuestCreationProfile(): SavedGuestCreation | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<SavedGuestCreation>;
     if (!parsed.hasCompletedCreation || !parsed.loadout) return null;
+    const merged = { ...DEFAULT_LOADOUT, ...parsed.loadout };
+    const skin = resolveSkinToneDef(merged.skinTone || merged.skinColor);
     return {
       name: typeof parsed.name === 'string' && parsed.name.trim() ? parsed.name.trim() : 'PhumHero',
-      loadout: { ...DEFAULT_LOADOUT, ...parsed.loadout, pet: null, petId: null, hasCompletedCreation: true },
+      loadout: {
+        ...merged,
+        skinTone: skin.id,
+        skinColor: skin.hex,
+        hairStyle: normalizeHairStyleId(merged.hairStyle),
+        eyeStyle: normalizeEyeStyleId(merged.eyeStyle),
+        eyebrowStyle: normalizeEyebrowStyleId(merged.eyebrowStyle),
+        faceStyle: normalizeFaceStyleId(merged.faceStyle),
+        pet: null,
+        petId: null,
+        hasCompletedCreation: true,
+      },
       activeClass: parsed.activeClass ?? 'lbokator',
       hasCompletedCreation: true,
     };
