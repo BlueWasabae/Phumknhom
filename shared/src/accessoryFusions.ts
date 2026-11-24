@@ -205,6 +205,25 @@ export const ACCESSORY_DEFS: Record<string, AccessoryDefinition> = {
       critChanceBonus: 0.06,
     },
   },
+  // ==================== UPDATE 1.7 BEST-FRIEND / COUPLE BOND RING ====================
+  acc_lotus_bond_ring: {
+    id: 'acc_lotus_bond_ring',
+    name: 'Lotus Bond Ring',
+    khmerName: 'ចិញ្ចៀនផ្កាឈូកចំណងមិត្តភាព',
+    rarity: 'legendary',
+    tier: 'base',
+    icon: '💍',
+    primaryColor: '#ec4899',
+    accentColor: '#fbcfe8',
+    stylishScore: 68,
+    summary: 'Pink Lotus Aura, Warp to Partner & Shared Co-op Farm',
+    description: 'Sacred rose-gold lotus ring sold at the Fashion Boutique (1,000 Coins or 10 Gold). Offer to your best friend or partner to unlock the Pink Lotus Heart Aura & Shared Co-op Farm!',
+    buyCoins: 1000,
+    effects: {
+      maxHpFlat: 15,
+      critChanceBonus: 0.03,
+    },
+  },
 };
 
 export const ACCESSORY_LIST: AccessoryDefinition[] = Object.values(ACCESSORY_DEFS);

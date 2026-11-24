@@ -96,6 +96,14 @@ export interface TukTukCartListing {
   isDemo?: boolean;
 }
 
+export interface BondPartnerRecord {
+  bondId: string;
+  partnerId: string;
+  partnerName: string;
+  status: 'pending' | 'accepted';
+  bondedAt: string;
+}
+
 export type WeaponAuraId = 'golden_lotus' | 'emerald_naga' | 'celestial_angkor';
 
 export interface NpcFriendshipEntry {
@@ -362,6 +370,10 @@ export interface PlayerState {
   festivalSplashCount?: number;
   /** Update 1.6 — Active Torn Angkor Treasure Map clue coordinates */
   activeTreasureMap?: ActiveTreasureMap | null;
+  /** Update 1.7 — Weekly Fashion Runway Icon & Best-Friend/Couple Bond Ring */
+  runwayIconBadge?: boolean;
+  runwayScore?: number;
+  bondPartner?: BondPartnerRecord | null;
   hasCompletedCreation?: boolean;
   skillDamagePct: number;
   armorDamagePct: number;

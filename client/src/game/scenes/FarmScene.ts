@@ -29,6 +29,8 @@ import { soundManager } from '../systems/SoundManager';
 import { SeasonAtmosphereOverlay } from '../systems/SeasonClock';
 import { EventBus, type FarmToolMode, type JoystickVector } from '../EventBus';
 import { Player } from '../entities/Player';
+import { PaperDoll } from '../entities/PaperDoll';
+import { DEFAULT_LOADOUT } from '@shared/types';
 
 const FARM_W = 860;
 const FARM_H = 600;
@@ -240,6 +242,46 @@ export class FarmScene extends Phaser.Scene {
 
     this.redrawAllPlots();
     this.redrawDynamicZones();
+
+    // Update 1.7 — Shared Co-op Farm Partner Helper & Pink Lotus Banner when bonded!
+    if (this.player.state.bondPartner?.status === 'accepted') {
+      const pName = this.player.state.bondPartner.partnerName;
+      this.add
+        .text(270, 206, `💞 SHARED CO-OP FARM WITH ${pName.toUpperCase()}`, {
+          fontFamily: 'Fredoka, sans-serif',
+          fontSize: '10px',
+          fontStyle: 'bold',
+          color: '#fbcfe8',
+          backgroundColor: 'rgba(131, 24, 67, 0.92)',
+          padding: { x: 6, y: 2 },
+        })
+        .setResolution(2)
+        .setScale(0.44)
+        .setOrigin(0.5, 1)
+        .setDepth(260);
+      const partnerDoll = new PaperDoll(
+        this,
+        412,
+        282,
+        { ...DEFAULT_LOADOUT, shirt: 'shirt_krama_set', hairColor: '#451a03' },
+        'bond_partner_farm'
+      );
+      partnerDoll.setScale(0.54).setDepth(282);
+      partnerDoll.setPoseAndFacing('idle', 'left', 0);
+      this.add
+        .text(412, 294, `💍 ${pName}`, {
+          fontFamily: 'Fredoka, sans-serif',
+          fontSize: '10px',
+          fontStyle: 'bold',
+          color: '#fbcfe8',
+          backgroundColor: 'rgba(131, 24, 67, 0.88)',
+          padding: { x: 5, y: 1 },
+        })
+        .setResolution(2)
+        .setScale(0.42)
+        .setOrigin(0.5, 0)
+        .setDepth(296);
+    }
 
     // 4-Season Weather Particles & Day/Night Lighting Overlay (Monsoon auto-waters plots!)
     this.atmosphere = new SeasonAtmosphereOverlay(this, FARM_W, FARM_H);

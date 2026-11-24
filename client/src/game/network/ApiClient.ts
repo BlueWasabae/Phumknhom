@@ -5,6 +5,7 @@ import {
   createInitialSkillProfile,
   type ActiveDungeonFightInfo,
   type ActiveTreasureMap,
+  type BondPartnerRecord,
   type EquippedLoadout,
   type KromGuild,
   type PlayerState,
@@ -100,6 +101,9 @@ export interface SavedProfilePayload {
   pchumBenBlessingUntil?: number | null;
   festivalSplashCount?: number;
   activeTreasureMap?: ActiveTreasureMap | null;
+  runwayIconBadge?: boolean;
+  runwayScore?: number;
+  bondPartner?: BondPartnerRecord | null;
   hasCompletedCreation?: boolean;
   activeClass: PlayerState['activeClass'];
   weapon: PlayerState['weapon'];
@@ -395,6 +399,9 @@ export function serializePlayerStateForSave(state: PlayerState): SavedProfilePay
     pchumBenBlessingUntil: state.pchumBenBlessingUntil ?? null,
     festivalSplashCount: state.festivalSplashCount ?? 0,
     activeTreasureMap: state.activeTreasureMap ?? null,
+    runwayIconBadge: Boolean(state.runwayIconBadge ?? false),
+    runwayScore: state.runwayScore ?? 0,
+    bondPartner: state.bondPartner ?? null,
     hasCompletedCreation: Boolean(state.hasCompletedCreation ?? state.loadout.hasCompletedCreation),
     activeClass: state.activeClass,
     weapon: { ...state.weapon },
@@ -706,6 +713,9 @@ export function hydratePlayerStateFromSave(
         : saved?.activeTreasureMap === null
         ? null
         : INITIAL_PLAYER_STATE.activeTreasureMap,
+    runwayIconBadge: Boolean(saved?.runwayIconBadge ?? false),
+    runwayScore: typeof saved?.runwayScore === 'number' ? saved.runwayScore : 0,
+    bondPartner: saved?.bondPartner && typeof saved.bondPartner === 'object' ? saved.bondPartner : null,
     hasCompletedCreation: Boolean(
       saved?.hasCompletedCreation ?? saved?.loadout?.hasCompletedCreation ?? false
     ),
@@ -1511,4 +1521,120 @@ export async function closeTukTukCartApi(
     revenueCoins: removed.totalSalesCoins,
     carts,
   };
+}
+
+// ==================== UPDATE 1.7 BEST-FRIEND / COUPLE BOND RING API ====================
+
+const LOCAL_BOND_KEY = 'phum_khnhom_bond_v1';
+
+interface RawServerBond {
+  bondId: string;
+  requesterId: string;
+  requesterName: string;
+  targetId: string;
+  targetName: string;
+  status: 'pending' | 'accepted';
+  createdAt: string;
+  acceptedAt?: string;
+}
+
+function toPartnerRecord(raw: RawServerBond, myName: string): BondPartnerRecord {
+  const isReq = raw.requesterName.toLowerCase() === myName.toLowerCase();
+  return {
+    bondId: raw.bondId,
+    partnerId: isReq ? raw.targetId : raw.requesterId,
+    partnerName: isReq ? raw.targetName : raw.requesterName,
+    status: raw.status,
+    bondedAt: raw.acceptedAt || raw.createdAt,
+  };
+}
+
+export async function fetchBondStatusApi(
+  token: string | undefined,
+  playerId: string,
+  username: string
+): Promise<{ activeBond: BondPartnerRecord | null; incoming: BondPartnerRecord[] }> {
+  try {
+    const res = await fetch(
+      `${getApiBase()}/bond/status?playerId=${encodeURIComponent(playerId)}&username=${encodeURIComponent(username)}`,
+      token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+    );
+    if (res.ok) {
+      const json = (await res.json()) as {
+        activeBond?: RawServerBond | null;
+        incoming?: RawServerBond[];
+      };
+      return {
+        activeBond: json.activeBond ? toPartnerRecord(json.activeBond, username) : null,
+        incoming: Array.isArray(json.incoming)
+          ? json.incoming.map((b) => toPartnerRecord(b, username))
+          : [],
+      };
+    }
+  } catch {
+    // Offline fallback below
+  }
+  try {
+    const raw = window.localStorage.getItem(LOCAL_BOND_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as BondPartnerRecord;
+      return { activeBond: parsed.status === 'accepted' ? parsed : null, incoming: [] };
+    }
+  } catch {
+    // ignore
+  }
+  return { activeBond: null, incoming: [] };
+}
+
+export async function requestBondApi(
+  token: string | undefined,
+  payload: {
+    requesterId: string;
+    requesterName: string;
+    targetId?: string;
+    targetName: string;
+    instantAcceptDemo?: boolean;
+  }
+): Promise<{ ok: boolean; bond?: BondPartnerRecord; error?: string }> {
+  const res = await postJson<{ ok: boolean; bond: RawServerBond }>('/bond/request', payload, token);
+  if (res.ok) {
+    const rec = toPartnerRecord(res.data.bond, payload.requesterName);
+    try {
+      window.localStorage.setItem(LOCAL_BOND_KEY, JSON.stringify(rec));
+    } catch {
+      // ignore
+    }
+    return { ok: true, bond: rec };
+  }
+  // Offline fallback
+  const rec: BondPartnerRecord = {
+    bondId: `bond_local_${Date.now()}`,
+    partnerId: payload.targetId ?? `partner_${payload.targetName.toLowerCase()}`,
+    partnerName: payload.targetName,
+    status: payload.instantAcceptDemo ? 'accepted' : 'pending',
+    bondedAt: new Date().toISOString(),
+  };
+  try {
+    window.localStorage.setItem(LOCAL_BOND_KEY, JSON.stringify(rec));
+  } catch {
+    // ignore
+  }
+  return { ok: true, bond: rec };
+}
+
+export async function acceptBondRequestApi(
+  token: string | undefined,
+  payload: { bondId: string; accepterId: string; accepterName: string }
+): Promise<{ ok: boolean; bond?: BondPartnerRecord; error?: string }> {
+  const res = await postJson<{ ok: boolean; bond: RawServerBond }>('/bond/accept', payload, token);
+  if (res.ok) {
+    const rec = toPartnerRecord(res.data.bond, payload.accepterName);
+    try {
+      window.localStorage.setItem(LOCAL_BOND_KEY, JSON.stringify(rec));
+    } catch {
+      // ignore
+    }
+    return { ok: true, bond: rec };
+  }
+  return { ok: false, error: res.error };
 }

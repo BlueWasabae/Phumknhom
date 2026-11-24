@@ -26,6 +26,7 @@ import { soundManager } from '../systems/SoundManager';
 import { SeasonAtmosphereOverlay, seasonClock } from '../systems/SeasonClock';
 import { travelManager, type TravelRequestPayload } from '../systems/TravelAndPylons';
 import { worldEventManager } from '../systems/WorldEventManager';
+import { vfxManager } from '../animations/VFXManager';
 import type { ActiveWorldEventSnapshot } from '@shared/worldEvents';
 import type { FestivalId } from '@shared/festivals';
 
@@ -123,6 +124,9 @@ export class OverworldScene extends Phaser.Scene {
   private lastSyncedFestival: FestivalId | null = null;
   private tukTukCartObjects: Phaser.GameObjects.GameObject[] = [];
   private tukTukCartLandmarks: LandmarkZone[] = [];
+  private bondAuraContainer?: Phaser.GameObjects.Container;
+  private bondAuraRing?: Phaser.GameObjects.Arc;
+  private lastBondHeartAt = 0;
   private treasureDigObjects: Phaser.GameObjects.GameObject[] = [];
   private treasureDigLandmark: LandmarkZone | null = null;
   private lastTreasureSpotId: string | null = null;
@@ -428,6 +432,17 @@ export class OverworldScene extends Phaser.Scene {
     void this.connectToPlazaArea(initialArea, false);
     this.syncWorldEventVisuals(worldEventManager.getActiveEvent());
     this.syncFestivalVisuals(seasonClock.getSnapshot().activeFestival);
+    // Apply WebGL Bloom to glow lights (Campfires, Portals, Shimmer Spring) when VFX Quality === High
+    this.glowLights.slice(0, 3).forEach((gl) => vfxManager.applyBloom(this, gl, { color: 0xfacc15, strength: 1.25 }));
+
+    // Update 1.7 — Pink Lotus Heart Aura container for Bonded Partners
+    this.bondAuraContainer = this.add.container(this.player.x, this.player.y).setDepth(this.player.y - 6).setVisible(false);
+    this.bondAuraRing = this.add
+      .circle(0, 6, 22, 0xf472b6, 0.16)
+      .setStrokeStyle(2, 0xf9a8d4, 0.85)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    this.bondAuraContainer.add(this.bondAuraRing);
+    vfxManager.applyGlow(this, this.bondAuraRing, 0xec4899, 3.0, 0.4);
     if (this.mapId === 'central_plaza' || this.mapId === 'temple_district') {
       void fetchTukTukCartsApi(this.mapId).then((carts) => {
         if (this.scene && this.scene.isActive('OverworldScene')) {
@@ -1190,6 +1205,87 @@ export class OverworldScene extends Phaser.Scene {
       label: 'Press [E] or Click → Enter Phum Club (Kla Klok, Ouk Chaktrang & Tien Len)',
       isDungeonPortal: true,
       onInteract: () => this.enterClub(),
+    });
+
+    // 6. WEEKLY FASHION RUNWAY STAGE (South-Center, spacious spotlight catwalk between Market & Club!)
+    const rx = 800;
+    const ry = 852;
+    const stageBase = this.add
+      .rectangle(rx, ry, 178, 56, 0x4c0519, 0.96)
+      .setStrokeStyle(3, 0xfacc15, 0.95)
+      .setDepth(ry - 16)
+      .setInteractive({ useHandCursor: true });
+    const stageCarpet = this.add
+      .rectangle(rx, ry, 162, 34, 0x9f1239, 0.92)
+      .setStrokeStyle(1.5, 0xfde047, 0.8)
+      .setDepth(ry - 15)
+      .setInteractive({ useHandCursor: true });
+
+    // 4 Blooming Warm Stage Spotlights + Floating Confetti Motes
+    for (const [sx, sy, tint] of [
+      [rx - 74, ry - 26, 0xfacc15],
+      [rx + 74, ry - 26, 0xf472b6],
+      [rx - 74, ry + 26, 0xf472b6],
+      [rx + 74, ry + 26, 0xfacc15],
+    ]) {
+      const bulb = this.add.circle(sx, sy, 5, tint, 0.95).setStrokeStyle(1.5, 0xffffff).setDepth(ry + 2);
+      const beam = this.add
+        .image(sx, sy, 'torch_glow')
+        .setTint(tint)
+        .setScale(0.85)
+        .setAlpha(0.55)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(ry + 1);
+      vfxManager.applyBloom(this, beam, { color: tint, strength: 1.4 });
+      this.glowLights.push(beam);
+      this.tweens.add({ targets: [bulb, beam], alpha: 0.35, duration: 760, yoyo: true, repeat: -1 });
+    }
+    for (let i = 0; i < 10; i++) {
+      const cx = rx + Phaser.Math.Between(-72, 72);
+      const cy = ry + Phaser.Math.Between(-24, 14);
+      const confetti = this.add
+        .rectangle(cx, cy, 4, 4, [0xfacc15, 0xf472b6, 0x38bdf8, 0x4ade80][i % 4], 0.9)
+        .setDepth(ry + 6);
+      this.tweens.add({
+        targets: confetti,
+        y: cy - 18,
+        angle: 180,
+        alpha: 0.25,
+        duration: 1300 + i * 110,
+        yoyo: true,
+        repeat: -1,
+      });
+    }
+
+    const runwayArrow = this.add.image(rx, ry - 48, 'join_arrow').setScale(0.56).setDepth(ry + 18);
+    this.tweens.add({ targets: runwayArrow, y: ry - 56, duration: 540, yoyo: true, repeat: -1 });
+    this.add
+      .text(rx, ry - 34, '👑 WEEKLY FASHION RUNWAY STAGE', {
+        fontFamily: 'Fredoka, sans-serif',
+        fontSize: '11px',
+        fontStyle: 'bold',
+        color: '#fef08a',
+        backgroundColor: 'rgba(88, 28, 135, 0.94)',
+        padding: { x: 8, y: 2 },
+      })
+      .setResolution(2)
+      .setScale(0.46)
+      .setOrigin(0.5, 1)
+      .setDepth(ry + 16);
+
+    const openRunway = () => {
+      soundManager.playSfx('magic');
+      EventBus.emit('ui:openModal', { modal: 'runway' });
+    };
+    stageBase.on('pointerdown', openRunway);
+    stageCarpet.on('pointerdown', openRunway);
+    this.landmarks.push({
+      x: rx,
+      y: ry,
+      radius: 86,
+      label: 'Press [E] or Click → 👑 Strut the Weekly Fashion Runway Stage!',
+      isDungeonPortal: false,
+      onInteract: openRunway,
     });
   }
 
@@ -3387,6 +3483,44 @@ export class OverworldScene extends Phaser.Scene {
     }
 
     this.player.syncVisuals(time, true);
+
+    // Update 1.7 — Pink Lotus Heart Aura when bonded (intensifies near bonded partner!)
+    if (this.bondAuraContainer && this.bondAuraRing) {
+      const bond = this.player.state.bondPartner;
+      const isBonded = bond?.status === 'accepted';
+      this.bondAuraContainer.setVisible(isBonded);
+      if (isBonded) {
+        this.bondAuraContainer.setPosition(this.player.x, this.player.y).setDepth(this.player.y - 6);
+        let partnerNearby = false;
+        this.remotePlayers.forEach((rp) => {
+          if (
+            rp.name.toLowerCase() === bond.partnerName.toLowerCase() &&
+            Phaser.Math.Distance.Between(this.player.x, this.player.y, rp.x, rp.y) <= 240
+          ) {
+            partnerNearby = true;
+          }
+        });
+        const pulseScale = (partnerNearby ? 1.15 : 0.92) + Math.sin(time / 340) * 0.1;
+        this.bondAuraRing.setScale(pulseScale).setAlpha(partnerNearby ? 0.95 : 0.52);
+        if (time - this.lastBondHeartAt > (partnerNearby ? 620 : 1450)) {
+          this.lastBondHeartAt = time;
+          const heart = this.add
+            .text(this.player.x + Phaser.Math.Between(-14, 14), this.player.y - 16, partnerNearby ? '💖' : '🪷', {
+              fontSize: '12px',
+            })
+            .setScale(0.55)
+            .setOrigin(0.5)
+            .setDepth(this.player.y + 18);
+          this.tweens.add({
+            targets: heart,
+            y: heart.y - 22,
+            alpha: 0,
+            duration: 950,
+            onComplete: () => heart.destroy(),
+          });
+        }
+      }
+    }
 
     // Patrol animation for Wild Frontier Mini-Boss
     if (this.miniBoss && this.miniBoss.alive) {

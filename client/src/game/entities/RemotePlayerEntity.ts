@@ -20,8 +20,8 @@ export class RemotePlayerEntity {
   public areaId: string;
 
   private scene: Phaser.Scene;
-  private x: number;
-  private y: number;
+  public x: number;
+  public y: number;
   private targetX: number;
   private targetY: number;
   private facing: PaperDollFacing;

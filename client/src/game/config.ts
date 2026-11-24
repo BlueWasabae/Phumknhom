@@ -26,6 +26,16 @@ export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameCon
       width: '100%',
       height: '100%',
     },
+    input: {
+      mouse: {
+        preventDefaultDown: false,
+        preventDefaultUp: false,
+        preventDefaultMove: false,
+      },
+      touch: {
+        capture: false,
+      },
+    },
     physics: {
       default: 'arcade',
       arcade: {

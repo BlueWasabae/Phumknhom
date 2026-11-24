@@ -1,15 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import {
   Check,
+  Heart,
   LogIn,
   Mail,
   MessageSquare,
+  Navigation,
   RefreshCw,
   Swords,
   UserPlus,
   Users,
   X,
 } from 'lucide-react';
+import type { BondPartnerRecord } from '@shared/types';
 import type { AuthSession, FriendRecord, FriendsListResponse } from '../game/network/ApiClient';
 import type { IncomingDungeonInvitePayload } from '../game/EventBus';
 import { NativeDialog } from './NativeDialog';
@@ -20,6 +23,7 @@ interface FriendsModalProps {
   authSession: AuthSession | null;
   friendsData: FriendsListResponse;
   dungeonInvites: IncomingDungeonInvitePayload[];
+  bondPartner?: BondPartnerRecord | null;
   onClose: () => void;
   onRefresh: () => void;
   onOpenAuth: () => void;
@@ -28,6 +32,9 @@ interface FriendsModalProps {
   onDeclineFriend: (friendshipId: string) => void;
   onWhisper: (username: string) => void;
   onInviteDungeon: (friend: FriendRecord) => void;
+  onOfferBondRing?: (partnerName: string) => void;
+  onWarpToPartner?: (partnerName: string) => void;
+  onOpenBondModal?: () => void;
   onAcceptDungeonInvite: (invite: IncomingDungeonInvitePayload) => void;
   onDeclineDungeonInvite: (inviteId: string) => void;
 }
@@ -38,6 +45,7 @@ export const FriendsModal: React.FC<FriendsModalProps> = ({
   authSession,
   friendsData,
   dungeonInvites,
+  bondPartner,
   onClose,
   onRefresh,
   onOpenAuth,
@@ -46,6 +54,9 @@ export const FriendsModal: React.FC<FriendsModalProps> = ({
   onDeclineFriend,
   onWhisper,
   onInviteDungeon,
+  onOfferBondRing,
+  onWarpToPartner,
+  onOpenBondModal,
   onAcceptDungeonInvite,
   onDeclineDungeonInvite,
 }) => {
@@ -126,6 +137,44 @@ export const FriendsModal: React.FC<FriendsModalProps> = ({
         {/* ==================== FRIENDS TAB ==================== */}
         {tab === 'friends' && (
           <div className="space-y-3">
+            {/* Lotus Bond Ring Quick Banner (Warp to Partner / Open Bond Sanctuary) */}
+            <div className="p-2.5 rounded-xl bg-gradient-to-r from-pink-50 to-rose-50 border border-pink-400/50 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-[11px] font-display font-bold text-pink-950">
+                <Heart className="w-4 h-4 text-pink-600 shrink-0" />
+                {bondPartner?.status === 'accepted' ? (
+                  <span>💍 Bonded with {bondPartner.partnerName} (Pink Lotus Aura &amp; Shared Farm)</span>
+                ) : (
+                  <span>💍 Lotus Bond Ring — Bond with a Best Friend / Partner!</span>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5">
+                {bondPartner?.status === 'accepted' && onWarpToPartner && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onWarpToPartner(bondPartner.partnerName);
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-pink-600 hover:bg-pink-500 text-white font-display font-bold text-[10px] inline-flex items-center gap-1"
+                  >
+                    <Navigation className="w-3 h-3" /> Warp to Partner
+                  </button>
+                )}
+                {onOpenBondModal && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onOpenBondModal();
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-rose-700 hover:bg-rose-600 text-white font-display font-bold text-[10px]"
+                  >
+                    {bondPartner?.status === 'accepted' ? 'Bond Hub' : 'Offer Bond Ring'}
+                  </button>
+                )}
+              </div>
+            </div>
+
             {!authSession ? (
               <div className="p-4 rounded-xl bg-amber-50 border-2 border-amber-900/25 text-center space-y-2.5">
                 <p className="font-display font-bold text-amber-950">
@@ -204,6 +253,19 @@ export const FriendsModal: React.FC<FriendsModalProps> = ({
                               className="px-2.5 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white font-display font-bold text-[11px] inline-flex items-center gap-1"
                             >
                               <Swords className="w-3 h-3" /> Raid
+                            </button>
+                          )}
+                          {onOfferBondRing && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onClose();
+                                onOfferBondRing(f.username);
+                              }}
+                              className="px-2 py-1.5 rounded-lg bg-pink-600 hover:bg-pink-500 text-white font-display font-bold text-[11px] inline-flex items-center gap-1"
+                              title="Offer Lotus Bond Ring"
+                            >
+                              <Heart className="w-3 h-3" /> Bond
                             </button>
                           )}
                         </div>

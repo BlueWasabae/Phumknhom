@@ -1,4 +1,64 @@
 import Phaser from 'phaser';
+import type { KhmerClassId } from '@shared/types';
+import { vfxManager } from './VFXManager';
+
+export interface SignatureSkillMeta {
+  classId: KhmerClassId;
+  name: string;
+  khmerName: string;
+  icon: string;
+  accentColor: string;
+  cooldownMs: number;
+  damageMult: number;
+}
+
+export const KHMER_SIGNATURE_SKILLS: Record<KhmerClassId, SignatureSkillMeta> = {
+  lbokator: {
+    classId: 'lbokator',
+    name: 'Hanuman Ground-Shatter',
+    khmerName: 'ហនុមានញ័រធរណី',
+    icon: '💥',
+    accentColor: '#f59e0b',
+    cooldownMs: 6500,
+    damageMult: 2.65,
+  },
+  archer: {
+    classId: 'archer',
+    name: 'Rain of Golden Arrows',
+    khmerName: 'ភ្លៀងព្រួញមាសរាមកេរ្តិ៍',
+    icon: '🏹',
+    accentColor: '#eab308',
+    cooldownMs: 6500,
+    damageMult: 2.55,
+  },
+  mystic: {
+    classId: 'mystic',
+    name: 'Sacred Yant Mandala',
+    khmerName: 'មណ្ឌលយ័ន្តសក្តិសិទ្ធិ',
+    icon: '☸️',
+    accentColor: '#22d3ee',
+    cooldownMs: 7000,
+    damageMult: 2.8,
+  },
+  tamer: {
+    classId: 'tamer',
+    name: 'Naga Spirit Surge',
+    khmerName: 'នាគរាជបារមីភ្លោះ',
+    icon: '🐉',
+    accentColor: '#10b981',
+    cooldownMs: 7000,
+    damageMult: 2.6,
+  },
+  shadow: {
+    classId: 'shadow',
+    name: 'Phantom Lotus Barrage',
+    khmerName: 'ផ្កាឈូកស្រមោលពន្លឺ',
+    icon: '🌸',
+    accentColor: '#a855f7',
+    cooldownMs: 6000,
+    damageMult: 2.75,
+  },
+};
 
 export interface SpawnedProjectile {
   node: Phaser.GameObjects.Container;
@@ -91,6 +151,7 @@ export class ClassCombatVFX {
     const tip = this.scene.add.triangle(dir * 14, 0, 0, -5, 10, 0, 0, 5, 0x22c55e).setScale(dir, 1);
     const feather = this.scene.add.rectangle(-dir * 12, 0, 7, 6, 0xf97316);
     container.add([shaft, tip, feather]);
+    vfxManager.applyGlow(this.scene, container, 0xfacc15, 2.5, 0.3);
 
     return {
       node: container,
@@ -129,6 +190,7 @@ export class ClassCombatVFX {
     const halo = this.scene.add.circle(0, 0, 13, 0xfacc15, 0.35);
     const core = this.scene.add.circle(0, 0, 7, 0xfef08a, 1).setStrokeStyle(2, 0xf59e0b);
     container.add([halo, core]);
+    vfxManager.applyBloom(this.scene, container, { color: 0xfacc15, strength: 1.4 });
 
     return {
       node: container,
@@ -702,6 +764,348 @@ export class ClassCombatVFX {
           spirit.destroy();
         },
       });
+    });
+  }
+
+  // ============================================================================
+  // UPDATE 1.7: 5 CINEMATIC KHMER CLASS SIGNATURE ACTIVE SKILLS ([Q] / SKILL)
+  // ============================================================================
+
+  /**
+   * 1. Lbokator Warrior — Hanuman Ground-Shatter
+   * Leaps up with golden aura -> slams down with expanding shockwave rings, flying stone debris & hit-stop!
+   */
+  public playSignatureHanumanShatter(
+    x: number,
+    floorY: number,
+    onImpact: () => void
+  ): void {
+    const aura = this.scene.add
+      .circle(x, floorY - 52, 30, 0xfacc15, 0.42)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(68);
+    vfxManager.applyBloom(this.scene, aura, { color: 0xfacc15, strength: 1.6 });
+
+    this.scene.tweens.add({
+      targets: aura,
+      y: floorY - 120,
+      scale: 1.4,
+      duration: 180,
+      ease: 'Quad.easeOut',
+      onComplete: () => {
+        this.scene.tweens.add({
+          targets: aura,
+          y: floorY - 10,
+          scale: 2.2,
+          alpha: 0,
+          duration: 130,
+          ease: 'Cubic.easeIn',
+          onComplete: () => {
+            aura.destroy();
+            vfxManager.hitStop(this.scene, 45);
+            vfxManager.directionalShake(this.scene, 0.4, 1, 0.013, 210);
+            vfxManager.radialShockwave(this.scene, x, floorY - 8, 0xfacc15, 175, 360, 70);
+            vfxManager.radialShockwave(this.scene, x, floorY - 8, 0xf97316, 130, 280, 71);
+            vfxManager.additiveSparkBurst(this.scene, x, floorY - 14, 0xfef08a, 18, 120, 72);
+
+            // Flying laterite sandstone debris chunks
+            for (let i = 0; i < 12; i++) {
+              const chunk = this.scene.add
+                .rectangle(
+                  x + (Math.random() - 0.5) * 90,
+                  floorY - 6,
+                  6 + Math.random() * 7,
+                  6 + Math.random() * 6,
+                  i % 2 === 0 ? 0xa8a29e : 0xd97706
+                )
+                .setStrokeStyle(1, 0x292524)
+                .setDepth(72);
+              const vx = (Math.random() - 0.5) * 190;
+              const vy = -(70 + Math.random() * 110);
+              this.scene.tweens.add({
+                targets: chunk,
+                x: chunk.x + vx,
+                y: chunk.y + vy,
+                angle: Phaser.Math.Between(-240, 240),
+                alpha: 0,
+                duration: 420 + Math.random() * 140,
+                ease: 'Quad.easeOut',
+                onComplete: () => chunk.destroy(),
+              });
+            }
+            onImpact();
+          },
+        });
+      },
+    });
+  }
+
+  /**
+   * 2. Divine Archer — Rain of Golden Arrows
+   * Fires a glowing arrow skyward -> rains down 12 blooming golden light-arrows across the boss zone!
+   */
+  public playSignatureGoldenArrowRain(
+    casterX: number,
+    casterY: number,
+    targetX: number,
+    floorY: number,
+    onVolleyHit: (waveIndex: number) => void
+  ): void {
+    // Rising skyward beacon arrow
+    const beacon = this.scene.add
+      .rectangle(casterX, casterY - 24, 5, 40, 0xfef08a, 0.96)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(70);
+    vfxManager.applyGlow(this.scene, beacon, 0xfacc15, 3.8, 0.5);
+    this.scene.tweens.add({
+      targets: beacon,
+      y: 60,
+      alpha: 0,
+      duration: 240,
+      ease: 'Cubic.easeIn',
+      onComplete: () => beacon.destroy(),
+    });
+
+    // 12 blooming golden light-arrows raining down across target zone
+    for (let i = 0; i < 12; i++) {
+      const delay = 170 + i * 52;
+      const dropX = targetX + (i - 5.5) * 28 + (Math.random() - 0.5) * 16;
+      this.scene.time.delayedCall(delay, () => {
+        if (!this.scene?.sys?.isActive()) return;
+        const arrow = this.scene.add.container(dropX + 32, 75).setDepth(71).setAngle(14);
+        const outerAura = this.scene.add
+          .rectangle(0, 0, 12, 52, 0xfacc15, 0.38)
+          .setBlendMode(Phaser.BlendModes.ADD);
+        const shaft = this.scene.add
+          .rectangle(0, 0, 4, 44, 0xfef08a, 0.96)
+          .setBlendMode(Phaser.BlendModes.ADD);
+        const head = this.scene.add.triangle(0, 24, -6, 0, 6, 0, 0, 12, 0xfacc15);
+        arrow.add([outerAura, shaft, head]);
+
+        this.scene.tweens.add({
+          targets: arrow,
+          x: dropX,
+          y: floorY - 18,
+          duration: 200,
+          ease: 'Cubic.easeIn',
+          onComplete: () => {
+            vfxManager.additiveSparkBurst(this.scene, dropX, floorY - 14, 0xfde047, 6, 36, 72);
+            arrow.destroy();
+            if (i === 3 || i === 7 || i === 11) {
+              vfxManager.directionalShake(this.scene, 0.2, 0.7, 0.006, 90);
+              onVolleyHit(i);
+            }
+          },
+        });
+      });
+    }
+  }
+
+  /**
+   * 3. Achar Mystic — Sacred Yant Mandala
+   * Draws a giant spinning, blooming golden Khmer geometric rune circle that pulses twice & erupts in cyan-gold light pillars!
+   */
+  public playSignatureSacredMandala(
+    targetX: number,
+    floorY: number,
+    onPulseHit: (erupted: boolean) => void
+  ): void {
+    const mandala = this.scene.add.container(targetX, floorY - 16).setDepth(66).setScale(0.2);
+    const g = this.scene.add.graphics();
+    g.lineStyle(4, 0xfacc15, 0.96);
+    g.strokeCircle(0, 0, 96);
+    g.lineStyle(2.5, 0x22d3ee, 0.92);
+    g.strokeCircle(0, 0, 72);
+    // Inscribed Khmer sacred 8-point star geometry
+    for (let rot = 0; rot < 2; rot++) {
+      const pts: Phaser.Geom.Point[] = [];
+      for (let i = 0; i < 4; i++) {
+        const ang = (i * Math.PI) / 2 + (rot * Math.PI) / 4;
+        pts.push(new Phaser.Geom.Point(Math.cos(ang) * 90, Math.sin(ang) * 90));
+      }
+      g.lineStyle(2.5, rot === 0 ? 0xfef08a : 0x38bdf8, 0.95);
+      g.strokePoints(pts, true);
+    }
+    mandala.add(g);
+    mandala.setScale(1, 0.34);
+    vfxManager.applyBloom(this.scene, mandala, { color: 0xfacc15, strength: 1.5 });
+
+    this.scene.tweens.add({
+      targets: mandala,
+      angle: 220,
+      duration: 920,
+      ease: 'Sine.easeInOut',
+    });
+
+    // Pulse 1
+    this.scene.time.delayedCall(260, () => {
+      if (!this.scene?.sys?.isActive()) return;
+      vfxManager.radialShockwave(this.scene, targetX, floorY - 16, 0x22d3ee, 115, 240, 68);
+      onPulseHit(false);
+    });
+
+    // Pulse 2 + Cyan-Gold Light Pillars Eruption
+    this.scene.time.delayedCall(580, () => {
+      if (!this.scene?.sys?.isActive()) return;
+      vfxManager.hitStop(this.scene, 45);
+      vfxManager.directionalShake(this.scene, 0.5, 1, 0.011, 200);
+      for (const ox of [-58, 0, 58]) {
+        const pillar = this.scene.add
+          .rectangle(targetX + ox, floorY - 220, ox === 0 ? 54 : 30, 440, ox === 0 ? 0x22d3ee : 0xfef08a, 0.8)
+          .setBlendMode(Phaser.BlendModes.ADD)
+          .setDepth(71);
+        vfxManager.applyBloom(this.scene, pillar, { color: 0x38bdf8, strength: 1.7 });
+        this.scene.tweens.add({
+          targets: pillar,
+          scaleX: 0.08,
+          alpha: 0,
+          duration: 420,
+          ease: 'Cubic.easeOut',
+          onComplete: () => pillar.destroy(),
+        });
+      }
+      vfxManager.additiveSparkBurst(this.scene, targetX, floorY - 80, 0x67e8f9, 20, 115, 73);
+      onPulseHit(true);
+    });
+
+    this.scene.time.delayedCall(980, () => {
+      if (mandala.active) mandala.destroy();
+    });
+  }
+
+  /**
+   * 4. Barami Spirit Tamer — Naga Spirit Surge
+   * Summons twin glowing emerald-and-gold spectral serpents weaving in a blooming figure-8 across the arena!
+   */
+  public playSignatureNagaSurge(
+    casterX: number,
+    casterY: number,
+    targetX: number,
+    targetY: number,
+    onWeaveHit: (passIndex: number) => void
+  ): void {
+    const colors = [0x10b981, 0xfacc15];
+    const centerX = (casterX + targetX) * 0.5;
+    const centerY = Math.min(casterY, targetY) - 24;
+    const spanX = Math.max(180, Math.abs(targetX - casterX) * 0.85);
+
+    colors.forEach((col, sIdx) => {
+      const serpent = this.scene.add.container(casterX, casterY).setDepth(70);
+      const segs: Phaser.GameObjects.Arc[] = [];
+      for (let k = 0; k < 7; k++) {
+        const seg = this.scene.add
+          .circle(-k * 10, 0, Math.max(4, 12 - k * 1.1), col, 0.9 - k * 0.08)
+          .setBlendMode(Phaser.BlendModes.ADD);
+        segs.push(seg);
+      }
+      const eye = this.scene.add.circle(4, -3, 2.5, 0xffffff, 1);
+      serpent.add([...segs, eye]);
+      vfxManager.applyGlow(this.scene, serpent, col, 3.6, 0.5);
+
+      const prog = { t: 0 };
+      this.scene.tweens.add({
+        targets: prog,
+        t: Math.PI * 2,
+        duration: 820,
+        ease: 'Sine.easeInOut',
+        onUpdate: () => {
+          const phase = prog.t + sIdx * Math.PI;
+          const x = centerX + Math.sin(phase) * spanX;
+          const y = centerY + Math.sin(phase * 2) * 76;
+          serpent.setPosition(x, y);
+          // Trailing glow mote
+          if (Math.random() < 0.45) {
+            const m = this.scene.add.circle(x, y, 3.5, col, 0.7).setBlendMode(Phaser.BlendModes.ADD).setDepth(68);
+            this.scene.tweens.add({ targets: m, alpha: 0, scale: 0.2, duration: 200, onComplete: () => m.destroy() });
+          }
+        },
+        onComplete: () => {
+          vfxManager.additiveSparkBurst(this.scene, targetX, targetY - 24, col, 12, 74, 72);
+          serpent.destroy();
+        },
+      });
+    });
+
+    this.scene.time.delayedCall(260, () => {
+      if (!this.scene?.sys?.isActive()) return;
+      vfxManager.directionalShake(this.scene, 0.8, 0.4, 0.008, 120);
+      onWeaveHit(0);
+    });
+    this.scene.time.delayedCall(620, () => {
+      if (!this.scene?.sys?.isActive()) return;
+      vfxManager.hitStop(this.scene, 45);
+      vfxManager.radialShockwave(this.scene, targetX, targetY - 24, 0x10b981, 130, 300, 71);
+      onWeaveHit(1);
+    });
+  }
+
+  /**
+   * 5. Shadow Hunter — Phantom Lotus Barrage
+   * Dashes through target leaving 4 glowing purple afterimage clones + crisscrossing violet slash webs + dark vignette flash!
+   */
+  public playSignaturePhantomLotus(
+    fromX: number,
+    fromY: number,
+    targetX: number,
+    targetY: number,
+    onBarrageComplete: () => void
+  ): void {
+    // Brief dark violet vignette flash
+    const camW = this.scene.scale.width;
+    const camH = this.scene.scale.height;
+    const vignette = this.scene.add
+      .rectangle(camW / 2, camH / 2, camW, camH, 0x1e0836, 0.42)
+      .setScrollFactor(0)
+      .setDepth(2150);
+    this.scene.tweens.add({
+      targets: vignette,
+      alpha: 0,
+      duration: 460,
+      onComplete: () => vignette.destroy(),
+    });
+
+    // 4 glowing purple afterimage dash clones leading into & past target
+    for (let i = 0; i < 4; i++) {
+      const frac = (i + 1) / 4;
+      const gx = Phaser.Math.Linear(fromX, targetX + (targetX >= fromX ? 64 : -64), frac);
+      const gy = Phaser.Math.Linear(fromY, targetY, frac);
+      this.scene.time.delayedCall(i * 55, () => {
+        if (!this.scene?.sys?.isActive()) return;
+        vfxManager.spawnAfterimage(this.scene, gx, gy, 0xa855f7, 1.08, 360, 66);
+      });
+    }
+
+    // Crisscrossing violet slash webs across the target
+    this.scene.time.delayedCall(210, () => {
+      if (!this.scene?.sys?.isActive()) return;
+      vfxManager.hitStop(this.scene, 45);
+      vfxManager.directionalShake(this.scene, 1, 0.6, 0.011, 180);
+
+      const web = this.scene.add.graphics().setBlendMode(Phaser.BlendModes.ADD).setDepth(72);
+      const slashes = [
+        [-88, -66, 88, 66],
+        [88, -66, -88, 66],
+        [-98, 6, 98, -14],
+        [-54, -84, 54, 84],
+        [54, -84, -54, 84],
+      ];
+      for (const [x1, y1, x2, y2] of slashes) {
+        web.lineStyle(7, 0xa855f7, 0.92);
+        web.lineBetween(targetX + x1, targetY - 24 + y1, targetX + x2, targetY - 24 + y2);
+        web.lineStyle(2.5, 0xf5d0fe, 1);
+        web.lineBetween(targetX + x1, targetY - 24 + y1, targetX + x2, targetY - 24 + y2);
+      }
+      vfxManager.applyBloom(this.scene, web, { color: 0xc084fc, strength: 1.6 });
+      vfxManager.radialShockwave(this.scene, targetX, targetY - 24, 0xc084fc, 135, 320, 71);
+      vfxManager.additiveSparkBurst(this.scene, targetX, targetY - 24, 0xe879f9, 18, 96, 73);
+
+      this.scene.tweens.add({
+        targets: web,
+        alpha: 0,
+        duration: 340,
+        onComplete: () => web.destroy(),
+      });
+      onBarrageComplete();
     });
   }
 }

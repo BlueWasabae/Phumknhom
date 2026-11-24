@@ -1579,6 +1579,7 @@ export const ITEM_CATALOG: Record<string, CatalogItem> = {
         primaryColor: acc.primaryColor,
         accentColor: acc.accentColor,
         styleVariant: acc.id,
+        ...(acc.id === 'acc_lotus_bond_ring' ? { shopPrice: { coins: 1000 } } : {}),
         stats: {
           defense: acc.effects.defenseFlat,
           maxHp: acc.effects.maxHpFlat,

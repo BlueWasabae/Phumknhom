@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   INITIAL_PLAYER_STATE,
   type ActiveDungeonFightInfo,
+  type BondPartnerRecord,
   type BossId,
   type ChatMessage,
   type CombatHitResult,
@@ -164,6 +165,8 @@ import { KromModal } from './ui/KromModal';
 import { ScryingMirrorModal } from './ui/ScryingMirrorModal';
 import { TukTukCartModal } from './ui/TukTukCartModal';
 import { TreasureMapModal } from './ui/TreasureMapModal';
+import { RunwayModal } from './ui/RunwayModal';
+import { BondModal } from './ui/BondModal';
 import { getMountSpec } from './game/entities/MountEntity';
 import { soundManager } from './game/systems/SoundManager';
 import { seasonClock } from './game/systems/SeasonClock';
@@ -202,6 +205,8 @@ type ActiveModalType =
   | 'scryingMirror'
   | 'tukTukCart'
   | 'treasureMap'
+  | 'runway'
+  | 'bond'
   | 'characterCreator';
 
 interface FloatingXpBanner extends SkillXpToastPayload {
@@ -231,6 +236,7 @@ export const App: React.FC = () => {
 
   const [activeNpcId, setActiveNpcId] = useState<KhmerNpcId | null>(null);
   const [focusedCartId, setFocusedCartId] = useState<string | null>(null);
+  const [bondPrefillPartner, setBondPrefillPartner] = useState<string | null>(null);
   const [houseDecorateMode, setHouseDecorateMode] = useState(false);
   const [leaderboardCategory, setLeaderboardCategory] = useState<LeaderboardCategory>('farmer');
   const [activeWorldEvent, setActiveWorldEvent] = useState<ActiveWorldEventSnapshot | null>(() =>
@@ -1306,6 +1312,10 @@ export const App: React.FC = () => {
       const k = e.key.toLowerCase();
       if (k === 'i' || k === 'b') {
         setActiveModal((cur) => (cur === 'inventory' ? null : 'inventory'));
+      } else if (k === 'q') {
+        if (!document.querySelector('dialog[open]')) {
+          EventBus.emit('input:signatureSkill');
+        }
       } else if (k === 'p') {
         setActiveModal((cur) => (cur === 'profile' ? null : 'profile'));
       } else if (k === 'k') {
@@ -1839,6 +1849,7 @@ export const App: React.FC = () => {
           clubGame,
           leaderboardCategory: reqLbCat,
           cartId,
+          bondPartnerName,
         }) => {
           if (modal === 'farm' && farmTab) setFarmModalTab(farmTab);
           if (modal === 'friends' && reqFriendsTab) setFriendsTab(reqFriendsTab);
@@ -1846,6 +1857,7 @@ export const App: React.FC = () => {
           if (modal === 'clubGames' && clubGame) setClubGameTab(clubGame);
           if (modal === 'leaderboard' && reqLbCat) setLeaderboardCategory(reqLbCat);
           if (modal === 'tukTukCart') setFocusedCartId(cartId ?? null);
+          if (modal === 'bond') setBondPrefillPartner(bondPartnerName ?? null);
           if (modal === 'wardrobe') {
             setShopTab('secondary');
             setActiveModal('fashionShop');
@@ -1945,6 +1957,11 @@ export const App: React.FC = () => {
           setActiveModal('tukTukCart');
         }}
         onOpenTreasureMap={() => setActiveModal('treasureMap')}
+        onOpenRunway={() => setActiveModal('runway')}
+        onOpenBond={() => {
+          setBondPrefillPartner(null);
+          setActiveModal('bond');
+        }}
         onToggleMount={handleToggleMount}
         onOpenHouseDecor={() => setActiveModal('houseDecor')}
         onInviteFriendsHome={() => {
@@ -2429,6 +2446,10 @@ export const App: React.FC = () => {
             name: target.name,
           })
         }
+        onOfferBondRing={(target) => {
+          setBondPrefillPartner(target.name);
+          setActiveModal('bond');
+        }}
       />
 
       <FriendsModal
@@ -2437,6 +2458,7 @@ export const App: React.FC = () => {
         authSession={authSession}
         friendsData={friendsData}
         dungeonInvites={dungeonInvites}
+        bondPartner={player.bondPartner}
         onClose={() => setActiveModal(null)}
         onRefresh={() => void refreshFriends()}
         onOpenAuth={() => setActiveModal('auth')}
@@ -2447,6 +2469,28 @@ export const App: React.FC = () => {
         onInviteDungeon={(friend: FriendRecord) =>
           handleInviteDungeon({ playerId: friend.playerId, name: friend.username })
         }
+        onOfferBondRing={(partnerName) => {
+          setBondPrefillPartner(partnerName);
+          setActiveModal('bond');
+        }}
+        onWarpToPartner={(partnerName) => {
+          handleTravel(
+            {
+              method: 'pylon',
+              destinationLabel: `${partnerName}'s Plaza`,
+              targetZone: 'overworld',
+              mapId: 'central_plaza',
+            },
+            0
+          );
+          EventBus.emit('ui:toast', {
+            text: `🌸 Warping with Pink Lotus Aura to your bonded partner ${partnerName}!`,
+          });
+        }}
+        onOpenBondModal={() => {
+          setBondPrefillPartner(null);
+          setActiveModal('bond');
+        }}
         onAcceptDungeonInvite={(inv) => {
           setDungeonInvites((prev) => prev.filter((i) => i.inviteId !== inv.inviteId));
           roomClient.sendAcceptDungeonInvite({
@@ -2722,6 +2766,126 @@ export const App: React.FC = () => {
             },
             0
           );
+        }}
+      />
+
+      <RunwayModal
+        open={activeModal === 'runway'}
+        player={player}
+        onClose={() => setActiveModal(null)}
+        onCompleteStrut={({ coins, stylishGain, applauseScore, unlockBadge }) => {
+          runStateAction((s) => {
+            const nextCoins = s.currencies.coins + coins;
+            soundManager.playSfx('victory');
+            return {
+              state: {
+                ...s,
+                coins: nextCoins,
+                currencies: { ...s.currencies, coins: nextCoins },
+                lifeStats: {
+                  ...s.lifeStats,
+                  stylish: s.lifeStats.stylish + stylishGain,
+                  happy: Math.min(100, s.lifeStats.happy + 15),
+                },
+                runwayIconBadge: s.runwayIconBadge || unlockBadge,
+                runwayScore: Math.max(s.runwayScore ?? 0, applauseScore),
+              },
+              ok: true,
+              message: `👑 Runway Strut Complete (${applauseScore} pts)! +${coins}c · +${stylishGain} Stylish${
+                unlockBadge ? ' · Unlocked 👑 Runway Icon Badge!' : ''
+              }`,
+            };
+          });
+          EventBus.emit('ticker:push', {
+            text: `👑 ${playerRef.current.name} strutted the Market Street Fashion Runway for ${applauseScore} applause pts!`,
+            category: 'club',
+          });
+        }}
+      />
+
+      <BondModal
+        open={activeModal === 'bond'}
+        player={player}
+        authSession={authSession}
+        prefillPartnerName={bondPrefillPartner}
+        onClose={() => setActiveModal(null)}
+        onBuyLotusBondRing={(currency) => {
+          runStateAction((s) => {
+            if (s.inventory.some((i) => i.itemId === 'acc_lotus_bond_ring' && i.quantity > 0)) {
+              return { state: s, ok: false, message: 'You already own a Lotus Bond Ring!' };
+            }
+            if (currency === 'coins') {
+              if (s.currencies.coins < 1000) return { state: s, ok: false, message: 'Need 1,000 Coins.' };
+              const nextCoins = s.currencies.coins - 1000;
+              soundManager.playSfx('coin');
+              return {
+                state: {
+                  ...s,
+                  coins: nextCoins,
+                  currencies: { ...s.currencies, coins: nextCoins },
+                  inventory: [...s.inventory, { itemId: 'acc_lotus_bond_ring', quantity: 1, itemLevel: 1 }],
+                },
+                ok: true,
+                message: '💍 Purchased Lotus Bond Ring (-1,000 Coins)! Ready to offer to your partner!',
+              };
+            }
+            if (s.currencies.gold < 10) return { state: s, ok: false, message: 'Need 10 Gold.' };
+            soundManager.playSfx('coin');
+            return {
+              state: {
+                ...s,
+                currencies: { ...s.currencies, gold: s.currencies.gold - 10 },
+                inventory: [...s.inventory, { itemId: 'acc_lotus_bond_ring', quantity: 1, itemLevel: 1 }],
+              },
+              ok: true,
+              message: '💍 Purchased Lotus Bond Ring (-10 Gold)! Ready to offer to your partner!',
+            };
+          });
+        }}
+        onBondAccepted={(bond: BondPartnerRecord, toastMsg: string) => {
+          runStateAction((s) => {
+            soundManager.playSfx('victory');
+            return {
+              state: {
+                ...s,
+                bondPartner: bond,
+                lifeStats: { ...s.lifeStats, friendly: 100, happy: 100 },
+              },
+              ok: true,
+              message: toastMsg,
+            };
+          });
+          EventBus.emit('ticker:push', {
+            text: `💖 ${playerRef.current.name} & ${bond.partnerName} sealed a Lotus Bond Ring!`,
+            category: 'club',
+          });
+        }}
+        onWarpToPartner={(partnerName) => {
+          handleTravel(
+            {
+              method: 'pylon',
+              destinationLabel: `${partnerName}'s Plaza`,
+              targetZone: 'overworld',
+              mapId: 'central_plaza',
+            },
+            0
+          );
+          EventBus.emit('ui:toast', {
+            text: `🌸 Warping with Pink Lotus Aura to your bonded partner ${partnerName}!`,
+          });
+        }}
+        onEnterSharedCoopFarm={(bond) => {
+          handleTravel(
+            {
+              method: 'mirror',
+              destinationLabel: `Shared Co-op Farm with ${bond.partnerName}`,
+              targetZone: 'farm',
+            },
+            0
+          );
+          EventBus.emit('ui:toast', {
+            text: `🌾 Entered Shared Co-op Farm with ${bond.partnerName}! Water, infuse & harvest together!`,
+          });
         }}
       />
 

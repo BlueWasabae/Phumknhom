@@ -10,6 +10,8 @@ import { computeVillageToDungeonBridge } from '@shared/skillTrees';
 import { EventBus, type JoystickVector } from '../EventBus';
 import { Player } from '../entities/Player';
 import { soundManager } from '../systems/SoundManager';
+import { ClassCombatVFX, KHMER_SIGNATURE_SKILLS } from '../animations/ClassCombatVFX';
+import { vfxManager } from '../animations/VFXManager';
 
 const ARENA_W = 1360;
 const ARENA_H = 720;
@@ -73,8 +75,10 @@ export class PagodaTowerScene extends Phaser.Scene {
   private projectiles: TowerProjectile[] = [];
 
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
-  private keys!: Record<'W' | 'A' | 'S' | 'D' | 'E' | 'G' | 'J' | 'SHIFT' | 'SPACE', Phaser.Input.Keyboard.Key>;
+  private keys!: Record<'W' | 'A' | 'S' | 'D' | 'E' | 'G' | 'J' | 'Q' | 'SHIFT' | 'SPACE', Phaser.Input.Keyboard.Key>;
   private joystick: JoystickVector = { x: 0, y: 0 };
+  private vfx!: ClassCombatVFX;
+  private signatureCooldownUntil = 0;
 
   private floorCleared = false;
   private transitioning = false;
@@ -125,6 +129,7 @@ export class PagodaTowerScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.physics.world.resume();
     this.physics.world.gravity.y = 920;
     this.physics.world.setBounds(24, 0, ARENA_W - 48, ARENA_H);
     soundManager.playBgm('boss');
@@ -180,9 +185,12 @@ export class PagodaTowerScene extends Phaser.Scene {
     this.cameras.main.startFollow(this.player.sprite, true, 0.14, 0.14);
     this.cameras.main.fadeIn(220, 14, 10, 28);
 
+    this.vfx = new ClassCombatVFX(this);
+    this.signatureCooldownUntil = 0;
+
     this.cursors = this.input.keyboard!.createCursorKeys();
-    this.keys = this.input.keyboard!.addKeys('W,A,S,D,E,G,J,SHIFT,SPACE') as Record<
-      'W' | 'A' | 'S' | 'D' | 'E' | 'G' | 'J' | 'SHIFT' | 'SPACE',
+    this.keys = this.input.keyboard!.addKeys('W,A,S,D,E,G,J,Q,SHIFT,SPACE') as Record<
+      'W' | 'A' | 'S' | 'D' | 'E' | 'G' | 'J' | 'Q' | 'SHIFT' | 'SPACE',
       Phaser.Input.Keyboard.Key
     >;
 
@@ -217,6 +225,7 @@ export class PagodaTowerScene extends Phaser.Scene {
         this.fireBambooGrapple(this.player.x + dir * 240, this.player.y - 170);
       }),
       EventBus.on('input:dash', () => this.tryDash()),
+      EventBus.on('input:signatureSkill', () => this.performSignatureSkill()),
       EventBus.on('input:interact', () => this.tryInteractNearest()),
       EventBus.on('player:loadoutChanged', ({ loadout, playerState }) => {
         this.player.applyLoadoutUpdate(loadout, playerState);
@@ -766,6 +775,63 @@ export class PagodaTowerScene extends Phaser.Scene {
     });
   }
 
+  private performSignatureSkill(): void {
+    const now = this.time.now;
+    if (this.transitioning || this.defeated) return;
+    const cls = this.player.state.activeClass;
+    const meta = KHMER_SIGNATURE_SKILLS[cls];
+    if (now < this.signatureCooldownUntil) return;
+    this.signatureCooldownUntil = now + meta.cooldownMs;
+    this.attackAnimUntil = now + 260;
+    this.invulnUntil = Math.max(this.invulnUntil, now + 380);
+    soundManager.playSfx('level_up');
+
+    EventBus.emit('combat:signatureSkillState', {
+      classId: cls,
+      skillName: meta.name,
+      khmerName: meta.khmerName,
+      icon: meta.icon,
+      accentColor: meta.accentColor,
+      cooldownMs: meta.cooldownMs,
+      readyAt: Date.now() + meta.cooldownMs,
+    });
+
+    const aliveEnemies = this.enemies.filter((e) => e.alive);
+    const primary = aliveEnemies[0];
+    const dir = this.player.facing === 'left' ? -1 : 1;
+    const targetX = primary ? primary.sprite.x : Phaser.Math.Clamp(this.player.x + dir * 200, 120, ARENA_W - 120);
+    const targetY = primary ? primary.sprite.y : FLOOR_Y - 56;
+    const bridge = computeVillageToDungeonBridge(this.player.state);
+    const baseDmg = Math.max(
+      42,
+      Math.round((this.player.state.weapon.baseDamage + bridge.flatDamageBonus) * meta.damageMult * 1.45)
+    );
+
+    const strikeAll = (scale = 1) => {
+      for (const e of this.enemies) {
+        if (e.alive) this.damageEnemy(e, Math.round(baseDmg * scale), true);
+      }
+    };
+
+    this.spawnFloatingText(this.player.x, this.player.y - 54, `${meta.icon} ${meta.name}!`, '#fef08a');
+
+    if (cls === 'lbokator') {
+      this.player.body.setVelocityY(-440);
+      this.vfx.playSignatureHanumanShatter(Phaser.Math.Clamp(this.player.x + dir * 80, 100, ARENA_W - 100), FLOOR_Y, () =>
+        strikeAll(1)
+      );
+    } else if (cls === 'archer') {
+      this.vfx.playSignatureGoldenArrowRain(this.player.x, this.player.y, targetX, FLOOR_Y, () => strikeAll(0.4));
+    } else if (cls === 'mystic') {
+      this.vfx.playSignatureSacredMandala(targetX, FLOOR_Y, (erupted) => strikeAll(erupted ? 0.78 : 0.35));
+    } else if (cls === 'tamer') {
+      this.vfx.playSignatureNagaSurge(this.player.x, this.player.y - 20, targetX, targetY, () => strikeAll(0.58));
+    } else {
+      this.vfx.playSignaturePhantomLotus(this.player.x, this.player.y, targetX, targetY, () => strikeAll(1));
+      this.player.sprite.setPosition(Phaser.Math.Clamp(targetX + dir * 64, 90, ARENA_W - 90), this.player.y);
+    }
+  }
+
   private tryDash(): void {
     const now = this.time.now;
     const bridge = computeVillageToDungeonBridge(this.player.state);
@@ -854,6 +920,7 @@ export class PagodaTowerScene extends Phaser.Scene {
   }
 
   update(time: number, delta: number): void {
+    vfxManager.ensurePhysicsResumed(this);
     const modalOpen = Boolean(document.querySelector('dialog[open]'));
     if (this.input.enabled === modalOpen) {
       this.input.enabled = !modalOpen;
@@ -887,6 +954,9 @@ export class PagodaTowerScene extends Phaser.Scene {
       }
       if (Phaser.Input.Keyboard.JustDown(this.keys.SHIFT)) {
         this.tryDash();
+      }
+      if (Phaser.Input.Keyboard.JustDown(this.keys.Q)) {
+        this.performSignatureSkill();
       }
       if (Phaser.Input.Keyboard.JustDown(this.keys.G)) {
         const dir = this.player.facing === 'left' ? -1 : 1;

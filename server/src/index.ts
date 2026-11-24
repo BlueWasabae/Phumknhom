@@ -19,6 +19,13 @@ import {
   type TukTukCartItemRecord,
 } from './economy/tukTukCartService';
 import {
+  acceptBondRequest,
+  createBondRequest,
+  getBondStatusForPlayer,
+  getSharedCoopFarm,
+  syncSharedCoopFarm,
+} from './economy/bondService';
+import {
   createKrom,
   donateToKrom,
   getKromById,
@@ -631,6 +638,87 @@ app.post('/api/cart/close', (req, res) => {
   }
   broadcastTukTukCartsUpdate(result.carts);
   res.json(result);
+});
+
+// ==================== UPDATE 1.7 BEST-FRIEND / COUPLE BOND RING & CO-OP FARM ====================
+
+app.get('/api/bond/status', (req, res) => {
+  const verified = verifyAuthToken(extractBearerToken(req));
+  const playerId = verified?.playerId ?? String(req.query.playerId || 'guest');
+  const username = verified?.username ?? String(req.query.username || 'PhumHero');
+  res.json(getBondStatusForPlayer(playerId, username));
+});
+
+app.post('/api/bond/request', (req, res) => {
+  const verified = verifyAuthToken(extractBearerToken(req));
+  const body = (req.body ?? {}) as {
+    requesterName?: string;
+    targetId?: string;
+    targetName?: string;
+    instantAcceptDemo?: boolean;
+  };
+  const requesterId = verified?.playerId ?? 'guest';
+  const requesterName = verified?.username ?? body.requesterName ?? 'PhumHero';
+  const result = createBondRequest({
+    requesterId,
+    requesterName,
+    targetId: body.targetId,
+    targetName: body.targetName ?? '',
+    instantAcceptDemo: Boolean(body.instantAcceptDemo),
+  });
+  if (!result.ok) {
+    res.status(400).json({ error: result.error });
+    return;
+  }
+  if (result.bond && !body.instantAcceptDemo) {
+    presenceRegistry.sendToTarget(
+      { playerId: result.bond.targetId, username: result.bond.targetName },
+      'socialNotice',
+      { text: `💍 ${requesterName} offered you a Lotus Bond Ring! Open MENU → Bond Ring to accept!` }
+    );
+  }
+  res.status(201).json(result);
+});
+
+app.post('/api/bond/accept', (req, res) => {
+  const verified = verifyAuthToken(extractBearerToken(req));
+  const body = (req.body ?? {}) as { bondId?: string; accepterName?: string };
+  if (!body.bondId) {
+    res.status(400).json({ error: 'Missing bondId.' });
+    return;
+  }
+  const accepterId = verified?.playerId ?? 'guest';
+  const accepterName = verified?.username ?? body.accepterName ?? 'PhumHero';
+  const result = acceptBondRequest({
+    bondId: body.bondId,
+    accepterId,
+    accepterName,
+  });
+  if (!result.ok) {
+    res.status(400).json({ error: result.error });
+    return;
+  }
+  if (result.bond) {
+    presenceRegistry.sendToTarget(
+      { playerId: result.bond.requesterId, username: result.bond.requesterName },
+      'socialNotice',
+      { text: `💖 ${accepterName} accepted your Lotus Bond Ring! Pink Lotus Aura & Co-op Farm unlocked!` }
+    );
+  }
+  res.json(result);
+});
+
+app.get('/api/bond/farm/:bondId', (req, res) => {
+  res.json({ sharedFarm: getSharedCoopFarm(req.params.bondId) });
+});
+
+app.post('/api/bond/farm/sync', (req, res) => {
+  const body = (req.body ?? {}) as { bondId?: string; farm?: unknown };
+  if (!body.bondId || !body.farm) {
+    res.status(400).json({ error: 'Missing bondId or farm.' });
+    return;
+  }
+  res.json(syncSharedCoopFarm(body.bondId, body.farm));
 });
 
 const httpServer = http.createServer(app);

@@ -51,8 +51,11 @@ import {
   type ClassMeterPayload,
   type FarmToolMode,
   type NetworkStatusPayload,
+  type SignatureSkillHudPayload,
 } from '../game/EventBus';
 import { soundManager, type AudioSettings } from '../game/systems/SoundManager';
+import { vfxManager, type VfxQualityMode } from '../game/animations/VFXManager';
+import { KHMER_SIGNATURE_SKILLS } from '../game/animations/ClassCombatVFX';
 import { worldEventManager } from '../game/systems/WorldEventManager';
 import {
   WORLD_EVENT_LIST,
@@ -119,6 +122,8 @@ interface HUDProps {
   onOpenScryingMirror?: () => void;
   onOpenTukTukCart?: () => void;
   onOpenTreasureMap?: () => void;
+  onOpenRunway?: () => void;
+  onOpenBond?: () => void;
   onToggleMount?: () => void;
   onFastForwardFarm: () => void;
 }
@@ -171,6 +176,8 @@ export const HUD: React.FC<HUDProps> = ({
   onOpenScryingMirror,
   onOpenTukTukCart,
   onOpenTreasureMap,
+  onOpenRunway,
+  onOpenBond,
   onToggleMount,
   onFastForwardFarm,
 }) => {
@@ -178,6 +185,8 @@ export const HUD: React.FC<HUDProps> = ({
   const [balanceModalOpen, setBalanceModalOpen] = useState(false);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [audioSettings, setAudioSettings] = useState<AudioSettings>(() => soundManager.getSettings());
+  const [vfxQuality, setVfxQuality] = useState<VfxQualityMode>(() => vfxManager.getQuality());
+  const [sigSkillState, setSigSkillState] = useState<SignatureSkillHudPayload | null>(null);
   const [seasonSnap, setSeasonSnap] = useState<SeasonClockSnapshot>(() => seasonClock.getSnapshot());
   const [activeWorldEvent, setActiveWorldEvent] = useState<ActiveWorldEventSnapshot | null>(() =>
     worldEventManager.getActiveEvent()
@@ -189,14 +198,18 @@ export const HUD: React.FC<HUDProps> = ({
 
   useEffect(() => {
     const unsubAudio = soundManager.subscribe(setAudioSettings);
+    const unsubVfx = vfxManager.subscribe(setVfxQuality);
+    const unsubSig = EventBus.on('combat:signatureSkillState', setSigSkillState);
     const unsubSeason = seasonClock.subscribe(setSeasonSnap);
     const unsubEvent = worldEventManager.subscribe(setActiveWorldEvent);
     const id = window.setInterval(() => {
       setNow(Date.now());
       setSeasonSnap(seasonClock.getSnapshot());
-    }, 1000);
+    }, 250);
     return () => {
       unsubAudio();
+      unsubVfx();
+      unsubSig();
       unsubSeason();
       unsubEvent();
       window.clearInterval(id);
@@ -807,6 +820,40 @@ export const HUD: React.FC<HUDProps> = ({
                     )}
                   </button>
                 )}
+                {onOpenRunway && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuDropdownOpen(false);
+                      onOpenRunway();
+                    }}
+                    className="px-3 py-2 rounded-xl hover:bg-pink-100 text-left flex items-center justify-between gap-2 text-amber-950"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Crown className="w-4 h-4 text-pink-600" /> Weekly Fashion Runway
+                    </span>
+                    {player.runwayIconBadge && (
+                      <span className="text-[9px] font-bold text-pink-700">👑 ICON</span>
+                    )}
+                  </button>
+                )}
+                {onOpenBond && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuDropdownOpen(false);
+                      onOpenBond();
+                    }}
+                    className="px-3 py-2 rounded-xl hover:bg-rose-100 text-left flex items-center justify-between gap-2 text-amber-950"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Heart className="w-4 h-4 text-rose-600" /> Lotus Bond Ring
+                    </span>
+                    <span className="text-[9px] font-bold text-rose-700">
+                      {player.bondPartner?.status === 'accepted' ? '💖 Bonded' : 'Ring'}
+                    </span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => {
@@ -973,15 +1020,24 @@ export const HUD: React.FC<HUDProps> = ({
             </button>
 
             <button
+              id="btn-touch-ui"
               type="button"
-              onClick={onToggleTouchUi}
-              className={`phum-btn px-2.5 py-1.5 rounded-xl font-display font-bold text-xs flex items-center gap-1 shrink-0 ${
-                touchUiEnabled ? 'ring-2 ring-emerald-600' : ''
+              data-touch-ui={touchUiEnabled ? 'on' : 'off'}
+              aria-pressed={touchUiEnabled}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleTouchUi();
+              }}
+              className={`phum-btn px-2.5 py-1.5 rounded-xl font-display font-bold text-xs flex items-center gap-1 shrink-0 cursor-pointer ${
+                touchUiEnabled ? 'ring-2 ring-emerald-300 !bg-none !bg-emerald-600 !text-white !border-emerald-950' : ''
               }`}
               title="Preview Mobile Touch Controls on Desktop"
             >
               <Gamepad2 className="w-3.5 h-3.5 shrink-0" />
-              <span className="hidden sm:inline whitespace-nowrap">Touch UI</span>
+              <span className="hidden sm:inline whitespace-nowrap">
+                {touchUiEnabled ? 'Touch ON' : 'Touch UI'}
+              </span>
             </button>
 
             {emoteOpen && (
@@ -1080,11 +1136,11 @@ export const HUD: React.FC<HUDProps> = ({
           </div>
         )}
 
-        {/* DUNGEON BOSS HEALTH BAR, CLASS METER & MYTHIC FOCUS/FURY GAUGES */}
-        {zone === 'dungeon' && (
+        {/* DUNGEON / PAGODA TOWER BOSS HEALTH BAR, SIGNATURE SKILL [Q] RING & MYTHIC GAUGES */}
+        {(zone === 'dungeon' || zone === 'tower') && (
           <div className="flex flex-col items-center gap-1.5 w-full">
             {/* Sleek Top-Center Boss Health Bar */}
-            {bossHud && bossHud.active && (
+            {zone === 'dungeon' && bossHud && bossHud.active && (
               <div className="pointer-events-auto w-[min(94vw,520px)] bg-slate-950/90 border-2 border-amber-500/80 rounded-2xl px-3 py-1.5 shadow-xl">
                 <div className="flex items-center justify-between gap-2 text-[11px] font-display font-bold mb-1">
                   <div className="flex items-center gap-1.5 min-w-0">
@@ -1186,6 +1242,66 @@ export const HUD: React.FC<HUDProps> = ({
                   <span className="text-emerald-800">Quiver · Shift = Backflip</span>
                 )}
               </div>
+
+              {/* Signature Active Skill [Q] Cooldown Ring Button (All 5 Khmer Classes) */}
+              {(() => {
+                const sigDef = KHMER_SIGNATURE_SKILLS[player.activeClass];
+                const readyAt =
+                  sigSkillState && sigSkillState.classId === player.activeClass
+                    ? sigSkillState.readyAt
+                    : 0;
+                const cdMs = sigDef.cooldownMs;
+                const remMs = Math.max(0, readyAt - now);
+                const ready = remMs <= 0;
+                const pct = ready ? 1 : Math.max(0, 1 - remMs / cdMs);
+                const radius = 14;
+                const circ = 2 * Math.PI * radius;
+                return (
+                  <button
+                    type="button"
+                    onClick={() => EventBus.emit('input:signatureSkill')}
+                    title={`${sigDef.name} (${sigDef.khmerName}) [Q]`}
+                    className={`pointer-events-auto flex items-center gap-2 pl-1.5 pr-3 py-1 rounded-full border-2 shadow-lg transition cursor-pointer ${
+                      ready
+                        ? 'bg-gradient-to-r from-amber-900 via-purple-950 to-amber-900 text-amber-100 border-yellow-400 shadow-[0_0_16px_rgba(250,204,21,0.55)] hover:scale-[1.03]'
+                        : 'bg-slate-900/90 text-slate-300 border-slate-600'
+                    }`}
+                  >
+                    <span className="relative w-8 h-8 flex items-center justify-center shrink-0">
+                      <svg className="w-8 h-8 -rotate-90" viewBox="0 0 36 36">
+                        <circle
+                          cx="18"
+                          cy="18"
+                          r={radius}
+                          fill="rgba(15,23,42,0.85)"
+                          stroke="rgba(148,163,184,0.3)"
+                          strokeWidth="3"
+                        />
+                        <circle
+                          cx="18"
+                          cy="18"
+                          r={radius}
+                          fill="none"
+                          stroke={ready ? '#fde047' : sigDef.accentColor}
+                          strokeWidth="3"
+                          strokeDasharray={circ}
+                          strokeDashoffset={circ * (1 - pct)}
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                      <span className="absolute text-sm leading-none">{sigDef.icon}</span>
+                    </span>
+                    <span className="text-left leading-tight">
+                      <span className="block font-display font-bold text-[10px] text-yellow-200">
+                        {sigDef.name} [Q]
+                      </span>
+                      <span className="block font-mono text-[9px] text-amber-200/90">
+                        {ready ? '✨ READY!' : `${(remMs / 1000).toFixed(1)}s CD`}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })()}
 
               {/* Mythic Focus & Fury Gauges */}
               {bossHud && bossHud.difficulty === 'mythic' && (
@@ -1475,6 +1591,50 @@ export const HUD: React.FC<HUDProps> = ({
                   {label}
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* VFX Quality & WebGL Bloom Toggle (Update 1.7) */}
+          <div className="p-3 rounded-xl bg-amber-50 border border-amber-900/25 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <div className="font-display font-bold text-amber-950">
+                  ✨ VFX Quality (WebGL Bloom &amp; Particles)
+                </div>
+                <div className="text-[10px] text-amber-900/85">
+                  High enables Phaser WebGL Bloom/Glow on portals, skills &amp; campfires. Performance keeps older phones locked at 60 FPS.
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  soundManager.playSfx('click');
+                  vfxManager.setQuality('high');
+                }}
+                className={`px-2.5 py-1.5 rounded-xl border font-display font-bold text-[11px] transition ${
+                  vfxQuality === 'high'
+                    ? 'bg-purple-800 text-amber-100 border-purple-950 shadow'
+                    : 'bg-white hover:bg-amber-100 text-amber-950 border-amber-900/25'
+                }`}
+              >
+                ✨ High (Bloom)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  soundManager.playSfx('click');
+                  vfxManager.setQuality('performance');
+                }}
+                className={`px-2.5 py-1.5 rounded-xl border font-display font-bold text-[11px] transition ${
+                  vfxQuality === 'performance'
+                    ? 'bg-emerald-700 text-white border-emerald-950 shadow'
+                    : 'bg-white hover:bg-amber-100 text-amber-950 border-amber-900/25'
+                }`}
+              >
+                ⚡ Performance (Mobile)
+              </button>
             </div>
           </div>
 

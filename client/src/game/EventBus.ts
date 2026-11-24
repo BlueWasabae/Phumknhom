@@ -35,6 +35,16 @@ export interface ClassMeterPayload {
   lbokatorStance: number;   // 1=Lion, 2=Crocodile, 3=Hanuman
 }
 
+export interface SignatureSkillHudPayload {
+  classId: KhmerClassId;
+  skillName: string;
+  khmerName: string;
+  icon: string;
+  accentColor: string;
+  cooldownMs: number;
+  readyAt: number; // Date.now() epoch ms when ready
+}
+
 export type FarmToolMode = 'smart' | 'fertilize' | 'infuse';
 
 export interface SkillXpToastPayload {
@@ -174,6 +184,7 @@ export interface EventMap {
   'portal:proximity': PortalProximityPayload;
   'combat:hit': { hit: CombatHitResult; dummyHp: number; dummyMaxHp: number };
   'combat:classMeter': ClassMeterPayload;
+  'combat:signatureSkillState': SignatureSkillHudPayload;
   'boss:hudUpdate': BossHudPayload;
   'dungeon:enterRequest': {
     bossId: BossId;
@@ -276,6 +287,7 @@ export interface EventMap {
   'input:jump': void;
   'input:attack': void;
   'input:secondary': void;
+  'input:signatureSkill': void;
   'input:dash': void;
   'input:grapple': void;
   'input:toggleMount': void;
@@ -317,7 +329,9 @@ export interface EventMap {
       | 'krom'
       | 'scryingMirror'
       | 'tukTukCart'
-      | 'treasureMap';
+      | 'treasureMap'
+      | 'runway'
+      | 'bond';
     leaderboardCategory?: 'farmer' | 'stylish' | 'slayer' | 'tower';
     farmTab?: 'seeds' | 'livestock' | 'artisan';
     shopTab?: 'primary' | 'secondary';
@@ -325,6 +339,7 @@ export interface EventMap {
     reforgeTab?: 'reforge' | 'fusion' | 'shimmer' | 'bank';
     clubGame?: 'kla_klok' | 'ouk_chaktrang' | 'tien_len';
     cartId?: string;
+    bondPartnerName?: string;
   };
   'ui:toast': { text: string };
 }

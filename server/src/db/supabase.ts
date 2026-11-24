@@ -57,6 +57,9 @@ export interface SavedPlayerProfile {
   pchumBenBlessingUntil?: number | null;
   festivalSplashCount?: number;
   activeTreasureMap?: Record<string, unknown> | null;
+  runwayIconBadge?: boolean;
+  runwayScore?: number;
+  bondPartner?: Record<string, unknown> | null;
   hasCompletedCreation?: boolean;
   activeClass?: string;
   weapon?: Record<string, unknown>;
@@ -481,6 +484,12 @@ function rowToSavedProfile(row: {
       meta.activeTreasureMap && typeof meta.activeTreasureMap === 'object'
         ? (meta.activeTreasureMap as Record<string, unknown>)
         : null,
+    runwayIconBadge: Boolean(meta.runwayIconBadge ?? false),
+    runwayScore: typeof meta.runwayScore === 'number' ? meta.runwayScore : 0,
+    bondPartner:
+      meta.bondPartner && typeof meta.bondPartner === 'object'
+        ? (meta.bondPartner as Record<string, unknown>)
+        : null,
     hasCompletedCreation: Boolean(
       meta.hasCompletedCreation ??
         (loadout as { hasCompletedCreation?: boolean }).hasCompletedCreation ??
@@ -797,6 +806,12 @@ export async function savePlayerProfile(
     activeTreasureMap:
       profile.activeTreasureMap && typeof profile.activeTreasureMap === 'object'
         ? profile.activeTreasureMap
+        : null,
+    runwayIconBadge: Boolean(profile.runwayIconBadge ?? false),
+    runwayScore: typeof profile.runwayScore === 'number' ? profile.runwayScore : 0,
+    bondPartner:
+      profile.bondPartner && typeof profile.bondPartner === 'object'
+        ? profile.bondPartner
         : null,
     hasCompletedCreation: Boolean(
       profile.hasCompletedCreation ??

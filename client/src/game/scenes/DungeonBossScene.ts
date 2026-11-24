@@ -32,9 +32,11 @@ import { Pet, summonTemporaryCombatSpirit } from '../entities/Pet';
 import { BossController } from '../entities/BossController';
 import {
   ClassCombatVFX,
+  KHMER_SIGNATURE_SKILLS,
   type SpawnedProjectile,
   type TossedGoldCoin,
 } from '../animations/ClassCombatVFX';
+import { vfxManager } from '../animations/VFXManager';
 import {
   parseAppearance,
   roomClient,
@@ -173,6 +175,7 @@ export class DungeonBossScene extends Phaser.Scene {
   private invulnerableUntil = 0;
   private attackCooldownUntil = 0;
   private attackAnimUntil = 0;
+  private signatureCooldownUntil = 0;
   // Bamboo Vine Grapple & Naga Water Shield (Update 1.3A)
   private grappleActive = false;
   private grappleTargetX = 0;
@@ -255,6 +258,7 @@ export class DungeonBossScene extends Phaser.Scene {
 
   create(): void {
     // Side-Scrolling Boss Cavern Mode: 2D Platformer (gravity = 800)
+    this.physics.world.resume();
     this.physics.world.gravity.y = 800;
     this.physics.world.setBounds(0, 0, ARENA_W, ARENA_H);
     soundManager.playBgm('boss');
@@ -340,6 +344,11 @@ export class DungeonBossScene extends Phaser.Scene {
       'A' | 'D' | 'W' | 'E' | 'G' | 'J' | 'L' | 'F' | 'Q' | 'R' | 'SHIFT' | 'SPACE',
       Phaser.Input.Keyboard.Key
     >;
+    this.input.enabled = true;
+    if (this.input.keyboard) {
+      this.input.keyboard.enabled = true;
+      this.input.keyboard.resetKeys();
+    }
 
     // Enable crisp Right-Click for Preah Khan Parry & Golden Riel Coin Toss without browser menu popup
     this.input.mouse?.disableContextMenu();
@@ -381,6 +390,7 @@ export class DungeonBossScene extends Phaser.Scene {
       EventBus.on('input:jump', () => this.performJump()),
       EventBus.on('input:attack', () => this.performClassAttack()),
       EventBus.on('input:secondary', () => this.performSecondaryWeaponAction()),
+      EventBus.on('input:signatureSkill', () => this.performSignatureSkill()),
       EventBus.on('input:dash', () => this.performClassDash()),
       EventBus.on('input:grapple', () => this.performBambooGrapple()),
       EventBus.on('input:focus', () => this.activateFocusBurst()),
@@ -1606,8 +1616,109 @@ export class DungeonBossScene extends Phaser.Scene {
     }
 
     EventBus.emit('ui:toast', {
-      text: 'Tip: Right-Click / [Q] triggers Parry (Preah Khan) or Coin Toss (Golden Riel Crossbow)!',
+      text: 'Tip: Right-Click triggers Parry (Preah Khan) or Coin Toss (Golden Riel Crossbow)! Press [Q] for your Class Signature Skill!',
     });
+  }
+
+  /**
+   * Update 1.7 — 5 Khmer Class Signature Active Skills ([Q] / Mobile SKILL button)
+   * Full multi-stage animations, WebGL bloom VFX, directional shake, hit-stop & HUD cooldown ring!
+   */
+  private performSignatureSkill(): void {
+    const now = this.time.now;
+    if (this.transitioning || this.playerDefeated) return;
+    const cls = this.player.state.activeClass;
+    const meta = KHMER_SIGNATURE_SKILLS[cls];
+    if (now < this.signatureCooldownUntil) {
+      const remSec = ((this.signatureCooldownUntil - now) / 1000).toFixed(1);
+      this.spawnFloatingText(this.player.x, this.player.y - 44, `${meta.icon} ${remSec}s`, '#cbd5e1', '12px');
+      return;
+    }
+
+    this.signatureCooldownUntil = now + meta.cooldownMs;
+    this.attackAnimUntil = now + 260;
+    this.invulnerableUntil = Math.max(this.invulnerableUntil, now + 380);
+    soundManager.playSfx('level_up');
+
+    EventBus.emit('combat:signatureSkillState', {
+      classId: cls,
+      skillName: meta.name,
+      khmerName: meta.khmerName,
+      icon: meta.icon,
+      accentColor: meta.accentColor,
+      cooldownMs: meta.cooldownMs,
+      readyAt: Date.now() + meta.cooldownMs,
+    });
+
+    const dir = this.bossCtrl.x >= this.player.x ? 1 : -1;
+    this.player.facing = dir > 0 ? 'right' : 'left';
+    const targetX = this.bossCtrl.alive ? this.bossCtrl.x : Phaser.Math.Clamp(this.player.x + dir * 240, 120, ARENA_W - 120);
+    const targetY = this.bossCtrl.alive ? this.bossCtrl.y - 72 : FLOOR_Y - 60;
+
+    this.spawnFloatingText(this.player.x, this.player.y - 54, `${meta.icon} ${meta.name.toUpperCase()}!`, '#fef08a', '16px');
+
+    if (cls === 'lbokator') {
+      // 1. Hanuman Ground-Shatter: Leap up with golden aura -> slam down with expanding shockwave rings & debris!
+      this.player.body.setVelocityY(-460);
+      this.player.body.setVelocityX(dir * 260);
+      this.vfx.playSignatureHanumanShatter(Phaser.Math.Clamp(this.player.x + dir * 95, 100, ARENA_W - 100), FLOOR_Y, () => {
+        if (this.bossCtrl.alive) {
+          this.damageBoss(dir, {
+            bonusMult: meta.damageMult,
+            guaranteedCrit: true,
+            tag: '💥 HANUMAN GROUND-SHATTER!',
+          });
+        }
+      });
+    } else if (cls === 'archer') {
+      // 2. Rain of Golden Arrows: Fire skyward -> rain 12 blooming golden light-arrows across boss zone!
+      this.vfx.playSignatureGoldenArrowRain(this.player.x, this.player.y, targetX, FLOOR_Y, (waveIdx) => {
+        if (this.bossCtrl.alive) {
+          this.damageBoss(dir, {
+            bonusMult: meta.damageMult / 3,
+            guaranteedCrit: waveIdx === 11,
+            tag: waveIdx === 11 ? '🏹 RAIN OF GOLDEN ARROWS!' : '🏹 ARROW VOLLEY',
+          });
+        }
+      });
+    } else if (cls === 'mystic') {
+      // 3. Sacred Yant Mandala: Giant spinning blooming Khmer rune circle -> 2 pulses & cyan-gold light pillars!
+      this.vfx.playSignatureSacredMandala(targetX, FLOOR_Y, (erupted) => {
+        if (this.bossCtrl.alive) {
+          this.damageBoss(dir, {
+            bonusMult: erupted ? meta.damageMult * 0.72 : meta.damageMult * 0.35,
+            guaranteedCrit: erupted,
+            tag: erupted ? '☸️ SACRED YANT MANDALA!' : '☸️ MANDALA PULSE',
+          });
+        }
+      });
+    } else if (cls === 'tamer') {
+      // 4. Naga Spirit Surge: Twin glowing emerald & gold spectral serpents weaving in a blooming figure-8!
+      this.vfx.playSignatureNagaSurge(this.player.x, this.player.y - 24, targetX, targetY, (passIdx) => {
+        if (this.bossCtrl.alive) {
+          this.damageBoss(dir, {
+            bonusMult: meta.damageMult * 0.55,
+            guaranteedCrit: passIdx === 1,
+            tag: passIdx === 1 ? '🐉 NAGA SPIRIT SURGE!' : '🐉 TWIN NAGA COIL',
+          });
+        }
+      });
+    } else {
+      // 5. Shadow Hunter — Phantom Lotus Barrage: Dash through with 4 glowing purple afterimages + violet slash webs!
+      const destX = Phaser.Math.Clamp(targetX + dir * 88, 90, ARENA_W - 90);
+      this.vfx.playSignaturePhantomLotus(this.player.x, this.player.y, targetX, targetY, () => {
+        if (this.bossCtrl.alive) {
+          this.damageBoss(dir, {
+            bonusMult: meta.damageMult,
+            guaranteedCrit: true,
+            tag: '🌸 PHANTOM LOTUS BARRAGE!',
+          });
+        }
+      });
+      this.player.sprite.setPosition(destX, this.player.y);
+      this.stealthPct = 100;
+      this.broadcastClassMeter();
+    }
   }
 
   /**
@@ -1980,6 +2091,7 @@ export class DungeonBossScene extends Phaser.Scene {
     this.player.state = skillRes.state;
     if (skillRes.leveledUp) {
       soundManager.playSfx('level_up');
+      vfxManager.playLevelUpLightPillar(this, this.player.x, this.player.y);
     }
 
     const isGoldenPan = weapon.id === 'weapon_golden_pan';
@@ -2016,12 +2128,7 @@ export class DungeonBossScene extends Phaser.Scene {
 
     if (hit.isCrit || focusActive) {
       this.cameras.main.shake(95, 0.0055);
-      this.physics.world.pause();
-      window.setTimeout(() => {
-        if (this.scene.isActive('DungeonBossScene')) {
-          this.physics.world.resume();
-        }
-      }, 40);
+      vfxManager.hitStop(this, 40);
     }
 
     if (roomClient.isInCoopDungeon) {
@@ -2319,9 +2426,19 @@ export class DungeonBossScene extends Phaser.Scene {
   }
 
   update(time: number, delta: number): void {
+    vfxManager.ensurePhysicsResumed(this);
+    const modalOpen = Boolean(document.querySelector('dialog[open]'));
+    if (this.input.enabled === modalOpen) {
+      this.input.enabled = !modalOpen;
+    }
+    if (this.input.keyboard && this.input.keyboard.enabled === modalOpen) {
+      this.input.keyboard.enabled = !modalOpen;
+    }
     const dt = delta / 1000;
     const typing =
-      document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA';
+      modalOpen ||
+      document.activeElement?.tagName === 'INPUT' ||
+      document.activeElement?.tagName === 'TEXTAREA';
     const onGround = this.player.body.blocked.down || this.player.body.touching.down;
     const bridge = computeVillageToDungeonBridge(this.player.state, Date.now(), this.consecutiveMeleeHits);
     if (!onGround) {
@@ -2448,7 +2565,7 @@ export class DungeonBossScene extends Phaser.Scene {
           this.activateFocusBurst();
         }
         if (Phaser.Input.Keyboard.JustDown(this.keys.Q)) {
-          this.performSecondaryWeaponAction();
+          this.performSignatureSkill();
         }
         if (Phaser.Input.Keyboard.JustDown(this.keys.R)) {
           this.activateFuryBurst();

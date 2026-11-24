@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import type { EquipSlot } from '@shared/types';
-import { MessageSquare, Sparkles, Swords, User, UserPlus } from 'lucide-react';
+import { Heart, MessageSquare, Sparkles, Swords, User, UserPlus } from 'lucide-react';
 import { ITEM_CATALOG } from '../data/items';
 import type { InspectedRemotePlayer } from '../game/EventBus';
 import { NativeDialog } from './NativeDialog';
@@ -12,6 +12,7 @@ interface PlayerActionModalProps {
   onAddFriend: (target: InspectedRemotePlayer) => void;
   onWhisper: (username: string) => void;
   onInviteDungeon: (target: InspectedRemotePlayer) => void;
+  onOfferBondRing?: (target: InspectedRemotePlayer) => void;
 }
 
 const DISPLAY_SLOTS: Array<{ slot: Exclude<EquipSlot, 'accessory'>; label: string }> = [
@@ -31,6 +32,7 @@ export const PlayerActionModal: React.FC<PlayerActionModalProps> = ({
   onAddFriend,
   onWhisper,
   onInviteDungeon,
+  onOfferBondRing,
 }) => {
   const [viewingProfile, setViewingProfile] = useState(false);
 
@@ -115,6 +117,19 @@ export const PlayerActionModal: React.FC<PlayerActionModalProps> = ({
                 >
                   <Swords className="w-4 h-4" /> Invite Dungeon
                 </button>
+
+                {onOfferBondRing && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onOfferBondRing(target);
+                      onClose();
+                    }}
+                    className="col-span-2 py-2.5 px-3 rounded-xl bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white border-2 border-rose-950 font-display font-bold text-xs flex items-center justify-center gap-1.5"
+                  >
+                    <Heart className="w-4 h-4" /> 💍 Offer Lotus Bond Ring
+                  </button>
+                )}
               </div>
             </>
           ) : (
