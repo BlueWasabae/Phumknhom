@@ -189,10 +189,11 @@ export class PagodaTowerScene extends Phaser.Scene {
     this.signatureCooldownUntil = 0;
 
     this.cursors = this.input.keyboard!.createCursorKeys();
-    this.keys = this.input.keyboard!.addKeys('W,A,S,D,E,G,J,Q,SHIFT,SPACE') as Record<
+    this.keys = this.input.keyboard!.addKeys('W,A,S,D,E,G,J,Q,SHIFT,SPACE', false) as Record<
       'W' | 'A' | 'S' | 'D' | 'E' | 'G' | 'J' | 'Q' | 'SHIFT' | 'SPACE',
       Phaser.Input.Keyboard.Key
     >;
+    this.input.keyboard!.clearCaptures();
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (this.transitioning || this.defeated) return;

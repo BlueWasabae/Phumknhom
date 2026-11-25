@@ -74,10 +74,11 @@ export class ClubScene extends Phaser.Scene {
     this.cameras.main.fadeIn(220, 12, 8, 22);
 
     this.cursors = this.input.keyboard!.createCursorKeys();
-    this.keys = this.input.keyboard!.addKeys('W,A,S,D,E') as Record<
+    this.keys = this.input.keyboard!.addKeys('W,A,S,D,E', false) as Record<
       'W' | 'A' | 'S' | 'D' | 'E',
       Phaser.Input.Keyboard.Key
     >;
+    this.input.keyboard!.clearCaptures();
 
     this.unsubs.push(
       EventBus.on('mobile:joystick', (vec) => {

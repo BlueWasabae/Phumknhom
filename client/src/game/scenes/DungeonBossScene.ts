@@ -340,10 +340,11 @@ export class DungeonBossScene extends Phaser.Scene {
     this.cameras.main.fadeIn(240, 8, 10, 20);
 
     this.cursors = this.input.keyboard!.createCursorKeys();
-    this.keys = this.input.keyboard!.addKeys('A,D,W,E,G,J,L,F,Q,R,SHIFT,SPACE') as Record<
+    this.keys = this.input.keyboard!.addKeys('A,D,W,E,G,J,L,F,Q,R,SHIFT,SPACE', false) as Record<
       'A' | 'D' | 'W' | 'E' | 'G' | 'J' | 'L' | 'F' | 'Q' | 'R' | 'SHIFT' | 'SPACE',
       Phaser.Input.Keyboard.Key
     >;
+    this.input.keyboard!.clearCaptures();
     this.input.enabled = true;
     if (this.input.keyboard) {
       this.input.keyboard.enabled = true;

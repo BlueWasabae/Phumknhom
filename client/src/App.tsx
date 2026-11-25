@@ -1307,8 +1307,10 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement | null)?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      const targetEl = (e.target as HTMLElement | null) ?? (document.activeElement as HTMLElement | null);
+      const tag = targetEl?.tagName?.toUpperCase();
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || targetEl?.isContentEditable) return;
+      if (document.querySelector('dialog[open]')) return;
       const k = e.key.toLowerCase();
       if (k === 'i' || k === 'b') {
         setActiveModal((cur) => (cur === 'inventory' ? null : 'inventory'));

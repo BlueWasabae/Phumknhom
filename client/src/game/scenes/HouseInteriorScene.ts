@@ -127,10 +127,11 @@ export class HouseInteriorScene extends Phaser.Scene {
 
     if (this.input.keyboard) {
       this.cursors = this.input.keyboard.createCursorKeys();
-      this.keys = this.input.keyboard.addKeys('W,A,S,D,E,R') as Record<
+      this.keys = this.input.keyboard.addKeys('W,A,S,D,E,R', false) as Record<
         'W' | 'A' | 'S' | 'D' | 'E' | 'R',
         Phaser.Input.Keyboard.Key
       >;
+      this.input.keyboard.clearCaptures();
     }
 
     // Floor click handler for placing or moving furniture in Decorate Mode

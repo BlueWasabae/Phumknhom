@@ -33,8 +33,10 @@ import {
   LogIn,
   Mail,
   Map as MapIcon,
+  Maximize2,
   Menu,
   MessageCircle,
+  Minimize2,
   Smile,
   Sparkles,
   Sprout,
@@ -192,9 +194,61 @@ export const HUD: React.FC<HUDProps> = ({
     worldEventManager.getActiveEvent()
   );
   const [emoteOpen, setEmoteOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [previewDiff, setPreviewDiff] = useState<DifficultyMode>('normal');
   const [previewParty, setPreviewParty] = useState(2);
   const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const syncFs = () => {
+      const doc = document as Document & { webkitFullscreenElement?: Element | null };
+      setIsFullscreen(Boolean(document.fullscreenElement || doc.webkitFullscreenElement));
+    };
+    syncFs();
+    document.addEventListener('fullscreenchange', syncFs);
+    document.addEventListener('webkitfullscreenchange', syncFs as EventListener);
+    return () => {
+      document.removeEventListener('fullscreenchange', syncFs);
+      document.removeEventListener('webkitfullscreenchange', syncFs as EventListener);
+    };
+  }, []);
+
+  const toggleFullscreen = async () => {
+    soundManager.playSfx('click');
+    const doc = document as Document & {
+      webkitFullscreenElement?: Element | null;
+      webkitExitFullscreen?: () => Promise<void> | void;
+    };
+    const rootEl = document.documentElement as HTMLElement & {
+      webkitRequestFullscreen?: () => Promise<void> | void;
+    };
+    try {
+      if (document.fullscreenElement || doc.webkitFullscreenElement) {
+        if (document.exitFullscreen) await document.exitFullscreen();
+        else if (doc.webkitExitFullscreen) await doc.webkitExitFullscreen();
+      } else if (rootEl.requestFullscreen) {
+        await rootEl.requestFullscreen();
+        try {
+          const orientation = screen.orientation as ScreenOrientation & {
+            lock?: (mode: string) => Promise<void>;
+          };
+          await orientation?.lock?.('landscape');
+        } catch {
+          // Orientation lock is optional and unsupported on desktop/iOS
+        }
+      } else if (rootEl.webkitRequestFullscreen) {
+        await rootEl.webkitRequestFullscreen();
+      } else {
+        EventBus.emit('ui:toast', {
+          text: '📱 On iPhone Safari, tap Share → "Add to Home Screen" for full edge-to-edge fullscreen!',
+        });
+      }
+    } catch {
+      EventBus.emit('ui:toast', {
+        text: '📱 Tap Share → "Add to Home Screen" on mobile for full edge-to-edge fullscreen!',
+      });
+    }
+  };
 
   useEffect(() => {
     const unsubAudio = soundManager.subscribe(setAudioSettings);
@@ -1020,6 +1074,28 @@ export const HUD: React.FC<HUDProps> = ({
             </button>
 
             <button
+              id="btn-fullscreen"
+              type="button"
+              aria-pressed={isFullscreen}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                void toggleFullscreen();
+              }}
+              aria-label={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
+              title={isFullscreen ? 'Exit Fullscreen Mode' : 'Enter Fullscreen Mode (Best for Mobile)'}
+              className={`phum-btn p-2 rounded-xl shrink-0 cursor-pointer ${
+                isFullscreen ? 'ring-2 ring-sky-300 !bg-none !bg-sky-600 !text-white !border-sky-950' : ''
+              }`}
+            >
+              {isFullscreen ? (
+                <Minimize2 className="w-4 h-4 shrink-0" />
+              ) : (
+                <Maximize2 className="w-4 h-4 shrink-0" />
+              )}
+            </button>
+
+            <button
               id="btn-touch-ui"
               type="button"
               data-touch-ui={touchUiEnabled ? 'on' : 'off'}
@@ -1636,6 +1712,14 @@ export const HUD: React.FC<HUDProps> = ({
                 ⚡ Performance (Mobile)
               </button>
             </div>
+            <button
+              type="button"
+              onClick={() => void toggleFullscreen()}
+              className="w-full px-3 py-2 rounded-xl bg-sky-700 hover:bg-sky-600 text-white border border-sky-950 font-display font-bold text-[11px] flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+              <span>{isFullscreen ? 'Exit Fullscreen Mode' : '📱 Enter Mobile Fullscreen (Anti-Zoom Locked)'}</span>
+            </button>
           </div>
 
           {/* 4-Season Khmer Calendar & Weather Preview */}

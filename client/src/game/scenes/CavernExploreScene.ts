@@ -237,10 +237,11 @@ export class CavernExploreScene extends Phaser.Scene {
     // Controls
     if (this.input.keyboard) {
       this.cursors = this.input.keyboard.createCursorKeys();
-      this.keys = this.input.keyboard.addKeys('A,D,W,E,J,G,SHIFT,SPACE') as Record<
+      this.keys = this.input.keyboard.addKeys('A,D,W,E,J,G,SHIFT,SPACE', false) as Record<
         'A' | 'D' | 'W' | 'E' | 'J' | 'G' | 'SHIFT' | 'SPACE',
         Phaser.Input.Keyboard.Key
       >;
+      this.input.keyboard.clearCaptures();
     }
 
     // Banner helper tooltip at bottom-left of cavern entrance

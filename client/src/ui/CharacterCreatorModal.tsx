@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { DEFAULT_LOADOUT, type EquippedLoadout, type KhmerClassId, type PlayerState } from '@shared/types';
 import {
   EYE_COLORS,
@@ -91,8 +91,11 @@ export const CharacterCreatorModal: React.FC<CharacterCreatorModalProps> = ({
     sanitizeDraftLoadout(initialPlayer?.loadout)
   );
 
+  const wasOpenRef = useRef(false);
   useEffect(() => {
-    if (!open) return;
+    const justOpened = open && !wasOpenRef.current;
+    wasOpenRef.current = open;
+    if (!justOpened) return;
     setTab('appearance');
     setFacingIdx(0);
     setName(initialPlayer?.name || 'PhumHero');

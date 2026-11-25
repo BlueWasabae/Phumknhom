@@ -182,10 +182,11 @@ export class KhmerWorldScene extends Phaser.Scene {
     }
 
     this.cursors = this.input.keyboard!.createCursorKeys();
-    this.keys = this.input.keyboard!.addKeys('W,A,S,D,E') as Record<
+    this.keys = this.input.keyboard!.addKeys('W,A,S,D,E', false) as Record<
       'W' | 'A' | 'S' | 'D' | 'E',
       Phaser.Input.Keyboard.Key
     >;
+    this.input.keyboard!.clearCaptures();
 
     this.unsubs.push(
       EventBus.on('mobile:joystick', (vec) => {

@@ -179,10 +179,11 @@ export class FarmScene extends Phaser.Scene {
     this.cameras.main.fadeIn(220, 10, 18, 12);
 
     this.cursors = this.input.keyboard!.createCursorKeys();
-    this.keys = this.input.keyboard!.addKeys('W,A,S,D,E') as Record<
+    this.keys = this.input.keyboard!.addKeys('W,A,S,D,E', false) as Record<
       'W' | 'A' | 'S' | 'D' | 'E',
       Phaser.Input.Keyboard.Key
     >;
+    this.input.keyboard!.clearCaptures();
 
     this.unsubs.push(
       EventBus.on('mobile:joystick', (vec) => {
