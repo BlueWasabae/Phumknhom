@@ -406,6 +406,28 @@ class PlazaRoomClient {
         }
       });
 
+      room.onMessage('gmAnnouncement', (msg: { text?: string; actor?: string }) => {
+        if (typeof msg?.text === 'string' && msg.text.trim()) {
+          EventBus.emit('ticker:push', {
+            text: `📣 [GM] ${msg.text.trim()}`,
+            category: 'boss',
+          });
+          EventBus.emit('ui:toast', {
+            text: `📣 [SERVER ANNOUNCEMENT] ${msg.text.trim()}`,
+          });
+        }
+      });
+
+      room.onMessage(
+        'gmEventTrigger',
+        (msg: { worldEventId?: string | null; festivalId?: string | null; actor?: string }) => {
+          EventBus.emit('gm:liveEventTriggered', {
+            worldEventId: msg?.worldEventId ?? null,
+            festivalId: msg?.festivalId ?? null,
+          });
+        }
+      );
+
       room.onMessage(
         'cartSaleNotice',
         (msg: {

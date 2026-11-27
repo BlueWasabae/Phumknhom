@@ -227,6 +227,10 @@ export interface EventMap {
   'guide:step': {
     stepId: 'customize_hero' | 'plant_crop' | 'greet_npc' | 'explore_or_boss' | 'claim_bounty';
   };
+  'gm:liveEventTriggered': {
+    worldEventId: string | null;
+    festivalId: string | null;
+  };
   'dungeon:outcome': DungeonOutcomePayload | null;
   'travel:execute': TravelRequestPayload;
   'frontier:gather': {
@@ -367,7 +371,9 @@ export interface EventMap {
       | 'treasureMap'
       | 'runway'
       | 'bond'
-      | 'bounties';
+      | 'bounties'
+      | 'promo'
+      | 'admin';
     leaderboardCategory?: 'farmer' | 'stylish' | 'slayer' | 'tower' | 'boss_rush';
     farmTab?: 'seeds' | 'livestock' | 'artisan';
     shopTab?: 'primary' | 'secondary';

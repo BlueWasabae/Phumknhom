@@ -394,3 +394,20 @@ export function broadcastTukTukCartsUpdate(carts: unknown[]): void {
     room.broadcast('tukTukCartsUpdated', { carts });
   });
 }
+
+export function broadcastGmAnnouncement(payload: { text: string; actor: string; timestamp: number }): void {
+  PlazaRoom.activeRooms.forEach((room) => {
+    room.broadcast('gmAnnouncement', payload);
+  });
+}
+
+export function broadcastGmEventTrigger(payload: {
+  worldEventId?: string | null;
+  festivalId?: string | null;
+  actor: string;
+  timestamp: number;
+}): void {
+  PlazaRoom.activeRooms.forEach((room) => {
+    room.broadcast('gmEventTrigger', payload);
+  });
+}

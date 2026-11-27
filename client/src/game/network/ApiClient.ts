@@ -109,6 +109,8 @@ export interface SavedProfilePayload {
   activeTitle?: string | null;
   bountyProgress?: PlayerState['bountyProgress'];
   starterGuide?: PlayerState['starterGuide'];
+  redeemedCodes?: string[];
+  referredBy?: string | null;
   hasCompletedCreation?: boolean;
   activeClass: PlayerState['activeClass'];
   weapon: PlayerState['weapon'];
@@ -462,6 +464,8 @@ export function serializePlayerStateForSave(state: PlayerState): SavedProfilePay
           dismissed: Boolean(state.starterGuide.dismissed),
         }
       : undefined,
+    redeemedCodes: [...(state.redeemedCodes ?? [])],
+    referredBy: state.referredBy ?? null,
     hasCompletedCreation: Boolean(state.hasCompletedCreation ?? state.loadout.hasCompletedCreation),
     activeClass: state.activeClass,
     weapon: { ...state.weapon },
@@ -796,6 +800,8 @@ export function hydratePlayerStateFromSave(
             dismissed: Boolean(saved.starterGuide.dismissed),
           }
         : undefined,
+    redeemedCodes: Array.isArray(saved?.redeemedCodes) ? [...saved.redeemedCodes] : [],
+    referredBy: typeof saved?.referredBy === 'string' ? saved.referredBy : null,
     hasCompletedCreation: Boolean(
       saved?.hasCompletedCreation ?? saved?.loadout?.hasCompletedCreation ?? false
     ),
@@ -1770,4 +1776,197 @@ export async function syncSharedBondFarmApi(
     plots,
   });
   return res.ok;
+}
+
+// ==================== UPDATE 2.0: GM CONTROL PANEL & LAUNCH GIFT CODES / REFERRALS ====================
+
+export interface AdminServerStats {
+  plazaPlayers: number;
+  clubPlayers: number;
+  dungeonPlayers: number;
+  totalOnlinePlayers: number;
+  activeRooms: { plaza: number; club: number; dungeon: number };
+  economy: {
+    activeMarketListings: number;
+    activeKroms: number;
+    activeTukTukCarts: number;
+    leaderboardAccounts: number;
+  };
+  storageMode: string;
+  uptimeSec: number;
+}
+
+export async function fetchAdminServerStatsApi(
+  adminSecret: string,
+  ownerEmail: string | null
+): Promise<
+  | { ok: true; actor: string; stats: AdminServerStats }
+  | { ok: false; error: string; offline?: boolean }
+> {
+  const res = await postJson<{ ok: boolean; actor: string; stats: AdminServerStats }>(
+    '/admin/stats',
+    { adminSecret, ownerEmail }
+  );
+  if (!res.ok) {
+    return {
+      ok: false,
+      error: res.error,
+      offline: res.error.includes('Cannot reach Phum server'),
+    };
+  }
+  return { ok: true, actor: res.data.actor, stats: res.data.stats };
+}
+
+export async function sendAdminBroadcastApi(
+  adminSecret: string,
+  ownerEmail: string | null,
+  text: string
+): Promise<
+  | { ok: true; announcement: { id: string; text: string; actor: string; timestamp: number } }
+  | { ok: false; error: string; offline?: boolean }
+> {
+  const res = await postJson<{
+    ok: boolean;
+    announcement: { id: string; text: string; actor: string; timestamp: number };
+  }>('/admin/broadcast', { adminSecret, ownerEmail, text });
+  if (!res.ok) {
+    return {
+      ok: false,
+      error: res.error,
+      offline: res.error.includes('Cannot reach Phum server'),
+    };
+  }
+  return { ok: true, announcement: res.data.announcement };
+}
+
+export async function triggerAdminLiveEventApi(
+  adminSecret: string,
+  ownerEmail: string | null,
+  payload: { worldEventId?: string | null; festivalId?: string | null }
+): Promise<{ ok: true } | { ok: false; error: string; offline?: boolean }> {
+  const res = await postJson<{ ok: boolean }>('/admin/event', {
+    adminSecret,
+    ownerEmail,
+    ...payload,
+  });
+  if (!res.ok) {
+    return {
+      ok: false,
+      error: res.error,
+      offline: res.error.includes('Cannot reach Phum server'),
+    };
+  }
+  return { ok: true };
+}
+
+export interface PromoRedeemReward {
+  code: string;
+  title: string;
+  coins: number;
+  gold: number;
+  diamonds: number;
+  items: Array<{ itemId: string; quantity: number; label: string }>;
+  summary: string;
+}
+
+const OFFLINE_LAUNCH_CODES: Record<string, PromoRedeemReward> = {
+  PHUM2026: {
+    code: 'PHUM2026',
+    title: 'Phum Khnhom 2026 Launch Pack',
+    coins: 500,
+    gold: 0,
+    diamonds: 0,
+    items: [{ itemId: 'mat_reforge_stone', quantity: 2, label: 'Reforge Stone' }],
+    summary: '+500 Coins & 2× Reforge Stones',
+  },
+  ANGKOR100: {
+    code: 'ANGKOR100',
+    title: 'Angkor Diamond Celebration',
+    coins: 0,
+    gold: 0,
+    diamonds: 100,
+    items: [],
+    summary: '+100 Diamonds',
+  },
+  KHMERHERO: {
+    code: 'KHMERHERO',
+    title: 'Founder Hero Launch Cape',
+    coins: 0,
+    gold: 0,
+    diamonds: 0,
+    items: [{ itemId: 'wings_launch_cape', quantity: 1, label: 'Exclusive Launch Cape' }],
+    summary: 'Exclusive Launch Cape (Vanity Back)',
+  },
+};
+
+export async function redeemPromoCodeApi(
+  session: AuthSession | null,
+  payload: { code: string; playerName: string; alreadyRedeemed: string[] }
+): Promise<
+  | { ok: true; reward: PromoRedeemReward; redeemedCodes: string[] }
+  | { ok: false; error: string }
+> {
+  const cleanCode = payload.code.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+  const prevSet = new Set(payload.alreadyRedeemed.map((c) => c.toUpperCase()));
+  if (!cleanCode) {
+    return { ok: false, error: 'Please enter a Gift Code (e.g. PHUM2026).' };
+  }
+  if (prevSet.has(cleanCode)) {
+    return { ok: false, error: `Gift code "${cleanCode}" has already been redeemed on this account!` };
+  }
+
+  const res = await postJson<{
+    ok: boolean;
+    reward: PromoRedeemReward;
+    redeemedCodes: string[];
+  }>('/promo/redeem', payload, session?.token);
+
+  if (res.ok) {
+    return { ok: true, reward: res.data.reward, redeemedCodes: res.data.redeemedCodes };
+  }
+
+  // Offline graceful fallback so guests/offline players can still redeem launch codes cleanly
+  if (res.error.includes('Cannot reach Phum server')) {
+    const localReward = OFFLINE_LAUNCH_CODES[cleanCode];
+    if (!localReward) {
+      return { ok: false, error: `Invalid or expired gift code "${cleanCode}".` };
+    }
+    prevSet.add(cleanCode);
+    return { ok: true, reward: localReward, redeemedCodes: Array.from(prevSet) };
+  }
+
+  return { ok: false, error: res.error };
+}
+
+export async function claimFriendReferralApi(
+  session: AuthSession | null,
+  referrerUsername: string,
+  newPlayerUsername: string
+): Promise<{ ok: boolean; bonusCoins: number }> {
+  const res = await postJson<{ ok: boolean; bonusCoins: number }>(
+    '/promo/referral',
+    { referrerUsername, newPlayerUsername },
+    session?.token
+  );
+  if (res.ok) {
+    return { ok: true, bonusCoins: res.data.bonusCoins ?? 300 };
+  }
+  // Offline local welcome credit for the new player
+  if (res.error.includes('Cannot reach Phum server')) {
+    return { ok: true, bonusCoins: 300 };
+  }
+  return { ok: false, bonusCoins: 0 };
+}
+
+export async function popPendingReferralCoinsApi(username: string): Promise<number> {
+  try {
+    const res = await fetch(
+      `${getApiBase()}/promo/referral-pending?username=${encodeURIComponent(username)}`
+    );
+    if (!res.ok) return 0;
+    const json = (await res.json()) as { bonusCoins?: number };
+    return typeof json.bonusCoins === 'number' ? json.bonusCoins : 0;
+  } catch {
+    return 0;
+  }
 }

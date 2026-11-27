@@ -65,6 +65,8 @@ export interface SavedPlayerProfile {
   activeTitle?: string | null;
   bountyProgress?: Record<string, unknown>;
   starterGuide?: Record<string, unknown>;
+  redeemedCodes?: string[];
+  referredBy?: string | null;
   hasCompletedCreation?: boolean;
   activeClass?: string;
   weapon?: Record<string, unknown>;
@@ -839,6 +841,8 @@ export async function savePlayerProfile(
       profile.starterGuide && typeof profile.starterGuide === 'object'
         ? profile.starterGuide
         : undefined,
+    redeemedCodes: Array.isArray(profile.redeemedCodes) ? profile.redeemedCodes : [],
+    referredBy: typeof profile.referredBy === 'string' ? profile.referredBy : null,
     hasCompletedCreation: Boolean(
       profile.hasCompletedCreation ??
         (profile.loadout as { hasCompletedCreation?: boolean } | undefined)?.hasCompletedCreation ??

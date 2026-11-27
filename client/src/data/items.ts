@@ -768,6 +768,20 @@ export const ITEM_CATALOG: Record<string, CatalogItem> = {
     styleVariant: 'yant_halo',
     stats: { attack: 4, critChance: 0.05 },
   },
+  wings_launch_cape: {
+    id: 'wings_launch_cape',
+    name: 'Exclusive Launch Cape',
+    khmerName: 'អាវឃ្លុំបើកសម្ពោធអង្គរ',
+    slot: 'wings',
+    rarity: 'legendary',
+    stylishScore: 95,
+    description:
+      'Limited 1.0 Public Launch Edition Khmer crimson-and-gold ceremonial cape redeemed via code KHMERHERO.',
+    primaryColor: '#b91c1c',
+    accentColor: '#facc15',
+    styleVariant: 'royal_cape',
+    stats: { defense: 3, maxHp: 25, critChance: 0.04 },
+  },
   weapon_naga_fang: {
     id: 'weapon_naga_fang',
     name: 'Naga Venom Fang',

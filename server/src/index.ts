@@ -4,7 +4,25 @@ import express from 'express';
 import cors from 'cors';
 import { Server, matchMaker } from 'colyseus';
 import { WebSocketTransport } from '@colyseus/ws-transport';
-import { ALLOWED_AREAS, PlazaRoom, broadcastTukTukCartsUpdate } from './rooms/PlazaRoom';
+import {
+  ALLOWED_AREAS,
+  PlazaRoom,
+  broadcastGmAnnouncement,
+  broadcastGmEventTrigger,
+  broadcastTukTukCartsUpdate,
+} from './rooms/PlazaRoom';
+import {
+  getLiveServerStats,
+  recordGmAnnouncement,
+  setLiveGmEvent,
+  verifyGmAccess,
+} from './economy/adminService';
+import {
+  LAUNCH_GIFT_CODES,
+  popPendingReferralCoins,
+  recordFriendReferralBonus,
+  redeemPromoCode,
+} from './economy/promoService';
 import {
   DungeonRoom,
   listActiveDungeonFights,
@@ -719,6 +737,132 @@ app.post('/api/bond/farm/sync', (req, res) => {
     return;
   }
   res.json(syncSharedCoopFarm(body.bondId, body.farm));
+});
+
+// ==================== UPDATE 2.0: GM CONTROL PANEL & LAUNCH GIFT CODES ====================
+
+app.post('/api/admin/stats', async (req, res) => {
+  const body = (req.body ?? {}) as { adminSecret?: string; ownerEmail?: string | null };
+  const auth = verifyGmAccess({
+    adminSecret: body.adminSecret || (req.headers['x-admin-secret'] as string | undefined),
+    ownerEmail: body.ownerEmail,
+  });
+  if (!auth.ok) {
+    res.status(403).json({ error: auth.error });
+    return;
+  }
+  const stats = await getLiveServerStats();
+  res.json({ ok: true, actor: auth.actor, stats });
+});
+
+app.post('/api/admin/broadcast', (req, res) => {
+  const body = (req.body ?? {}) as {
+    adminSecret?: string;
+    ownerEmail?: string | null;
+    text?: string;
+  };
+  const auth = verifyGmAccess({
+    adminSecret: body.adminSecret || (req.headers['x-admin-secret'] as string | undefined),
+    ownerEmail: body.ownerEmail,
+  });
+  if (!auth.ok) {
+    res.status(403).json({ error: auth.error });
+    return;
+  }
+  const text = typeof body.text === 'string' ? body.text.trim() : '';
+  if (!text) {
+    res.status(400).json({ error: 'Announcement text cannot be empty.' });
+    return;
+  }
+  const entry = recordGmAnnouncement(text, auth.actor);
+  broadcastGmAnnouncement({ text: entry.text, actor: entry.actor, timestamp: entry.timestamp });
+  res.json({ ok: true, announcement: entry });
+});
+
+app.post('/api/admin/event', (req, res) => {
+  const body = (req.body ?? {}) as {
+    adminSecret?: string;
+    ownerEmail?: string | null;
+    worldEventId?: 'crimson_eclipse' | 'golden_frog_rain' | 'khmer_night_market' | null;
+    festivalId?: 'bon_om_touk' | 'chol_chnam_thmey' | 'pchum_ben' | null;
+  };
+  const auth = verifyGmAccess({
+    adminSecret: body.adminSecret || (req.headers['x-admin-secret'] as string | undefined),
+    ownerEmail: body.ownerEmail,
+  });
+  if (!auth.ok) {
+    res.status(403).json({ error: auth.error });
+    return;
+  }
+  const nextState = setLiveGmEvent(
+    { worldEventId: body.worldEventId, festivalId: body.festivalId },
+    auth.actor
+  );
+  broadcastGmEventTrigger({
+    worldEventId: body.worldEventId,
+    festivalId: body.festivalId,
+    actor: auth.actor,
+    timestamp: Date.now(),
+  });
+  res.json({ ok: true, state: nextState });
+});
+
+app.get('/api/promo/codes', (_req, res) => {
+  res.json({
+    codes: Object.values(LAUNCH_GIFT_CODES).map((c) => ({
+      code: c.code,
+      title: c.title,
+      summary: c.summary,
+    })),
+  });
+});
+
+app.post('/api/promo/redeem', (req, res) => {
+  const verified = verifyAuthToken(extractBearerToken(req));
+  const body = (req.body ?? {}) as {
+    code?: string;
+    playerName?: string;
+    alreadyRedeemed?: string[];
+  };
+  const accountKey = verified?.playerId || verified?.username || body.playerName || 'guest';
+  const result = redeemPromoCode({
+    accountKey,
+    rawCode: body.code ?? '',
+    alreadyRedeemed: Array.isArray(body.alreadyRedeemed) ? body.alreadyRedeemed : [],
+  });
+  if (!result.ok) {
+    res.status(400).json({ error: result.error });
+    return;
+  }
+  res.json(result);
+});
+
+app.post('/api/promo/referral', (req, res) => {
+  const verified = verifyAuthToken(extractBearerToken(req));
+  const body = (req.body ?? {}) as { referrerUsername?: string; newPlayerUsername?: string };
+  const newPlayerUsername = verified?.username || body.newPlayerUsername || '';
+  const result = recordFriendReferralBonus({
+    referrerUsername: body.referrerUsername ?? '',
+    newPlayerUsername,
+  });
+  if (!result.ok) {
+    res.status(400).json({ error: result.error });
+    return;
+  }
+  presenceRegistry.sendToTarget(
+    { username: result.referrerUsername },
+    'socialNotice',
+    {
+      text: `🎁 Friend Invite Bonus! ${newPlayerUsername} joined via your link — +${result.bonusCoins} Bonus Coins!`,
+    }
+  );
+  res.json(result);
+});
+
+app.get('/api/promo/referral-pending', (req, res) => {
+  const username = typeof req.query.username === 'string' ? req.query.username : '';
+  const bonusCoins = popPendingReferralCoins(username);
+  res.json({ bonusCoins });
 });
 
 const httpServer = http.createServer(app);

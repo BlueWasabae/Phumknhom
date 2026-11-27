@@ -21,6 +21,9 @@ export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameCon
     pixelArt: true,
     roundPixels: true,
     antialias: false,
+    render: {
+      preserveDrawingBuffer: true,
+    },
     scale: {
       mode: Phaser.Scale.RESIZE,
       autoCenter: Phaser.Scale.CENTER_BOTH,

@@ -413,6 +413,9 @@ export interface PlayerState {
   bountyProgress?: BountyProgressState;
   /** Update 1.9 — New-Player Welcome Checklist ("Village Starter Guide") */
   starterGuide?: StarterGuideState;
+  /** Update 2.0 — Redeemed Launch Gift Codes & Friend Invite Referral */
+  redeemedCodes?: string[];
+  referredBy?: string | null;
   hasCompletedCreation?: boolean;
   skillDamagePct: number;
   armorDamagePct: number;

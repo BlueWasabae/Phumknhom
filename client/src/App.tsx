@@ -91,12 +91,14 @@ import {
   bankActionApi,
   buyMarketListingApi,
   cancelMarketListingApi,
+  claimFriendReferralApi,
   createMarketListingApi,
   declineFriendRequestApi,
   fetchFriends,
   hydratePlayerStateFromSave,
   loadGuestCreationProfile,
   loadGuestProgressSnapshot,
+  popPendingReferralCoinsApi,
   reforgeItemApi,
   sandboxTopUpApi,
   sanitizeLegacyLocalStoragePets,
@@ -110,6 +112,7 @@ import {
   type FriendsListResponse,
   type LeaderboardCategory,
   type MarketListingClient,
+  type PromoRedeemReward,
 } from './game/network/ApiClient';
 import { roomClient } from './game/network/RoomClient';
 import { launchPhaserGame } from './game/config';
@@ -168,6 +171,9 @@ import { TreasureMapModal } from './ui/TreasureMapModal';
 import { RunwayModal } from './ui/RunwayModal';
 import { BondModal } from './ui/BondModal';
 import { BountyBoardModal } from './ui/BountyBoardModal';
+import { AdminPanelModal } from './ui/AdminPanelModal';
+import { PromoCodeModal } from './ui/PromoCodeModal';
+import { PhotoModeOverlay } from './ui/PhotoModeOverlay';
 import { STARTER_GUIDE_STEPS, WelcomeGuideWidget } from './ui/WelcomeGuideWidget';
 import type { StarterGuideStepId } from '@shared/types';
 import {
@@ -217,6 +223,8 @@ type ActiveModalType =
   | 'runway'
   | 'bond'
   | 'bounties'
+  | 'promo'
+  | 'admin'
   | 'characterCreator';
 
 interface FloatingXpBanner extends SkillXpToastPayload {
@@ -248,6 +256,13 @@ export const App: React.FC = () => {
   const [focusedCartId, setFocusedCartId] = useState<string | null>(null);
   const [bondPrefillPartner, setBondPrefillPartner] = useState<string | null>(null);
   const [houseDecorateMode, setHouseDecorateMode] = useState(false);
+  const [photoMode, setPhotoMode] = useState(false);
+  const [canInstallPwa, setCanInstallPwa] = useState(false);
+  const deferredInstallPromptRef = useRef<{
+    prompt: () => Promise<void>;
+    userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+  } | null>(null);
+  const pendingReferralRef = useRef<string | null>(null);
   const [leaderboardCategory, setLeaderboardCategory] = useState<LeaderboardCategory>('farmer');
   const [activeWorldEvent, setActiveWorldEvent] = useState<ActiveWorldEventSnapshot | null>(() =>
     worldEventManager.getActiveEvent()
@@ -259,10 +274,61 @@ export const App: React.FC = () => {
   useEffect(() => {
     const u1 = worldEventManager.subscribe(setActiveWorldEvent);
     const u2 = seasonClock.subscribe((snap) => setActiveFestival(snap.activeFestival));
+
+    // Update 2.0: Capture PWA beforeinstallprompt for "Install App" button
+    const onBeforeInstall = (e: Event) => {
+      e.preventDefault();
+      deferredInstallPromptRef.current = e as unknown as {
+        prompt: () => Promise<void>;
+        userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+      };
+      setCanInstallPwa(true);
+    };
+    const onAppInstalled = () => {
+      deferredInstallPromptRef.current = null;
+      setCanInstallPwa(false);
+      EventBus.emit('ui:toast', { text: '📲 ភូមិខ្ញុំ installed to your home screen!' });
+    };
+    window.addEventListener('beforeinstallprompt', onBeforeInstall);
+    window.addEventListener('appinstalled', onAppInstalled);
+
+    // Update 2.0: Parse Friend Invite Referral (?ref=<Username>)
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const refParam = params.get('ref')?.trim();
+      if (refParam) {
+        pendingReferralRef.current = refParam.slice(0, 24);
+        window.sessionStorage.setItem('phum_khnhom_ref', refParam.slice(0, 24));
+      } else {
+        const storedRef = window.sessionStorage.getItem('phum_khnhom_ref');
+        if (storedRef) pendingReferralRef.current = storedRef;
+      }
+    } catch {
+      // ignore URL/storage issues
+    }
+
     return () => {
       u1();
       u2();
+      window.removeEventListener('beforeinstallprompt', onBeforeInstall);
+      window.removeEventListener('appinstalled', onAppInstalled);
     };
+  }, []);
+
+  const handleInstallPwa = useCallback(async () => {
+    const promptEvt = deferredInstallPromptRef.current;
+    if (promptEvt) {
+      await promptEvt.prompt();
+      const choice = await promptEvt.userChoice;
+      if (choice.outcome === 'accepted') {
+        deferredInstallPromptRef.current = null;
+        setCanInstallPwa(false);
+      }
+      return;
+    }
+    EventBus.emit('ui:toast', {
+      text: '📲 Install App: Open browser menu → "Install App" or "Add to Home Screen"!',
+    });
   }, []);
 
   const [zone, setZone] = useState<ZoneType>('overworld');
@@ -688,6 +754,25 @@ export const App: React.FC = () => {
             }).`,
       });
       void refreshFriends(session.playerId);
+      // Claim any Friend Invite coins earned while offline
+      void popPendingReferralCoinsApi(session.username).then((bonusCoins) => {
+        if (bonusCoins > 0) {
+          soundManager.playSfx('coin');
+          setPlayer((prev) => {
+            const nextCoins = prev.currencies.coins + bonusCoins;
+            const next: PlayerState = {
+              ...prev,
+              coins: nextCoins,
+              currencies: { ...prev.currencies, coins: nextCoins },
+            };
+            EventBus.emit('player:stateSync', next);
+            return next;
+          });
+          EventBus.emit('ui:toast', {
+            text: `🎁 Friend Invite Bonus! You earned +${bonusCoins} Coins from invited friends!`,
+          });
+        }
+      });
     },
     [refreshFriends]
   );
@@ -808,6 +893,35 @@ export const App: React.FC = () => {
 
       setActiveModal(null);
       EventBus.emit('guide:step', { stepId: 'customize_hero' });
+      const pendingRef = pendingReferralRef.current;
+      if (pendingRef && pendingRef.toLowerCase() !== result.name.toLowerCase() && !playerRef.current.referredBy) {
+        pendingReferralRef.current = null;
+        try {
+          window.sessionStorage.removeItem('phum_khnhom_ref');
+        } catch {
+          // ignore
+        }
+        void claimFriendReferralApi(authSessionRef.current, pendingRef, result.name).then((refRes) => {
+          if (refRes.ok && refRes.bonusCoins > 0) {
+            soundManager.playSfx('coin');
+            setPlayer((prev) => {
+              if (prev.referredBy) return prev;
+              const nextCoins = prev.currencies.coins + refRes.bonusCoins;
+              const next: PlayerState = {
+                ...prev,
+                coins: nextCoins,
+                currencies: { ...prev.currencies, coins: nextCoins },
+                referredBy: pendingRef,
+              };
+              EventBus.emit('player:stateSync', next);
+              return next;
+            });
+            EventBus.emit('ui:toast', {
+              text: `🎁 Friend Invite Bonus! You & ${pendingRef} both earned +${refRes.bonusCoins} Bonus Coins!`,
+            });
+          }
+        });
+      }
       const clsName = KHMER_CLASSES[result.selectedClass].englishName;
       EventBus.emit('ui:toast', {
         text: `Welcome to ភូមិខ្ញុំ, ${result.name} (${clsName})!`,
@@ -1333,6 +1447,20 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      // Update 2.0 Global Shortcuts: F9 (Photo / Cinematic Mode) & Ctrl+Shift+G (Founder GM Panel)
+      if (e.key === 'F9') {
+        e.preventDefault();
+        soundManager.playSfx('click');
+        setPhotoMode((prev) => !prev);
+        return;
+      }
+      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'g') {
+        e.preventDefault();
+        soundManager.playSfx('click');
+        setPhotoMode(false);
+        setActiveModal((cur) => (cur === 'admin' ? null : 'admin'));
+        return;
+      }
       const targetEl = (e.target as HTMLElement | null) ?? (document.activeElement as HTMLElement | null);
       const tag = targetEl?.tagName?.toUpperCase();
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || targetEl?.isContentEditable) return;
@@ -1420,6 +1548,8 @@ export const App: React.FC = () => {
           activeTitle: nextPlayer.activeTitle ?? prev.activeTitle,
           bountyProgress: nextPlayer.bountyProgress ?? prev.bountyProgress,
           starterGuide: nextPlayer.starterGuide ?? prev.starterGuide,
+          redeemedCodes: nextPlayer.redeemedCodes ?? prev.redeemedCodes,
+          referredBy: nextPlayer.referredBy ?? prev.referredBy,
         }));
       }),
       EventBus.on('npc:openDialogue', ({ npcId }) => {
@@ -2054,6 +2184,22 @@ export const App: React.FC = () => {
           });
         }
       ),
+      EventBus.on('gm:liveEventTriggered', ({ worldEventId, festivalId }) => {
+        if (
+          worldEventId === 'crimson_eclipse' ||
+          worldEventId === 'golden_frog_rain' ||
+          worldEventId === 'khmer_night_market'
+        ) {
+          worldEventManager.triggerEvent(worldEventId);
+        }
+        if (
+          festivalId === 'bon_om_touk' ||
+          festivalId === 'chol_chnam_thmey' ||
+          festivalId === 'pchum_ben'
+        ) {
+          seasonClock.setFestivalOverride(festivalId);
+        }
+      }),
       EventBus.on('ui:toast', ({ text }) => {
         setToast(text);
         if (toastTimer) window.clearTimeout(toastTimer);
@@ -2075,182 +2221,193 @@ export const App: React.FC = () => {
     <div className="relative w-screen h-dvh max-w-full max-h-dvh overflow-hidden bg-slate-950">
       <div ref={mountRef} className="w-full h-full overflow-hidden" />
 
-      <HUD
-        player={player}
-        zone={zone}
-        networkStatus={networkStatus}
-        authUsername={authSession?.username ?? null}
-        saveStatus={saveStatus}
-        inboxCount={inboxCount}
-        chatOpen={chatOpen}
-        onToggleChat={() => setChatOpen((o) => !o)}
-        touchUiEnabled={touchUiEnabled}
-        onToggleTouchUi={() => setTouchUiEnabled((v) => !v)}
-        lastHit={lastHit}
-        classMeter={classMeter}
-        bossHud={bossHud}
-        selectedCropId={selectedCropId}
-        farmToolMode={farmToolMode}
-        onSelectFarmSeed={handleSelectFarmSeed}
-        onEatQuickSlot={handleEatQuickSlot}
-        onOpenProfile={() => setActiveModal('profile')}
-        onOpenInventory={() => setActiveModal('inventory')}
-        onOpenWardrobe={() => {
-          setShopTab('secondary');
-          setActiveModal('fashionShop');
-        }}
-        onOpenFarmModal={() => {
-          setFarmModalTab('seeds');
-          setActiveModal('farm');
-        }}
-        onOpenSkills={() => setActiveModal('skills')}
-        onOpenAreaSwitcher={() => setActiveModal('areaSwitcher')}
-        onOpenFriends={() => {
-          setFriendsTab('friends');
-          setActiveModal('friends');
-        }}
-        onOpenInbox={() => {
-          setFriendsTab('inbox');
-          setActiveModal('friends');
-        }}
-        onOpenAuth={() => setActiveModal('auth')}
-        onOpenMarket={() => setActiveModal('market')}
-        onOpenBestiary={() => setActiveModal('bestiary')}
-        onOpenDiamondStore={() => setActiveModal('diamondStore')}
-        onOpenWorldMap={() => setActiveModal('worldMap')}
-        onOpenServerCity={() => setActiveModal('serverCity')}
-        onOpenReforge={() => {
-          setReforgeTab('reforge');
-          setActiveModal('reforge');
-        }}
-        onOpenClubGames={() => {
-          setClubGameTab('kla_klok');
-          setActiveModal('clubGames');
-        }}
-        onOpenLeaderboard={() => {
-          setLeaderboardCategory('farmer');
-          setActiveModal('leaderboard');
-        }}
-        onOpenPagodaTower={() => setActiveModal('pagodaTower')}
-        onOpenMuseum={() => setActiveModal('museum')}
-        onOpenNightMarket={() => setActiveModal('nightMarket')}
-        onOpenFestival={() => setActiveModal('festival')}
-        onOpenKrom={() => setActiveModal('krom')}
-        onOpenScryingMirror={() => setActiveModal('scryingMirror')}
-        onOpenTukTukCart={() => {
-          setFocusedCartId(null);
-          setActiveModal('tukTukCart');
-        }}
-        onOpenTreasureMap={() => setActiveModal('treasureMap')}
-        onOpenRunway={() => setActiveModal('runway')}
-        onOpenBond={() => {
-          setBondPrefillPartner(null);
-          setActiveModal('bond');
-        }}
-        onOpenBounties={() => setActiveModal('bounties')}
-        onToggleMount={handleToggleMount}
-        onOpenHouseDecor={() => setActiveModal('houseDecor')}
-        onInviteFriendsHome={() => {
-          const hostName = playerRef.current.name;
-          roomClient.sendChat(`🏡 [HOME INVITE] Come visit ${hostName}'s decorated Khmer Stilt House!`);
-          EventBus.emit('ticker:push', {
-            text: `🏡 ${hostName} invited friends to hang out inside their decorated Khmer Stilt House!`,
-            category: 'club',
-          });
-          EventBus.emit('ui:toast', {
-            text: `👥 Sent live Home Invite to online friends in ${networkStatus.areaId}!`,
-          });
-        }}
-        onFastForwardFarm={() => runFarmAction((s) => fastForwardFarmTimers(s, 60))}
-      />
+      <PhotoModeOverlay active={photoMode} onExit={() => setPhotoMode(false)} />
 
-      <ServerTickerBanner />
+      {!photoMode && (
+        <>
+          <HUD
+            player={player}
+            zone={zone}
+            networkStatus={networkStatus}
+            authUsername={authSession?.username ?? null}
+            saveStatus={saveStatus}
+            inboxCount={inboxCount}
+            chatOpen={chatOpen}
+            onToggleChat={() => setChatOpen((o) => !o)}
+            touchUiEnabled={touchUiEnabled}
+            onToggleTouchUi={() => setTouchUiEnabled((v) => !v)}
+            lastHit={lastHit}
+            classMeter={classMeter}
+            bossHud={bossHud}
+            selectedCropId={selectedCropId}
+            farmToolMode={farmToolMode}
+            onSelectFarmSeed={handleSelectFarmSeed}
+            onEatQuickSlot={handleEatQuickSlot}
+            onOpenProfile={() => setActiveModal('profile')}
+            onOpenInventory={() => setActiveModal('inventory')}
+            onOpenWardrobe={() => {
+              setShopTab('secondary');
+              setActiveModal('fashionShop');
+            }}
+            onOpenFarmModal={() => {
+              setFarmModalTab('seeds');
+              setActiveModal('farm');
+            }}
+            onOpenSkills={() => setActiveModal('skills')}
+            onOpenAreaSwitcher={() => setActiveModal('areaSwitcher')}
+            onOpenFriends={() => {
+              setFriendsTab('friends');
+              setActiveModal('friends');
+            }}
+            onOpenInbox={() => {
+              setFriendsTab('inbox');
+              setActiveModal('friends');
+            }}
+            onOpenAuth={() => setActiveModal('auth')}
+            onOpenMarket={() => setActiveModal('market')}
+            onOpenBestiary={() => setActiveModal('bestiary')}
+            onOpenDiamondStore={() => setActiveModal('diamondStore')}
+            onOpenWorldMap={() => setActiveModal('worldMap')}
+            onOpenServerCity={() => setActiveModal('serverCity')}
+            onOpenReforge={() => {
+              setReforgeTab('reforge');
+              setActiveModal('reforge');
+            }}
+            onOpenClubGames={() => {
+              setClubGameTab('kla_klok');
+              setActiveModal('clubGames');
+            }}
+            onOpenLeaderboard={() => {
+              setLeaderboardCategory('farmer');
+              setActiveModal('leaderboard');
+            }}
+            onOpenPagodaTower={() => setActiveModal('pagodaTower')}
+            onOpenMuseum={() => setActiveModal('museum')}
+            onOpenNightMarket={() => setActiveModal('nightMarket')}
+            onOpenFestival={() => setActiveModal('festival')}
+            onOpenKrom={() => setActiveModal('krom')}
+            onOpenScryingMirror={() => setActiveModal('scryingMirror')}
+            onOpenTukTukCart={() => {
+              setFocusedCartId(null);
+              setActiveModal('tukTukCart');
+            }}
+            onOpenTreasureMap={() => setActiveModal('treasureMap')}
+            onOpenRunway={() => setActiveModal('runway')}
+            onOpenBond={() => {
+              setBondPrefillPartner(null);
+              setActiveModal('bond');
+            }}
+            onOpenBounties={() => setActiveModal('bounties')}
+            onOpenPromo={() => setActiveModal('promo')}
+            onOpenAdmin={() => setActiveModal('admin')}
+            onTogglePhotoMode={() => setPhotoMode(true)}
+            canInstallPwa={canInstallPwa}
+            onInstallPwa={() => void handleInstallPwa()}
+            onToggleMount={handleToggleMount}
+            onOpenHouseDecor={() => setActiveModal('houseDecor')}
+            onInviteFriendsHome={() => {
+              const hostName = playerRef.current.name;
+              roomClient.sendChat(`🏡 [HOME INVITE] Come visit ${hostName}'s decorated Khmer Stilt House!`);
+              EventBus.emit('ticker:push', {
+                text: `🏡 ${hostName} invited friends to hang out inside their decorated Khmer Stilt House!`,
+                category: 'club',
+              });
+              EventBus.emit('ui:toast', {
+                text: `👥 Sent live Home Invite to online friends in ${networkStatus.areaId}!`,
+              });
+            }}
+            onFastForwardFarm={() => runFarmAction((s) => fastForwardFarmTimers(s, 60))}
+          />
 
-      <WelcomeGuideWidget
-        player={player}
-        zone={zone}
-        hiddenByModal={activeModal !== null || Boolean(activeNpcId) || Boolean(dungeonOutcome)}
-        onDismiss={() =>
-          runStateAction((s) => ({
-            state: {
-              ...s,
-              starterGuide: {
-                completedSteps: s.starterGuide?.completedSteps ?? [],
-                finalRewardClaimed: Boolean(s.starterGuide?.finalRewardClaimed),
-                dismissed: true,
-              },
-            },
-            ok: true,
-            message: '🧭 Village Starter Guide dismissed. Have fun exploring ភូមិខ្ញុំ!',
-          }))
-        }
-        onQuickAction={(stepId) => {
-          if (stepId === 'plant_crop') {
-            handleTravel(
-              { method: 'mirror', targetZone: 'farm', destinationLabel: 'Personal Farm' },
-              0
-            );
-          } else if (stepId === 'greet_npc') {
-            handleTravel(
-              {
-                method: 'pylon',
-                targetZone: 'overworld',
-                mapId: 'market_street',
-                destinationLabel: 'Market Street (NPCs)',
-              },
-              0
-            );
-          } else if (stepId === 'explore_or_boss') {
-            setActiveModal('modeSelector');
-          } else if (stepId === 'claim_bounty') {
-            setActiveModal('bounties');
-          }
-        }}
-      />
+          <ServerTickerBanner />
 
-      {/* Floating +XP & LEVEL UP! Skill Notifications */}
-      {xpBanners.length > 0 && (
-        <div className="pointer-events-none fixed top-24 right-3 z-30 flex flex-col items-end gap-1.5">
-          {xpBanners.map((b) => (
-            <div
-              key={b.uid}
-              className={`px-3 py-1 rounded-full font-display font-bold text-xs shadow-lg border-2 ${
-                b.leveledUp
-                  ? 'bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 text-amber-950 border-amber-900 animate-bounce'
-                  : 'bg-slate-900/90 text-emerald-300 border-emerald-500/70'
-              }`}
-            >
-              {b.leveledUp ? (
-                <>
-                  🎉 {b.icon} {b.skillName} LEVEL UP! Lv.{b.level}
-                  {b.talentPointGained ? ' · +1 Talent Point!' : ''}
-                </>
-              ) : (
-                <>
-                  {b.icon} +{b.xp} {b.skillName} XP
-                </>
-              )}
+          <WelcomeGuideWidget
+            player={player}
+            zone={zone}
+            hiddenByModal={activeModal !== null || Boolean(activeNpcId) || Boolean(dungeonOutcome)}
+            onDismiss={() =>
+              runStateAction((s) => ({
+                state: {
+                  ...s,
+                  starterGuide: {
+                    completedSteps: s.starterGuide?.completedSteps ?? [],
+                    finalRewardClaimed: Boolean(s.starterGuide?.finalRewardClaimed),
+                    dismissed: true,
+                  },
+                },
+                ok: true,
+                message: '🧭 Village Starter Guide dismissed. Have fun exploring ភូមិខ្ញុំ!',
+              }))
+            }
+            onQuickAction={(stepId) => {
+              if (stepId === 'plant_crop') {
+                handleTravel(
+                  { method: 'mirror', targetZone: 'farm', destinationLabel: 'Personal Farm' },
+                  0
+                );
+              } else if (stepId === 'greet_npc') {
+                handleTravel(
+                  {
+                    method: 'pylon',
+                    targetZone: 'overworld',
+                    mapId: 'market_street',
+                    destinationLabel: 'Market Street (NPCs)',
+                  },
+                  0
+                );
+              } else if (stepId === 'explore_or_boss') {
+                setActiveModal('modeSelector');
+              } else if (stepId === 'claim_bounty') {
+                setActiveModal('bounties');
+              }
+            }}
+          />
+
+          {/* Floating +XP & LEVEL UP! Skill Notifications */}
+          {xpBanners.length > 0 && (
+            <div className="pointer-events-none fixed top-24 right-3 z-30 flex flex-col items-end gap-1.5">
+              {xpBanners.map((b) => (
+                <div
+                  key={b.uid}
+                  className={`px-3 py-1 rounded-full font-display font-bold text-xs shadow-lg border-2 ${
+                    b.leveledUp
+                      ? 'bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 text-amber-950 border-amber-900 animate-bounce'
+                      : 'bg-slate-900/90 text-emerald-300 border-emerald-500/70'
+                  }`}
+                >
+                  {b.leveledUp ? (
+                    <>
+                      🎉 {b.icon} {b.skillName} LEVEL UP! Lv.{b.level}
+                      {b.talentPointGained ? ' · +1 Talent Point!' : ''}
+                    </>
+                  ) : (
+                    <>
+                      {b.icon} +{b.xp} {b.skillName} XP
+                    </>
+                  )}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          )}
+
+          <ChatOverlay
+            open={chatOpen}
+            playerName={player.name}
+            kromTag={player.kromTag}
+            messages={messages}
+            draftPrefill={chatDraftPrefill}
+            onAddMessage={(msg) => setMessages((prev) => [...prev.slice(-39), msg])}
+          />
+
+          <MobileControls
+            visible={touchUiEnabled}
+            zone={zone}
+            nearPortal={nearPortal}
+            bossHud={bossHud}
+            equippedWeaponId={player.weapon.id}
+          />
+        </>
       )}
-
-      <ChatOverlay
-        open={chatOpen}
-        playerName={player.name}
-        kromTag={player.kromTag}
-        messages={messages}
-        draftPrefill={chatDraftPrefill}
-        onAddMessage={(msg) => setMessages((prev) => [...prev.slice(-39), msg])}
-      />
-
-      <MobileControls
-        visible={touchUiEnabled}
-        zone={zone}
-        nearPortal={nearPortal}
-        bossHud={bossHud}
-        equippedWeaponId={player.weapon.id}
-      />
 
       <ModeSelectorModal
         open={activeModal === 'modeSelector'}
@@ -3177,6 +3334,57 @@ export const App: React.FC = () => {
             };
           })
         }
+      />
+
+      <PromoCodeModal
+        open={activeModal === 'promo'}
+        player={player}
+        authSession={authSession}
+        onClose={() => setActiveModal(null)}
+        onRewardClaimed={(reward: PromoRedeemReward, redeemedCodes: string[]) => {
+          runStateAction((s) => {
+            const nextCoins = s.currencies.coins + reward.coins;
+            const nextGold = s.currencies.gold + reward.gold;
+            const nextDiamonds = s.currencies.diamonds + reward.diamonds;
+            const nextInv = s.inventory.map((i) => ({ ...i }));
+            for (const item of reward.items) {
+              const ex = nextInv.find(
+                (i) => i.itemId === item.itemId && (i.quality ?? 'normal') === 'normal'
+              );
+              if (ex) ex.quantity += item.quantity;
+              else {
+                nextInv.push({
+                  itemId: item.itemId,
+                  quantity: item.quantity,
+                  itemLevel: 1,
+                  quality: 'normal',
+                });
+              }
+            }
+            return {
+              state: {
+                ...s,
+                coins: nextCoins,
+                currencies: {
+                  coins: nextCoins,
+                  gold: nextGold,
+                  diamonds: nextDiamonds,
+                },
+                inventory: nextInv,
+                redeemedCodes,
+              },
+              ok: true,
+              message: `🎁 Gift Code ${reward.code} Redeemed! ${reward.summary}`,
+            };
+          });
+        }}
+      />
+
+      <AdminPanelModal
+        open={activeModal === 'admin'}
+        authSession={authSession}
+        localOnlineCount={networkStatus.playerCount}
+        onClose={() => setActiveModal(null)}
       />
 
       <ShopModal

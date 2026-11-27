@@ -21,13 +21,16 @@ import {
   Award,
   Backpack,
   BookOpen,
+  Camera,
   ClipboardList,
   Cloud,
   Coins,
   Crown,
+  Download,
   FastForward,
   Gamepad2,
   Gem,
+  Gift,
   Globe2,
   Hammer,
   Heart,
@@ -38,6 +41,7 @@ import {
   Menu,
   MessageCircle,
   Minimize2,
+  Shield,
   Smile,
   Sparkles,
   Sprout,
@@ -136,6 +140,11 @@ interface HUDProps {
   onOpenRunway?: () => void;
   onOpenBond?: () => void;
   onOpenBounties?: () => void;
+  onOpenPromo?: () => void;
+  onOpenAdmin?: () => void;
+  onTogglePhotoMode?: () => void;
+  canInstallPwa?: boolean;
+  onInstallPwa?: () => void;
   onToggleMount?: () => void;
   onFastForwardFarm: () => void;
 }
@@ -191,6 +200,11 @@ export const HUD: React.FC<HUDProps> = ({
   onOpenRunway,
   onOpenBond,
   onOpenBounties,
+  onOpenPromo,
+  onOpenAdmin,
+  onTogglePhotoMode,
+  canInstallPwa,
+  onInstallPwa,
   onToggleMount,
   onFastForwardFarm,
 }) => {
@@ -959,6 +973,22 @@ export const HUD: React.FC<HUDProps> = ({
                     )}
                   </button>
                 )}
+                {onOpenPromo && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundManager.playSfx('click');
+                      setMenuDropdownOpen(false);
+                      onOpenPromo();
+                    }}
+                    className="px-3 py-2 rounded-xl hover:bg-rose-100 text-left flex items-center justify-between gap-2 text-amber-950"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Gift className="w-4 h-4 text-rose-600" /> Gift Codes &amp; Invite
+                    </span>
+                    <span className="text-[9px] font-bold text-rose-700">FREE</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => {
@@ -1123,6 +1153,24 @@ export const HUD: React.FC<HUDProps> = ({
             >
               <Smile className="w-4 h-4" />
             </button>
+
+            {onTogglePhotoMode && (
+              <button
+                id="btn-photo-mode"
+                type="button"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  soundManager.playSfx('click');
+                  onTogglePhotoMode();
+                }}
+                aria-label="Toggle Photo & Trailer Mode (F9)"
+                title="Clean Photo & Trailer Recording Mode (F9)"
+                className="phum-btn p-2 rounded-xl shrink-0 cursor-pointer"
+              >
+                <Camera className="w-4 h-4 text-amber-900 shrink-0" />
+              </button>
+            )}
 
             <button
               id="btn-fullscreen"
@@ -1951,6 +1999,28 @@ export const HUD: React.FC<HUDProps> = ({
               {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
               <span>{isFullscreen ? 'Exit Fullscreen Mode' : '📱 Enter Mobile Fullscreen (Anti-Zoom Locked)'}</span>
             </button>
+
+            {onInstallPwa && (
+              <button
+                type="button"
+                onClick={() => {
+                  soundManager.playSfx('click');
+                  onInstallPwa();
+                }}
+                className={`w-full px-3 py-2 rounded-xl border font-display font-bold text-[11px] flex items-center justify-center gap-1.5 cursor-pointer ${
+                  canInstallPwa
+                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white border-emerald-950 shadow'
+                    : 'bg-amber-100 hover:bg-amber-200 text-amber-950 border-amber-900/35'
+                }`}
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>
+                  {canInstallPwa
+                    ? '📲 Install App — ភូមិខ្ញុំ (Home Screen)'
+                    : '📲 Install App (Add to Home Screen)'}
+                </span>
+              </button>
+            )}
           </div>
 
           {/* 4-Season Khmer Calendar & Weather Preview */}
@@ -2122,6 +2192,23 @@ export const HUD: React.FC<HUDProps> = ({
               })}
             </div>
           </div>
+
+          {onOpenAdmin && (
+            <div className="pt-1 flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  soundManager.playSfx('click');
+                  setSettingsModalOpen(false);
+                  onOpenAdmin();
+                }}
+                className="px-2.5 py-1 rounded-lg bg-slate-900/85 hover:bg-slate-800 text-amber-300/90 border border-amber-500/40 font-mono text-[10px] flex items-center gap-1 cursor-pointer"
+                title="Owner-Only GM Control Panel (Ctrl+Shift+G)"
+              >
+                <Shield className="w-3 h-3" /> Founder / GM Panel
+              </button>
+            </div>
+          )}
         </div>
       </NativeDialog>
     </>
