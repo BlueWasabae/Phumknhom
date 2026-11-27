@@ -52,6 +52,41 @@ export const PaperDollPreview: React.FC<PaperDollPreviewProps> = ({
           drawFullPaperDollToCanvas(ctx, loadout, pose, facing, t);
           ctx.restore();
 
+          // Render Pagoda Tower Milestone Weapon Aura glow + orbiting sparks on Runway & Character Previews
+          if (loadout.weaponAura) {
+            const auraPrimary =
+              loadout.weaponAura === 'celestial_angkor'
+                ? 'rgba(192, 132, 252, 0.55)'
+                : loadout.weaponAura === 'emerald_naga'
+                  ? 'rgba(16, 185, 129, 0.55)'
+                  : 'rgba(250, 204, 21, 0.58)';
+            const sparkHex =
+              loadout.weaponAura === 'celestial_angkor'
+                ? '#e9d5ff'
+                : loadout.weaponAura === 'emerald_naga'
+                  ? '#6ee7b7'
+                  : '#fef08a';
+            const wx = width * 0.68;
+            const wy = height * 0.56;
+            const pulse = 1 + Math.sin(t / 190) * 0.14;
+            const grad = ctx.createRadialGradient(wx, wy, 2, wx, wy, width * 0.17 * pulse);
+            grad.addColorStop(0, auraPrimary);
+            grad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(wx, wy, width * 0.17 * pulse, 0, Math.PI * 2);
+            ctx.fill();
+            for (let i = 0; i < 3; i++) {
+              const ang = t / 360 + (i * Math.PI * 2) / 3;
+              const sx = wx + Math.cos(ang) * width * 0.1;
+              const sy = wy + Math.sin(ang) * height * 0.08;
+              ctx.fillStyle = sparkHex;
+              ctx.beginPath();
+              ctx.arc(sx, sy, 2.2, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+
           if (includePet && loadout.pet) {
             drawPetToCanvas(ctx, loadout.pet, width * 0.22, height * 0.74, Math.max(1.2, width / 110), t);
           }

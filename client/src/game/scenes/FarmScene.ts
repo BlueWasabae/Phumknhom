@@ -31,6 +31,7 @@ import { EventBus, type FarmToolMode, type JoystickVector } from '../EventBus';
 import { Player } from '../entities/Player';
 import { PaperDoll } from '../entities/PaperDoll';
 import { DEFAULT_LOADOUT } from '@shared/types';
+import { fetchSharedBondFarmApi, syncSharedBondFarmApi } from '../network/ApiClient';
 
 const FARM_W = 860;
 const FARM_H = 600;
@@ -244,9 +245,24 @@ export class FarmScene extends Phaser.Scene {
     this.redrawAllPlots();
     this.redrawDynamicZones();
 
-    // Update 1.7 — Shared Co-op Farm Partner Helper & Pink Lotus Banner when bonded!
+    // Update 1.7 — Shared Co-op Farm Partner Helper, Shared Plot Sync & Pink Lotus Banner when bonded!
     if (this.player.state.bondPartner?.status === 'accepted') {
-      const pName = this.player.state.bondPartner.partnerName;
+      const activeBond = this.player.state.bondPartner;
+      const pName = activeBond.partnerName;
+      void fetchSharedBondFarmApi(activeBond.bondId).then(({ plots, updatedBy }) => {
+        if (!this.sys?.isActive() || !plots || plots.length !== this.player.state.farm.plots.length) return;
+        this.player.state = {
+          ...this.player.state,
+          farm: { ...this.player.state.farm, plots },
+        };
+        EventBus.emit('player:state', this.player.state);
+        this.redrawAllPlots();
+        if (updatedBy && updatedBy !== this.player.state.name) {
+          EventBus.emit('ui:toast', {
+            text: `💞 Synced Shared Co-op Farm updates from ${updatedBy}!`,
+          });
+        }
+      });
       this.add
         .text(270, 206, `💞 SHARED CO-OP FARM WITH ${pName.toUpperCase()}`, {
           fontFamily: 'Fredoka, sans-serif',
@@ -495,6 +511,10 @@ export class FarmScene extends Phaser.Scene {
       EventBus.emit('player:state', this.player.state);
       this.redrawAllPlots();
       this.redrawDynamicZones();
+      const activeBond = this.player.state.bondPartner;
+      if (activeBond?.status === 'accepted') {
+        void syncSharedBondFarmApi(activeBond.bondId, this.player.state.name, this.player.state.farm.plots);
+      }
     }
     EventBus.emit('ui:toast', { text: msg });
   }

@@ -751,6 +751,7 @@ export class DungeonBossScene extends Phaser.Scene {
       .setAlpha(0.55)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setDepth(19);
+    vfxManager.applyBloom(this, glow, { color: 0xa855f7, strength: 1.35 });
     this.tweens.add({
       targets: glow,
       alpha: 0.25,
@@ -917,6 +918,9 @@ export class DungeonBossScene extends Phaser.Scene {
         .setAlpha(activeInit ? 0.72 : 0.14)
         .setBlendMode(Phaser.BlendModes.ADD)
         .setDepth(17);
+      if (st.key === 'sacredCampfire') {
+        vfxManager.applyBloom(this, aura, { color: 0xf97316, strength: 1.3 });
+      }
 
       this.tweens.add({
         targets: aura,
@@ -1004,6 +1008,7 @@ export class DungeonBossScene extends Phaser.Scene {
       .setAlpha(0.65)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setDepth(16);
+    vfxManager.applyBloom(this, glow, { color: 0xc084fc, strength: 1.4 });
     this.tweens.add({ targets: glow, alpha: 0.38, scale: 1.25, duration: 950, yoyo: true, repeat: -1 });
 
     const rippleHit = this.add

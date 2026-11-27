@@ -1638,3 +1638,56 @@ export async function acceptBondRequestApi(
   }
   return { ok: false, error: res.error };
 }
+
+const LOCAL_SHARED_FARM_PREFIX = 'phum_shared_bond_farm_v1_';
+
+export async function fetchSharedBondFarmApi(
+  bondId: string
+): Promise<{ plots: PlayerState['farm']['plots'] | null; updatedBy: string | null }> {
+  try {
+    const res = await fetch(`${getApiBase()}/bond/farm/${encodeURIComponent(bondId)}`);
+    if (res.ok) {
+      const json = (await res.json()) as {
+        farm?: { plots?: PlayerState['farm']['plots']; updatedBy?: string | null };
+      };
+      if (Array.isArray(json.farm?.plots) && json.farm.plots.length > 0) {
+        return { plots: json.farm.plots, updatedBy: json.farm.updatedBy ?? null };
+      }
+    }
+  } catch {
+    // Offline fallback below
+  }
+  try {
+    const raw = window.localStorage.getItem(`${LOCAL_SHARED_FARM_PREFIX}${bondId}`);
+    if (raw) {
+      const parsed = JSON.parse(raw) as { plots?: PlayerState['farm']['plots']; updatedBy?: string };
+      if (Array.isArray(parsed.plots) && parsed.plots.length > 0) {
+        return { plots: parsed.plots, updatedBy: parsed.updatedBy ?? null };
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return { plots: null, updatedBy: null };
+}
+
+export async function syncSharedBondFarmApi(
+  bondId: string,
+  updatedBy: string,
+  plots: PlayerState['farm']['plots']
+): Promise<boolean> {
+  try {
+    window.localStorage.setItem(
+      `${LOCAL_SHARED_FARM_PREFIX}${bondId}`,
+      JSON.stringify({ plots, updatedBy, updatedAt: Date.now() })
+    );
+  } catch {
+    // ignore storage quota
+  }
+  const res = await postJson<{ ok: boolean }>('/bond/farm/sync', {
+    bondId,
+    updatedBy,
+    plots,
+  });
+  return res.ok;
+}

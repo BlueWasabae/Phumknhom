@@ -9,6 +9,7 @@ import {
 } from '@shared/characterStyles';
 import { ITEM_CATALOG } from '../../data/items';
 import { COMBAT_ARMOR_SETS } from '../../data/armorSets';
+import { vfxManager } from '../animations/VFXManager';
 
 export type PaperDollPose =
   | 'idle'
@@ -825,6 +826,8 @@ export class PaperDoll extends Phaser.GameObjects.Container {
             ? 0x6ee7b7
             : 0xf472b6;
       this.weaponAuraGlow.setTint(auraColor).setAlpha(0.62).setVisible(true);
+      this.weaponAuraGlow.postFX?.clear?.();
+      vfxManager.applyGlow(this.scene, this.weaponAuraGlow, auraColor, 3.0, 0.4);
       this.weaponAuraSparks.forEach((sp, idx) => {
         sp.setFillStyle(idx % 2 === 0 ? auraColor : sparkAlt, 0.95).setVisible(true);
       });

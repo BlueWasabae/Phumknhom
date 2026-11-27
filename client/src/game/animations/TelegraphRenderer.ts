@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { vfxManager } from './VFXManager';
 
 export type TelegraphColor = 'yellow' | 'red' | 'green' | 'purple';
 
@@ -181,6 +182,7 @@ export class TelegraphRenderer {
       .circle(x, y, heavy ? 22 : 14, pal.fill, 0.45)
       .setStrokeStyle(3, pal.stroke, 0.95)
       .setDepth(68);
+    vfxManager.applyGlow(this.scene, ring, pal.fill, heavy ? 3.2 : 2.2, 0.35);
     this.scene.tweens.add({
       targets: ring,
       scale: heavy ? 3.2 : 2.1,
@@ -210,12 +212,7 @@ export class TelegraphRenderer {
     this.scene.cameras.main.shake(heavy ? 180 : 95, heavy ? 0.0085 : 0.004);
 
     if (heavy) {
-      this.scene.physics.world.pause();
-      window.setTimeout(() => {
-        if (this.scene.scene.isActive()) {
-          this.scene.physics.world.resume();
-        }
-      }, 40);
+      vfxManager.hitStop(this.scene, 45);
     }
   }
 
@@ -239,6 +236,7 @@ export class TelegraphRenderer {
       .setStrokeStyle(3, pal.stroke, 1);
     const crest = this.scene.add.triangle(0, -24, -14, 14, 0, -10, 14, 14, pal.stroke, 0.95);
     container.add([waveCore, crest]);
+    vfxManager.applyGlow(this.scene, container, pal.fill, 2.8, 0.35);
 
     return {
       kind: 'shockwave',
