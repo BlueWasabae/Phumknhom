@@ -606,6 +606,7 @@ export class FarmScene extends Phaser.Scene {
       const res = harvestPlot(this.player.state, index, now);
       if (res.ok) {
         soundManager.playSfx('harvest');
+        EventBus.emit('bounty:progress', { category: 'harvest_crops', amount: 1 });
         this.spawnPopSparkle(
           visual.cx,
           visual.cy,

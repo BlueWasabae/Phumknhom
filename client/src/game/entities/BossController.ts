@@ -11,6 +11,7 @@ import {
   type BossHazard,
   type TelegraphColor,
 } from '../animations/TelegraphRenderer';
+import { vfxManager } from '../animations/VFXManager';
 import { WormBossEntity } from './WormBossEntity';
 
 export type BossStage = 'idle' | 'windup' | 'active' | 'recovery' | 'phase_roar' | 'defeated';
@@ -18,7 +19,7 @@ export type BossStage = 'idle' | 'windup' | 'active' | 'recovery' | 'phase_roar'
 export interface BossControllerCallbacks {
   onHitPlayer: (rawAttack: number, label: string, pullDir?: number, isPoison?: boolean) => void;
   onFloatingText: (x: number, y: number, text: string, color: string, fontSize?: string) => void;
-  onPhaseChange: (phase: 2) => void;
+  onPhaseChange: (phase: 2 | 3) => void;
   onDefeated: () => void;
 }
 
@@ -38,7 +39,7 @@ export class BossController {
   public readonly difficulty: DifficultyMode;
   public maxHp: number;
   public hp: number;
-  public phase: 1 | 2 = 1;
+  public phase: 1 | 2 | 3 = 1;
   public stage: BossStage = 'idle';
   public alive = true;
   public x: number;
@@ -79,6 +80,25 @@ export class BossController {
   private wormTargetX = 900;
   private wormTargetY = 380;
   private wormLunging = false;
+
+  // Update 1.8 — DuoStormCrystalRig (Ream Eyso & Moni Mekhala — Two Simultaneous Bosses!)
+  private eysoHp = 0;
+  private eysoMaxHp = 0;
+  private mekhalaHp = 0;
+  private mekhalaMaxHp = 0;
+  private duoOverdriveName: string | null = null;
+  private eysoAura?: Phaser.GameObjects.Arc;
+  private mekhalaContainer?: Phaser.GameObjects.Container;
+  private mekhalaX = 1120;
+  private mekhalaY = 300;
+  private mekhalaNextCastAt = 0;
+
+  // Update 1.8 — SovereignYakshaRig (Krong Reap — 3-Phase Ten-Headed Yaksha Sovereign!)
+  private sovereignAura?: Phaser.GameObjects.Arc;
+  private sovereignCrownRing?: Phaser.GameObjects.Arc;
+  private sovereignVignette?: Phaser.GameObjects.Rectangle;
+  private yakshaMasks: Phaser.GameObjects.Container[] = [];
+  private maskFireCooldownAt = 0;
 
   private nextStateAt = 0;
   private attackCounter = 0;
@@ -147,6 +167,12 @@ export class BossController {
     } else if (bossId === 'neak_reach') {
       resolvedTexKey = hasCustomNeak ? 'boss_neak_reach_head' : 'boss_dragon_head';
       this.baseScale = hasCustomNeak ? 1.35 : 2.15;
+    } else if (bossId === 'ream_eyso_moni_mekhala') {
+      resolvedTexKey = 'boss_yeak_thmor';
+      this.baseScale = 1.42;
+    } else if (bossId === 'krong_reap') {
+      resolvedTexKey = 'boss_yeak_thmor';
+      this.baseScale = 1.92;
     } else {
       // Boss #5: Yeak Thmor -> REAL cleaned transparent Khmer sprite (/assets/khmer/bosses/boss_yeak_thmor.png)
       this.baseScale = 1.45;
@@ -206,6 +232,73 @@ export class BossController {
         .setDepth(33);
     }
 
+    // Update 1.8 — DuoStormCrystalRig: Ream Eyso (ground storm warrior) + Moni Mekhala (overhead crystal goddess)
+    if (this.def.rig === 'DuoStormCrystalRig') {
+      this.eysoMaxHp = Math.round(this.maxHp * 0.55);
+      this.mekhalaMaxHp = Math.max(1, this.maxHp - this.eysoMaxHp);
+      this.eysoHp = this.eysoMaxHp;
+      this.mekhalaHp = this.mekhalaMaxHp;
+      this.sprite.setTint(0xfde047);
+
+      this.eysoAura = scene.add
+        .circle(spawnX, floorY - 70, 74, 0xfacc15, 0.24)
+        .setStrokeStyle(3, 0xa855f7, 0.78)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(41);
+      vfxManager.applyGlow(scene, this.eysoAura, 0xfacc15, 3.0, 0.4);
+
+      this.mekhalaX = Phaser.Math.Clamp(spawnX - 240, arenaMinX + 180, arenaMaxX - 180);
+      this.mekhalaY = floorY - 265;
+      this.mekhalaContainer = scene.add.container(this.mekhalaX, this.mekhalaY).setDepth(44);
+      const crystalHalo = scene.add
+        .circle(0, 0, 56, 0x38bdf8, 0.28)
+        .setStrokeStyle(3, 0xe0f2fe, 0.92)
+        .setBlendMode(Phaser.BlendModes.ADD);
+      const mekhalaSprite = scene.add
+        .sprite(0, 2, 'boss_giant_spirit_idle', 0)
+        .setScale(2.1)
+        .setTint(0x67e8f9);
+      if (scene.anims.exists('boss_spirit_idle')) mekhalaSprite.play('boss_spirit_idle');
+      const crystalOrb = scene.add
+        .circle(26, -18, 12, 0xe0f2fe, 0.95)
+        .setStrokeStyle(3, 0x38bdf8, 1)
+        .setBlendMode(Phaser.BlendModes.ADD);
+      const mekLabel = scene.add
+        .text(0, -68, '✨ មណីមេខលា · MONI MEKHALA', {
+          fontFamily: 'Fredoka, sans-serif',
+          fontSize: '11px',
+          fontStyle: 'bold',
+          color: '#bae6fd',
+          backgroundColor: 'rgba(12, 74, 110, 0.88)',
+          padding: { x: 6, y: 2 },
+        })
+        .setOrigin(0.5, 1);
+      this.mekhalaContainer.add([crystalHalo, mekhalaSprite, crystalOrb, mekLabel]);
+      vfxManager.applyBloom(scene, crystalHalo, { color: 0x38bdf8, strength: 1.5 });
+      this.mekhalaNextCastAt = scene.time.now + 2200;
+    }
+
+    // Update 1.8 — SovereignYakshaRig: Krong Reap (Ten-Headed Yaksha Sovereign, 3-Phase Crimson-Gold Aura)
+    if (this.def.rig === 'SovereignYakshaRig') {
+      this.sprite.setTint(0xfca5a5);
+      this.sovereignAura = scene.add
+        .circle(spawnX, floorY - 96, 118, 0xe11d48, 0.26)
+        .setStrokeStyle(4, 0xfacc15, 0.88)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(41);
+      vfxManager.applyBloom(scene, this.sovereignAura, { color: 0xe11d48, strength: 1.5 });
+
+      this.sovereignCrownRing = scene.add
+        .circle(spawnX, floorY - 196, 46, 0xfacc15, 0.16)
+        .setStrokeStyle(3, 0xfef08a, 0.95)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(43);
+
+      this.sovereignVignette = scene.add
+        .rectangle(900, 360, 2200, 960, 0x450a0a, 0)
+        .setDepth(32);
+    }
+
     this.stageBadge = scene.add
       .text(spawnX, this.y - 110, '', {
         fontFamily: 'Fredoka, sans-serif',
@@ -232,6 +325,18 @@ export class BossController {
    */
   public intersectsHitbox(rect: Phaser.Geom.Rectangle): boolean {
     if (!this.alive) return false;
+    if (this.def.rig === 'DuoStormCrystalRig') {
+      if (this.eysoHp > 0 && Phaser.Geom.Intersects.RectangleToRectangle(rect, this.sprite.getBounds())) {
+        return true;
+      }
+      if (this.mekhalaHp > 0 && this.mekhalaContainer) {
+        const mekRect = new Phaser.Geom.Rectangle(this.mekhalaX - 54, this.mekhalaY - 54, 108, 108);
+        if (Phaser.Geom.Intersects.RectangleToRectangle(rect, mekRect)) {
+          return true;
+        }
+      }
+      return false;
+    }
     if (Phaser.Geom.Intersects.RectangleToRectangle(rect, this.sprite.getBounds())) {
       return true;
     }
@@ -241,9 +346,29 @@ export class BossController {
     return false;
   }
 
+  public getDuoStatus():
+    | {
+        eysoHp: number;
+        eysoMaxHp: number;
+        mekhalaHp: number;
+        mekhalaMaxHp: number;
+        overdriveName: string | null;
+      }
+    | undefined {
+    if (this.def.rig !== 'DuoStormCrystalRig') return undefined;
+    return {
+      eysoHp: this.eysoHp,
+      eysoMaxHp: this.eysoMaxHp,
+      mekhalaHp: this.mekhalaHp,
+      mekhalaMaxHp: this.mekhalaMaxHp,
+      overdriveName: this.duoOverdriveName,
+    };
+  }
+
   public getStageLabel(): string {
     if (!this.alive) return 'DEFEATED';
-    if (this.stage === 'phase_roar') return 'PHASE 2 ROAR!';
+    if (this.stage === 'phase_roar') return this.phase === 3 ? 'PHASE 3 · SOVEREIGN WRATH!' : 'PHASE 2 ROAR!';
+    if (this.duoOverdriveName) return `⚡ ${this.duoOverdriveName.toUpperCase()} OVERDRIVE`;
     if (this.stage === 'windup') return 'TELEGRAPH!';
     if (this.stage === 'active') return 'STRIKING';
     if (this.stage === 'recovery') return 'PUNISH WINDOW';
@@ -253,11 +378,20 @@ export class BossController {
   /**
    * Synchronizes shared Co-op DungeonRoom boss HP, party-scaled Max HP, and Phase.
    */
-  public applyCoopBossSync(hp: number, maxHp: number, phase: 1 | 2): void {
+  public applyCoopBossSync(hp: number, maxHp: number, phase: 1 | 2 | 3): void {
     this.maxHp = Math.max(1, maxHp);
     this.hp = Math.max(0, Math.min(this.maxHp, hp));
+    if (this.def.rig === 'DuoStormCrystalRig') {
+      const ratio = this.hp / Math.max(1, this.maxHp);
+      this.eysoMaxHp = Math.round(this.maxHp * 0.55);
+      this.mekhalaMaxHp = Math.max(1, this.maxHp - this.eysoMaxHp);
+      this.eysoHp = Math.round(this.eysoMaxHp * ratio);
+      this.mekhalaHp = Math.round(this.mekhalaMaxHp * ratio);
+    }
     if (phase === 2 && this.phase === 1 && this.alive && this.hp > 0) {
       this.triggerPhase2Roar();
+    } else if (phase === 3 && this.phase < 3 && this.alive && this.hp > 0) {
+      this.triggerPhase3SovereignWrath();
     }
     if (this.hp <= 0 && this.alive) {
       this.die();
@@ -266,10 +400,31 @@ export class BossController {
 
   public takeDamage(amount: number, knockDir: number, heavy = false): boolean {
     if (!this.alive) return false;
-    this.hp = Math.max(0, this.hp - amount);
+
+    if (this.def.rig === 'DuoStormCrystalRig') {
+      // Distribute damage across the two simultaneous bosses (focusing Ream Eyso first, splash to Moni Mekhala!)
+      if (this.eysoHp > 0 && this.mekhalaHp > 0) {
+        const eysoShare = Math.round(amount * 0.65);
+        const mekShare = Math.max(1, amount - eysoShare);
+        this.eysoHp = Math.max(0, this.eysoHp - eysoShare);
+        this.mekhalaHp = Math.max(0, this.mekhalaHp - mekShare);
+      } else if (this.eysoHp > 0) {
+        this.eysoHp = Math.max(0, this.eysoHp - amount);
+      } else {
+        this.mekhalaHp = Math.max(0, this.mekhalaHp - amount);
+      }
+      this.hp = this.eysoHp + this.mekhalaHp;
+
+      // Enrage Mechanic: When one drops to 0 HP, survivor enters Storm Overdrive!
+      if (!this.duoOverdriveName && this.hp > 0 && (this.eysoHp <= 0 || this.mekhalaHp <= 0)) {
+        this.triggerDuoStormOverdrive(this.eysoHp <= 0 ? 'Moni Mekhala' : 'Ream Eyso');
+      }
+    } else {
+      this.hp = Math.max(0, this.hp - amount);
+    }
 
     // Stage 3: White flash + knock shudder
-    this.sprite.setTintFill(0xffffff);
+    if (this.sprite.visible) this.sprite.setTintFill(0xffffff);
     this.wormEntity?.setTintFill(0xffffff);
 
     const baseX = this.x;
@@ -282,14 +437,24 @@ export class BossController {
     });
     this.scene.time.delayedCall(85, () => {
       if (this.alive) {
-        this.sprite.clearTint();
+        if (this.def.rig === 'DuoStormCrystalRig') this.sprite.setTint(this.duoOverdriveName ? 0xfacc15 : 0xfde047);
+        else if (this.def.rig === 'SovereignYakshaRig') this.sprite.setTint(this.phase === 3 ? 0xf43f5e : 0xfca5a5);
+        else this.sprite.clearTint();
         this.wormEntity?.clearTint();
       }
     });
 
-    // Check Phase 2 transition (<50% HP)
-    if (this.hp > 0 && this.phase === 1 && this.hp <= this.maxHp * 0.5) {
-      this.triggerPhase2Roar();
+    // Check Phase Transitions
+    if (this.def.rig === 'SovereignYakshaRig') {
+      if (this.hp > 0 && this.phase === 1 && this.hp <= this.maxHp * 0.65) {
+        this.triggerPhase2Roar();
+      } else if (this.hp > 0 && this.phase < 3 && this.hp <= this.maxHp * 0.3) {
+        this.triggerPhase3SovereignWrath();
+      }
+    } else if (this.def.rig !== 'DuoStormCrystalRig') {
+      if (this.hp > 0 && this.phase === 1 && this.hp <= this.maxHp * 0.5) {
+        this.triggerPhase2Roar();
+      }
     }
 
     if (this.hp <= 0) {
@@ -297,6 +462,81 @@ export class BossController {
       return true;
     }
     return false;
+  }
+
+  private triggerDuoStormOverdrive(survivorName: 'Ream Eyso' | 'Moni Mekhala'): void {
+    this.duoOverdriveName = survivorName;
+    this.phase = 2;
+    this.speedMult *= 1.38;
+    if (this.eysoHp <= 0) {
+      this.sprite.setVisible(false);
+      this.eysoAura?.setVisible(false);
+      this.shadow.setVisible(false);
+    }
+    if (this.mekhalaHp <= 0 && this.mekhalaContainer) {
+      this.mekhalaContainer.setVisible(false);
+    }
+    const burstX = survivorName === 'Moni Mekhala' ? this.mekhalaX : this.x;
+    const burstY = survivorName === 'Moni Mekhala' ? this.mekhalaY : this.y - 60;
+    vfxManager.radialShockwave(this.scene, burstX, burstY, 0x38bdf8, 175, 420, 74);
+    vfxManager.additiveSparkBurst(this.scene, burstX, burstY, 0xfacc15, 22, 110, 75);
+    this.telegraphs.playImpactJuice(burstX, burstY, 'purple', true);
+    this.callbacks.onFloatingText(
+      burstX,
+      burstY - 70,
+      `⚡ STORM OVERDRIVE! ${survivorName.toUpperCase()} ENRAGES!`,
+      '#38bdf8',
+      '20px'
+    );
+    this.callbacks.onPhaseChange(2);
+  }
+
+  private triggerPhase3SovereignWrath(): void {
+    this.phase = 3;
+    this.stage = 'phase_roar';
+    this.pendingAction = undefined;
+    this.dashVelX = 0;
+    this.dashVelY = 0;
+    this.dashHitboxActive = false;
+    this.speedMult *= 1.24;
+    this.telegraphs.clearAll();
+
+    if (this.sovereignVignette) {
+      this.scene.tweens.add({ targets: this.sovereignVignette, alpha: 0.42, duration: 520 });
+    }
+    this.sprite.setTint(0xf43f5e);
+    vfxManager.radialShockwave(this.scene, this.x, this.y - 90, 0xe11d48, 220, 480, 75);
+    vfxManager.radialShockwave(this.scene, this.x, this.y - 90, 0xfacc15, 165, 380, 76);
+    this.telegraphs.playImpactJuice(this.x, this.y - 60, 'red', true);
+    this.callbacks.onFloatingText(
+      this.x,
+      this.y - 165,
+      '👑 PHASE 3 · KRONG REAP SOVEREIGN WRATH!',
+      '#fda4af',
+      '22px'
+    );
+    this.callbacks.onPhaseChange(3);
+
+    this.scene.time.delayedCall(900, () => {
+      if (!this.alive) return;
+      this.stage = 'idle';
+      this.nextStateAt = this.scene.time.now + 320;
+    });
+  }
+
+  private spawnYakshaOrbitMasks(): void {
+    if (this.yakshaMasks.length > 0) return;
+    for (let i = 0; i < 3; i++) {
+      const m = this.scene.add.container(this.x, this.y - 110).setDepth(46);
+      const glow = this.scene.add.circle(0, 0, 22, 0xe11d48, 0.35).setBlendMode(Phaser.BlendModes.ADD);
+      const face = this.scene.add.rectangle(0, 0, 22, 24, 0x991b1b, 0.96).setStrokeStyle(2.5, 0xfacc15);
+      const eyes = this.scene.add.rectangle(0, -2, 14, 4, 0xfef08a, 1);
+      const crown = this.scene.add.triangle(0, -16, -9, 4, 0, -8, 9, 4, 0xfacc15, 1);
+      m.add([glow, face, eyes, crown]);
+      vfxManager.applyGlow(this.scene, m, 0xe11d48, 2.8, 0.4);
+      this.yakshaMasks.push(m);
+    }
+    this.maskFireCooldownAt = this.scene.time.now + 1800;
   }
 
   private triggerPhase2Roar(): void {
@@ -334,7 +574,13 @@ export class BossController {
         ? 'PHASE 2 · ARP CRIMSON HAUNT!'
         : this.def.id === 'neak_reach'
         ? 'PHASE 2 · SHADOW NAGA COILS!'
+        : this.def.id === 'krong_reap'
+        ? 'PHASE 2 · 3 SPECTRAL YAKSHA MASKS & MAGMA VENTS!'
         : 'PHASE 2 · STONE YAKSHA ROARS!';
+
+    if (this.def.rig === 'SovereignYakshaRig') {
+      this.spawnYakshaOrbitMasks();
+    }
 
     this.telegraphs.playImpactJuice(this.x, this.y - 40, 'red', true);
     this.callbacks.onFloatingText(this.x, this.y - 120, p2Banner, '#f87171', '20px');
@@ -364,10 +610,18 @@ export class BossController {
     this.stageBadge.setVisible(false);
     if (this.throatGlow) this.throatGlow.setAlpha(0);
 
-    // Lift Arp's cavern darkness cleanly on victory!
+    // Lift Arp's / Krong Reap's cavern darkness cleanly on victory!
     if (this.darkVeil) {
       this.scene.tweens.add({ targets: this.darkVeil, alpha: 0, duration: 500 });
     }
+    if (this.sovereignVignette) {
+      this.scene.tweens.add({ targets: this.sovereignVignette, alpha: 0, duration: 500 });
+    }
+    this.eysoAura?.setVisible(false);
+    this.mekhalaContainer?.setVisible(false);
+    this.sovereignAura?.setVisible(false);
+    this.sovereignCrownRing?.setVisible(false);
+    this.yakshaMasks.forEach((m) => m.setVisible(false));
     if (this.arpSpotlight) this.arpSpotlight.setVisible(false);
     if (this.arpOuterGlow) this.arpOuterGlow.setVisible(false);
     if (this.playerLanternGlow) this.playerLanternGlow.setVisible(false);
@@ -463,8 +717,279 @@ export class BossController {
       this.runArpFloaterAttack(playerX, playerY, dir, now);
     } else if (this.def.rig === 'MultiSegmentWormRig') {
       this.runNeakReachWormAttack(playerX, playerY, dir, now);
+    } else if (this.def.rig === 'DuoStormCrystalRig') {
+      this.runDuoStormCrystalAttack(playerX, playerY, dir, now);
+    } else if (this.def.rig === 'SovereignYakshaRig') {
+      this.runKrongReapSovereignAttack(playerX, playerY, dir, now);
     } else {
       this.runStoneYakshaAttack(playerX, dir, now);
+    }
+  }
+
+  // ==================== BOSS #7: REAM EYSO & MONI MEKHALA (DuoStormCrystalRig) ====================
+  private runDuoStormCrystalAttack(playerX: number, playerY: number, dir: number, _now: number): void {
+    const overdrive = Boolean(this.duoOverdriveName);
+
+    // If Ream Eyso has fallen, Moni Mekhala solo-leads Storm Overdrive crystal barrages!
+    if (this.eysoHp <= 0) {
+      const windup = 540;
+      this.telegraphs.showLineTelegraph(this.mekhalaX, this.mekhalaY, playerX, 26, 'purple', windup);
+      this.startWindup('purple', windup, '⚡ CRYSTAL OVERDRIVE!', () => {
+        this.stage = 'active';
+        this.fireMekhalaCrystalBeam(playerX, true);
+        this.scene.time.delayedCall(280, () => {
+          if (this.alive) this.fireMekhalaCrystalBeam(Phaser.Math.Clamp(playerX + 140, this.arenaMinX + 80, this.arenaMaxX - 80), true);
+        });
+        this.nextStateAt = this.scene.time.now + 520;
+        this.pendingAction = () => this.enterRecovery(650);
+      });
+      return;
+    }
+
+    if (this.attackCounter % 2 === 1) {
+      // Ream Eyso throws his blooming golden lightning axe (Phkak) that boomerangs back + thunder pillars!
+      const windup = overdrive ? 520 : 660;
+      const tipX = Phaser.Math.Clamp(this.x + dir * 560, this.arenaMinX + 60, this.arenaMaxX - 60);
+      this.telegraphs.showLineTelegraph(this.x, this.floorY - 62, tipX, 28, 'yellow', windup);
+      this.startWindup('yellow', windup, overdrive ? '⚡ STORM OVERDRIVE PHKAK!' : '⚡ LIGHTNING AXE THROW!', () => {
+        this.stage = 'active';
+        const axe = this.scene.add.container(this.x + dir * 24, this.floorY - 62).setDepth(64);
+        const glow = this.scene.add.circle(0, 0, 26, 0xfacc15, 0.36).setBlendMode(Phaser.BlendModes.ADD);
+        const blade = this.scene.add.rectangle(0, 0, 38, 12, 0xfef08a, 0.98).setStrokeStyle(2, 0xd97706);
+        const edge = this.scene.add.triangle(16, 0, 0, -14, 14, 0, 0, 14, 0xfacc15, 1);
+        axe.add([glow, blade, edge]);
+        vfxManager.applyGlow(this.scene, axe, 0xfacc15, 3.2, 0.45);
+
+        const nowMs = this.scene.time.now;
+        this.hazards.push({
+          kind: 'boomerang_axe',
+          sprite: axe,
+          x: this.x + dir * 24,
+          y: this.floorY - 62,
+          vx: dir * (510 * this.speedMult),
+          vy: 0,
+          width: 44,
+          height: 36,
+          damage: Math.round(this.def.baseAttack * (overdrive ? 1.25 : 1.05)),
+          expiresAt: nowMs + 2200,
+          boomerangReturnAt: nowMs + 720,
+          boomerangOriginX: this.x,
+          alive: true,
+          label: 'Lightning Axe Phkak',
+        });
+
+        // Trigger vertical blooming thunder-pillar strikes!
+        const strikeCount = overdrive ? 3 : 2;
+        for (let i = 0; i < strikeCount; i++) {
+          const sx = Phaser.Math.Clamp(playerX + (i - (strikeCount - 1) / 2) * 150, this.arenaMinX + 90, this.arenaMaxX - 90);
+          this.telegraphs.showGroundZone(sx, this.floorY, 72, 24, 'yellow', 520 + i * 160);
+          this.scene.time.delayedCall(520 + i * 160, () => {
+            if (!this.alive) return;
+            const pillar = this.scene.add
+              .rectangle(sx, this.floorY - 220, 44, 440, 0xfef08a, 0.85)
+              .setBlendMode(Phaser.BlendModes.ADD)
+              .setDepth(66);
+            vfxManager.applyBloom(this.scene, pillar, { color: 0xfacc15, strength: 1.6 });
+            vfxManager.radialShockwave(this.scene, sx, this.floorY - 12, 0xfacc15, 86, 260, 68);
+            this.telegraphs.playImpactJuice(sx, this.floorY - 10, 'yellow', false);
+            this.checkAreaHit(sx, 54, this.def.baseAttack * 0.95, 'Thunder Pillar', playerX);
+            this.scene.tweens.add({ targets: pillar, scaleX: 0.08, alpha: 0, duration: 300, onComplete: () => pillar.destroy() });
+          });
+        }
+
+        this.nextStateAt = this.scene.time.now + 780;
+        this.pendingAction = () => this.enterRecovery(overdrive ? 660 : 880);
+      });
+    } else {
+      // Ream Eyso storm dash charge across arena!
+      const windup = overdrive ? 480 : 620;
+      const targetX = Phaser.Math.Clamp(this.x + dir * 480, this.arenaMinX + 90, this.arenaMaxX - 90);
+      this.telegraphs.showLineTelegraph(this.x, this.floorY - 64, targetX, 34, 'red', windup);
+      this.startWindup('red', windup, '⚡ STORM CHARGE!', () => {
+        this.stage = 'active';
+        this.dashVelX = dir * (610 * this.speedMult);
+        this.dashVelY = 0;
+        this.dashHitboxActive = true;
+        this.dashLabel = 'Ream Eyso Storm Charge';
+        vfxManager.additiveSparkBurst(this.scene, this.x, this.floorY - 56, 0xfacc15, 14, 72, 68);
+        this.nextStateAt = this.scene.time.now + Math.round(620 / this.speedMult);
+        this.pendingAction = () => {
+          this.dashVelX = 0;
+          this.dashHitboxActive = false;
+          this.telegraphs.playImpactJuice(this.x, this.floorY - 12, 'yellow', true);
+          this.enterRecovery(overdrive ? 650 : 860);
+        };
+      });
+    }
+    void playerY;
+  }
+
+  private fireMekhalaCrystalBeam(targetX: number, overdrive: boolean): void {
+    if (!this.alive || this.mekhalaHp <= 0) return;
+    const beamX = Phaser.Math.Clamp(targetX, this.arenaMinX + 80, this.arenaMaxX - 80);
+    this.telegraphs.showGroundZone(beamX, this.floorY, 76, 22, 'purple', 480);
+    this.scene.time.delayedCall(480, () => {
+      if (!this.alive || this.mekhalaHp <= 0) return;
+      const beam = this.scene.add
+        .rectangle(beamX, (this.mekhalaY + this.floorY) / 2, overdrive ? 42 : 30, Math.abs(this.floorY - this.mekhalaY) + 40, 0x38bdf8, 0.86)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(65);
+      vfxManager.applyBloom(this.scene, beam, { color: 0x38bdf8, strength: 1.6 });
+      this.hazards.push({
+        kind: 'crystal_beam',
+        sprite: beam,
+        x: beamX,
+        y: this.floorY - 40,
+        vx: 0,
+        vy: 0,
+        width: overdrive ? 44 : 34,
+        height: 110,
+        damage: Math.round(this.def.baseAttack * (overdrive ? 1.15 : 0.88)),
+        expiresAt: this.scene.time.now + 260,
+        alive: true,
+        label: 'Mekhala Crystal Beam',
+      });
+      vfxManager.radialShockwave(this.scene, beamX, this.floorY - 10, 0x38bdf8, 80, 260, 67);
+    });
+  }
+
+  // ==================== BOSS #8: KRONG REAP (SovereignYakshaRig — 3-Phase Final Sovereign) ====================
+  private runKrongReapSovereignAttack(playerX: number, playerY: number, dir: number, _now: number): void {
+    // PHASE 3 (<30%): Sovereign Wrath — Rhythmic Bullet-Hell Lotus Rings + Sword Slams!
+    if (this.phase === 3 && this.attackCounter % 2 === 1) {
+      const windup = 600;
+      this.startWindup('red', windup, '🪷 SOVEREIGN LOTUS WRATH!', () => {
+        this.stage = 'active';
+        const fireRing = (ringIdx: number) => {
+          if (!this.alive) return;
+          const petals = 10;
+          const baseOffset = ringIdx * 0.28;
+          const cx = this.x;
+          const cy = this.floorY - 115;
+          vfxManager.radialShockwave(this.scene, cx, cy, 0xe11d48, 120, 260, 66);
+          for (let i = 0; i < petals; i++) {
+            const ang = baseOffset + (i / petals) * Math.PI * 2;
+            const spd = (240 + ringIdx * 35) * this.speedMult;
+            const orb = this.scene.add
+              .circle(cx, cy, 10, i % 2 === 0 ? 0xf43f5e : 0xfacc15, 0.96)
+              .setStrokeStyle(2, 0xfef08a)
+              .setBlendMode(Phaser.BlendModes.ADD)
+              .setDepth(65);
+            this.hazards.push({
+              kind: 'chakram',
+              sprite: orb,
+              x: cx,
+              y: cy,
+              vx: Math.cos(ang) * spd,
+              vy: Math.sin(ang) * spd,
+              width: 18,
+              height: 18,
+              damage: Math.round(this.def.baseAttack * 0.85),
+              expiresAt: this.scene.time.now + 3200,
+              alive: true,
+              label: 'Sovereign Lotus Ring',
+            });
+          }
+        };
+        fireRing(0);
+        this.scene.time.delayedCall(460, () => fireRing(1));
+        this.nextStateAt = this.scene.time.now + 900;
+        this.pendingAction = () => this.enterRecovery(740);
+      });
+      return;
+    }
+
+    // PHASE 2 (65%–30%): Arena Floor Magma Vents + Synchronized Yaksha Mask Cross-Beams!
+    if (this.phase >= 2 && this.attackCounter % 3 === 0) {
+      const windup = 660;
+      const ventXs = [
+        Phaser.Math.Clamp(playerX - 180, this.arenaMinX + 90, this.arenaMaxX - 90),
+        Phaser.Math.Clamp(playerX, this.arenaMinX + 90, this.arenaMaxX - 90),
+        Phaser.Math.Clamp(playerX + 180, this.arenaMinX + 90, this.arenaMaxX - 90),
+      ];
+      ventXs.forEach((vx) => this.telegraphs.showGroundZone(vx, this.floorY, 82, 24, 'red', windup));
+      this.startWindup('red', windup, '🌋 MAGMA VENTS & MASK BEAMS!', () => {
+        this.stage = 'active';
+        ventXs.forEach((vx) => {
+          const vent = this.scene.add
+            .rectangle(vx, this.floorY - 90, 48, 180, 0xf97316, 0.88)
+            .setStrokeStyle(3, 0xfef08a)
+            .setBlendMode(Phaser.BlendModes.ADD)
+            .setDepth(64);
+          vfxManager.applyBloom(this.scene, vent, { color: 0xe11d48, strength: 1.5 });
+          this.telegraphs.playImpactJuice(vx, this.floorY - 12, 'red', false);
+          this.hazards.push({
+            kind: 'magma_vent',
+            sprite: vent,
+            x: vx,
+            y: this.floorY - 80,
+            vx: 0,
+            vy: 0,
+            width: 48,
+            height: 170,
+            damage: Math.round(this.def.baseAttack * 1.05),
+            expiresAt: this.scene.time.now + 440,
+            alive: true,
+            label: 'Sovereign Magma Vent',
+          });
+        });
+        this.nextStateAt = this.scene.time.now + 560;
+        this.pendingAction = () => this.enterRecovery(780);
+      });
+      return;
+    }
+
+    // PHASE 1 & ALL PHASES: Multi-Directional Golden Chakram Volley OR Giant Sovereign Sword Slam!
+    if (this.attackCounter % 2 === 1) {
+      const windup = 620;
+      this.startWindup('yellow', windup, '✦ GOLDEN CHAKRAM VOLLEY!', () => {
+        this.stage = 'active';
+        const baseAng = Phaser.Math.Angle.Between(this.x, this.floorY - 110, playerX, playerY - 16);
+        const spreads = [-0.46, -0.23, 0, 0.23, 0.46];
+        for (const offset of spreads) {
+          const ang = baseAng + offset;
+          const spd = 340 * this.speedMult;
+          const ring = this.scene.add
+            .circle(this.x, this.floorY - 110, 14, 0xfacc15, 0.25)
+            .setStrokeStyle(4, 0xfef08a, 1)
+            .setBlendMode(Phaser.BlendModes.ADD)
+            .setDepth(64);
+          vfxManager.applyGlow(this.scene, ring, 0xfacc15, 2.6, 0.4);
+          this.hazards.push({
+            kind: 'chakram',
+            sprite: ring,
+            x: this.x,
+            y: this.floorY - 110,
+            vx: Math.cos(ang) * spd,
+            vy: Math.sin(ang) * spd,
+            width: 24,
+            height: 24,
+            damage: Math.round(this.def.baseAttack * 0.92),
+            expiresAt: this.scene.time.now + 2800,
+            alive: true,
+            label: 'Golden Sovereign Chakram',
+          });
+        }
+        this.nextStateAt = this.scene.time.now + 480;
+        this.pendingAction = () => this.enterRecovery(820);
+      });
+    } else {
+      const windup = 680;
+      const slamX = Phaser.Math.Clamp(this.x + dir * 130, this.arenaMinX + 90, this.arenaMaxX - 90);
+      this.telegraphs.showGroundZone(slamX, this.floorY, 240, 30, 'red', windup);
+      this.startWindup('red', windup, '⚔️ GIANT SOVEREIGN SWORD SLAM!', () => {
+        this.stage = 'active';
+        this.telegraphs.playImpactJuice(slamX, this.floorY - 14, 'red', true);
+        vfxManager.radialShockwave(this.scene, slamX, this.floorY - 14, 0xe11d48, 160, 340, 68);
+        this.checkAreaHit(slamX, 130, this.def.baseAttack * 1.25, 'Giant Sovereign Sword Slam', playerX);
+        const waveSpd = 350 * this.speedMult;
+        this.hazards.push(
+          this.telegraphs.createGroundShockwave(slamX - 30, this.floorY, -1, waveSpd, Math.round(this.def.baseAttack * 0.85), 'red', this.scene.time.now, 'Sovereign Shockwave'),
+          this.telegraphs.createGroundShockwave(slamX + 30, this.floorY, 1, waveSpd, Math.round(this.def.baseAttack * 0.85), 'red', this.scene.time.now, 'Sovereign Shockwave')
+        );
+        this.nextStateAt = this.scene.time.now + 380;
+        this.pendingAction = () => this.enterRecovery(840);
+      });
     }
   }
 
@@ -1116,6 +1641,93 @@ export class BossController {
         this.playerLanternGlow.setPosition(playerX, playerY - 12);
       }
 
+      // DuoStormCrystalRig Live Update: Moni Mekhala overhead glide + autonomous cyan crystal beams & healing orbs!
+      if (this.def.rig === 'DuoStormCrystalRig') {
+        if (this.eysoAura && this.eysoHp > 0) {
+          this.eysoAura.setPosition(this.x, this.y - 72).setScale(1 + Math.sin(time * 0.009) * 0.08);
+        }
+        if (this.mekhalaContainer && this.mekhalaHp > 0) {
+          const desiredMekX = Phaser.Math.Clamp(
+            playerX + Math.sin(time * 0.0016) * 280,
+            this.arenaMinX + 120,
+            this.arenaMaxX - 120
+          );
+          const desiredMekY = 235 + Math.sin(time * 0.0032) * 44;
+          this.mekhalaX = Phaser.Math.Linear(this.mekhalaX, desiredMekX, Math.min(1, 2.2 * dt));
+          this.mekhalaY = Phaser.Math.Linear(this.mekhalaY, desiredMekY, Math.min(1, 2.6 * dt));
+          this.mekhalaContainer.setPosition(this.mekhalaX, this.mekhalaY);
+
+          if (time >= this.mekhalaNextCastAt) {
+            const overdrive = Boolean(this.duoOverdriveName);
+            this.mekhalaNextCastAt = time + Math.round((overdrive ? 2300 : 3400) / this.speedMult);
+            if (this.eysoHp > 0 && this.eysoHp < this.eysoMaxHp * 0.85 && Math.random() < 0.35) {
+              // Healing Crystal Orb drifting down toward Ream Eyso!
+              const healAmt = Math.round(this.eysoMaxHp * 0.03);
+              const orb = this.scene.add
+                .circle(this.mekhalaX, this.mekhalaY + 24, 14, 0x34d399, 0.9)
+                .setStrokeStyle(2, 0xe0f2fe)
+                .setBlendMode(Phaser.BlendModes.ADD)
+                .setDepth(62);
+              this.scene.tweens.add({
+                targets: orb,
+                x: this.x,
+                y: this.y - 68,
+                duration: 680,
+                ease: 'Sine.easeInOut',
+                onComplete: () => {
+                  orb.destroy();
+                  if (this.alive && this.eysoHp > 0) {
+                    this.eysoHp = Math.min(this.eysoMaxHp, this.eysoHp + healAmt);
+                    this.hp = this.eysoHp + this.mekhalaHp;
+                    this.callbacks.onFloatingText(this.x, this.y - 125, `+${healAmt} ✨ CRYSTAL HEAL`, '#6ee7b7', '13px');
+                  }
+                },
+              });
+            } else {
+              this.fireMekhalaCrystalBeam(playerX, overdrive);
+            }
+          }
+        }
+      }
+
+      // SovereignYakshaRig Live Update: Crimson-Gold Aura + 3 Orbiting Spectral Yaksha Masks firing cross-beams!
+      if (this.def.rig === 'SovereignYakshaRig') {
+        const pulse = 1 + Math.sin(time * 0.008) * 0.1;
+        this.sovereignAura?.setPosition(this.x, this.y - 96).setScale(pulse);
+        this.sovereignCrownRing?.setPosition(this.x, this.y - 196).setScale(1 + Math.cos(time * 0.01) * 0.08);
+        if (this.yakshaMasks.length > 0) {
+          this.yakshaMasks.forEach((m, idx) => {
+            const ang = time * 0.0024 + (idx * Math.PI * 2) / 3;
+            m.setPosition(this.x + Math.cos(ang) * 145, this.y - 125 + Math.sin(ang) * 62);
+          });
+          if (time >= this.maskFireCooldownAt) {
+            this.maskFireCooldownAt = time + Math.round((this.phase === 3 ? 2500 : 3500) / this.speedMult);
+            const mask = this.yakshaMasks[Math.floor(time / 1000) % this.yakshaMasks.length];
+            const ang = Phaser.Math.Angle.Between(mask.x, mask.y, playerX, playerY - 14);
+            const spd = 330 * this.speedMult;
+            const beamOrb = this.scene.add
+              .circle(mask.x, mask.y, 11, 0xe11d48, 0.95)
+              .setStrokeStyle(2, 0xfacc15)
+              .setBlendMode(Phaser.BlendModes.ADD)
+              .setDepth(64);
+            this.hazards.push({
+              kind: 'orb',
+              sprite: beamOrb,
+              x: mask.x,
+              y: mask.y,
+              vx: Math.cos(ang) * spd,
+              vy: Math.sin(ang) * spd,
+              width: 20,
+              height: 20,
+              damage: Math.round(this.def.baseAttack * 0.78),
+              expiresAt: time + 2400,
+              alive: true,
+              label: 'Yaksha Mask Cross-Beam',
+            });
+          }
+        }
+      }
+
       this.stageBadge.setPosition(this.x, this.y - (isAirborne ? 82 : 175));
     }
 
@@ -1153,6 +1765,19 @@ export class BossController {
           this.hazards.splice(i, 1);
           continue;
         }
+      } else if (h.kind === 'boomerang_axe') {
+        if (h.boomerangReturnAt && time >= h.boomerangReturnAt) {
+          h.boomerangReturnAt = undefined;
+          const backDir = Math.sign((h.boomerangOriginX ?? this.x) - h.x) || -Math.sign(h.vx || 1);
+          h.vx = backDir * (560 * this.speedMult);
+        }
+        h.x += h.vx * dt;
+        h.y += h.vy * dt;
+        h.sprite.angle += 720 * dt;
+      } else if (h.kind === 'chakram') {
+        h.x += h.vx * dt;
+        h.y += h.vy * dt;
+        h.sprite.angle += 540 * dt;
       } else {
         h.x += h.vx * dt;
         h.y += h.vy * dt;
@@ -1197,6 +1822,13 @@ export class BossController {
     this.arpSpotlight?.destroy();
     this.arpOuterGlow?.destroy();
     this.playerLanternGlow?.destroy();
+    this.eysoAura?.destroy();
+    this.mekhalaContainer?.destroy();
+    this.sovereignAura?.destroy();
+    this.sovereignCrownRing?.destroy();
+    this.sovereignVignette?.destroy();
+    this.yakshaMasks.forEach((m) => m.destroy());
+    this.yakshaMasks = [];
     this.wormEntity?.destroy();
     this.wormEntity = undefined;
   }

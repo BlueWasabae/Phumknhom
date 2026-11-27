@@ -1460,6 +1460,47 @@ export const ITEM_CATALOG: Record<string, CatalogItem> = {
     stats: { maxHp: 15, critChance: 0.02 },
   },
 
+  // ==================== UPDATE 1.8: ENDGAME MYTHIC BOSS & BOSS RUSH EXCLUSIVES ====================
+  wings_mekhala_halo: {
+    id: 'wings_mekhala_halo',
+    name: 'Mekhala Celestial Halo',
+    khmerName: 'រស្មីកែវមណីមេខលា',
+    slot: 'wings',
+    rarity: 'legendary',
+    stylishScore: 135,
+    description: 'Blooming cyan-and-gold celestial crystal halo dropped by Ream Eyso & Moni Mekhala.',
+    primaryColor: '#38bdf8',
+    accentColor: '#fef08a',
+    styleVariant: 'yant_halo',
+    stats: { maxHp: 35, defense: 4, critChance: 0.05 },
+  },
+  hat_sovereign_crown: {
+    id: 'hat_sovereign_crown',
+    name: 'Sovereign Crown',
+    khmerName: 'មកុដក្រុងរាពណ៍',
+    slot: 'hat',
+    rarity: 'legendary',
+    stylishScore: 150,
+    description: 'Ten-spired crimson-and-gold crown claimed from Krong Reap, the Ten-Headed Yaksha Sovereign.',
+    primaryColor: '#dc2626',
+    accentColor: '#facc15',
+    styleVariant: 'royal_crown',
+    stats: { attack: 8, defense: 6, maxHp: 45, critChance: 0.06 },
+  },
+  wings_angkor_sovereign: {
+    id: 'wings_angkor_sovereign',
+    name: 'Radiant Angkor Sovereign Wings',
+    khmerName: 'ស្លាបរាជវង្សអង្គរភ្លឺចែងចាំង',
+    slot: 'wings',
+    rarity: 'legendary',
+    stylishScore: 180,
+    description: 'Blooming golden-crimson sovereign wings unlocked exclusively by conquering the 6-Boss Mythic Boss Rush!',
+    primaryColor: '#facc15',
+    accentColor: '#e11d48',
+    styleVariant: 'garuda',
+    stats: { attack: 10, defense: 6, maxHp: 50, critChance: 0.07 },
+  },
+
   // ==================== UPDATE 1.5: KHMER SEASONAL FESTIVAL EXCLUSIVES ====================
   weapon_water_paddle: {
     id: 'weapon_water_paddle',

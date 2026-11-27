@@ -11,7 +11,18 @@ const TELEGRAPH_PALETTE: Record<TelegraphColor, { fill: number; stroke: number; 
 };
 
 export interface BossHazard {
-  kind: 'shockwave' | 'boulder' | 'tadpole' | 'tongue' | 'orb' | 'venom_glob' | 'poison_pool';
+  kind:
+    | 'shockwave'
+    | 'boulder'
+    | 'tadpole'
+    | 'tongue'
+    | 'orb'
+    | 'venom_glob'
+    | 'poison_pool'
+    | 'boomerang_axe'
+    | 'crystal_beam'
+    | 'magma_vent'
+    | 'chakram';
   sprite: Phaser.GameObjects.Container | Phaser.GameObjects.Arc | Phaser.GameObjects.Rectangle | Phaser.GameObjects.Ellipse;
   x: number;
   y: number;
@@ -23,6 +34,9 @@ export interface BossHazard {
   expiresAt: number;
   hp?: number; // Killable mini-mobs like King Frog's tadpoles
   isPoison?: boolean; // Countered by Coconut Water Anti-Venom buff!
+  /** Optional boomerang return timer & origin X for Ream Eyso's Lightning Axe */
+  boomerangReturnAt?: number;
+  boomerangOriginX?: number;
   alive: boolean;
   label: string;
 }

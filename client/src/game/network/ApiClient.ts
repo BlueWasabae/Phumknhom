@@ -104,6 +104,10 @@ export interface SavedProfilePayload {
   runwayIconBadge?: boolean;
   runwayScore?: number;
   bondPartner?: BondPartnerRecord | null;
+  bestBossRushTimeMs?: number | null;
+  unlockedTitles?: string[];
+  activeTitle?: string | null;
+  bountyProgress?: PlayerState['bountyProgress'];
   hasCompletedCreation?: boolean;
   activeClass: PlayerState['activeClass'];
   weapon: PlayerState['weapon'];
@@ -111,7 +115,7 @@ export interface SavedProfilePayload {
   areaChannel: number;
 }
 
-export type LeaderboardCategory = 'farmer' | 'stylish' | 'slayer' | 'tower';
+export type LeaderboardCategory = 'farmer' | 'stylish' | 'slayer' | 'tower' | 'boss_rush';
 
 export interface LeaderboardEntry {
   rank: number;
@@ -126,6 +130,15 @@ export interface LeaderboardResponse {
   stylish: LeaderboardEntry[];
   slayer: LeaderboardEntry[];
   tower: LeaderboardEntry[];
+  boss_rush: LeaderboardEntry[];
+}
+
+function formatBossRushSpeedrun(ms: number): string {
+  const sec = Math.max(0, ms / 1000);
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  const d = Math.floor((ms % 1000) / 100);
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${d}`;
 }
 
 function buildOfflineFallbackLeaderboard(localPlayer?: PlayerState): LeaderboardResponse {
@@ -137,6 +150,7 @@ function buildOfflineFallbackLeaderboard(localPlayer?: PlayerState): Leaderboard
     uniqueBosses: number;
     totalKills: number;
     highestTowerFloor: number;
+    bestBossRushTimeMs?: number | null;
     loadout: EquippedLoadout;
   }> = [
     {
@@ -144,9 +158,10 @@ function buildOfflineFallbackLeaderboard(localPlayer?: PlayerState): Leaderboard
       farmLevel: 24,
       coins: 18500,
       stylish: 485,
-      uniqueBosses: 4,
-      totalKills: 19,
+      uniqueBosses: 6,
+      totalKills: 24,
       highestTowerFloor: 42,
+      bestBossRushTimeMs: 224_800,
       loadout: {
         ...DEFAULT_LOADOUT,
         hat: 'hat_royal_crown',
@@ -264,6 +279,7 @@ function buildOfflineFallbackLeaderboard(localPlayer?: PlayerState): Leaderboard
       uniqueBosses: localPlayer.clearedBosses.length,
       totalKills,
       highestTowerFloor: localPlayer.highestTowerFloor ?? 0,
+      bestBossRushTimeMs: localPlayer.bestBossRushTimeMs ?? null,
       loadout: { ...localPlayer.loadout },
     });
   }
@@ -315,7 +331,28 @@ function buildOfflineFallbackLeaderboard(localPlayer?: PlayerState): Leaderboard
       loadout: p.loadout,
     }));
 
-  return { farmer, stylish, slayer, tower };
+  const boss_rush = [...seeds]
+    .map((p, i) => ({
+      ...p,
+      rushMs:
+        typeof p.bestBossRushTimeMs === 'number' && p.bestBossRushTimeMs > 0
+          ? p.bestBossRushTimeMs
+          : p.username === localPlayer?.name
+            ? null
+            : 238_000 + i * 19_400,
+    }))
+    .filter((p): p is typeof p & { rushMs: number } => typeof p.rushMs === 'number' && p.rushMs > 0)
+    .sort((a, b) => a.rushMs - b.rushMs)
+    .slice(0, 10)
+    .map((p, idx) => ({
+      rank: idx + 1,
+      username: p.username,
+      score: Math.round(p.rushMs / 1000),
+      detailLabel: `⚡ ${formatBossRushSpeedrun(p.rushMs)} · 6-Boss Gauntlet Clear`,
+      loadout: p.loadout,
+    }));
+
+  return { farmer, stylish, slayer, tower, boss_rush };
 }
 
 export async function fetchLeaderboard(localPlayer?: PlayerState): Promise<LeaderboardResponse> {
@@ -334,6 +371,10 @@ export async function fetchLeaderboard(localPlayer?: PlayerState): Promise<Leade
           stylish: json.stylish.map(normalizeRow),
           slayer: json.slayer.map(normalizeRow),
           tower: Array.isArray(json.tower) && json.tower.length > 0 ? json.tower.map(normalizeRow) : fallback.tower,
+          boss_rush:
+            Array.isArray(json.boss_rush) && json.boss_rush.length > 0
+              ? json.boss_rush.map(normalizeRow)
+              : fallback.boss_rush,
         };
       }
     }
@@ -402,6 +443,17 @@ export function serializePlayerStateForSave(state: PlayerState): SavedProfilePay
     runwayIconBadge: Boolean(state.runwayIconBadge ?? false),
     runwayScore: state.runwayScore ?? 0,
     bondPartner: state.bondPartner ?? null,
+    bestBossRushTimeMs: state.bestBossRushTimeMs ?? null,
+    unlockedTitles: [...(state.unlockedTitles ?? [])],
+    activeTitle: state.activeTitle ?? null,
+    bountyProgress: state.bountyProgress
+      ? {
+          dailyKey: state.bountyProgress.dailyKey,
+          weeklyKey: state.bountyProgress.weeklyKey,
+          progress: { ...state.bountyProgress.progress },
+          claimed: [...state.bountyProgress.claimed],
+        }
+      : undefined,
     hasCompletedCreation: Boolean(state.hasCompletedCreation ?? state.loadout.hasCompletedCreation),
     activeClass: state.activeClass,
     weapon: { ...state.weapon },
@@ -716,6 +768,16 @@ export function hydratePlayerStateFromSave(
     runwayIconBadge: Boolean(saved?.runwayIconBadge ?? false),
     runwayScore: typeof saved?.runwayScore === 'number' ? saved.runwayScore : 0,
     bondPartner: saved?.bondPartner && typeof saved.bondPartner === 'object' ? saved.bondPartner : null,
+    bestBossRushTimeMs:
+      typeof saved?.bestBossRushTimeMs === 'number' && saved.bestBossRushTimeMs > 0
+        ? saved.bestBossRushTimeMs
+        : null,
+    unlockedTitles: Array.isArray(saved?.unlockedTitles) ? saved.unlockedTitles : [],
+    activeTitle: typeof saved?.activeTitle === 'string' ? saved.activeTitle : null,
+    bountyProgress:
+      saved?.bountyProgress && typeof saved.bountyProgress === 'object'
+        ? saved.bountyProgress
+        : undefined,
     hasCompletedCreation: Boolean(
       saved?.hasCompletedCreation ?? saved?.loadout?.hasCompletedCreation ?? false
     ),

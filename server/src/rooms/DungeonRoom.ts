@@ -6,6 +6,8 @@ const BOSS_SOLO_HP: Record<string, number> = {
   arp_prey_chrov: 9000,
   yeak_thmor: 18000,
   neak_reach: 24000,
+  ream_eyso_moni_mekhala: 32000,
+  krong_reap: 45000,
 };
 
 const DIFFICULTY_MULT: Record<string, number> = {
@@ -35,6 +37,8 @@ const BOSS_NAMES: Record<string, string> = {
   arp_prey_chrov: 'Arp Prey Chrov (Forest Ghost)',
   yeak_thmor: 'Yeak Thmor Prasat',
   neak_reach: 'Neak Reach (Shadow Naga)',
+  ream_eyso_moni_mekhala: 'Ream Eyso & Moni Mekhala (Storm Duo)',
+  krong_reap: 'Krong Reap (Ten-Headed Sovereign)',
 };
 
 const activeDungeonRooms = new Map<string, DungeonRoom>();

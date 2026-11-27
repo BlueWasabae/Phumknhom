@@ -60,6 +60,10 @@ export interface SavedPlayerProfile {
   runwayIconBadge?: boolean;
   runwayScore?: number;
   bondPartner?: Record<string, unknown> | null;
+  bestBossRushTimeMs?: number | null;
+  unlockedTitles?: string[];
+  activeTitle?: string | null;
+  bountyProgress?: Record<string, unknown>;
   hasCompletedCreation?: boolean;
   activeClass?: string;
   weapon?: Record<string, unknown>;
@@ -490,6 +494,13 @@ function rowToSavedProfile(row: {
       meta.bondPartner && typeof meta.bondPartner === 'object'
         ? (meta.bondPartner as Record<string, unknown>)
         : null,
+    bestBossRushTimeMs: typeof meta.bestBossRushTimeMs === 'number' ? meta.bestBossRushTimeMs : null,
+    unlockedTitles: Array.isArray(meta.unlockedTitles) ? (meta.unlockedTitles as string[]) : [],
+    activeTitle: typeof meta.activeTitle === 'string' ? meta.activeTitle : null,
+    bountyProgress:
+      meta.bountyProgress && typeof meta.bountyProgress === 'object'
+        ? (meta.bountyProgress as Record<string, unknown>)
+        : undefined,
     hasCompletedCreation: Boolean(
       meta.hasCompletedCreation ??
         (loadout as { hasCompletedCreation?: boolean }).hasCompletedCreation ??
@@ -813,6 +824,16 @@ export async function savePlayerProfile(
       profile.bondPartner && typeof profile.bondPartner === 'object'
         ? profile.bondPartner
         : null,
+    bestBossRushTimeMs:
+      typeof profile.bestBossRushTimeMs === 'number' && profile.bestBossRushTimeMs > 0
+        ? profile.bestBossRushTimeMs
+        : null,
+    unlockedTitles: Array.isArray(profile.unlockedTitles) ? profile.unlockedTitles : [],
+    activeTitle: typeof profile.activeTitle === 'string' ? profile.activeTitle : null,
+    bountyProgress:
+      profile.bountyProgress && typeof profile.bountyProgress === 'object'
+        ? profile.bountyProgress
+        : undefined,
     hasCompletedCreation: Boolean(
       profile.hasCompletedCreation ??
         (profile.loadout as { hasCompletedCreation?: boolean } | undefined)?.hasCompletedCreation ??
@@ -1420,6 +1441,7 @@ export async function getTopTenLeaderboards(): Promise<{
   stylish: ServerLeaderboardEntry[];
   slayer: ServerLeaderboardEntry[];
   tower: ServerLeaderboardEntry[];
+  boss_rush: ServerLeaderboardEntry[];
 }> {
   interface RawRecord {
     username: string;
@@ -1468,7 +1490,7 @@ export async function getTopTenLeaderboards(): Promise<{
         wings: 'wings_garuda',
         weapon: 'weapon_preah_khan',
       },
-      meta_json: { highestTowerFloor: 42, bankCoins: 4500, clearedBosses: ['sdech_kongkaeb', 'arp_prey_chrov', 'yeak_thmor', 'neak_reach'], bossDefeats: { sdech_kongkaeb: 8, yeak_thmor: 6, neak_reach: 5 } },
+      meta_json: { highestTowerFloor: 42, bestBossRushTimeMs: 224800, bankCoins: 4500, clearedBosses: ['sdech_kongkaeb', 'arp_prey_chrov', 'yeak_thmor', 'neak_reach', 'ream_eyso_moni_mekhala', 'krong_reap'], bossDefeats: { sdech_kongkaeb: 8, yeak_thmor: 6, neak_reach: 5 } },
     },
     {
       username: 'Bopha_Lotus',
@@ -1482,7 +1504,7 @@ export async function getTopTenLeaderboards(): Promise<{
         wings: 'wings_yant_halo',
         weapon: 'weapon_sastra',
       },
-      meta_json: { highestTowerFloor: 31, bankCoins: 2000, clearedBosses: ['sdech_kongkaeb', 'arp_prey_chrov', 'yeak_thmor'], bossDefeats: { sdech_kongkaeb: 5, yeak_thmor: 4 } },
+      meta_json: { highestTowerFloor: 31, bestBossRushTimeMs: 268400, bankCoins: 2000, clearedBosses: ['sdech_kongkaeb', 'arp_prey_chrov', 'yeak_thmor'], bossDefeats: { sdech_kongkaeb: 5, yeak_thmor: 4 } },
     },
     {
       username: 'Vireak_Lbokator',
@@ -1496,7 +1518,7 @@ export async function getTopTenLeaderboards(): Promise<{
         wings: 'wings_ember',
         weapon: 'weapon_stone_club',
       },
-      meta_json: { highestTowerFloor: 50, bankCoins: 1500, clearedBosses: ['sdech_kongkaeb', 'arp_prey_chrov', 'yeak_thmor', 'neak_reach'], bossDefeats: { sdech_kongkaeb: 9, yeak_thmor: 10, neak_reach: 7 } },
+      meta_json: { highestTowerFloor: 50, bestBossRushTimeMs: 212300, bankCoins: 1500, clearedBosses: ['sdech_kongkaeb', 'arp_prey_chrov', 'yeak_thmor', 'neak_reach', 'ream_eyso_moni_mekhala', 'krong_reap'], bossDefeats: { sdech_kongkaeb: 9, yeak_thmor: 10, neak_reach: 7 } },
     },
   ];
   const existingNames = new Set(rows.map((r) => r.username.toLowerCase()));
@@ -1513,6 +1535,10 @@ export async function getTopTenLeaderboards(): Promise<{
     const defeatsObj = (r.meta_json?.bossDefeats as Record<string, number> | undefined) ?? {};
     const totalKills = Object.values(defeatsObj).reduce((sum, n) => sum + (Number(n) || 0), 0);
     const highestTowerFloor = Math.max(0, Math.min(50, Number(r.meta_json?.highestTowerFloor) || 0));
+    const bestBossRushTimeMs =
+      typeof r.meta_json?.bestBossRushTimeMs === 'number' && r.meta_json.bestBossRushTimeMs > 0
+        ? Math.floor(r.meta_json.bestBossRushTimeMs)
+        : null;
     return {
       username: r.username,
       farmLevel,
@@ -1521,6 +1547,7 @@ export async function getTopTenLeaderboards(): Promise<{
       cleared,
       totalKills,
       highestTowerFloor,
+      bestBossRushTimeMs,
       loadout: r.appearance ?? {},
     };
   });
@@ -1572,5 +1599,21 @@ export async function getTopTenLeaderboards(): Promise<{
       loadout: p.loadout,
     }));
 
-  return { farmer, stylish, slayer, tower };
+  const fmtRush = (ms: number) => {
+    const s = ms / 1000;
+    return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}.${Math.floor((ms % 1000) / 100)}`;
+  };
+  const boss_rush = [...parsed]
+    .filter((p): p is typeof p & { bestBossRushTimeMs: number } => typeof p.bestBossRushTimeMs === 'number' && p.bestBossRushTimeMs > 0)
+    .sort((a, b) => a.bestBossRushTimeMs - b.bestBossRushTimeMs)
+    .slice(0, 10)
+    .map((p, i) => ({
+      rank: i + 1,
+      username: p.username,
+      score: Math.round(p.bestBossRushTimeMs / 1000),
+      detailLabel: `⚡ ${fmtRush(p.bestBossRushTimeMs)} · 6-Boss Gauntlet Clear`,
+      loadout: p.loadout,
+    }));
+
+  return { farmer, stylish, slayer, tower, boss_rush };
 }

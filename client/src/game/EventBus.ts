@@ -14,6 +14,7 @@ import type {
   ZoneType,
 } from '@shared/types';
 import type { KhmerNpcId } from '@shared/npcSchedules';
+import type { BountyCategory } from '@shared/bounties';
 import type { ActiveWorldEventSnapshot } from '@shared/worldEvents';
 import type { TravelRequestPayload } from './systems/TravelAndPylons';
 
@@ -64,7 +65,7 @@ export interface BossHudPayload {
   englishName: string;
   hp: number;
   maxHp: number;
-  phase: 1 | 2;
+  phase: 1 | 2 | 3;
   difficulty: DifficultyMode;
   partySize?: number;
   stageLabel: string;
@@ -74,6 +75,22 @@ export interface BossHudPayload {
   furyActive: boolean;
   defenseCracked: boolean;
   damageTakenThisFight: number;
+  /** Duo Boss (Ream Eyso & Moni Mekhala) dual HP breakdown */
+  duoStatus?: {
+    eysoHp: number;
+    eysoMaxHp: number;
+    mekhalaHp: number;
+    mekhalaMaxHp: number;
+    overdriveName: string | null;
+  };
+  /** Update 1.8 Mythic Boss Rush live Speedrun Timer & Stage Tracker */
+  bossRush?: {
+    active: boolean;
+    stageIndex: number; // 1..6
+    totalStages: number;
+    elapsedMs: number;
+    breatherSec: number; // >0 during 5s breather + full heal between bosses
+  };
 }
 
 export interface DungeonOutcomePayload {
@@ -191,6 +208,21 @@ export interface EventMap {
     difficulty: DifficultyMode;
     partyMode?: 'solo' | 'coop';
     partyId?: string;
+  };
+  'bossRush:enterRequest': {
+    difficulty: DifficultyMode;
+  };
+  'bossRush:completed': {
+    elapsedMs: number;
+    difficulty: DifficultyMode;
+    coins: number;
+    gold: number;
+    unlockedSovereignTitle: boolean;
+    unlockedSovereignWings: boolean;
+  };
+  'bounty:progress': {
+    category: BountyCategory;
+    amount?: number;
   };
   'dungeon:outcome': DungeonOutcomePayload | null;
   'travel:execute': TravelRequestPayload;
@@ -331,8 +363,9 @@ export interface EventMap {
       | 'tukTukCart'
       | 'treasureMap'
       | 'runway'
-      | 'bond';
-    leaderboardCategory?: 'farmer' | 'stylish' | 'slayer' | 'tower';
+      | 'bond'
+      | 'bounties';
+    leaderboardCategory?: 'farmer' | 'stylish' | 'slayer' | 'tower' | 'boss_rush';
     farmTab?: 'seeds' | 'livestock' | 'artisan';
     shopTab?: 'primary' | 'secondary';
     friendsTab?: 'friends' | 'inbox';

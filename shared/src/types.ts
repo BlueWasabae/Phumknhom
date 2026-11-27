@@ -104,7 +104,18 @@ export interface BondPartnerRecord {
   bondedAt: string;
 }
 
-export type WeaponAuraId = 'golden_lotus' | 'emerald_naga' | 'celestial_angkor';
+export type WeaponAuraId =
+  | 'golden_lotus'
+  | 'emerald_naga'
+  | 'celestial_angkor'
+  | 'krong_reap_ten_head';
+
+export interface BountyProgressState {
+  dailyKey: string;
+  weeklyKey: string;
+  progress: Record<string, number>;
+  claimed: string[];
+}
 
 export interface NpcFriendshipEntry {
   hearts: number; // 0..10 (supports 0.2 / 0.5 / 1.0 increments)
@@ -122,13 +133,21 @@ export interface PlacedHouseDecor {
 
 export type DifficultyMode = 'normal' | 'expert' | 'mythic' | 'death';
 
-export type BossId = 'sdech_kongkaeb' | 'arp_prey_chrov' | 'yeak_thmor' | 'neak_reach';
+export type BossId =
+  | 'sdech_kongkaeb'
+  | 'arp_prey_chrov'
+  | 'yeak_thmor'
+  | 'neak_reach'
+  | 'ream_eyso_moni_mekhala'
+  | 'krong_reap';
 
 export type BossRigType =
   | 'QuadrupedHopperRig'
   | 'HumanoidRig'
   | 'FloaterRig'
-  | 'MultiSegmentWormRig';
+  | 'MultiSegmentWormRig'
+  | 'DuoStormCrystalRig'
+  | 'SovereignYakshaRig';
 
 export type EmoteSymbol = '👋' | '😄' | '❤️' | '🔥';
 
@@ -374,6 +393,11 @@ export interface PlayerState {
   runwayIconBadge?: boolean;
   runwayScore?: number;
   bondPartner?: BondPartnerRecord | null;
+  /** Update 1.8 — Endgame Boss Rush Speedrun Record, Titles & Daily/Weekly Bounty Board */
+  bestBossRushTimeMs?: number | null;
+  unlockedTitles?: string[];
+  activeTitle?: string | null;
+  bountyProgress?: BountyProgressState;
   hasCompletedCreation?: boolean;
   skillDamagePct: number;
   armorDamagePct: number;

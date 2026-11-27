@@ -55,17 +55,21 @@ export const PaperDollPreview: React.FC<PaperDollPreviewProps> = ({
           // Render Pagoda Tower Milestone Weapon Aura glow + orbiting sparks on Runway & Character Previews
           if (loadout.weaponAura) {
             const auraPrimary =
-              loadout.weaponAura === 'celestial_angkor'
-                ? 'rgba(192, 132, 252, 0.55)'
-                : loadout.weaponAura === 'emerald_naga'
-                  ? 'rgba(16, 185, 129, 0.55)'
-                  : 'rgba(250, 204, 21, 0.58)';
+              loadout.weaponAura === 'krong_reap_ten_head'
+                ? 'rgba(225, 29, 72, 0.6)'
+                : loadout.weaponAura === 'celestial_angkor'
+                  ? 'rgba(192, 132, 252, 0.55)'
+                  : loadout.weaponAura === 'emerald_naga'
+                    ? 'rgba(16, 185, 129, 0.55)'
+                    : 'rgba(250, 204, 21, 0.58)';
             const sparkHex =
-              loadout.weaponAura === 'celestial_angkor'
-                ? '#e9d5ff'
-                : loadout.weaponAura === 'emerald_naga'
-                  ? '#6ee7b7'
-                  : '#fef08a';
+              loadout.weaponAura === 'krong_reap_ten_head'
+                ? '#facc15'
+                : loadout.weaponAura === 'celestial_angkor'
+                  ? '#e9d5ff'
+                  : loadout.weaponAura === 'emerald_naga'
+                    ? '#6ee7b7'
+                    : '#fef08a';
             const wx = width * 0.68;
             const wy = height * 0.56;
             const pulse = 1 + Math.sin(t / 190) * 0.14;

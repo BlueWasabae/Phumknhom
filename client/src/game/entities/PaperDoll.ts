@@ -814,17 +814,21 @@ export class PaperDoll extends Phaser.GameObjects.Container {
     const wAura = this.loadout.weaponAura;
     if (wAura && this.weaponSprite.visible) {
       const auraColor =
-        wAura === 'celestial_angkor'
-          ? 0xc084fc
-          : wAura === 'emerald_naga'
-            ? 0x10b981
-            : 0xfacc15;
+        wAura === 'krong_reap_ten_head'
+          ? 0xe11d48
+          : wAura === 'celestial_angkor'
+            ? 0xc084fc
+            : wAura === 'emerald_naga'
+              ? 0x10b981
+              : 0xfacc15;
       const sparkAlt =
-        wAura === 'celestial_angkor'
-          ? 0xfef08a
-          : wAura === 'emerald_naga'
-            ? 0x6ee7b7
-            : 0xf472b6;
+        wAura === 'krong_reap_ten_head'
+          ? 0xfacc15
+          : wAura === 'celestial_angkor'
+            ? 0xfef08a
+            : wAura === 'emerald_naga'
+              ? 0x6ee7b7
+              : 0xf472b6;
       this.weaponAuraGlow.setTint(auraColor).setAlpha(0.62).setVisible(true);
       this.weaponAuraGlow.postFX?.clear?.();
       vfxManager.applyGlow(this.scene, this.weaponAuraGlow, auraColor, 3.0, 0.4);

@@ -43,6 +43,14 @@ const AURA_MILESTONES: Array<{
     colorClass: 'border-purple-500 bg-purple-50 text-purple-950',
     dotColor: '#c084fc',
   },
+  {
+    floor: 0,
+    auraId: 'krong_reap_ten_head',
+    name: "Krong Reap's Ten-Headed Aura",
+    khmerName: 'រស្មីក្រុងរាពណ៍ ១០ មុខ',
+    colorClass: 'border-rose-600 bg-rose-50 text-rose-950',
+    dotColor: '#dc2626',
+  },
 ];
 
 const CHECKPOINT_FLOORS = [1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50];
@@ -60,8 +68,11 @@ export const PagodaTowerModal: React.FC<PagodaTowerModalProps> = ({
     if (highestFloor >= 10) set.add('golden_lotus');
     if (highestFloor >= 25) set.add('emerald_naga');
     if (highestFloor >= 50) set.add('celestial_angkor');
+    if (player.clearedBosses.includes('krong_reap') || (player.bossDefeats?.krong_reap ?? 0) > 0) {
+      set.add('krong_reap_ten_head');
+    }
     return set;
-  }, [highestFloor, player.unlockedWeaponAuras]);
+  }, [highestFloor, player.unlockedWeaponAuras, player.clearedBosses, player.bossDefeats]);
 
   const [selectedFloor, setSelectedFloor] = useState<number>(1);
   const [partyMode, setPartyMode] = useState<'solo' | 'coop'>('solo');
@@ -212,7 +223,7 @@ export const PagodaTowerModal: React.FC<PagodaTowerModalProps> = ({
             )}
           </div>
 
-          <div className="grid sm:grid-cols-3 gap-2">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
             {AURA_MILESTONES.map((m) => {
               const unlocked = unlockedAuras.has(m.auraId);
               const equipped = player.loadout.weaponAura === m.auraId;
@@ -230,7 +241,7 @@ export const PagodaTowerModal: React.FC<PagodaTowerModalProps> = ({
                         style={{ backgroundColor: m.dotColor }}
                       />
                       <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-black/10">
-                        Floor {m.floor}
+                        {m.floor > 0 ? `Floor ${m.floor}` : 'Boss #8'}
                       </span>
                     </div>
                     <div className="font-display font-bold text-xs">{m.name}</div>
@@ -250,7 +261,7 @@ export const PagodaTowerModal: React.FC<PagodaTowerModalProps> = ({
                     </button>
                   ) : (
                     <div className="text-center py-1 rounded-lg bg-stone-200 text-stone-600 font-bold text-[10px]">
-                      🔒 Clear Floor {m.floor}
+                      {m.floor > 0 ? `🔒 Clear Floor ${m.floor}` : '🔒 Defeat Krong Reap'}
                     </div>
                   )}
                 </div>

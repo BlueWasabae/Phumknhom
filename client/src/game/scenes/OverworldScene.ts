@@ -397,6 +397,9 @@ export class OverworldScene extends Phaser.Scene {
       EventBus.on('dungeon:enterRequest', ({ bossId, difficulty, partyMode, partyId }) => {
         this.enterDungeon(bossId, difficulty, partyMode ?? 'solo', partyId);
       }),
+      EventBus.on('bossRush:enterRequest', ({ difficulty }) => {
+        this.enterBossRush(difficulty);
+      }),
       EventBus.on('cavern:enterRequest', ({ returnMapId }) => {
         this.enterCavernExplore(returnMapId);
       }),
@@ -772,6 +775,60 @@ export class OverworldScene extends Phaser.Scene {
       label: 'Press [E] or Click → Switch Multiplayer Area (AREA 0 / 1 / 2)',
       isDungeonPortal: false,
       onInteract: () => EventBus.emit('ui:openModal', { modal: 'areaSwitcher' }),
+    });
+
+    // 1B. UPDATE 1.8: WOODEN ADVENTURER'S BOUNTY BOARD (East of Central Fountain)
+    const bountyBoard = this.addBuildingOrProp({
+      texture: 'sv_sign_wood',
+      x: 958,
+      y: 600,
+      scale: 1.48,
+      shadowW: 36,
+      shadowH: 11,
+      bodyW: 26,
+      bodyH: 12,
+      label: "ADVENTURER'S BOUNTY BOARD",
+      joinArrowY: 550,
+    });
+    // Wooden notice board backdrop + pinned parchment bounty flyers
+    const boardPanel = this.add
+      .rectangle(958, 588, 36, 22, 0x78350f, 0.96)
+      .setStrokeStyle(2, 0xfacc15, 0.95)
+      .setDepth(605);
+    const flyer1 = this.add.rectangle(949, 586, 9, 11, 0xfef3c7, 1).setDepth(606);
+    const flyer2 = this.add.rectangle(959, 589, 9, 11, 0xfde68a, 1).setDepth(606);
+    const flyer3 = this.add.rectangle(968, 586, 8, 10, 0xfecdd3, 1).setDepth(606);
+    const bountyBadge = this.add
+      .text(958, 567, '📋 BOUNTIES', {
+        fontFamily: 'Fredoka, sans-serif',
+        fontSize: '11px',
+        fontStyle: 'bold',
+        color: '#fef08a',
+        backgroundColor: '#7c2d12',
+        padding: { x: 6, y: 2 },
+      })
+      .setResolution(2)
+      .setScale(0.45)
+      .setOrigin(0.5)
+      .setDepth(614)
+      .setInteractive({ useHandCursor: true });
+    const openBounties = () => {
+      if (typeof document !== 'undefined' && document.querySelector('dialog[open]')) return;
+      EventBus.emit('ui:openModal', { modal: 'bounties' });
+    };
+    bountyBoard.setInteractive({ useHandCursor: true }).on('pointerdown', openBounties);
+    boardPanel.setInteractive({ useHandCursor: true }).on('pointerdown', openBounties);
+    flyer1.setInteractive({ useHandCursor: true }).on('pointerdown', openBounties);
+    flyer2.setInteractive({ useHandCursor: true }).on('pointerdown', openBounties);
+    flyer3.setInteractive({ useHandCursor: true }).on('pointerdown', openBounties);
+    bountyBadge.on('pointerdown', openBounties);
+    this.landmarks.push({
+      x: 958,
+      y: 604,
+      radius: 54,
+      label: "Press [E] or Click → Open Adventurer's Bounty Board (Daily & Weekly Quests)",
+      isDungeonPortal: false,
+      onInteract: openBounties,
     });
 
     // 2. EXPRESS BUS STOP + WAITING BENCH (West-Center Avenue)
@@ -3341,6 +3398,31 @@ export class OverworldScene extends Phaser.Scene {
           ...this.player.state,
           zone: 'dungeon',
           difficulty,
+          weapon: { ...this.player.state.weapon },
+          loadout: { ...this.player.state.loadout },
+          currencies: { ...this.player.state.currencies },
+          lifeStats: { ...this.player.state.lifeStats },
+          activeBuffs: [...this.player.state.activeBuffs],
+          quickSnackSlots: [...this.player.state.quickSnackSlots],
+          clearedBosses: [...this.player.state.clearedBosses],
+          bossDefeats: { ...(this.player.state.bossDefeats ?? {}) },
+        },
+      });
+    });
+  }
+
+  private enterBossRush(difficulty: DifficultyMode = 'normal'): void {
+    if (this.transitioning) return;
+    this.transitioning = true;
+    this.cameras.main.fadeOut(220, 14, 6, 22);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      this.scene.start('BossRushScene', {
+        difficulty,
+        playerState: {
+          ...this.player.state,
+          zone: 'dungeon',
+          difficulty,
+          activeMount: null,
           weapon: { ...this.player.state.weapon },
           loadout: { ...this.player.state.loadout },
           currencies: { ...this.player.state.currencies },

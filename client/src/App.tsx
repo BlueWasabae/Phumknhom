@@ -167,6 +167,13 @@ import { TukTukCartModal } from './ui/TukTukCartModal';
 import { TreasureMapModal } from './ui/TreasureMapModal';
 import { RunwayModal } from './ui/RunwayModal';
 import { BondModal } from './ui/BondModal';
+import { BountyBoardModal } from './ui/BountyBoardModal';
+import {
+  claimBountyReward,
+  getActiveBounties,
+  recordBountyProgress,
+  type BountyCategory,
+} from '@shared/bounties';
 import { getMountSpec } from './game/entities/MountEntity';
 import { soundManager } from './game/systems/SoundManager';
 import { seasonClock } from './game/systems/SeasonClock';
@@ -207,6 +214,7 @@ type ActiveModalType =
   | 'treasureMap'
   | 'runway'
   | 'bond'
+  | 'bounties'
   | 'characterCreator';
 
 interface FloatingXpBanner extends SkillXpToastPayload {
@@ -572,7 +580,10 @@ export const App: React.FC = () => {
           };
         }
         const res = consumeStreetSnack(s, snackId);
-        if (res.ok) soundManager.playSfx('heal');
+        if (res.ok) {
+          soundManager.playSfx('heal');
+          EventBus.emit('bounty:progress', { category: 'eat_or_cook_snack', amount: 1 });
+        }
         return res;
       });
     },
@@ -921,6 +932,7 @@ export const App: React.FC = () => {
           activeTreasureMap: nextTreasureMap,
         };
         const xpRes = awardSkillXp(base, 'fishing', reward.fishingXp, true);
+        EventBus.emit('bounty:progress', { category: 'catch_fish', amount: 1 });
         return {
           state: xpRes.state,
           ok: true,
@@ -1451,6 +1463,9 @@ export const App: React.FC = () => {
             activeTreasureMap: nextTreasureMap,
           };
           const xpRes = awardSkillXp(withLoot, skillId, xp);
+          if (skillId === 'mining') {
+            EventBus.emit('bounty:progress', { category: 'mine_ores', amount: 1 });
+          }
           return {
             state: xpRes.state,
             ok: true,
@@ -1488,6 +1503,9 @@ export const App: React.FC = () => {
             const xpRes = awardSkillXp(nextState, skillId, xp);
             nextState = xpRes.state;
           }
+          if (skillId === 'mining') {
+            EventBus.emit('bounty:progress', { category: 'mine_ores', amount: 1 });
+          }
           return {
             state: nextState,
             ok: true,
@@ -1496,6 +1514,7 @@ export const App: React.FC = () => {
         });
       }),
       EventBus.on('tower:floorCleared', ({ floor, isBossFloor, coins, vitalityXp, reforgeStones, unlockedAura }) => {
+        EventBus.emit('bounty:progress', { category: 'clear_tower_floors', amount: 1 });
         runStateAction((prev) => {
           const nextCoins = prev.currencies.coins + coins;
           const nextInv = prev.inventory.map((i) => ({ ...i }));
@@ -1871,6 +1890,85 @@ export const App: React.FC = () => {
           setActiveModal(modal);
         }
       ),
+      EventBus.on('bounty:progress', ({ category, amount }) => {
+        let completedLabels: string[] = [];
+        setPlayer((prev) => {
+          const res = recordBountyProgress(prev, category as BountyCategory, amount ?? 1);
+          completedLabels = res.newlyCompleted.map((b) => `${b.icon} ${b.title}`);
+          EventBus.emit('player:stateSync', res.state);
+          if (!authSessionRef.current) {
+            saveGuestProgressSnapshot(res.state);
+          }
+          return res.state;
+        });
+        if (completedLabels.length > 0) {
+          soundManager.playSfx('level_up');
+          EventBus.emit('ui:toast', {
+            text: `📋 Bounty Complete: ${completedLabels.join(', ')}! Claim reward on the Bounty Board!`,
+          });
+        }
+      }),
+      EventBus.on(
+        'bossRush:completed',
+        ({ difficulty, elapsedMs, coins, gold, unlockedSovereignTitle, unlockedSovereignWings }) => {
+          soundManager.playSfx('victory');
+          const mm = String(Math.floor(elapsedMs / 60000)).padStart(2, '0');
+          const ss = String(Math.floor((elapsedMs % 60000) / 1000)).padStart(2, '0');
+          const ds = Math.floor((elapsedMs % 1000) / 100);
+          const timeStr = `${mm}:${ss}.${ds}`;
+          const title = 'Sovereign of Angkor';
+          const rewardItemId = 'wings_angkor_sovereign';
+
+          runStateAction((prev) => {
+            const nextCoins = prev.currencies.coins + coins;
+            const nextGold = prev.currencies.gold + gold;
+            const nextInv = prev.inventory.map((i) => ({ ...i }));
+            if (unlockedSovereignWings && !nextInv.some((i) => i.itemId === rewardItemId)) {
+              nextInv.push({ itemId: rewardItemId, quantity: 1, itemLevel: 6, quality: 'normal' });
+            }
+            const prevBest = prev.bestBossRushTimeMs ?? null;
+            const nextBest = prevBest === null ? elapsedMs : Math.min(prevBest, elapsedMs);
+            const titles = new Set<string>(prev.unlockedTitles ?? []);
+            if (unlockedSovereignTitle) titles.add(title);
+            const nextCleared = Array.from(
+              new Set<BossId>([
+                ...prev.clearedBosses,
+                'sdech_kongkaeb',
+                'arp_prey_chrov',
+                'yeak_thmor',
+                'neak_reach',
+                'ream_eyso_moni_mekhala',
+                'krong_reap',
+              ])
+            );
+            const nextAuras = new Set<WeaponAuraId>(prev.unlockedWeaponAuras ?? []);
+            nextAuras.add('krong_reap_ten_head');
+
+            const nextState: PlayerState = {
+              ...prev,
+              coins: nextCoins,
+              currencies: { ...prev.currencies, coins: nextCoins, gold: nextGold },
+              inventory: nextInv,
+              bestBossRushTimeMs: nextBest,
+              unlockedTitles: Array.from(titles),
+              activeTitle: unlockedSovereignTitle ? title : prev.activeTitle,
+              clearedBosses: nextCleared,
+              unlockedWeaponAuras: Array.from(nextAuras),
+            };
+            return {
+              state: nextState,
+              ok: true,
+              message: `⚡ MYTHIC BOSS RUSH CLEARED (${timeStr} · ${difficulty.toUpperCase()})! +${coins.toLocaleString()}c · +${gold} Gold · 👑 ${title} · Radiant Angkor Sovereign Wings!`,
+            };
+          });
+          EventBus.emit('bounty:progress', { category: 'defeat_any_boss', amount: 1 });
+          EventBus.emit('bounty:progress', { category: 'defeat_mythic_boss', amount: 1 });
+          EventBus.emit('ticker:push', {
+            text: `⚡ ${playerRef.current.name} conquered the 6-Boss Mythic Boss Rush in ${timeStr} (${difficulty.toUpperCase()}) and earned 👑 ${title}!`,
+            category: 'boss',
+          });
+        }
+      ),
       EventBus.on('ui:toast', ({ text }) => {
         setToast(text);
         if (toastTimer) window.clearTimeout(toastTimer);
@@ -1964,6 +2062,7 @@ export const App: React.FC = () => {
           setBondPrefillPartner(null);
           setActiveModal('bond');
         }}
+        onOpenBounties={() => setActiveModal('bounties')}
         onToggleMount={handleToggleMount}
         onOpenHouseDecor={() => setActiveModal('houseDecor')}
         onInviteFriendsHome={() => {
@@ -2040,6 +2139,11 @@ export const App: React.FC = () => {
           soundManager.playSfx('click');
           setActiveModal(null);
           EventBus.emit('dungeon:enterRequest', { bossId, difficulty, partyMode, partyId });
+        }}
+        onEnterBossRush={(difficulty: DifficultyMode) => {
+          soundManager.playSfx('click');
+          setActiveModal(null);
+          EventBus.emit('bossRush:enterRequest', { difficulty });
         }}
       />
 
@@ -2654,7 +2758,16 @@ export const App: React.FC = () => {
         onSellFarmItem={(itemId, quality, qty = 1) =>
           runFarmAction((s) => sellFarmProduce(s, itemId, quality, qty))
         }
-        onEatSnack={(snackId) => runStateAction((s) => consumeStreetSnack(s, snackId))}
+        onEatSnack={(snackId) =>
+          runStateAction((s) => {
+            const res = consumeStreetSnack(s, snackId);
+            if (res.ok) {
+              soundManager.playSfx('heal');
+              EventBus.emit('bounty:progress', { category: 'eat_or_cook_snack', amount: 1 });
+            }
+            return res;
+          })
+        }
         onUseMagicMirror={handleUseMagicMirror}
         onReadTreasureMap={() => {
           runStateAction((s) => {
@@ -2891,6 +3004,50 @@ export const App: React.FC = () => {
         }}
       />
 
+      <BountyBoardModal
+        open={activeModal === 'bounties'}
+        player={player}
+        onClose={() => setActiveModal(null)}
+        onClaimBounty={(bountyId) =>
+          runStateAction((s) => {
+            const res = claimBountyReward(s, bountyId);
+            if (res.ok) soundManager.playSfx('level_up');
+            return res;
+          })
+        }
+        onClaimAllReady={() =>
+          runStateAction((s) => {
+            const active = getActiveBounties();
+            let cur = s;
+            let claimedCount = 0;
+            let totalCoins = 0;
+            let totalGold = 0;
+            let totalStones = 0;
+            let totalXp = 0;
+            for (const b of active.all) {
+              const res = claimBountyReward(cur, b.id);
+              if (res.ok && res.bounty) {
+                cur = res.state;
+                claimedCount += 1;
+                totalCoins += res.bounty.rewardCoins;
+                totalGold += res.bounty.rewardGold;
+                totalStones += res.bounty.rewardReforgeStones;
+                totalXp += res.bounty.rewardXp;
+              }
+            }
+            if (claimedCount === 0) {
+              return { state: s, ok: false, message: 'No completed bounties ready to claim yet!' };
+            }
+            soundManager.playSfx('victory');
+            return {
+              state: cur,
+              ok: true,
+              message: `📋 Claimed ${claimedCount} Bounties! +${totalCoins.toLocaleString()}c · +${totalGold} Gold · +${totalStones}× Reforge Stones · +${totalXp} XP!`,
+            };
+          })
+        }
+      />
+
       <ShopModal
         open={activeModal === 'snackShop' || activeModal === 'fashionShop'}
         mode={shopMode}
@@ -2907,14 +3064,20 @@ export const App: React.FC = () => {
         onCookSnack={(snackId) =>
           runStateAction((s) => {
             const res = cookStreetSnack(s, snackId);
-            if (res.ok) soundManager.playSfx('harvest');
+            if (res.ok) {
+              soundManager.playSfx('harvest');
+              EventBus.emit('bounty:progress', { category: 'eat_or_cook_snack', amount: 1 });
+            }
             return res;
           })
         }
         onEatSnack={(snackId) =>
           runStateAction((s) => {
             const res = consumeStreetSnack(s, snackId);
-            if (res.ok) soundManager.playSfx('heal');
+            if (res.ok) {
+              soundManager.playSfx('heal');
+              EventBus.emit('bounty:progress', { category: 'eat_or_cook_snack', amount: 1 });
+            }
             return res;
           })
         }

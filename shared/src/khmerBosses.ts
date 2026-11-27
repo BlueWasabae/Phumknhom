@@ -33,6 +33,8 @@ export interface KhmerBossDef {
   trophyIcon: string;
   phase1Summary: string;
   phase2Summary: string;
+  phase3Summary?: string;
+  isEndgame?: boolean;
   drops: BossLootEntry[];
   noHitEasterEggItemId?: string;
   noHitEasterEggHint?: string;
@@ -259,6 +261,105 @@ export const KHMER_BOSSES: Record<BossId, KhmerBossDef> = {
       },
     ],
   },
+  ream_eyso_moni_mekhala: {
+    id: 'ream_eyso_moni_mekhala',
+    rosterNumber: 7,
+    khmerName: 'រាមឥសូរ និង មណីមេខលា',
+    englishName: 'Ream Eyso & Moni Mekhala (Storm & Crystal Duo)',
+    shortTitle: 'Storm & Crystal Duo · Boss #7',
+    biomeName: 'Celestial Monsoon Spire',
+    rig: 'DuoStormCrystalRig',
+    textureKey: 'boss_yeak_thmor',
+    soloNormalHp: 32000,
+    baseAttack: 52,
+    defense: 16,
+    bossDR: 0.12,
+    coinsReward: 950,
+    firstClearGold: 9,
+    vitalityXp: 240,
+    charXp: 340,
+    accentColor: '#38bdf8',
+    lore: 'Mythic duo of Cambodian celestial folklore: Moni Mekhala glides overhead casting dazzling crystal light-beams while Ream Eyso hurls his thunder-axe Phkak across the storm!',
+    trophyName: 'Moni Mekhala Crystal Orb',
+    trophyIcon: '⚡',
+    phase1Summary: 'Two simultaneous bosses! Moni Mekhala fires telegraphed cyan crystal beams & healing orbs overhead while Ream Eyso throws a boomeranging golden lightning axe + thunder pillars.',
+    phase2Summary: 'STORM OVERDRIVE: When one twin falls to 0 HP, the survivor surges with radiant storm energy and accelerated overdrive combos!',
+    isEndgame: true,
+    drops: [
+      {
+        itemId: 'drop_storm_crystal_core',
+        label: 'Storm Crystal Core',
+        chanceNormal: 1,
+        chanceExpert: 1,
+        quantity: 2,
+      },
+      {
+        itemId: 'mat_lightning_axe_blueprint',
+        label: 'Lightning Axe Blueprint',
+        chanceNormal: 0.45,
+        chanceExpert: 0.85,
+        quantity: 1,
+      },
+      {
+        itemId: 'wings_mekhala_halo',
+        label: 'Mekhala Celestial Halo',
+        chanceNormal: 0.22,
+        chanceExpert: 0.5,
+        quantity: 1,
+        isEquipment: true,
+      },
+    ],
+  },
+  krong_reap: {
+    id: 'krong_reap',
+    rosterNumber: 8,
+    khmerName: 'ក្រុងរាពណ៍',
+    englishName: 'Krong Reap (Ten-Headed Yaksha Sovereign)',
+    shortTitle: 'Final Sovereign · Boss #8',
+    biomeName: 'Throne of the Crimson Angkor',
+    rig: 'SovereignYakshaRig',
+    textureKey: 'boss_yeak_thmor',
+    soloNormalHp: 45000,
+    baseAttack: 60,
+    defense: 19,
+    bossDR: 0.14,
+    coinsReward: 1400,
+    firstClearGold: 12,
+    vitalityXp: 360,
+    charXp: 500,
+    accentColor: '#e11d48',
+    lore: 'The supreme Ten-Headed Yaksha Sovereign of the Reamker epic, wreathed in crimson-and-gold Angkor flames across a blistering 3-phase endgame trial.',
+    trophyName: 'Ten-Headed Sovereign Crown',
+    trophyIcon: '👑',
+    phase1Summary: '100%–65% HP: Multi-directional blooming golden chakram volleys + telegraphed giant sovereign sword slams.',
+    phase2Summary: '65%–30% HP: Summons 3 orbiting spectral Yaksha Masks firing synchronized cross-beams while crimson magma vents erupt along the arena floor.',
+    phase3Summary: '<30% HP (Sovereign Wrath): Darkens the cavern with a crimson vignette and unleashes rhythmic bullet-hell lotus rings rewarding Double-Jump, Dash, Grapple & Focus/Fury!',
+    isEndgame: true,
+    drops: [
+      {
+        itemId: 'relic_angkor_mythic',
+        label: 'Angkor Mythic Relic',
+        chanceNormal: 1,
+        chanceExpert: 1,
+        quantity: 1,
+      },
+      {
+        itemId: 'hat_sovereign_crown',
+        label: 'Sovereign Crown',
+        chanceNormal: 0.35,
+        chanceExpert: 0.75,
+        quantity: 1,
+        isEquipment: true,
+      },
+      {
+        itemId: 'mat_reforge_stone',
+        label: 'Reforge Stone',
+        chanceNormal: 1,
+        chanceExpert: 1,
+        quantity: 3,
+      },
+    ],
+  },
 };
 
 export const KHMER_BOSS_LIST: KhmerBossDef[] = [
@@ -266,6 +367,17 @@ export const KHMER_BOSS_LIST: KhmerBossDef[] = [
   KHMER_BOSSES.arp_prey_chrov,
   KHMER_BOSSES.yeak_thmor,
   KHMER_BOSSES.neak_reach,
+  KHMER_BOSSES.ream_eyso_moni_mekhala,
+  KHMER_BOSSES.krong_reap,
+];
+
+export const BOSS_RUSH_ORDER: BossId[] = [
+  'sdech_kongkaeb',
+  'arp_prey_chrov',
+  'yeak_thmor',
+  'neak_reach',
+  'ream_eyso_moni_mekhala',
+  'krong_reap',
 ];
 
 export function getScaledBossMaxHp(

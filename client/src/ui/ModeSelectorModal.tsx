@@ -3,7 +3,7 @@ import type { BossId, DifficultyMode, PlayerState } from '@shared/types';
 import { calculateDamageTaken } from '@shared/balanceFormulas';
 import { computeVillageToDungeonBridge } from '@shared/skillTrees';
 import { KHMER_BOSSES, KHMER_BOSS_LIST, getScaledBossMaxHp } from '@shared/khmerBosses';
-import { Flame, ShieldAlert, Skull, Sparkles, Swords, Trophy, User, Users } from 'lucide-react';
+import { Crown, Flame, ShieldAlert, Skull, Sparkles, Swords, Timer, Trophy, User, Users, Zap } from 'lucide-react';
 import { NativeDialog } from './NativeDialog';
 
 interface ModeSelectorModalProps {
@@ -17,6 +17,7 @@ interface ModeSelectorModalProps {
     partyMode: 'solo' | 'coop',
     partyId?: string
   ) => void;
+  onEnterBossRush?: (difficulty: DifficultyMode) => void;
 }
 
 const DIFFICULTY_OPTIONS: Array<{
@@ -59,16 +60,29 @@ export const ModeSelectorModal: React.FC<ModeSelectorModalProps> = ({
   initialBossId,
   onClose,
   onEnterDungeon,
+  onEnterBossRush,
 }) => {
+  const [modalTab, setModalTab] = useState<'single' | 'boss_rush'>('single');
   const [selectedBoss, setSelectedBoss] = useState<BossId>(initialBossId ?? 'sdech_kongkaeb');
   const [selectedDiff, setSelectedDiff] = useState<DifficultyMode>('normal');
+  const [rushDiff, setRushDiff] = useState<DifficultyMode>('mythic');
   const [partyMode, setPartyMode] = useState<'solo' | 'coop'>('solo');
 
   useEffect(() => {
     if (open && initialBossId) {
       setSelectedBoss(initialBossId);
+      setModalTab('single');
     }
   }, [initialBossId, open]);
+
+  const formatBestRush = (ms?: number | null) => {
+    if (!ms || ms <= 0) return 'Not cleared yet';
+    const sec = ms / 1000;
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    const d = Math.floor((ms % 1000) / 100);
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${d}`;
+  };
 
   const bossDef = KHMER_BOSSES[selectedBoss];
   const scaledHp = getScaledBossMaxHp(selectedBoss, selectedDiff, partyMode === 'coop' ? 2 : 1);
@@ -89,6 +103,111 @@ export const ModeSelectorModal: React.FC<ModeSelectorModalProps> = ({
       maxWidthClass="w-[min(96vw,760px)]"
     >
       <div className="space-y-3.5 max-h-[68dvh] overflow-y-auto pr-1">
+        {/* TOP MODE TABS: Single Boss Raid vs Mythic Boss Rush Gauntlet */}
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => setModalTab('single')}
+            className={`py-2 px-3 rounded-xl border-2 font-display font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer ${
+              modalTab === 'single'
+                ? 'bg-amber-800 text-amber-50 border-amber-950 shadow'
+                : 'bg-amber-50 text-amber-950 border-amber-900/30 hover:bg-amber-100'
+            }`}
+          >
+            <Skull className="w-4 h-4" /> Single Boss Raid (6 Bosses)
+          </button>
+          <button
+            type="button"
+            onClick={() => setModalTab('boss_rush')}
+            className={`py-2 px-3 rounded-xl border-2 font-display font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer ${
+              modalTab === 'boss_rush'
+                ? 'bg-gradient-to-r from-rose-700 via-purple-800 to-amber-700 text-amber-50 border-amber-400 shadow'
+                : 'bg-purple-50 text-purple-950 border-purple-700/40 hover:bg-purple-100'
+            }`}
+          >
+            <Zap className="w-4 h-4 text-yellow-400" /> ⚡ Mythic Boss Rush
+          </button>
+        </div>
+
+        {modalTab === 'boss_rush' ? (
+          <div className="space-y-3">
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-rose-950 via-purple-950 to-amber-950 text-amber-50 border-2 border-amber-400/80 space-y-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="font-display font-bold text-base text-amber-300 flex items-center gap-1.5">
+                    <Crown className="w-4 h-4" /> Mythic Boss Rush · 6-Boss Speedrun Gauntlet
+                  </div>
+                  <p className="text-[11px] text-amber-100/90 mt-0.5">
+                    Battle all 6 Khmer Bosses back-to-back with a live Speedrun Timer and a 5-second breather + full heal between fights!
+                  </p>
+                </div>
+                <div className="px-3 py-1.5 rounded-xl bg-slate-950/70 border border-amber-400/50 text-right">
+                  <div className="text-[9px] uppercase text-amber-300 font-bold flex items-center gap-1 justify-end">
+                    <Timer className="w-3 h-3" /> Personal Best
+                  </div>
+                  <div className="font-mono font-bold text-sm text-yellow-300">
+                    {formatBestRush(player.bestBossRushTimeMs)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid sm:grid-cols-3 gap-1.5 text-[10px] font-bold">
+                {KHMER_BOSS_LIST.map((b, idx) => (
+                  <div
+                    key={b.id}
+                    className="px-2.5 py-1.5 rounded-xl bg-white/10 border border-amber-300/30 flex items-center gap-1.5"
+                  >
+                    <span className="w-5 h-5 rounded-full bg-amber-400 text-amber-950 flex items-center justify-center shrink-0">
+                      {idx + 1}
+                    </span>
+                    <span className="truncate">{b.khmerName}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-amber-50 border-2 border-amber-900/30 space-y-2">
+              <div className="font-display font-bold text-xs text-amber-950">
+                🏆 Boss Rush Clear Jackpot &amp; Speedrun Leaderboard
+              </div>
+              <div className="flex flex-wrap gap-1.5 text-[10px] font-bold">
+                <span className="px-2 py-1 rounded-lg bg-amber-200 text-amber-950">🪙 +3,000 Coins &amp; +15 Gold</span>
+                <span className="px-2 py-1 rounded-lg bg-purple-200 text-purple-950">👑 Title: Sovereign of Angkor</span>
+                <span className="px-2 py-1 rounded-lg bg-rose-200 text-rose-950">🪽 Radiant Angkor Sovereign Wings</span>
+                <span className="px-2 py-1 rounded-lg bg-sky-200 text-sky-950">⏱️ Boss Rush Speedrun Hall of Fame</span>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-amber-900/15">
+                <div className="flex items-center gap-1.5">
+                  {(['normal', 'expert', 'mythic'] as DifficultyMode[]).map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setRushDiff(d)}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-display font-bold uppercase border cursor-pointer ${
+                        rushDiff === d
+                          ? 'bg-purple-800 text-amber-100 border-amber-400'
+                          : 'bg-white text-amber-950 border-amber-900/25'
+                      }`}
+                    >
+                      {d}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onEnterBossRush?.(rushDiff);
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-rose-600 via-purple-700 to-amber-600 hover:brightness-110 text-white border-2 border-amber-300 font-display font-bold text-sm flex items-center gap-2 shadow-lg cursor-pointer"
+                >
+                  <Zap className="w-4 h-4 text-yellow-300" /> LAUNCH MYTHIC BOSS RUSH
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
         {/* 1. BOSS SELECTION */}
         <div className="space-y-1.5">
           <div className="font-display font-bold text-xs uppercase text-amber-900 flex items-center gap-1.5">
@@ -145,8 +264,13 @@ export const ModeSelectorModal: React.FC<ModeSelectorModalProps> = ({
                       <strong>P1:</strong> {b.phase1Summary}
                     </div>
                     <div>
-                      <strong>P2 (&lt;50%):</strong> {b.phase2Summary}
+                      <strong>P2:</strong> {b.phase2Summary}
                     </div>
+                    {b.phase3Summary && (
+                      <div className="text-rose-900">
+                        <strong>P3 (&lt;30%):</strong> {b.phase3Summary}
+                      </div>
+                    )}
                   </div>
 
                   {b.noHitEasterEggHint && (
@@ -260,6 +384,8 @@ export const ModeSelectorModal: React.FC<ModeSelectorModalProps> = ({
             {partyMode === 'coop' ? 'JOIN CO-OP RAID' : 'ENTER DUNGEON'}
           </button>
         </div>
+          </>
+        )}
       </div>
     </NativeDialog>
   );

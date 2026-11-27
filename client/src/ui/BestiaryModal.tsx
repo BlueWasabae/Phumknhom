@@ -34,7 +34,7 @@ export const BestiaryModal: React.FC<BestiaryModalProps> = ({
         <div className="p-2.5 rounded-xl bg-amber-950/10 border border-amber-900/25 flex flex-wrap items-center justify-between gap-2 text-[11px] text-amber-950">
           <div className="flex items-center gap-1.5 font-display font-bold">
             <BookOpen className="w-4 h-4 text-amber-800" />
-            All 4 Reusable Boss Rigs Live: QuadrupedHopper · Floater · Humanoid · MultiSegmentWorm
+            All 6 Khmer Bosses Live: 4 Classic Rigs + Storm &amp; Crystal Duo + Ten-Headed Yaksha Sovereign
           </div>
           <span className="px-2 py-0.5 rounded-lg bg-amber-800 text-amber-50 font-bold text-[10px]">
             🏆 {unlockedTrophies}/{KHMER_BOSS_LIST.length} Trophies

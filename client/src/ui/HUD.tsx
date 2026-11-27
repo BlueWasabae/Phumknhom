@@ -21,6 +21,7 @@ import {
   Award,
   Backpack,
   BookOpen,
+  ClipboardList,
   Cloud,
   Coins,
   Crown,
@@ -42,11 +43,14 @@ import {
   Sprout,
   Store,
   Swords,
+  Timer,
   User,
   Users,
   Volume2,
   VolumeX,
+  Zap,
 } from 'lucide-react';
+import { countClaimableBounties } from '@shared/bounties';
 import {
   EventBus,
   type BossHudPayload,
@@ -126,6 +130,7 @@ interface HUDProps {
   onOpenTreasureMap?: () => void;
   onOpenRunway?: () => void;
   onOpenBond?: () => void;
+  onOpenBounties?: () => void;
   onToggleMount?: () => void;
   onFastForwardFarm: () => void;
 }
@@ -180,6 +185,7 @@ export const HUD: React.FC<HUDProps> = ({
   onOpenTreasureMap,
   onOpenRunway,
   onOpenBond,
+  onOpenBounties,
   onToggleMount,
   onFastForwardFarm,
 }) => {
@@ -635,9 +641,19 @@ export const HUD: React.FC<HUDProps> = ({
             <Crown className="w-2.5 h-2.5" /> VIP
           </span>
         )}
+        {player.activeTitle && (
+          <span
+            title={`Equipped Title: ${player.activeTitle}`}
+            className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-gradient-to-r from-amber-700 to-rose-700 text-amber-100 border border-amber-400/80 font-display font-bold text-[9px] shrink-0"
+          >
+            👑 {player.activeTitle}
+          </span>
+        )}
       </div>
     </div>
   );
+
+  const claimableBounties = countClaimableBounties(player);
 
   return (
     <>
@@ -648,10 +664,18 @@ export const HUD: React.FC<HUDProps> = ({
             <button
               type="button"
               onClick={() => setMenuDropdownOpen((o) => !o)}
-              className="phum-btn px-2.5 sm:px-3 py-1.5 rounded-xl font-display font-bold text-xs sm:text-sm flex items-center gap-1.5 shrink-0"
+              className="phum-btn relative px-2.5 sm:px-3 py-1.5 rounded-xl font-display font-bold text-xs sm:text-sm flex items-center gap-1.5 shrink-0"
             >
               <Menu className="w-4 h-4 shrink-0" />
               <span>MENU</span>
+              {claimableBounties > 0 && (
+                <span
+                  title={`${claimableBounties} Bounty reward(s) ready to claim!`}
+                  className="absolute -top-1.5 -right-1.5 min-w-4 h-4 px-1 rounded-full bg-rose-600 text-white text-[9px] font-bold flex items-center justify-center border-2 border-amber-100 animate-pulse"
+                >
+                  {claimableBounties}
+                </span>
+              )}
             </button>
 
             <button
@@ -906,6 +930,25 @@ export const HUD: React.FC<HUDProps> = ({
                     <span className="text-[9px] font-bold text-rose-700">
                       {player.bondPartner?.status === 'accepted' ? '💖 Bonded' : 'Ring'}
                     </span>
+                  </button>
+                )}
+                {onOpenBounties && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuDropdownOpen(false);
+                      onOpenBounties();
+                    }}
+                    className="px-3 py-2 rounded-xl hover:bg-amber-200/80 text-left flex items-center justify-between gap-2 text-amber-950"
+                  >
+                    <span className="flex items-center gap-2">
+                      <ClipboardList className="w-4 h-4 text-amber-800" /> Bounties (Daily/Weekly)
+                    </span>
+                    {claimableBounties > 0 && (
+                      <span className="px-1.5 py-0.5 rounded-full bg-emerald-600 text-white text-[9px] font-bold animate-pulse">
+                        {claimableBounties} READY
+                      </span>
+                    )}
                   </button>
                 )}
                 <button
@@ -1215,58 +1258,154 @@ export const HUD: React.FC<HUDProps> = ({
         {/* DUNGEON / PAGODA TOWER BOSS HEALTH BAR, SIGNATURE SKILL [Q] RING & MYTHIC GAUGES */}
         {(zone === 'dungeon' || zone === 'tower') && (
           <div className="flex flex-col items-center gap-1.5 w-full">
-            {/* Sleek Top-Center Boss Health Bar */}
-            {zone === 'dungeon' && bossHud && bossHud.active && (
-              <div className="pointer-events-auto w-[min(94vw,520px)] bg-slate-950/90 border-2 border-amber-500/80 rounded-2xl px-3 py-1.5 shadow-xl">
-                <div className="flex items-center justify-between gap-2 text-[11px] font-display font-bold mb-1">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="text-amber-300 truncate">
-                      {bossHud.khmerName} · {bossHud.englishName}
-                    </span>
-                    <span
-                      className={`px-1.5 py-0.2 rounded text-[9px] uppercase shrink-0 ${
-                        bossHud.phase === 2
-                          ? 'bg-red-600 text-white animate-pulse'
-                          : 'bg-amber-700 text-amber-100'
-                      }`}
-                    >
-                      {bossHud.phase === 2 ? 'P2 ENRAGED' : 'P1'}
-                    </span>
-                    <span className="px-1.5 py-0.2 rounded bg-purple-800 text-purple-100 text-[9px] uppercase shrink-0">
-                      {bossHud.difficulty}
-                    </span>
-                    {(bossHud.partySize ?? 1) > 1 && (
-                      <span className="px-1.5 py-0.2 rounded bg-emerald-700 text-white text-[9px] uppercase shrink-0">
-                        CO-OP {bossHud.partySize}/4
+            {/* Sleek Top-Center Boss Health Bar (+ Boss Rush Speedrun Timer + Duo & 3-Phase Support) */}
+            {zone === 'dungeon' && bossHud && (bossHud.active || bossHud.bossRush?.active) && (
+              <div className="pointer-events-auto w-[min(94vw,540px)] bg-slate-950/92 border-2 border-amber-500/80 rounded-2xl px-3 py-1.5 shadow-xl space-y-1">
+                {/* Mythic Boss Rush Live Speedrun Banner */}
+                {bossHud.bossRush?.active && (
+                  <div className="flex items-center justify-between gap-2 text-[10px] font-display font-bold pb-1 border-b border-amber-500/30">
+                    <div className="flex items-center gap-1.5 text-amber-300">
+                      <Zap className="w-3.5 h-3.5 text-yellow-400" />
+                      <span>
+                        MYTHIC BOSS RUSH · STAGE {bossHud.bossRush.stageIndex + 1} / {bossHud.bossRush.totalStages}
                       </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0 text-amber-100">
-                    {bossHud.bossId === 'sdech_kongkaeb' && bossHud.damageTakenThisFight === 0 && (
-                      <span className="px-1.5 py-0.2 rounded bg-yellow-400 text-amber-950 text-[9px] font-bold">
-                        ★ NO-HIT
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {bossHud.bossRush.breatherSec > 0 && (
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white animate-pulse">
+                          ✨ FULL HEAL · NEXT IN {bossHud.bossRush.breatherSec}s
+                        </span>
+                      )}
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-400/60 text-yellow-300 font-mono">
+                        <Timer className="w-3 h-3" />
+                        {`${String(Math.floor(bossHud.bossRush.elapsedMs / 60000)).padStart(2, '0')}:${String(
+                          Math.floor((bossHud.bossRush.elapsedMs % 60000) / 1000)
+                        ).padStart(2, '0')}.${Math.floor((bossHud.bossRush.elapsedMs % 1000) / 100)}`}
                       </span>
-                    )}
-                    <span className="font-mono text-[10px]">
-                      {bossHud.hp.toLocaleString()} / {bossHud.maxHp.toLocaleString()} (
-                      {Math.ceil((bossHud.hp / Math.max(1, bossHud.maxHp)) * 100)}%)
-                    </span>
+                    </div>
                   </div>
-                </div>
-                <div className="w-full h-3 rounded-full bg-slate-800 border border-amber-500/40 overflow-hidden relative">
-                  <div
-                    className={`h-full transition-all duration-150 ${
-                      bossHud.phase === 2
-                        ? 'bg-gradient-to-r from-red-700 via-orange-500 to-yellow-400'
-                        : 'bg-gradient-to-r from-rose-700 via-red-500 to-amber-500'
-                    }`}
-                    style={{
-                      width: `${Math.max(0, Math.min(100, (bossHud.hp / Math.max(1, bossHud.maxHp)) * 100))}%`,
-                    }}
-                  />
-                  {/* 50% Phase 2 Threshold Marker */}
-                  <div className="absolute top-0 bottom-0 left-1/2 w-0.5 bg-amber-200/70" />
-                </div>
+                )}
+
+                {bossHud.active && (
+                  <>
+                    <div className="flex items-center justify-between gap-2 text-[11px] font-display font-bold">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-amber-300 truncate">
+                          {bossHud.khmerName} · {bossHud.englishName}
+                        </span>
+                        <span
+                          className={`px-1.5 py-0.2 rounded text-[9px] uppercase shrink-0 ${
+                            bossHud.phase === 3
+                              ? 'bg-rose-700 text-yellow-200 animate-pulse border border-yellow-400/60'
+                              : bossHud.phase === 2
+                                ? 'bg-red-600 text-white animate-pulse'
+                                : 'bg-amber-700 text-amber-100'
+                          }`}
+                        >
+                          {bossHud.phase === 3
+                            ? 'P3 SOVEREIGN WRATH'
+                            : bossHud.phase === 2
+                              ? bossHud.bossId === 'krong_reap'
+                                ? 'P2 MASK RITUAL'
+                                : bossHud.duoStatus?.overdriveName
+                                  ? `STORM OVERDRIVE (${bossHud.duoStatus.overdriveName})`
+                                  : 'P2 ENRAGED'
+                              : 'P1'}
+                        </span>
+                        <span className="px-1.5 py-0.2 rounded bg-purple-800 text-purple-100 text-[9px] uppercase shrink-0">
+                          {bossHud.difficulty}
+                        </span>
+                        {(bossHud.partySize ?? 1) > 1 && (
+                          <span className="px-1.5 py-0.2 rounded bg-emerald-700 text-white text-[9px] uppercase shrink-0">
+                            CO-OP {bossHud.partySize}/4
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0 text-amber-100">
+                        {bossHud.bossId === 'sdech_kongkaeb' && bossHud.damageTakenThisFight === 0 && (
+                          <span className="px-1.5 py-0.2 rounded bg-yellow-400 text-amber-950 text-[9px] font-bold">
+                            ★ NO-HIT
+                          </span>
+                        )}
+                        <span className="font-mono text-[10px]">
+                          {bossHud.hp.toLocaleString()} / {bossHud.maxHp.toLocaleString()} (
+                          {Math.ceil((bossHud.hp / Math.max(1, bossHud.maxHp)) * 100)}%)
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="w-full h-3 rounded-full bg-slate-800 border border-amber-500/40 overflow-hidden relative">
+                      <div
+                        className={`h-full transition-all duration-150 ${
+                          bossHud.phase === 3
+                            ? 'bg-gradient-to-r from-rose-900 via-red-600 to-yellow-400'
+                            : bossHud.phase === 2
+                              ? 'bg-gradient-to-r from-red-700 via-orange-500 to-yellow-400'
+                              : 'bg-gradient-to-r from-rose-700 via-red-500 to-amber-500'
+                        }`}
+                        style={{
+                          width: `${Math.max(0, Math.min(100, (bossHud.hp / Math.max(1, bossHud.maxHp)) * 100))}%`,
+                        }}
+                      />
+                      {bossHud.bossId === 'krong_reap' ? (
+                        <>
+                          {/* 65% Phase 2 & 30% Phase 3 Threshold Markers */}
+                          <div className="absolute top-0 bottom-0 left-[30%] w-0.5 bg-rose-200/80" />
+                          <div className="absolute top-0 bottom-0 left-[65%] w-0.5 bg-amber-200/80" />
+                        </>
+                      ) : (
+                        <div className="absolute top-0 bottom-0 left-1/2 w-0.5 bg-amber-200/70" />
+                      )}
+                    </div>
+
+                    {/* Duo Boss Dual Sub-Bars: Ream Eyso & Moni Mekhala */}
+                    {bossHud.duoStatus && (
+                      <div className="grid grid-cols-2 gap-2 pt-0.5 text-[9px] font-display font-bold">
+                        <div className="space-y-0.5">
+                          <div className="flex justify-between text-amber-300">
+                            <span>⚡ Ream Eyso</span>
+                            <span className="font-mono">
+                              {bossHud.duoStatus.eysoHp.toLocaleString()} / {bossHud.duoStatus.eysoMaxHp.toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-amber-600 to-yellow-300 transition-all duration-150"
+                              style={{
+                                width: `${Math.max(
+                                  0,
+                                  Math.min(100, (bossHud.duoStatus.eysoHp / Math.max(1, bossHud.duoStatus.eysoMaxHp)) * 100)
+                                )}%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-0.5">
+                          <div className="flex justify-between text-cyan-300">
+                            <span>✨ Moni Mekhala</span>
+                            <span className="font-mono">
+                              {bossHud.duoStatus.mekhalaHp.toLocaleString()} / {bossHud.duoStatus.mekhalaMaxHp.toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-sky-500 to-cyan-300 transition-all duration-150"
+                              style={{
+                                width: `${Math.max(
+                                  0,
+                                  Math.min(
+                                    100,
+                                    (bossHud.duoStatus.mekhalaHp / Math.max(1, bossHud.duoStatus.mekhalaMaxHp)) * 100
+                                  )
+                                )}%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             )}
 

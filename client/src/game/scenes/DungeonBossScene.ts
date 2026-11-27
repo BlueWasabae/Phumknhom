@@ -311,9 +311,9 @@ export class DungeonBossScene extends Phaser.Scene {
           this.handlePlayerHit(rawAtk, label, pullDir, isPoison),
         onFloatingText: (x, y, text, color, fontSize) =>
           this.spawnFloatingText(x, y, text, color, fontSize ?? '16px'),
-        onPhaseChange: () => {
+        onPhaseChange: (phase) => {
           EventBus.emit('ui:toast', {
-            text: `${this.bossCtrl.def.khmerName} entered PHASE 2! Watch the new telegraphs!`,
+            text: `${this.bossCtrl.def.khmerName} entered PHASE ${phase}! Watch the new telegraphs!`,
           });
           this.broadcastBossHud();
         },
@@ -483,6 +483,10 @@ export class DungeonBossScene extends Phaser.Scene {
         ? 0x0b1d1b
         : this.bossId === 'neak_reach'
         ? 0x22163b
+        : this.bossId === 'ream_eyso_moni_mekhala'
+        ? 0x122645
+        : this.bossId === 'krong_reap'
+        ? 0x3b0b18
         : 0x202744;
     const farTint =
       this.bossId === 'sdech_kongkaeb'
@@ -1298,6 +1302,7 @@ export class DungeonBossScene extends Phaser.Scene {
       furyActive: now < this.furyActiveUntil,
       defenseCracked: now < this.defenseCrackedUntil,
       damageTakenThisFight: this.damageTakenThisFight,
+      duoStatus: this.bossCtrl.getDuoStatus(),
     });
   }
 
@@ -2192,6 +2197,18 @@ export class DungeonBossScene extends Phaser.Scene {
       const nb = computeVillageToDungeonBridge(this.player.state);
       this.player.state.hp = nb.effectiveMaxHp;
     }
+    EventBus.emit('bounty:progress', {
+      category: this.difficulty === 'mythic' ? 'defeat_mythic_boss' : 'defeat_any_boss',
+      amount: 1,
+    });
+
+    // Update 1.8 — Krong Reap also unlocks Krong Reap's Ten-Headed Weapon Aura!
+    if (this.bossId === 'krong_reap') {
+      const auras = new Set(this.player.state.unlockedWeaponAuras ?? []);
+      auras.add('krong_reap_ten_head');
+      this.player.state.unlockedWeaponAuras = Array.from(auras);
+    }
+
     soundManager.playSfx('victory');
     this.emitPlayerState();
     this.broadcastBossHud();

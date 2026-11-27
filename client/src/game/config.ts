@@ -9,6 +9,7 @@ import { HouseInteriorScene } from './scenes/HouseInteriorScene';
 import { PagodaTowerScene } from './scenes/PagodaTowerScene';
 import { FestivalRaceScene } from './scenes/FestivalRaceScene';
 import { DungeonBossScene } from './scenes/DungeonBossScene';
+import { BossRushScene } from './scenes/BossRushScene';
 
 export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameConfig {
   return {
@@ -54,6 +55,7 @@ export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameCon
       PagodaTowerScene,
       FestivalRaceScene,
       DungeonBossScene,
+      BossRushScene,
     ],
   };
 }
