@@ -46,7 +46,7 @@ export class ClubScene extends Phaser.Scene {
   create(): void {
     this.physics.world.gravity.y = 0;
     this.physics.world.setBounds(48, 120, ROOM_W - 96, ROOM_H - 150);
-    soundManager.playBgm('village');
+    soundManager.playBgm('festival');
 
     this.drawClubInterior();
 

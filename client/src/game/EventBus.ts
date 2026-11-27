@@ -224,6 +224,9 @@ export interface EventMap {
     category: BountyCategory;
     amount?: number;
   };
+  'guide:step': {
+    stepId: 'customize_hero' | 'plant_crop' | 'greet_npc' | 'explore_or_boss' | 'claim_bounty';
+  };
   'dungeon:outcome': DungeonOutcomePayload | null;
   'travel:execute': TravelRequestPayload;
   'frontier:gather': {

@@ -50,7 +50,14 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
   };
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-4 z-20 px-4 flex items-end justify-between box-border max-w-full">
+    <div
+      className="pointer-events-none fixed inset-x-0 bottom-3 z-20 px-4 flex items-end justify-between box-border max-w-full"
+      style={{
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        paddingLeft: 'max(1rem, env(safe-area-inset-left, 1rem))',
+        paddingRight: 'max(1rem, env(safe-area-inset-right, 1rem))',
+      }}
+    >
       <div
         ref={padRef}
         onPointerDown={(e) => {

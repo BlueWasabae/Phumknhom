@@ -64,6 +64,7 @@ export interface SavedPlayerProfile {
   unlockedTitles?: string[];
   activeTitle?: string | null;
   bountyProgress?: Record<string, unknown>;
+  starterGuide?: Record<string, unknown>;
   hasCompletedCreation?: boolean;
   activeClass?: string;
   weapon?: Record<string, unknown>;
@@ -833,6 +834,10 @@ export async function savePlayerProfile(
     bountyProgress:
       profile.bountyProgress && typeof profile.bountyProgress === 'object'
         ? profile.bountyProgress
+        : undefined,
+    starterGuide:
+      profile.starterGuide && typeof profile.starterGuide === 'object'
+        ? profile.starterGuide
         : undefined,
     hasCompletedCreation: Boolean(
       profile.hasCompletedCreation ??

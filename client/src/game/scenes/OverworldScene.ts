@@ -240,7 +240,7 @@ export class OverworldScene extends Phaser.Scene {
     this.physics.world.setBounds(24, HORIZON_H, MAP_W - 48, MAP_H - HORIZON_H - 18);
     this.glowLights = [];
     this.areaSignText = undefined;
-    soundManager.playBgm('village');
+    this.syncDynamicBgm();
 
     // 1. Lush Textured 16x16 Meadow Grass across full 1600x1200 map
     this.add
@@ -411,6 +411,7 @@ export class OverworldScene extends Phaser.Scene {
       }),
       EventBus.on('worldEvent:changed', (snap) => {
         this.syncWorldEventVisuals(snap);
+        this.syncDynamicBgm();
       }),
       EventBus.on('cart:listUpdated', ({ carts }) => {
         this.syncTukTukCarts(carts);
@@ -418,6 +419,7 @@ export class OverworldScene extends Phaser.Scene {
       seasonClock.subscribe((snap) => {
         if (snap.activeFestival !== this.lastSyncedFestival) {
           this.syncFestivalVisuals(snap.activeFestival);
+          this.syncDynamicBgm();
         }
       }),
       EventBus.on('travel:execute', (req) => {
@@ -457,6 +459,9 @@ export class OverworldScene extends Phaser.Scene {
     this.syncTreasureMapDigSpot();
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      vfxManager.cleanupScene(this);
+      this.tweens.killAll();
+      this.time.removeAllEvents();
       this.clearWorldEventVisuals();
       this.clearFestivalVisuals();
       this.clearTukTukCarts();
@@ -476,6 +481,23 @@ export class OverworldScene extends Phaser.Scene {
       void roomClient.leavePlaza(false);
       this.player.destroy();
     });
+  }
+
+  private syncDynamicBgm(): void {
+    if (this.mapId === 'wild_frontier') {
+      soundManager.playBgm('cavern');
+      return;
+    }
+    const activeEvent = worldEventManager.getActiveEvent();
+    const activeFestival = seasonClock.getSnapshot().activeFestival;
+    if (
+      activeEvent?.eventId === 'khmer_night_market' ||
+      (activeFestival && (this.mapId === 'central_plaza' || this.mapId === 'green_park' || this.mapId === 'market_street'))
+    ) {
+      soundManager.playBgm('festival');
+      return;
+    }
+    soundManager.playBgm('village');
   }
 
   private clearRemotePlayers(): void {
@@ -3544,6 +3566,7 @@ export class OverworldScene extends Phaser.Scene {
     }
 
     const len = Math.hypot(vx, vy);
+    vfxManager.tickPerformanceMonitor(this, delta);
     const isMoving = len > 0.1;
     if (isMoving) {
       const bridge = computeVillageToDungeonBridge(this.player.state);

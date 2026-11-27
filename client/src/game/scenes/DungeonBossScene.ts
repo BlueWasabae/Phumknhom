@@ -446,6 +446,9 @@ export class DungeonBossScene extends Phaser.Scene {
     }
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      vfxManager.cleanupScene(this);
+      this.tweens.killAll();
+      this.time.removeAllEvents();
       this.unsubs.forEach((u) => u());
       this.unsubs = [];
       this.cheerPackages.forEach((cp) => cp.container.destroy());
@@ -1649,7 +1652,7 @@ export class DungeonBossScene extends Phaser.Scene {
     this.signatureCooldownUntil = now + meta.cooldownMs;
     this.attackAnimUntil = now + 260;
     this.invulnerableUntil = Math.max(this.invulnerableUntil, now + 380);
-    soundManager.playSfx('level_up');
+    soundManager.playSfx('signature_skill');
 
     EventBus.emit('combat:signatureSkillState', {
       classId: cls,
@@ -2390,24 +2393,10 @@ export class DungeonBossScene extends Phaser.Scene {
   }
 
   private spawnFloatingText(x: number, y: number, text: string, color: string, fontSize: string): void {
-    const txt = this.add
-      .text(x, y, text, {
-        fontFamily: 'Fredoka, sans-serif',
-        fontSize,
-        fontStyle: 'bold',
-        color,
-        stroke: '#0f172a',
-        strokeThickness: 4,
-      })
-      .setOrigin(0.5)
-      .setDepth(120);
-    this.tweens.add({
-      targets: txt,
-      y: y - 44,
-      alpha: 0,
-      duration: 760,
-      ease: 'Cubic.easeOut',
-      onComplete: () => txt.destroy(),
+    vfxManager.spawnFloatingText(this, x, y, text, color, fontSize, {
+      riseY: 44,
+      durationMs: 760,
+      depth: 120,
     });
   }
 
@@ -2450,6 +2439,7 @@ export class DungeonBossScene extends Phaser.Scene {
 
   update(time: number, delta: number): void {
     vfxManager.ensurePhysicsResumed(this);
+    vfxManager.tickPerformanceMonitor(this, delta);
     const modalOpen = Boolean(document.querySelector('dialog[open]'));
     if (this.input.enabled === modalOpen) {
       this.input.enabled = !modalOpen;

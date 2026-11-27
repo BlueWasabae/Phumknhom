@@ -59,8 +59,13 @@ import {
   type NetworkStatusPayload,
   type SignatureSkillHudPayload,
 } from '../game/EventBus';
-import { soundManager, type AudioSettings } from '../game/systems/SoundManager';
-import { vfxManager, type VfxQualityMode } from '../game/animations/VFXManager';
+import {
+  BGM_TRACK_META,
+  soundManager,
+  type AudioSettings,
+  type BgmTrack,
+} from '../game/systems/SoundManager';
+import { vfxManager, type FpsSnapshot, type VfxQualityMode } from '../game/animations/VFXManager';
 import { KHMER_SIGNATURE_SKILLS } from '../game/animations/ClassCombatVFX';
 import { worldEventManager } from '../game/systems/WorldEventManager';
 import {
@@ -194,6 +199,7 @@ export const HUD: React.FC<HUDProps> = ({
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [audioSettings, setAudioSettings] = useState<AudioSettings>(() => soundManager.getSettings());
   const [vfxQuality, setVfxQuality] = useState<VfxQualityMode>(() => vfxManager.getQuality());
+  const [fpsSnap, setFpsSnap] = useState<FpsSnapshot>(() => vfxManager.getFpsSnapshot());
   const [sigSkillState, setSigSkillState] = useState<SignatureSkillHudPayload | null>(null);
   const [seasonSnap, setSeasonSnap] = useState<SeasonClockSnapshot>(() => seasonClock.getSnapshot());
   const [activeWorldEvent, setActiveWorldEvent] = useState<ActiveWorldEventSnapshot | null>(() =>
@@ -259,6 +265,7 @@ export const HUD: React.FC<HUDProps> = ({
   useEffect(() => {
     const unsubAudio = soundManager.subscribe(setAudioSettings);
     const unsubVfx = vfxManager.subscribe(setVfxQuality);
+    const unsubFps = vfxManager.subscribeFps(setFpsSnap);
     const unsubSig = EventBus.on('combat:signatureSkillState', setSigSkillState);
     const unsubSeason = seasonClock.subscribe(setSeasonSnap);
     const unsubEvent = worldEventManager.subscribe(setActiveWorldEvent);
@@ -269,6 +276,7 @@ export const HUD: React.FC<HUDProps> = ({
     return () => {
       unsubAudio();
       unsubVfx();
+      unsubFps();
       unsubSig();
       unsubSeason();
       unsubEvent();
@@ -1567,11 +1575,38 @@ export const HUD: React.FC<HUDProps> = ({
         )}
       </div>
 
+      {/* Update 1.9 — Optional Live FPS & VFX Monitor Pill (Toggle in MENU -> Settings) */}
+      {fpsSnap.showFps && (
+        <div
+          className="pointer-events-none fixed right-2.5 bottom-3 z-30 px-2.5 py-1 rounded-xl bg-slate-950/88 border border-amber-400/60 text-[10px] font-mono font-bold text-amber-100 shadow-lg flex items-center gap-2"
+          style={{ bottom: 'max(0.75rem, env(safe-area-inset-bottom, 0.75rem))' }}
+        >
+          <span
+            className={
+              fpsSnap.fps >= 50
+                ? 'text-emerald-400'
+                : fpsSnap.fps >= 38
+                  ? 'text-amber-300'
+                  : 'text-rose-400'
+            }
+          >
+            {fpsSnap.fps} FPS
+          </span>
+          <span className="text-amber-300/60">|</span>
+          <span className="uppercase text-[9px] text-sky-300">
+            VFX: {fpsSnap.quality}
+          </span>
+        </div>
+      )}
+
       {/* 3-SLOT QUICK-SNACK BAR & LIVE TIMED BUFF TIMERS */}
       <div
         className={`pointer-events-none fixed left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-1.5 max-w-[96vw] ${
           touchUiEnabled ? 'bottom-36 sm:bottom-5' : 'bottom-3'
         }`}
+        style={{
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        }}
       >
         {/* Active Timed Buff Pills with Live Countdown */}
         {activeBuffs.length > 0 && (
@@ -1737,29 +1772,42 @@ export const HUD: React.FC<HUDProps> = ({
         maxWidthClass="w-[min(94vw,490px)]"
       >
         <div className="space-y-3.5 text-xs">
-          {/* Audio Mixer */}
+          {/* Audio Mixer (Update 1.9 Khmer 4-Track Dynamic Soundscape) */}
           <div className="p-3 rounded-xl bg-amber-50 border border-amber-900/25 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <span className="font-display font-bold text-amber-950 flex items-center gap-1.5">
-                {audioSettings.muted ? <VolumeX className="w-4 h-4 text-rose-700" /> : <Volume2 className="w-4 h-4 text-emerald-700" />}
-                Audio Engine (Pack OGG/WAV + Synth Fallback)
-              </span>
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <span className="font-display font-bold text-amber-950 flex items-center gap-1.5">
+                  {audioSettings.muted ? (
+                    <VolumeX className="w-4 h-4 text-rose-700 shrink-0" />
+                  ) : (
+                    <Volume2 className="w-4 h-4 text-emerald-700 shrink-0" />
+                  )}
+                  <span className="truncate">Khmer Dynamic Soundscape</span>
+                </span>
+                {audioSettings.currentTrack && (
+                  <div className="text-[10px] text-amber-800 truncate">
+                    Now Playing: {BGM_TRACK_META[audioSettings.currentTrack].icon}{' '}
+                    <strong>{BGM_TRACK_META[audioSettings.currentTrack].name}</strong> (
+                    {BGM_TRACK_META[audioSettings.currentTrack].mood})
+                  </div>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => soundManager.toggleMute()}
-                className={`px-2.5 py-1 rounded-lg font-display font-bold text-[11px] border ${
+                className={`px-2.5 py-1 rounded-lg font-display font-bold text-[11px] border shrink-0 cursor-pointer ${
                   audioSettings.muted
                     ? 'bg-rose-700 text-white border-rose-950'
                     : 'bg-emerald-700 text-white border-emerald-950'
                 }`}
               >
-                {audioSettings.muted ? 'Muted' : 'Sound On'}
+                {audioSettings.muted ? 'Muted All' : 'Mute All: Off'}
               </button>
             </div>
 
             <label className="block space-y-1">
               <div className="flex justify-between font-bold text-amber-900 text-[11px]">
-                <span>Music (BGM)</span>
+                <span>Music Volume (BGM)</span>
                 <span>{Math.round(audioSettings.bgmVolume * 100)}%</span>
               </div>
               <input
@@ -1774,7 +1822,7 @@ export const HUD: React.FC<HUDProps> = ({
 
             <label className="block space-y-1">
               <div className="flex justify-between font-bold text-amber-900 text-[11px]">
-                <span>Sound Effects (SFX)</span>
+                <span>SFX Volume</span>
                 <span>{Math.round(audioSettings.sfxVolume * 100)}%</span>
               </div>
               <input
@@ -1787,21 +1835,51 @@ export const HUD: React.FC<HUDProps> = ({
               />
             </label>
 
+            <div className="space-y-1">
+              <div className="text-[10px] font-bold text-amber-900 uppercase">
+                Preview Scene Soundtracks (Crossfade)
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1">
+                {(['village', 'cavern', 'boss', 'festival'] as BgmTrack[]).map((tid) => {
+                  const meta = BGM_TRACK_META[tid];
+                  const active = audioSettings.currentTrack === tid;
+                  return (
+                    <button
+                      key={tid}
+                      type="button"
+                      onClick={() => {
+                        soundManager.unlock();
+                        soundManager.playBgm(tid);
+                      }}
+                      className={`px-2 py-1 rounded-lg border font-display font-bold text-[10px] transition cursor-pointer ${
+                        active
+                          ? 'bg-amber-800 text-amber-50 border-amber-950 shadow'
+                          : 'bg-white hover:bg-amber-100 text-amber-950 border-amber-900/25'
+                      }`}
+                    >
+                      {meta.icon} {tid.charAt(0).toUpperCase() + tid.slice(1)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="flex flex-wrap gap-1.5 pt-1">
               {(
                 [
-                  ['swing', '⚔️ Swing'],
-                  ['bonk', '🍳 BONK!'],
+                  ['signature_skill', '✨ Skill [Q]'],
+                  ['ore_shatter', '⛏️ Ore Shatter'],
+                  ['harvest', '🌾 Harvest'],
                   ['coin', '🪙 Coin'],
-                  ['splash', '💦 Splash'],
                   ['level_up', '🎺 Level Up'],
+                  ['bonk', '🍳 BONK!'],
                 ] as const
               ).map(([sfx, label]) => (
                 <button
                   key={sfx}
                   type="button"
                   onClick={() => soundManager.playSfx(sfx)}
-                  className="px-2 py-1 rounded-lg bg-white hover:bg-amber-100 border border-amber-900/30 font-bold text-[10px] text-amber-950"
+                  className="px-2 py-1 rounded-lg bg-white hover:bg-amber-100 border border-amber-900/30 font-bold text-[10px] text-amber-950 cursor-pointer"
                 >
                   {label}
                 </button>
@@ -1809,17 +1887,31 @@ export const HUD: React.FC<HUDProps> = ({
             </div>
           </div>
 
-          {/* VFX Quality & WebGL Bloom Toggle (Update 1.7) */}
+          {/* VFX Quality, Auto-FPS Guard & Show FPS Toggle (Update 1.7 + 1.9) */}
           <div className="p-3 rounded-xl bg-amber-50 border border-amber-900/25 space-y-2">
             <div className="flex items-center justify-between gap-2">
               <div>
                 <div className="font-display font-bold text-amber-950">
-                  ✨ VFX Quality (WebGL Bloom &amp; Particles)
+                  ✨ VFX Quality &amp; Auto-FPS Guard
                 </div>
                 <div className="text-[10px] text-amber-900/85">
-                  High enables Phaser WebGL Bloom/Glow on portals, skills &amp; campfires. Performance keeps older phones locked at 60 FPS.
+                  Auto-FPS drops to Performance Mode automatically if FPS dips under 40 for 3s on mobile.
                 </div>
               </div>
+              <button
+                type="button"
+                onClick={() => {
+                  soundManager.playSfx('click');
+                  vfxManager.setShowFps(!fpsSnap.showFps);
+                }}
+                className={`px-2.5 py-1 rounded-lg border font-display font-bold text-[10px] shrink-0 cursor-pointer ${
+                  fpsSnap.showFps
+                    ? 'bg-emerald-700 text-white border-emerald-950'
+                    : 'bg-white hover:bg-amber-100 text-amber-950 border-amber-900/25'
+                }`}
+              >
+                {fpsSnap.showFps ? `Show FPS: ON (${fpsSnap.fps})` : 'Show FPS: OFF'}
+              </button>
             </div>
             <div className="grid grid-cols-2 gap-1.5">
               <button

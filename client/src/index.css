@@ -52,13 +52,13 @@ select {
   }
 }
 
-/* Native <dialog> modal best practices */
+/* Native <dialog> modal best practices + safe-area mobile viewport safety */
 dialog {
   padding: 0;
   border: none;
   background: transparent;
-  max-width: 94vw;
-  max-height: 90dvh;
+  max-width: min(96vw, calc(100vw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)));
+  max-height: min(90dvh, calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)));
   color: inherit;
 }
 

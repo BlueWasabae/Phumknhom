@@ -9,6 +9,7 @@ import { ACCESSORY_DEFS } from '@shared/accessoryFusions';
 import { EventBus, type JoystickVector } from '../EventBus';
 import { Player } from '../entities/Player';
 import { soundManager } from '../systems/SoundManager';
+import { vfxManager } from '../animations/VFXManager';
 
 const WORLD_W = 2400;
 const WORLD_H = 1040;
@@ -198,7 +199,7 @@ export class CavernExploreScene extends Phaser.Scene {
   create(): void {
     this.physics.world.gravity.y = 800;
     this.physics.world.setBounds(0, 0, WORLD_W, WORLD_H);
-    soundManager.playBgm('boss');
+    soundManager.playBgm('cavern');
 
     this.drawCavernParallaxAndBackdrop();
     this.buildPlatforms();
@@ -308,8 +309,12 @@ export class CavernExploreScene extends Phaser.Scene {
     );
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      vfxManager.cleanupScene(this);
+      this.tweens.killAll();
+      this.time.removeAllEvents();
       this.unsubs.forEach((fn) => fn());
       this.unsubs = [];
+      this.player.destroy();
     });
 
     EventBus.emit('scene:ready', { zone: 'cavern' });
@@ -828,7 +833,7 @@ export class CavernExploreScene extends Phaser.Scene {
     node.glow.setAlpha(0.08);
     node.label.setText('Respawning...');
     this.spawnStoneBurst(node.x, node.y - 8, node.sparkColor, 16);
-    soundManager.playSfx('harvest');
+    soundManager.playSfx('ore_shatter');
 
     const dropQty = node.kind === 'laterite' ? 2 : 1;
     const bonusItems: Array<{ itemId: string; quantity: number }> = [
@@ -1309,24 +1314,10 @@ export class CavernExploreScene extends Phaser.Scene {
   }
 
   private spawnFloatingText(x: number, y: number, text: string, color: string, fontSize = '13px'): void {
-    const t = this.add
-      .text(x, y, text, {
-        fontFamily: 'Fredoka, sans-serif',
-        fontSize,
-        fontStyle: 'bold',
-        color,
-        stroke: '#0f172a',
-        strokeThickness: 4,
-      })
-      .setOrigin(0.5)
-      .setDepth(95);
-    this.tweens.add({
-      targets: t,
-      y: y - 34,
-      alpha: 0,
-      duration: 920,
-      ease: 'Cubic.easeOut',
-      onComplete: () => t.destroy(),
+    vfxManager.spawnFloatingText(this, x, y, text, color, fontSize, {
+      riseY: 34,
+      durationMs: 920,
+      depth: 95,
     });
   }
 
@@ -1351,6 +1342,7 @@ export class CavernExploreScene extends Phaser.Scene {
   }
 
   update(time: number, delta: number): void {
+    vfxManager.tickPerformanceMonitor(this, delta);
     if (this.transitioning) return;
     const dt = delta / 1000;
 

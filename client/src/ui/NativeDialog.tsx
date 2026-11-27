@@ -87,8 +87,14 @@ export const NativeDialog: React.FC<NativeDialogProps> = ({
       onPointerDown={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
       className="m-auto rounded-2xl overflow-visible shadow-2xl"
+      style={{
+        paddingTop: 'env(safe-area-inset-top, 0px)',
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        paddingLeft: 'env(safe-area-inset-left, 0px)',
+        paddingRight: 'env(safe-area-inset-right, 0px)',
+      }}
     >
-      <div className={`${maxWidthClass} max-h-[88dvh] phum-panel rounded-2xl overflow-hidden flex flex-col`}>
+      <div className={`${maxWidthClass} max-h-[90dvh] phum-panel rounded-2xl overflow-hidden flex flex-col`}>
         <div className="px-4 py-3 phum-wood flex items-center justify-between gap-2 shrink-0">
           <div className="min-w-0">
             <h2 id={titleId} className="font-display font-bold text-base text-amber-100 truncate">
@@ -106,7 +112,14 @@ export const NativeDialog: React.FC<NativeDialogProps> = ({
             </button>
           </form>
         </div>
-        <div className="p-4 overflow-y-auto flex-1">{children}</div>
+        <div
+          className="p-3 sm:p-4 overflow-y-auto overscroll-contain flex-1 min-h-0"
+          style={{
+            paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 1rem))',
+          }}
+        >
+          {children}
+        </div>
       </div>
     </dialog>
   );

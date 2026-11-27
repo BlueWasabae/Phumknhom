@@ -108,6 +108,7 @@ export interface SavedProfilePayload {
   unlockedTitles?: string[];
   activeTitle?: string | null;
   bountyProgress?: PlayerState['bountyProgress'];
+  starterGuide?: PlayerState['starterGuide'];
   hasCompletedCreation?: boolean;
   activeClass: PlayerState['activeClass'];
   weapon: PlayerState['weapon'];
@@ -454,6 +455,13 @@ export function serializePlayerStateForSave(state: PlayerState): SavedProfilePay
           claimed: [...state.bountyProgress.claimed],
         }
       : undefined,
+    starterGuide: state.starterGuide
+      ? {
+          completedSteps: [...state.starterGuide.completedSteps],
+          finalRewardClaimed: Boolean(state.starterGuide.finalRewardClaimed),
+          dismissed: Boolean(state.starterGuide.dismissed),
+        }
+      : undefined,
     hasCompletedCreation: Boolean(state.hasCompletedCreation ?? state.loadout.hasCompletedCreation),
     activeClass: state.activeClass,
     weapon: { ...state.weapon },
@@ -777,6 +785,16 @@ export function hydratePlayerStateFromSave(
     bountyProgress:
       saved?.bountyProgress && typeof saved.bountyProgress === 'object'
         ? saved.bountyProgress
+        : undefined,
+    starterGuide:
+      saved?.starterGuide && typeof saved.starterGuide === 'object'
+        ? {
+            completedSteps: Array.isArray(saved.starterGuide.completedSteps)
+              ? [...saved.starterGuide.completedSteps]
+              : [],
+            finalRewardClaimed: Boolean(saved.starterGuide.finalRewardClaimed),
+            dismissed: Boolean(saved.starterGuide.dismissed),
+          }
         : undefined,
     hasCompletedCreation: Boolean(
       saved?.hasCompletedCreation ?? saved?.loadout?.hasCompletedCreation ?? false

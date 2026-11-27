@@ -584,6 +584,7 @@ export class FarmScene extends Phaser.Scene {
       const res = plantSeedOnPlot(this.player.state, index, this.selectedCropId, now);
       if (res.ok) {
         soundManager.playSfx('click');
+        EventBus.emit('guide:step', { stepId: 'plant_crop' });
         this.spawnPopSparkle(visual.cx, visual.cy, 0x4ade80, 'Planted!');
       }
       this.commitFarmState(res.state, res.message, res.ok);

@@ -168,6 +168,8 @@ import { TreasureMapModal } from './ui/TreasureMapModal';
 import { RunwayModal } from './ui/RunwayModal';
 import { BondModal } from './ui/BondModal';
 import { BountyBoardModal } from './ui/BountyBoardModal';
+import { STARTER_GUIDE_STEPS, WelcomeGuideWidget } from './ui/WelcomeGuideWidget';
+import type { StarterGuideStepId } from '@shared/types';
 import {
   claimBountyReward,
   getActiveBounties,
@@ -273,7 +275,18 @@ export const App: React.FC = () => {
   const [nearPortal, setNearPortal] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatDraftPrefill, setChatDraftPrefill] = useState<{ text: string; nonce: number } | null>(null);
-  const [touchUiEnabled, setTouchUiEnabled] = useState(false);
+  const [touchUiEnabled, setTouchUiEnabled] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      const hasCoarsePointer =
+        typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+      const hasTouchPoints = (navigator?.maxTouchPoints ?? 0) > 0;
+      const isNarrowViewport = window.innerWidth <= 900;
+      return Boolean(hasCoarsePointer || (hasTouchPoints && isNarrowViewport));
+    } catch {
+      return false;
+    }
+  });
   const [activeModal, setActiveModal] = useState<ActiveModalType>('auth');
   const [authSession, setAuthSession] = useState<AuthSession | null>(null);
   const [saveStatus, setSaveStatus] = useState<'guest' | 'saving' | 'saved'>('guest');
@@ -794,6 +807,7 @@ export const App: React.FC = () => {
       }
 
       setActiveModal(null);
+      EventBus.emit('guide:step', { stepId: 'customize_hero' });
       const clsName = KHMER_CLASSES[result.selectedClass].englishName;
       EventBus.emit('ui:toast', {
         text: `Welcome to ភូមិខ្ញុំ, ${result.name} (${clsName})!`,
@@ -1365,6 +1379,9 @@ export const App: React.FC = () => {
           setBossHud(null);
           setDungeonOutcome(null);
         }
+        if (nextZone === 'cavern' || nextZone === 'dungeon') {
+          EventBus.emit('guide:step', { stepId: 'explore_or_boss' });
+        }
         // Automatically dismount when entering caverns, dungeons, club, farm, or house indoors!
         if (nextZone !== 'overworld' && playerRef.current.activeMount) {
           const dismounted = { ...playerRef.current, activeMount: null };
@@ -1398,10 +1415,78 @@ export const App: React.FC = () => {
           kromLevel: nextPlayer.kromLevel ?? prev.kromLevel,
           pchumBenBlessingUntil: nextPlayer.pchumBenBlessingUntil ?? prev.pchumBenBlessingUntil,
           festivalSplashCount: nextPlayer.festivalSplashCount ?? prev.festivalSplashCount,
+          bestBossRushTimeMs: nextPlayer.bestBossRushTimeMs ?? prev.bestBossRushTimeMs,
+          unlockedTitles: nextPlayer.unlockedTitles ?? prev.unlockedTitles,
+          activeTitle: nextPlayer.activeTitle ?? prev.activeTitle,
+          bountyProgress: nextPlayer.bountyProgress ?? prev.bountyProgress,
+          starterGuide: nextPlayer.starterGuide ?? prev.starterGuide,
         }));
       }),
       EventBus.on('npc:openDialogue', ({ npcId }) => {
         setActiveNpcId(npcId);
+        EventBus.emit('guide:step', { stepId: 'greet_npc' });
+      }),
+      EventBus.on('guide:step', ({ stepId }) => {
+        let toastMsg: string | null = null;
+        let finishedAll = false;
+        setPlayer((prev) => {
+          const curGuide = prev.starterGuide ?? {
+            completedSteps: [],
+            finalRewardClaimed: false,
+            dismissed: false,
+          };
+          const completed = new Set<StarterGuideStepId>(curGuide.completedSteps);
+          if (completed.has(stepId)) return prev;
+          completed.add(stepId);
+
+          const stepDef = STARTER_GUIDE_STEPS.find((s) => s.id === stepId);
+          let bonusCoins = stepDef?.rewardCoins ?? 100;
+          let finalClaimed = curGuide.finalRewardClaimed;
+          const nextTitles = new Set<string>(prev.unlockedTitles ?? []);
+          let nextActiveTitle = prev.activeTitle ?? null;
+
+          const allFiveDone = STARTER_GUIDE_STEPS.every((s) => completed.has(s.id));
+          if (allFiveDone && !finalClaimed) {
+            finalClaimed = true;
+            finishedAll = true;
+            bonusCoins += 500;
+            nextTitles.add('Phum Pioneer');
+            if (!nextActiveTitle) nextActiveTitle = 'Phum Pioneer';
+            toastMsg = `👑 VILLAGE STARTER GUIDE COMPLETE! Earned "Phum Pioneer" Title + 600 Bonus Coins!`;
+          } else {
+            toastMsg = `🧭 Starter Guide (${completed.size}/5): ${stepDef?.label ?? stepId} (+${bonusCoins} Bonus Coins!)`;
+          }
+
+          const nextCoins = prev.currencies.coins + bonusCoins;
+          const nextState: PlayerState = {
+            ...prev,
+            coins: nextCoins,
+            currencies: { ...prev.currencies, coins: nextCoins },
+            unlockedTitles: Array.from(nextTitles),
+            activeTitle: nextActiveTitle,
+            starterGuide: {
+              ...curGuide,
+              completedSteps: Array.from(completed),
+              finalRewardClaimed: finalClaimed,
+            },
+          };
+          EventBus.emit('player:stateSync', nextState);
+          if (!authSessionRef.current) {
+            saveGuestProgressSnapshot(nextState);
+          }
+          return nextState;
+        });
+
+        if (toastMsg) {
+          soundManager.playSfx(finishedAll ? 'victory' : 'level_up');
+          EventBus.emit('ui:toast', { text: toastMsg });
+          if (finishedAll) {
+            EventBus.emit('ticker:push', {
+              text: `👑 ${playerRef.current.name} completed the Village Starter Guide and earned the Phum Pioneer title!`,
+              category: 'club',
+            });
+          }
+        }
       }),
       EventBus.on('house:decorUpdated', ({ houseDecor, toast }) => {
         setPlayer((prev) => {
@@ -2080,6 +2165,48 @@ export const App: React.FC = () => {
       />
 
       <ServerTickerBanner />
+
+      <WelcomeGuideWidget
+        player={player}
+        zone={zone}
+        hiddenByModal={activeModal !== null || Boolean(activeNpcId) || Boolean(dungeonOutcome)}
+        onDismiss={() =>
+          runStateAction((s) => ({
+            state: {
+              ...s,
+              starterGuide: {
+                completedSteps: s.starterGuide?.completedSteps ?? [],
+                finalRewardClaimed: Boolean(s.starterGuide?.finalRewardClaimed),
+                dismissed: true,
+              },
+            },
+            ok: true,
+            message: '🧭 Village Starter Guide dismissed. Have fun exploring ភូមិខ្ញុំ!',
+          }))
+        }
+        onQuickAction={(stepId) => {
+          if (stepId === 'plant_crop') {
+            handleTravel(
+              { method: 'mirror', targetZone: 'farm', destinationLabel: 'Personal Farm' },
+              0
+            );
+          } else if (stepId === 'greet_npc') {
+            handleTravel(
+              {
+                method: 'pylon',
+                targetZone: 'overworld',
+                mapId: 'market_street',
+                destinationLabel: 'Market Street (NPCs)',
+              },
+              0
+            );
+          } else if (stepId === 'explore_or_boss') {
+            setActiveModal('modeSelector');
+          } else if (stepId === 'claim_bounty') {
+            setActiveModal('bounties');
+          }
+        }}
+      />
 
       {/* Floating +XP & LEVEL UP! Skill Notifications */}
       {xpBanners.length > 0 && (
@@ -3011,7 +3138,10 @@ export const App: React.FC = () => {
         onClaimBounty={(bountyId) =>
           runStateAction((s) => {
             const res = claimBountyReward(s, bountyId);
-            if (res.ok) soundManager.playSfx('level_up');
+            if (res.ok) {
+              soundManager.playSfx('level_up');
+              EventBus.emit('guide:step', { stepId: 'claim_bounty' });
+            }
             return res;
           })
         }
@@ -3039,6 +3169,7 @@ export const App: React.FC = () => {
               return { state: s, ok: false, message: 'No completed bounties ready to claim yet!' };
             }
             soundManager.playSfx('victory');
+            EventBus.emit('guide:step', { stepId: 'claim_bounty' });
             return {
               state: cur,
               ok: true,

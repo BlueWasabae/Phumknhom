@@ -245,6 +245,9 @@ export class PagodaTowerScene extends Phaser.Scene {
     EventBus.emit('portal:proximity', { nearPortal: false, label: '', targetZone: 'overworld' });
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      vfxManager.cleanupScene(this);
+      this.tweens.killAll();
+      this.time.removeAllEvents();
       this.unsubs.forEach((u) => u());
       this.unsubs = [];
       this.player.destroy();
@@ -785,7 +788,7 @@ export class PagodaTowerScene extends Phaser.Scene {
     this.signatureCooldownUntil = now + meta.cooldownMs;
     this.attackAnimUntil = now + 260;
     this.invulnUntil = Math.max(this.invulnUntil, now + 380);
-    soundManager.playSfx('level_up');
+    soundManager.playSfx('signature_skill');
 
     EventBus.emit('combat:signatureSkillState', {
       classId: cls,
@@ -899,29 +902,16 @@ export class PagodaTowerScene extends Phaser.Scene {
   }
 
   private spawnFloatingText(x: number, y: number, msg: string, color: string): void {
-    const t = this.add
-      .text(x, y, msg, {
-        fontFamily: 'Fredoka, sans-serif',
-        fontSize: '13px',
-        fontStyle: 'bold',
-        color,
-        stroke: '#0f172a',
-        strokeThickness: 4,
-      })
-      .setOrigin(0.5)
-      .setDepth(2500);
-    this.tweens.add({
-      targets: t,
-      y: y - 30,
-      alpha: 0,
-      duration: 780,
-      ease: 'Cubic.easeOut',
-      onComplete: () => t.destroy(),
+    vfxManager.spawnFloatingText(this, x, y, msg, color, '13px', {
+      riseY: 30,
+      durationMs: 780,
+      depth: 2500,
     });
   }
 
   update(time: number, delta: number): void {
     vfxManager.ensurePhysicsResumed(this);
+    vfxManager.tickPerformanceMonitor(this, delta);
     const modalOpen = Boolean(document.querySelector('dialog[open]'));
     if (this.input.enabled === modalOpen) {
       this.input.enabled = !modalOpen;

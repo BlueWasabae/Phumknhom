@@ -330,6 +330,19 @@ export interface WeaponStats {
   knockbackForce: number;
 }
 
+export type StarterGuideStepId =
+  | 'customize_hero'
+  | 'plant_crop'
+  | 'greet_npc'
+  | 'explore_or_boss'
+  | 'claim_bounty';
+
+export interface StarterGuideState {
+  completedSteps: StarterGuideStepId[];
+  finalRewardClaimed: boolean;
+  dismissed: boolean;
+}
+
 export interface PlayerState {
   name: string;
   level: number;
@@ -398,6 +411,8 @@ export interface PlayerState {
   unlockedTitles?: string[];
   activeTitle?: string | null;
   bountyProgress?: BountyProgressState;
+  /** Update 1.9 — New-Player Welcome Checklist ("Village Starter Guide") */
+  starterGuide?: StarterGuideState;
   hasCompletedCreation?: boolean;
   skillDamagePct: number;
   armorDamagePct: number;

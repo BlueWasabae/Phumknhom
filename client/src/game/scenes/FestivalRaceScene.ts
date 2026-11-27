@@ -79,7 +79,7 @@ export class FestivalRaceScene extends Phaser.Scene {
   create(): void {
     const w = this.scale.width;
     const h = this.scale.height;
-    soundManager.playBgm('village');
+    soundManager.playBgm('festival');
 
     // 1. Lantern-Lit Twilight Mekong River Course
     const bg = this.add.graphics().setDepth(0);

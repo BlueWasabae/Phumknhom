@@ -227,6 +227,9 @@ export class BossRushScene extends Phaser.Scene {
     this.broadcastBossRushHud();
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      vfxManager.cleanupScene(this);
+      this.tweens.killAll();
+      this.time.removeAllEvents();
       this.unsubs.forEach((u) => u());
       this.unsubs = [];
       this.bossCtrl?.destroy();
@@ -584,7 +587,7 @@ export class BossRushScene extends Phaser.Scene {
     this.signatureCooldownUntil = now + meta.cooldownMs;
     this.attackAnimUntil = now + 260;
     this.invulnerableUntil = Math.max(this.invulnerableUntil, now + 380);
-    soundManager.playSfx('level_up');
+    soundManager.playSfx('signature_skill');
 
     EventBus.emit('combat:signatureSkillState', {
       classId: cls,
@@ -666,18 +669,11 @@ export class BossRushScene extends Phaser.Scene {
   }
 
   private spawnFloatingText(x: number, y: number, text: string, color: string, fontSize = '15px'): void {
-    const t = this.add
-      .text(x, y, text, {
-        fontFamily: 'Fredoka, sans-serif',
-        fontSize,
-        fontStyle: 'bold',
-        color,
-        stroke: '#0f172a',
-        strokeThickness: 4,
-      })
-      .setOrigin(0.5)
-      .setDepth(2300);
-    this.tweens.add({ targets: t, y: y - 34, alpha: 0, duration: 820, onComplete: () => t.destroy() });
+    vfxManager.spawnFloatingText(this, x, y, text, color, fontSize, {
+      riseY: 36,
+      durationMs: 800,
+      depth: 2300,
+    });
   }
 
   private returnToVillage(): void {
@@ -696,6 +692,7 @@ export class BossRushScene extends Phaser.Scene {
 
   update(time: number, delta: number): void {
     vfxManager.ensurePhysicsResumed(this);
+    vfxManager.tickPerformanceMonitor(this, delta);
     const modalOpen = Boolean(document.querySelector('dialog[open]'));
     if (this.input.enabled === modalOpen) this.input.enabled = !modalOpen;
     if (this.input.keyboard && this.input.keyboard.enabled === modalOpen) this.input.keyboard.enabled = !modalOpen;
