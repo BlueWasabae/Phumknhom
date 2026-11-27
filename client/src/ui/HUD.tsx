@@ -55,6 +55,9 @@ import {
   Zap,
 } from 'lucide-react';
 import { countClaimableBounties } from '@shared/bounties';
+import { getDailyLoginStatus } from '@shared/loginRewards';
+import { countClaimablePassRewards, getSeasonPassTierFromXp } from '@shared/seasonPass';
+import { ACHIEVEMENT_LIST } from '@shared/achievements';
 import {
   EventBus,
   type BossHudPayload,
@@ -142,6 +145,9 @@ interface HUDProps {
   onOpenBounties?: () => void;
   onOpenPromo?: () => void;
   onOpenAdmin?: () => void;
+  onOpenDailyLogin?: () => void;
+  onOpenSeasonPass?: () => void;
+  onOpenAchievements?: () => void;
   onTogglePhotoMode?: () => void;
   canInstallPwa?: boolean;
   onInstallPwa?: () => void;
@@ -202,6 +208,9 @@ export const HUD: React.FC<HUDProps> = ({
   onOpenBounties,
   onOpenPromo,
   onOpenAdmin,
+  onOpenDailyLogin,
+  onOpenSeasonPass,
+  onOpenAchievements,
   onTogglePhotoMode,
   canInstallPwa,
   onInstallPwa,
@@ -676,6 +685,11 @@ export const HUD: React.FC<HUDProps> = ({
   );
 
   const claimableBounties = countClaimableBounties(player);
+  const dailyLoginStatus = getDailyLoginStatus(player);
+  const claimablePass = countClaimablePassRewards(player);
+  const seasonPassInfo = getSeasonPassTierFromXp(player.seasonPassXp ?? 0);
+  const totalMenuAlerts =
+    claimableBounties + (dailyLoginStatus.claimedToday ? 0 : 1) + claimablePass;
 
   return (
     <>
@@ -690,15 +704,35 @@ export const HUD: React.FC<HUDProps> = ({
             >
               <Menu className="w-4 h-4 shrink-0" />
               <span>MENU</span>
-              {claimableBounties > 0 && (
+              {totalMenuAlerts > 0 && (
                 <span
-                  title={`${claimableBounties} Bounty reward(s) ready to claim!`}
+                  title={`${totalMenuAlerts} reward(s) ready to claim!`}
                   className="absolute -top-1.5 -right-1.5 min-w-4 h-4 px-1 rounded-full bg-rose-600 text-white text-[9px] font-bold flex items-center justify-center border-2 border-amber-100 animate-pulse"
                 >
-                  {claimableBounties}
+                  {totalMenuAlerts > 9 ? '9+' : totalMenuAlerts}
                 </span>
               )}
             </button>
+
+            {onOpenSeasonPass && (
+              <button
+                type="button"
+                onClick={() => {
+                  soundManager.playSfx('click');
+                  onOpenSeasonPass();
+                }}
+                title={`Angkor Season Pass · Tier ${seasonPassInfo.tier}/20`}
+                className="phum-btn relative px-2 py-1.5 rounded-xl font-display font-bold text-xs flex items-center gap-1 shrink-0 cursor-pointer"
+              >
+                <Crown className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                <span className="hidden md:inline">Pass T{seasonPassInfo.tier}</span>
+                {claimablePass > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-4 h-4 px-1 rounded-full bg-emerald-600 text-white text-[9px] font-bold flex items-center justify-center border border-amber-100">
+                    {claimablePass}
+                  </span>
+                )}
+              </button>
+            )}
 
             <button
               type="button"
@@ -987,6 +1021,66 @@ export const HUD: React.FC<HUDProps> = ({
                       <Gift className="w-4 h-4 text-rose-600" /> Gift Codes &amp; Invite
                     </span>
                     <span className="text-[9px] font-bold text-rose-700">FREE</span>
+                  </button>
+                )}
+                {onOpenDailyLogin && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundManager.playSfx('click');
+                      setMenuDropdownOpen(false);
+                      onOpenDailyLogin();
+                    }}
+                    className="px-3 py-2 rounded-xl hover:bg-amber-200/80 text-left flex items-center justify-between gap-2 text-amber-950"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-amber-600" /> Daily Rewards (7-Day)
+                    </span>
+                    {!dailyLoginStatus.claimedToday ? (
+                      <span className="px-1.5 py-0.5 rounded-full bg-rose-600 text-white text-[9px] font-bold animate-pulse">
+                        DAY {dailyLoginStatus.nextClaimDay}
+                      </span>
+                    ) : (
+                      <span className="text-[9px] font-bold text-emerald-700">✓</span>
+                    )}
+                  </button>
+                )}
+                {onOpenSeasonPass && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundManager.playSfx('click');
+                      setMenuDropdownOpen(false);
+                      onOpenSeasonPass();
+                    }}
+                    className="px-3 py-2 rounded-xl hover:bg-purple-100 text-left flex items-center justify-between gap-2 text-amber-950"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Crown className="w-4 h-4 text-purple-700" /> Season Pass (T{seasonPassInfo.tier}/20)
+                    </span>
+                    {claimablePass > 0 && (
+                      <span className="px-1.5 py-0.5 rounded-full bg-emerald-600 text-white text-[9px] font-bold">
+                        {claimablePass}
+                      </span>
+                    )}
+                  </button>
+                )}
+                {onOpenAchievements && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundManager.playSfx('click');
+                      setMenuDropdownOpen(false);
+                      onOpenAchievements();
+                    }}
+                    className="px-3 py-2 rounded-xl hover:bg-amber-200/80 text-left flex items-center justify-between gap-2 text-amber-950"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Award className="w-4 h-4 text-amber-700" /> Achievements &amp; Badges
+                    </span>
+                    <span className="text-[9px] font-bold text-amber-800">
+                      {(player.unlockedAchievements ?? []).length}/{ACHIEVEMENT_LIST.length}
+                    </span>
                   </button>
                 )}
                 <button

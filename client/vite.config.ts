@@ -46,7 +46,7 @@ export default defineConfig({
         clientsClaim: true,
         skipWaiting: true,
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
-        navigateFallbackDenylist: [/^\/api/, /^\/sw\.js$/, /^\/manifest\.webmanifest$/],
+        navigateFallbackDenylist: [/^\/api/, /\.[a-zA-Z0-9]+$/],
         globPatterns: ['**/*.{js,css,html,svg,webmanifest}'],
         runtimeCaching: [
           {

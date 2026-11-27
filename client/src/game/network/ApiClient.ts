@@ -111,6 +111,14 @@ export interface SavedProfilePayload {
   starterGuide?: PlayerState['starterGuide'];
   redeemedCodes?: string[];
   referredBy?: string | null;
+  loginStreak?: number;
+  lastLoginDate?: string | null;
+  claimedLoginDays?: number[];
+  seasonPassXp?: number;
+  hasRoyalPass?: boolean;
+  claimedPassTiers?: string[];
+  unlockedAchievements?: string[];
+  equippedBadgeId?: string | null;
   hasCompletedCreation?: boolean;
   activeClass: PlayerState['activeClass'];
   weapon: PlayerState['weapon'];
@@ -466,6 +474,14 @@ export function serializePlayerStateForSave(state: PlayerState): SavedProfilePay
       : undefined,
     redeemedCodes: [...(state.redeemedCodes ?? [])],
     referredBy: state.referredBy ?? null,
+    loginStreak: state.loginStreak ?? 0,
+    lastLoginDate: state.lastLoginDate ?? null,
+    claimedLoginDays: [...(state.claimedLoginDays ?? [])],
+    seasonPassXp: state.seasonPassXp ?? 0,
+    hasRoyalPass: Boolean(state.hasRoyalPass ?? false),
+    claimedPassTiers: [...(state.claimedPassTiers ?? [])],
+    unlockedAchievements: [...(state.unlockedAchievements ?? [])],
+    equippedBadgeId: state.equippedBadgeId ?? null,
     hasCompletedCreation: Boolean(state.hasCompletedCreation ?? state.loadout.hasCompletedCreation),
     activeClass: state.activeClass,
     weapon: { ...state.weapon },
@@ -802,6 +818,14 @@ export function hydratePlayerStateFromSave(
         : undefined,
     redeemedCodes: Array.isArray(saved?.redeemedCodes) ? [...saved.redeemedCodes] : [],
     referredBy: typeof saved?.referredBy === 'string' ? saved.referredBy : null,
+    loginStreak: typeof saved?.loginStreak === 'number' ? saved.loginStreak : 0,
+    lastLoginDate: typeof saved?.lastLoginDate === 'string' ? saved.lastLoginDate : null,
+    claimedLoginDays: Array.isArray(saved?.claimedLoginDays) ? [...saved.claimedLoginDays] : [],
+    seasonPassXp: typeof saved?.seasonPassXp === 'number' ? saved.seasonPassXp : 0,
+    hasRoyalPass: Boolean(saved?.hasRoyalPass ?? false),
+    claimedPassTiers: Array.isArray(saved?.claimedPassTiers) ? [...saved.claimedPassTiers] : [],
+    unlockedAchievements: Array.isArray(saved?.unlockedAchievements) ? [...saved.unlockedAchievements] : [],
+    equippedBadgeId: typeof saved?.equippedBadgeId === 'string' ? saved.equippedBadgeId : null,
     hasCompletedCreation: Boolean(
       saved?.hasCompletedCreation ?? saved?.loadout?.hasCompletedCreation ?? false
     ),

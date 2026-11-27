@@ -416,6 +416,17 @@ export interface PlayerState {
   /** Update 2.0 — Redeemed Launch Gift Codes & Friend Invite Referral */
   redeemedCodes?: string[];
   referredBy?: string | null;
+  /** Update 2.1 — 7-Day Login Streak Calendar */
+  loginStreak?: number;
+  lastLoginDate?: string | null;
+  claimedLoginDays?: number[];
+  /** Update 2.1 — Angkor Season Pass (Free & Royal 20-Tier Tracks) */
+  seasonPassXp?: number;
+  hasRoyalPass?: boolean;
+  claimedPassTiers?: string[];
+  /** Update 2.1 — Account Achievement Badges */
+  unlockedAchievements?: string[];
+  equippedBadgeId?: string | null;
   hasCompletedCreation?: boolean;
   skillDamagePct: number;
   armorDamagePct: number;

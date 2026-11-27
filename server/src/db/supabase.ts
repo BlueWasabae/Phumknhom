@@ -67,6 +67,14 @@ export interface SavedPlayerProfile {
   starterGuide?: Record<string, unknown>;
   redeemedCodes?: string[];
   referredBy?: string | null;
+  loginStreak?: number;
+  lastLoginDate?: string | null;
+  claimedLoginDays?: number[];
+  seasonPassXp?: number;
+  hasRoyalPass?: boolean;
+  claimedPassTiers?: string[];
+  unlockedAchievements?: string[];
+  equippedBadgeId?: string | null;
   hasCompletedCreation?: boolean;
   activeClass?: string;
   weapon?: Record<string, unknown>;
@@ -843,6 +851,14 @@ export async function savePlayerProfile(
         : undefined,
     redeemedCodes: Array.isArray(profile.redeemedCodes) ? profile.redeemedCodes : [],
     referredBy: typeof profile.referredBy === 'string' ? profile.referredBy : null,
+    loginStreak: typeof profile.loginStreak === 'number' ? profile.loginStreak : 0,
+    lastLoginDate: typeof profile.lastLoginDate === 'string' ? profile.lastLoginDate : null,
+    claimedLoginDays: Array.isArray(profile.claimedLoginDays) ? profile.claimedLoginDays : [],
+    seasonPassXp: typeof profile.seasonPassXp === 'number' ? profile.seasonPassXp : 0,
+    hasRoyalPass: Boolean(profile.hasRoyalPass ?? false),
+    claimedPassTiers: Array.isArray(profile.claimedPassTiers) ? profile.claimedPassTiers : [],
+    unlockedAchievements: Array.isArray(profile.unlockedAchievements) ? profile.unlockedAchievements : [],
+    equippedBadgeId: typeof profile.equippedBadgeId === 'string' ? profile.equippedBadgeId : null,
     hasCompletedCreation: Boolean(
       profile.hasCompletedCreation ??
         (profile.loadout as { hasCompletedCreation?: boolean } | undefined)?.hasCompletedCreation ??

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { EquippedLoadout, PlayerState, ZoneType } from '@shared/types';
+import { getAchievementBadgeIcon } from '@shared/achievements';
 import { PaperDoll, type PaperDollFacing, type PaperDollPose } from './PaperDoll';
 import { Pet } from './Pet';
 import { MountEntity, getMountSpec } from './MountEntity';
@@ -100,11 +101,9 @@ export class Player {
       this.mount.setMount(this.state.activeMount);
     }
 
-    // Nameplate (with gold [KROM] guild tag when in a Krom!) + Overhead Speech Bubble + Emote
-    const formatDisplayName = (s: PlayerState) =>
-      s.kromTag ? `[${s.kromTag}] ${s.name}` : s.name;
+    // Nameplate (with equipped Achievement Badge Icon & gold [KROM] guild tag!) + Overhead Speech Bubble + Emote
     this.nameTag = scene.add
-      .text(x, y + 14, formatDisplayName(this.state), {
+      .text(x, y + 14, this.formatDisplayName(this.state), {
         fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
         fontSize: '13px',
         fontStyle: 'bold',
@@ -175,9 +174,19 @@ export class Player {
     }
   }
 
+  private formatDisplayName(s: PlayerState): string {
+    const badge = getAchievementBadgeIcon(s.equippedBadgeId);
+    const base = s.kromTag ? `[${s.kromTag}] ${s.name}` : s.name;
+    return badge ? `${badge} ${base}` : base;
+  }
+
   public applyLoadoutUpdate(loadout: EquippedLoadout, nextState: PlayerState): void {
-    if (this.state.name !== nextState.name || this.state.kromTag !== nextState.kromTag) {
-      this.nameTag.setText(nextState.kromTag ? `[${nextState.kromTag}] ${nextState.name}` : nextState.name);
+    if (
+      this.state.name !== nextState.name ||
+      this.state.kromTag !== nextState.kromTag ||
+      this.state.equippedBadgeId !== nextState.equippedBadgeId
+    ) {
+      this.nameTag.setText(this.formatDisplayName(nextState));
       this.nameTag.setColor(nextState.kromTag ? '#fde047' : this.zone === 'overworld' ? '#ffffff' : '#fef9c3');
     }
 
@@ -215,8 +224,12 @@ export class Player {
       this.state.loadout.eyebrowStyle !== nextState.loadout.eyebrowStyle ||
       this.state.loadout.faceStyle !== nextState.loadout.faceStyle;
 
-    if (this.state.name !== nextState.name || this.state.kromTag !== nextState.kromTag) {
-      this.nameTag.setText(nextState.kromTag ? `[${nextState.kromTag}] ${nextState.name}` : nextState.name);
+    if (
+      this.state.name !== nextState.name ||
+      this.state.kromTag !== nextState.kromTag ||
+      this.state.equippedBadgeId !== nextState.equippedBadgeId
+    ) {
+      this.nameTag.setText(this.formatDisplayName(nextState));
       this.nameTag.setColor(nextState.kromTag ? '#fde047' : this.zone === 'overworld' ? '#ffffff' : '#fef9c3');
     }
 

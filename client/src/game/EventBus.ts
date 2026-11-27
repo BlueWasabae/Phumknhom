@@ -373,7 +373,10 @@ export interface EventMap {
       | 'bond'
       | 'bounties'
       | 'promo'
-      | 'admin';
+      | 'admin'
+      | 'dailyLogin'
+      | 'seasonPass'
+      | 'achievements';
     leaderboardCategory?: 'farmer' | 'stylish' | 'slayer' | 'tower' | 'boss_rush';
     farmTab?: 'seeds' | 'livestock' | 'artisan';
     shopTab?: 'primary' | 'secondary';

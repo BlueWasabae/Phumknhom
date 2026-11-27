@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+Allow: /og-cover.png
+Allow: /manifest.webmanifest

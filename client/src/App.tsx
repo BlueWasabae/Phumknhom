@@ -174,6 +174,24 @@ import { BountyBoardModal } from './ui/BountyBoardModal';
 import { AdminPanelModal } from './ui/AdminPanelModal';
 import { PromoCodeModal } from './ui/PromoCodeModal';
 import { PhotoModeOverlay } from './ui/PhotoModeOverlay';
+import { DailyLoginModal } from './ui/DailyLoginModal';
+import { SeasonPassModal } from './ui/SeasonPassModal';
+import { AchievementsModal } from './ui/AchievementsModal';
+import {
+  claimDailyLoginReward,
+  getDailyLoginStatus,
+} from '@shared/loginRewards';
+import {
+  SEASON_PASS_TIERS,
+  awardSeasonPassXp,
+  claimSeasonPassTier,
+  unlockRoyalSeasonPass,
+} from '@shared/seasonPass';
+import {
+  evaluateAchievements,
+  type AchievementDef,
+  type AchievementId,
+} from '@shared/achievements';
 import { STARTER_GUIDE_STEPS, WelcomeGuideWidget } from './ui/WelcomeGuideWidget';
 import type { StarterGuideStepId } from '@shared/types';
 import {
@@ -225,6 +243,9 @@ type ActiveModalType =
   | 'bounties'
   | 'promo'
   | 'admin'
+  | 'dailyLogin'
+  | 'seasonPass'
+  | 'achievements'
   | 'characterCreator';
 
 interface FloatingXpBanner extends SkillXpToastPayload {
@@ -376,6 +397,20 @@ export const App: React.FC = () => {
   const [dungeonOutcome, setDungeonOutcome] = useState<DungeonOutcomePayload | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [xpBanners, setXpBanners] = useState<FloatingXpBanner[]>([]);
+  const [achievementBanner, setAchievementBanner] = useState<AchievementDef | null>(null);
+  const achievementTimerRef = useRef<number | null>(null);
+  const dailyLoginAutoShownDateRef = useRef<string | null>(null);
+
+  const showAchievementBanner = useCallback((unlocked: AchievementDef[]) => {
+    if (unlocked.length === 0) return;
+    const first = unlocked[0];
+    soundManager.playSfx('victory');
+    setAchievementBanner(first);
+    if (achievementTimerRef.current) window.clearTimeout(achievementTimerRef.current);
+    achievementTimerRef.current = window.setTimeout(() => {
+      setAchievementBanner(null);
+    }, 4400);
+  }, []);
   const [classMeter, setClassMeter] = useState<ClassMeterPayload>({
     classId: 'lbokator',
     stealthPct: 0,
@@ -392,20 +427,47 @@ export const App: React.FC = () => {
   ]);
 
   const runStateAction = useCallback(
-    (fn: (prev: PlayerState) => { state: PlayerState; ok: boolean; message: string }, isFarm = false) => {
+    (
+      fn: (prev: PlayerState) => { state: PlayerState; ok: boolean; message: string },
+      isFarm = false,
+      explicitAchievements: AchievementId[] = []
+    ) => {
+      let unlockedNow: AchievementDef[] = [];
       setPlayer((prev) => {
         const res = fn(prev);
         EventBus.emit('ui:toast', { text: res.message });
         if (res.ok) {
-          EventBus.emit('player:stateSync', res.state);
-          if (isFarm) EventBus.emit('farm:stateUpdated', res.state);
-          return res.state;
+          const achRes = evaluateAchievements(res.state, explicitAchievements);
+          unlockedNow = achRes.newlyUnlocked;
+          EventBus.emit('player:stateSync', achRes.state);
+          if (isFarm) EventBus.emit('farm:stateUpdated', achRes.state);
+          return achRes.state;
         }
         return prev;
       });
+      if (unlockedNow.length > 0) {
+        showAchievementBanner(unlockedNow);
+      }
     },
-    []
+    [showAchievementBanner]
   );
+
+  // Update 2.1: Auto-open 7-Day Login Streak Calendar once per calendar day after entering OverworldScene
+  useEffect(() => {
+    if (zone !== 'overworld') return;
+    if (activeModal !== null || activeNpcId !== null || photoMode) return;
+    if (!(player.hasCompletedCreation ?? player.loadout.hasCompletedCreation)) return;
+
+    const status = getDailyLoginStatus(player);
+    if (status.claimedToday) return;
+    if (dailyLoginAutoShownDateRef.current === status.todayKey) return;
+
+    dailyLoginAutoShownDateRef.current = status.todayKey;
+    const t = window.setTimeout(() => {
+      setActiveModal((cur) => (cur === null ? 'dailyLogin' : cur));
+    }, 650);
+    return () => window.clearTimeout(t);
+  }, [zone, activeModal, activeNpcId, photoMode, player.hasCompletedCreation, player.loadout.hasCompletedCreation, player.lastLoginDate]);
 
   const runFarmAction = useCallback(
     (fn: (prev: PlayerState) => ActionResult) => runStateAction(fn, true),
@@ -649,6 +711,7 @@ export const App: React.FC = () => {
 
   const handleEatQuickSlot = useCallback(
     (slotIndex: 0 | 1 | 2) => {
+      let ate = false;
       runStateAction((s) => {
         const snackId = s.quickSnackSlots[slotIndex];
         if (!snackId) {
@@ -660,11 +723,16 @@ export const App: React.FC = () => {
         }
         const res = consumeStreetSnack(s, snackId);
         if (res.ok) {
+          ate = true;
           soundManager.playSfx('heal');
-          EventBus.emit('bounty:progress', { category: 'eat_or_cook_snack', amount: 1 });
         }
         return res;
       });
+      if (ate) {
+        window.setTimeout(() => {
+          EventBus.emit('bounty:progress', { category: 'eat_or_cook_snack', amount: 1 });
+        }, 0);
+      }
     },
     [runStateAction]
   );
@@ -1060,7 +1128,9 @@ export const App: React.FC = () => {
           activeTreasureMap: nextTreasureMap,
         };
         const xpRes = awardSkillXp(base, 'fishing', reward.fishingXp, true);
-        EventBus.emit('bounty:progress', { category: 'catch_fish', amount: 1 });
+        window.setTimeout(() => {
+          EventBus.emit('bounty:progress', { category: 'catch_fish', amount: 1 });
+        }, 0);
         return {
           state: xpRes.state,
           ok: true,
@@ -1550,6 +1620,14 @@ export const App: React.FC = () => {
           starterGuide: nextPlayer.starterGuide ?? prev.starterGuide,
           redeemedCodes: nextPlayer.redeemedCodes ?? prev.redeemedCodes,
           referredBy: nextPlayer.referredBy ?? prev.referredBy,
+          loginStreak: nextPlayer.loginStreak ?? prev.loginStreak,
+          lastLoginDate: nextPlayer.lastLoginDate ?? prev.lastLoginDate,
+          claimedLoginDays: nextPlayer.claimedLoginDays ?? prev.claimedLoginDays,
+          seasonPassXp: Math.max(nextPlayer.seasonPassXp ?? 0, prev.seasonPassXp ?? 0),
+          hasRoyalPass: Boolean(nextPlayer.hasRoyalPass || prev.hasRoyalPass),
+          claimedPassTiers: nextPlayer.claimedPassTiers ?? prev.claimedPassTiers,
+          unlockedAchievements: nextPlayer.unlockedAchievements ?? prev.unlockedAchievements,
+          equippedBadgeId: nextPlayer.equippedBadgeId ?? prev.equippedBadgeId,
         }));
       }),
       EventBus.on('npc:openDialogue', ({ npcId }) => {
@@ -1679,7 +1757,9 @@ export const App: React.FC = () => {
           };
           const xpRes = awardSkillXp(withLoot, skillId, xp);
           if (skillId === 'mining') {
-            EventBus.emit('bounty:progress', { category: 'mine_ores', amount: 1 });
+            window.setTimeout(() => {
+              EventBus.emit('bounty:progress', { category: 'mine_ores', amount: 1 });
+            }, 0);
           }
           return {
             state: xpRes.state,
@@ -1719,7 +1799,9 @@ export const App: React.FC = () => {
             nextState = xpRes.state;
           }
           if (skillId === 'mining') {
-            EventBus.emit('bounty:progress', { category: 'mine_ores', amount: 1 });
+            window.setTimeout(() => {
+              EventBus.emit('bounty:progress', { category: 'mine_ores', amount: 1 });
+            }, 0);
           }
           return {
             state: nextState,
@@ -2107,15 +2189,45 @@ export const App: React.FC = () => {
       ),
       EventBus.on('bounty:progress', ({ category, amount }) => {
         let completedLabels: string[] = [];
+        let newlyUnlockedAchs: AchievementDef[] = [];
         setPlayer((prev) => {
           const res = recordBountyProgress(prev, category as BountyCategory, amount ?? 1);
           completedLabels = res.newlyCompleted.map((b) => `${b.icon} ${b.title}`);
-          EventBus.emit('player:stateSync', res.state);
+          let next = res.state;
+
+          // Update 2.1: Automatically award Season Pass XP & check activity Achievements!
+          const passXpGain =
+            category === 'defeat_mythic_boss'
+              ? 180
+              : category === 'defeat_any_boss'
+                ? 140
+                : category === 'clear_tower_floors'
+                  ? 85
+                  : category === 'harvest_crops'
+                    ? 45
+                    : 25;
+          next = awardSeasonPassXp(next, passXpGain * Math.max(1, amount ?? 1)).state;
+
+          const explicitAchs: AchievementId[] = [];
+          if (category === 'harvest_crops') explicitAchs.push('first_harvest');
+          if (category === 'catch_fish') explicitAchs.push('master_angler');
+          if (category === 'mine_ores') explicitAchs.push('cavern_delver');
+          if (category === 'eat_or_cook_snack') explicitAchs.push('khmer_chef');
+          if (category === 'clear_tower_floors') explicitAchs.push('pagoda_climber');
+
+          const achRes = evaluateAchievements(next, explicitAchs);
+          next = achRes.state;
+          newlyUnlockedAchs = achRes.newlyUnlocked;
+
+          EventBus.emit('player:stateSync', next);
           if (!authSessionRef.current) {
-            saveGuestProgressSnapshot(res.state);
+            saveGuestProgressSnapshot(next);
           }
-          return res.state;
+          return next;
         });
+        if (newlyUnlockedAchs.length > 0) {
+          showAchievementBanner(newlyUnlockedAchs);
+        }
         if (completedLabels.length > 0) {
           soundManager.playSfx('level_up');
           EventBus.emit('ui:toast', {
@@ -2300,6 +2412,9 @@ export const App: React.FC = () => {
             onOpenBounties={() => setActiveModal('bounties')}
             onOpenPromo={() => setActiveModal('promo')}
             onOpenAdmin={() => setActiveModal('admin')}
+            onOpenDailyLogin={() => setActiveModal('dailyLogin')}
+            onOpenSeasonPass={() => setActiveModal('seasonPass')}
+            onOpenAchievements={() => setActiveModal('achievements')}
             onTogglePhotoMode={() => setPhotoMode(true)}
             canInstallPwa={canInstallPwa}
             onInstallPwa={() => void handleInstallPwa()}
@@ -2320,6 +2435,34 @@ export const App: React.FC = () => {
           />
 
           <ServerTickerBanner />
+
+          {/* Update 2.1: Golden Achievement Unlocked! Top Slide-In Banner */}
+          {achievementBanner && (
+            <div className="pointer-events-auto fixed top-16 left-1/2 -translate-x-1/2 z-40 w-[min(92vw,390px)] rounded-2xl bg-gradient-to-r from-amber-900 via-yellow-700 to-amber-900 border-2 border-yellow-300 shadow-[0_8px_30px_rgba(250,204,21,0.55)] px-3.5 py-2.5 text-amber-50 flex items-center gap-3 animate-bounce">
+              <span className="w-10 h-10 rounded-xl bg-yellow-300/20 border-2 border-yellow-300 flex items-center justify-center text-2xl shrink-0">
+                {achievementBanner.icon}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="text-[10px] font-display font-bold uppercase tracking-wider text-yellow-200">
+                  🏅 Achievement Unlocked!
+                </div>
+                <div className="font-display font-bold text-sm text-white truncate">
+                  {achievementBanner.name} · {achievementBanner.khmerName}
+                </div>
+                <div className="text-[10px] text-amber-100/90">
+                  +{achievementBanner.rewardDiamonds} 💎 Diamonds · Badge ready in Achievements!
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAchievementBanner(null)}
+                className="text-yellow-200 hover:text-white text-xs font-bold px-1.5 py-0.5 cursor-pointer"
+                aria-label="Close achievement banner"
+              >
+                ✕
+              </button>
+            </div>
+          )}
 
           <WelcomeGuideWidget
             player={player}
@@ -2738,26 +2881,30 @@ export const App: React.FC = () => {
         authSession={authSession}
         onClose={() => setActiveModal(null)}
         onSendCheerReward={(fight: ActiveDungeonFightInfo) => {
-          runStateAction((s) => {
-            if (s.currencies.coins < 50) {
-              return { state: s, ok: false, message: 'Need 50 Coins to send a Hot Num Pang Care Package.' };
-            }
-            const nextCoins = s.currencies.coins - 50;
-            soundManager.playSfx('coin');
-            return {
-              state: {
-                ...s,
-                coins: nextCoins,
-                currencies: { ...s.currencies, coins: nextCoins },
-                lifeStats: {
-                  ...s.lifeStats,
-                  friendly: Math.min(100, s.lifeStats.friendly + 10),
+          runStateAction(
+            (s) => {
+              if (s.currencies.coins < 50) {
+                return { state: s, ok: false, message: 'Need 50 Coins to send a Hot Num Pang Care Package.' };
+              }
+              const nextCoins = s.currencies.coins - 50;
+              soundManager.playSfx('coin');
+              return {
+                state: {
+                  ...s,
+                  coins: nextCoins,
+                  currencies: { ...s.currencies, coins: nextCoins },
+                  lifeStats: {
+                    ...s.lifeStats,
+                    friendly: Math.min(100, s.lifeStats.friendly + 10),
+                  },
                 },
-              },
-              ok: true,
-              message: `🥖 Sent a Hot Num Pang Care Package to ${fight.playerName} vs ${fight.bossName}! (-50c, +10 Friendly!)`,
-            };
-          });
+                ok: true,
+                message: `🥖 Sent a Hot Num Pang Care Package to ${fight.playerName} vs ${fight.bossName}! (-50c, +10 Friendly!)`,
+              };
+            },
+            false,
+            ['village_cheerleader']
+          );
           EventBus.emit('ticker:push', {
             text: `🥖 ${playerRef.current.name} dropped a Hot Num Pang Care Package to cheer on ${fight.playerName}!`,
             category: 'club',
@@ -3047,7 +3194,9 @@ export const App: React.FC = () => {
             const res = consumeStreetSnack(s, snackId);
             if (res.ok) {
               soundManager.playSfx('heal');
-              EventBus.emit('bounty:progress', { category: 'eat_or_cook_snack', amount: 1 });
+              window.setTimeout(() => {
+                EventBus.emit('bounty:progress', { category: 'eat_or_cook_snack', amount: 1 });
+              }, 0);
             }
             return res;
           })
@@ -3293,46 +3442,135 @@ export const App: React.FC = () => {
         player={player}
         onClose={() => setActiveModal(null)}
         onClaimBounty={(bountyId) =>
+          runStateAction(
+            (s) => {
+              const res = claimBountyReward(s, bountyId);
+              if (res.ok) {
+                soundManager.playSfx('level_up');
+                window.setTimeout(() => {
+                  EventBus.emit('guide:step', { stepId: 'claim_bounty' });
+                }, 0);
+                const passRes = awardSeasonPassXp(res.state, 120);
+                return {
+                  ...res,
+                  state: passRes.state,
+                  message: `${res.message} (+120 Season XP${passRes.tieredUp ? ` · Pass Tier ${passRes.newTier}!` : ''})`,
+                };
+              }
+              return res;
+            },
+            false,
+            ['bounty_hunter']
+          )
+        }
+        onClaimAllReady={() =>
+          runStateAction(
+            (s) => {
+              const active = getActiveBounties();
+              let cur = s;
+              let claimedCount = 0;
+              let totalCoins = 0;
+              let totalGold = 0;
+              let totalStones = 0;
+              let totalXp = 0;
+              for (const b of active.all) {
+                const res = claimBountyReward(cur, b.id);
+                if (res.ok && res.bounty) {
+                  cur = res.state;
+                  claimedCount += 1;
+                  totalCoins += res.bounty.rewardCoins;
+                  totalGold += res.bounty.rewardGold;
+                  totalStones += res.bounty.rewardReforgeStones;
+                  totalXp += res.bounty.rewardXp;
+                }
+              }
+              if (claimedCount === 0) {
+                return { state: s, ok: false, message: 'No completed bounties ready to claim yet!' };
+              }
+              soundManager.playSfx('victory');
+              window.setTimeout(() => {
+                EventBus.emit('guide:step', { stepId: 'claim_bounty' });
+              }, 0);
+              const passXp = claimedCount * 120;
+              const passRes = awardSeasonPassXp(cur, passXp);
+              return {
+                state: passRes.state,
+                ok: true,
+                message: `📋 Claimed ${claimedCount} Bounties! +${totalCoins.toLocaleString()}c · +${totalGold} Gold · +${totalStones}× Reforge Stones · +${totalXp} XP · +${passXp} Season XP!`,
+              };
+            },
+            false,
+            ['bounty_hunter']
+          )
+        }
+      />
+
+      <DailyLoginModal
+        open={activeModal === 'dailyLogin'}
+        player={player}
+        onClose={() => setActiveModal(null)}
+        onClaimToday={() =>
           runStateAction((s) => {
-            const res = claimBountyReward(s, bountyId);
+            const res = claimDailyLoginReward(s);
             if (res.ok) {
-              soundManager.playSfx('level_up');
-              EventBus.emit('guide:step', { stepId: 'claim_bounty' });
+              const passRes = awardSeasonPassXp(res.state, 60);
+              return { ...res, state: passRes.state };
             }
             return res;
           })
         }
+      />
+
+      <SeasonPassModal
+        open={activeModal === 'seasonPass'}
+        player={player}
+        onClose={() => setActiveModal(null)}
+        onUnlockRoyalPass={() => runStateAction((s) => unlockRoyalSeasonPass(s))}
+        onClaimTier={(tier, track) =>
+          runStateAction((s) => claimSeasonPassTier(s, tier, track))
+        }
         onClaimAllReady={() =>
           runStateAction((s) => {
-            const active = getActiveBounties();
             let cur = s;
-            let claimedCount = 0;
-            let totalCoins = 0;
-            let totalGold = 0;
-            let totalStones = 0;
-            let totalXp = 0;
-            for (const b of active.all) {
-              const res = claimBountyReward(cur, b.id);
-              if (res.ok && res.bounty) {
-                cur = res.state;
-                claimedCount += 1;
-                totalCoins += res.bounty.rewardCoins;
-                totalGold += res.bounty.rewardGold;
-                totalStones += res.bounty.rewardReforgeStones;
-                totalXp += res.bounty.rewardXp;
+            let count = 0;
+            for (const row of SEASON_PASS_TIERS) {
+              const r1 = claimSeasonPassTier(cur, row.tier, 'free');
+              if (r1.ok) {
+                cur = r1.state;
+                count += 1;
+              }
+              if (cur.hasRoyalPass) {
+                const r2 = claimSeasonPassTier(cur, row.tier, 'royal');
+                if (r2.ok) {
+                  cur = r2.state;
+                  count += 1;
+                }
               }
             }
-            if (claimedCount === 0) {
-              return { state: s, ok: false, message: 'No completed bounties ready to claim yet!' };
+            if (count === 0) {
+              return { state: s, ok: false, message: 'No unlocked Season Pass rewards ready to claim yet!' };
             }
-            soundManager.playSfx('victory');
-            EventBus.emit('guide:step', { stepId: 'claim_bounty' });
             return {
               state: cur,
               ok: true,
-              message: `📋 Claimed ${claimedCount} Bounties! +${totalCoins.toLocaleString()}c · +${totalGold} Gold · +${totalStones}× Reforge Stones · +${totalXp} XP!`,
+              message: `🎟️ Claimed ${count} Angkor Season Pass reward${count === 1 ? '' : 's'}!`,
             };
           })
+        }
+      />
+
+      <AchievementsModal
+        open={activeModal === 'achievements'}
+        player={player}
+        onClose={() => setActiveModal(null)}
+        onEquipBadge={(badgeId) =>
+          runStateAction((s) => ({
+            state: { ...s, equippedBadgeId: badgeId },
+            ok: true,
+            message: badgeId
+              ? '🏅 Equipped Achievement Badge next to your overhead name!'
+              : 'Hidden overhead Achievement Badge.',
+          }))
         }
       />
 
@@ -3405,7 +3643,9 @@ export const App: React.FC = () => {
             const res = cookStreetSnack(s, snackId);
             if (res.ok) {
               soundManager.playSfx('harvest');
-              EventBus.emit('bounty:progress', { category: 'eat_or_cook_snack', amount: 1 });
+              window.setTimeout(() => {
+                EventBus.emit('bounty:progress', { category: 'eat_or_cook_snack', amount: 1 });
+              }, 0);
             }
             return res;
           })
@@ -3415,7 +3655,9 @@ export const App: React.FC = () => {
             const res = consumeStreetSnack(s, snackId);
             if (res.ok) {
               soundManager.playSfx('heal');
-              EventBus.emit('bounty:progress', { category: 'eat_or_cook_snack', amount: 1 });
+              window.setTimeout(() => {
+                EventBus.emit('bounty:progress', { category: 'eat_or_cook_snack', amount: 1 });
+              }, 0);
             }
             return res;
           })

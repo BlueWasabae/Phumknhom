@@ -89,7 +89,7 @@ export const WelcomeGuideWidget: React.FC<WelcomeGuideWidgetProps> = ({
 
   return (
     <div
-      className="pointer-events-auto fixed left-2 sm:left-3 top-[104px] sm:top-[92px] z-20 w-[min(86vw,278px)] phum-panel rounded-2xl overflow-hidden shadow-xl transition-all"
+      className="pointer-events-auto fixed left-2 sm:left-3 top-[104px] sm:top-[92px] z-10 w-[min(86vw,278px)] phum-panel rounded-2xl overflow-hidden shadow-xl transition-all"
       aria-label="Village Starter Guide"
     >
       {/* Header */}
