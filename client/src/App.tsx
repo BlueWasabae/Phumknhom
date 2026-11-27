@@ -148,6 +148,8 @@ import { AuthModal } from './ui/AuthModal';
 import { PlayerActionModal } from './ui/PlayerActionModal';
 import { FriendsModal } from './ui/FriendsModal';
 import { FishingModal, type FishingCatchReward } from './ui/FishingModal';
+import { FishingMiniGame } from './ui/FishingMiniGame';
+import type { FishingBitePayload } from './game/EventBus';
 import {
   COIN_SPIN_COST,
   GOLD_SPIN_COST,
@@ -281,6 +283,7 @@ export const App: React.FC = () => {
   });
 
   const [activeNpcId, setActiveNpcId] = useState<KhmerNpcId | null>(null);
+  const [activeFishingBite, setActiveFishingBite] = useState<FishingBitePayload | null>(null);
   const [focusedCartId, setFocusedCartId] = useState<string | null>(null);
   const [bondPrefillPartner, setBondPrefillPartner] = useState<string | null>(null);
   const [houseDecorateMode, setHouseDecorateMode] = useState(false);
@@ -1570,7 +1573,7 @@ export const App: React.FC = () => {
       const k = e.key.toLowerCase();
       if (k === 'i' || k === 'b') {
         setActiveModal((cur) => (cur === 'inventory' ? null : 'inventory'));
-      } else if (k === 'q') {
+      } else if (k === 'r') {
         if (!document.querySelector('dialog[open]')) {
           EventBus.emit('input:signatureSkill');
         }
@@ -1972,6 +1975,9 @@ export const App: React.FC = () => {
           }
           return { state: nextState, ok: true, message: label };
         });
+      }),
+      EventBus.on('fishing:biteReady', (bite) => {
+        setActiveFishingBite(bite);
       }),
       EventBus.on('festival:raceFinished', ({ place, timeSec, coins, gold, fishingXp, unlockedPaddle }) => {
         runStateAction((prev) => {
@@ -3180,6 +3186,38 @@ export const App: React.FC = () => {
         player={player}
         onClose={() => setActiveModal(null)}
         onCatchReward={handleFishingCatch}
+      />
+
+      <FishingMiniGame
+        bite={activeFishingBite}
+        onComplete={(success, bite) => {
+          setActiveFishingBite(null);
+          EventBus.emit('fishing:reelComplete', { success, bite });
+          if (success) {
+            handleFishingCatch({
+              itemId: bite.fishId,
+              label: bite.label,
+              khmerLabel: bite.khmerName,
+              rarity: bite.rarity.toUpperCase(),
+              fishingXp: bite.fishingXp,
+              coins:
+                bite.rarity === 'ancient'
+                  ? 180
+                  : bite.rarity === 'mythic'
+                    ? 110
+                    : bite.rarity === 'legendary'
+                      ? 65
+                      : bite.rarity === 'epic'
+                        ? 38
+                        : 16,
+            });
+          }
+        }}
+        onCancel={() => {
+          const cur = activeFishingBite;
+          setActiveFishingBite(null);
+          if (cur) EventBus.emit('fishing:reelComplete', { success: false, bite: cur });
+        }}
       />
 
       <LuckyWheelModal

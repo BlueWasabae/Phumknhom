@@ -131,14 +131,14 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
                 onPointerDown={() => EventBus.emit('input:signatureSkill')}
                 className="w-16 h-16 rounded-full bg-gradient-to-b from-amber-400 via-orange-500 to-purple-700 border-[3px] border-yellow-200 text-white font-display font-bold text-[11px] leading-tight whitespace-pre-line shadow-[0_0_16px_rgba(250,204,21,0.75)] active:scale-95 flex items-center justify-center text-center"
               >
-                {'✨\nSKILL'}
+                {'✨\nSKILL [R]'}
               </button>
               <button
                 type="button"
                 onPointerDown={() => EventBus.emit('input:grapple')}
-                className="w-14 h-14 rounded-full bg-gradient-to-b from-emerald-400 to-green-600 border-[3px] border-emerald-950 text-white font-display font-bold text-[10px] leading-tight shadow-lg active:scale-95"
+                className="w-14 h-14 rounded-full bg-gradient-to-b from-emerald-400 to-green-600 border-[3px] border-emerald-950 text-white font-display font-bold text-[10px] leading-tight whitespace-pre-line shadow-lg active:scale-95"
               >
-                🌿{'\n'}GRAPPLE
+                {'🌿\nHOOK [Q]'}
               </button>
               <button
                 type="button"

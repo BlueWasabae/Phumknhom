@@ -203,6 +203,33 @@ export class BootScene extends Phaser.Scene {
     this.load.image('angkor_portal', '/assets/khmer/buildings/angkor_portal.png');
     this.load.image('boss_yeak_thmor', '/assets/khmer/bosses/boss_yeak_thmor.png');
     this.load.json('khmer_manifest', '/assets/khmer/manifest.json');
+
+    // ---- 9. UPDATE 2.3: HIGH-DETAIL 4-FRAME ANIMATED PNG WINGS (48x48) & PETS (32x32) ----
+    for (const wingKey of [
+      'wings_bamboo_leaf_glider',
+      'wings_golden_apsara_feathers',
+      'wings_storm_crystal',
+      'wings_celestial_naga_dragon',
+      'wings_solar_angkor_seraph',
+      'wings_void_phantom_butterfly',
+    ]) {
+      this.load.spritesheet(wingKey, `/assets/khmer/wings/${wingKey}.png`, {
+        frameWidth: 48,
+        frameHeight: 48,
+      });
+    }
+    for (const petKey of [
+      'pet_village_puppy',
+      'pet_baby_water_buffalo',
+      'pet_mini_golden_naga',
+      'pet_celestial_lotus_kitsune',
+      'pet_baby_angkor_singha',
+    ]) {
+      this.load.spritesheet(petKey, `/assets/khmer/pets/${petKey}.png`, {
+        frameWidth: 32,
+        frameHeight: 32,
+      });
+    }
   }
 
   create(): void {
@@ -813,7 +840,7 @@ export class BootScene extends Phaser.Scene {
     this.safeCreateAnim('boss_frog_idle', 'boss_giant_frog_idle', [0, 1, 2, 3, 4], 7, -1);
     this.safeCreateAnim('boss_spirit_idle', 'boss_giant_spirit_idle', [0, 1, 2, 3, 4], 7, -1);
 
-    // Real Pet animations
+    // Real Pet animations (Ninja Adventure + Update 2.3 4-Frame Animated Khmer PNG Pets!)
     const petAnims: Array<[string, string, number[], number]> = [
       ['pet_cat_idle', 'pet_cat_white', [0, 1], 4],
       ['pet_frog_idle', 'pet_frog', [0, 1], 5],
@@ -821,9 +848,26 @@ export class BootScene extends Phaser.Scene {
       ['pet_dog_idle', 'pet_dog', [0, 1], 5],
       ['pet_spirit_idle', 'pet_spirit', [0, 4, 8, 12], 7],
       ['pet_lantern_idle', 'pet_lantern', [0, 4, 8, 12], 7],
+      ['pet_village_puppy_anim', 'pet_village_puppy', [0, 1, 2, 3], 6],
+      ['pet_baby_water_buffalo_anim', 'pet_baby_water_buffalo', [0, 1, 2, 3], 5],
+      ['pet_mini_golden_naga_anim', 'pet_mini_golden_naga', [0, 1, 2, 3], 7],
+      ['pet_celestial_lotus_kitsune_anim', 'pet_celestial_lotus_kitsune', [0, 1, 2, 3], 6],
+      ['pet_baby_angkor_singha_anim', 'pet_baby_angkor_singha', [0, 1, 2, 3], 6],
     ];
     for (const [animKey, texKey, frames, frameRate] of petAnims) {
       this.safeCreateAnim(animKey, texKey, frames, frameRate, -1);
+    }
+
+    // Update 2.3 — High-Detail 4-Frame Animated PNG Wings (flapping loop!)
+    for (const [wingKey, fps] of [
+      ['wings_bamboo_leaf_glider', 6],
+      ['wings_golden_apsara_feathers', 7],
+      ['wings_storm_crystal', 8],
+      ['wings_celestial_naga_dragon', 7],
+      ['wings_solar_angkor_seraph', 6],
+      ['wings_void_phantom_butterfly', 8],
+    ] as Array<[string, number]>) {
+      this.safeCreateAnim(`${wingKey}_anim`, wingKey, [0, 1, 2, 3], fps, -1);
     }
 
     // Real Campfires, Shimmer Water Ripples, Lucky Wheel & Slash FX

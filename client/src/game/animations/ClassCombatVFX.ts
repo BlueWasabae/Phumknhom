@@ -91,17 +91,22 @@ export class ClassCombatVFX {
 
   /**
    * 1. Lbokator Warrior: 3-Hit Animal-Stance Crescent Melee Smear (Lion -> Crocodile -> Hanuman)
+   * Supports true 360° cursor aiming via optional `aimAngle`.
    */
-  public playLbokatorSlash(x: number, y: number, dir: number, stance: number): void {
+  public playLbokatorSlash(x: number, y: number, dir: number, stance: number, aimAngle?: number): void {
     const color = stance === 3 ? 0xfacc15 : stance === 2 ? 0xf97316 : 0xfef08a;
     const scale = stance === 3 ? 3.2 : 2.6;
+    const ang = aimAngle !== undefined ? aimAngle : dir < 0 ? Math.PI : 0;
+    const sx = x + Math.cos(ang) * 48;
+    const sy = y - 6 + Math.sin(ang) * 44;
 
-    // Real Ninja Adventure curved slash tinted by Animal Stance
+    // Real Ninja Adventure curved slash tinted by Animal Stance & rotated along aimAngle
     const slash = this.scene.add
-      .sprite(x + dir * 48, y - 4, 'fx_slash', 0)
+      .sprite(sx, sy, 'fx_slash', 0)
       .setScale(scale)
       .setTint(color)
-      .setFlipX(dir < 0)
+      .setRotation(ang)
+      .setFlipY(Math.cos(ang) < 0)
       .setDepth(62);
     slash.play('slash_curved');
     slash.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => slash.destroy());
@@ -109,7 +114,7 @@ export class ClassCombatVFX {
     // Hanuman 3rd-hit overhead slam dust burst
     if (stance === 3) {
       const ring = this.scene.add
-        .ellipse(x + dir * 56, y + 18, 96, 26, 0xfacc15, 0.55)
+        .ellipse(x + Math.cos(ang) * 56, y + 10 + Math.sin(ang) * 36, 96, 26, 0xfacc15, 0.55)
         .setStrokeStyle(3, 0xffffff)
         .setDepth(61);
       this.scene.tweens.add({
@@ -143,24 +148,29 @@ export class ClassCombatVFX {
   }
 
   /**
-   * 2. Divine Archer: Fast Glowing Reamker Arrow Projectile
+   * 2. Divine Archer: Fast Glowing Reamker Arrow Projectile (True 360° Cursor Aim)
    */
-  public spawnArcherArrow(x: number, y: number, dir: number, damageScale = 1): SpawnedProjectile {
-    const container = this.scene.add.container(x + dir * 24, y - 4).setDepth(62);
+  public spawnArcherArrow(x: number, y: number, dir: number, damageScale = 1, aimAngle?: number): SpawnedProjectile {
+    const ang = aimAngle !== undefined ? aimAngle : dir < 0 ? Math.PI : 0;
+    const container = this.scene.add
+      .container(x + Math.cos(ang) * 24, y - 6 + Math.sin(ang) * 24)
+      .setRotation(ang)
+      .setDepth(62);
     const shaft = this.scene.add.rectangle(0, 0, 26, 3.5, 0xfef08a);
-    const tip = this.scene.add.triangle(dir * 14, 0, 0, -5, 10, 0, 0, 5, 0x22c55e).setScale(dir, 1);
-    const feather = this.scene.add.rectangle(-dir * 12, 0, 7, 6, 0xf97316);
+    const tip = this.scene.add.triangle(14, 0, 0, -5, 10, 0, 0, 5, 0x22c55e);
+    const feather = this.scene.add.rectangle(-12, 0, 7, 6, 0xf97316);
     container.add([shaft, tip, feather]);
     vfxManager.applyGlow(this.scene, container, 0xfacc15, 2.5, 0.3);
 
+    const speed = 640;
     return {
       node: container,
-      vx: dir * 640,
-      vy: 0,
+      vx: Math.cos(ang) * speed,
+      vy: Math.sin(ang) * speed,
       damageScale,
       colorHex: 0x22c55e,
       kind: 'arrow',
-      expiresAt: this.scene.time.now + 1200,
+      expiresAt: this.scene.time.now + 1350,
     };
   }
 
@@ -183,23 +193,27 @@ export class ClassCombatVFX {
   }
 
   /**
-   * 3. Achar Mystic: Glowing Sacred Orb Projectile
+   * 3. Achar Mystic: Glowing Sacred Orb Projectile (True 360° Cursor Aim)
    */
-  public spawnMysticOrb(x: number, y: number, dir: number): SpawnedProjectile {
-    const container = this.scene.add.container(x + dir * 24, y - 8).setDepth(62);
+  public spawnMysticOrb(x: number, y: number, dir: number, aimAngle?: number): SpawnedProjectile {
+    const ang = aimAngle !== undefined ? aimAngle : dir < 0 ? Math.PI : 0;
+    const container = this.scene.add
+      .container(x + Math.cos(ang) * 24, y - 8 + Math.sin(ang) * 24)
+      .setDepth(62);
     const halo = this.scene.add.circle(0, 0, 13, 0xfacc15, 0.35);
     const core = this.scene.add.circle(0, 0, 7, 0xfef08a, 1).setStrokeStyle(2, 0xf59e0b);
     container.add([halo, core]);
     vfxManager.applyBloom(this.scene, container, { color: 0xfacc15, strength: 1.4 });
 
+    const speed = 490;
     return {
       node: container,
-      vx: dir * 480,
-      vy: 0,
+      vx: Math.cos(ang) * speed,
+      vy: Math.sin(ang) * speed,
       damageScale: 1,
       colorHex: 0xfacc15,
       kind: 'mystic_orb',
-      expiresAt: this.scene.time.now + 1400,
+      expiresAt: this.scene.time.now + 1450,
     };
   }
 
@@ -297,18 +311,22 @@ export class ClassCombatVFX {
   }
 
   /**
-   * 4. Barami Spirit Tamer: Wide Checkered Red-and-White Krama Whip Ribbon Snap
+   * 4. Barami Spirit Tamer: Wide Checkered Red-and-White Krama Whip Ribbon Snap (360° Aim)
    */
-  public playKramaWhipSnap(x: number, y: number, dir: number): void {
-    const container = this.scene.add.container(x + dir * 18, y - 4).setDepth(63);
+  public playKramaWhipSnap(x: number, y: number, dir: number, aimAngle?: number): void {
+    const ang = aimAngle !== undefined ? aimAngle : dir < 0 ? Math.PI : 0;
+    const container = this.scene.add
+      .container(x + Math.cos(ang) * 18, y - 6 + Math.sin(ang) * 18)
+      .setRotation(ang)
+      .setDepth(63);
     const segments = 9;
     for (let i = 0; i < segments; i++) {
-      const sx = dir * (i * 11);
-      const sy = Math.sin((i / segments) * Math.PI) * -22;
+      const sx = i * 11;
+      const sy = Math.sin((i / segments) * Math.PI) * -20;
       const cell = this.scene.add
         .rectangle(sx, sy, 12, 8, i % 2 === 0 ? 0xdc2626 : 0xffffff)
         .setStrokeStyle(1, 0x450a0a)
-        .setAngle(dir * (i * 5 - 15));
+        .setAngle(i * 5 - 15);
       container.add(cell);
     }
 
@@ -323,21 +341,22 @@ export class ClassCombatVFX {
   }
 
   /**
-   * 5. Shadow Hunter: Twin-Blade Crisscross Slash + Optional Purple Shadow Strike Burst
+   * 5. Shadow Hunter: Twin-Blade Crisscross Slash + Optional Purple Shadow Strike Burst (360° Aim)
    */
-  public playShadowTwinSlash(x: number, y: number, dir: number, isShadowStrike: boolean): void {
-    const cx = x + dir * 48;
-    const cy = y - 4;
-    const g = this.scene.add.graphics().setDepth(64);
+  public playShadowTwinSlash(x: number, y: number, dir: number, isShadowStrike: boolean, aimAngle?: number): void {
+    const ang = aimAngle !== undefined ? aimAngle : dir < 0 ? Math.PI : 0;
+    const cx = x + Math.cos(ang) * 48;
+    const cy = y - 6 + Math.sin(ang) * 44;
+    const g = this.scene.add.graphics().setPosition(cx, cy).setRotation(ang).setDepth(64);
     const col = isShadowStrike ? 0xc084fc : 0xe2e8f0;
     const lw = isShadowStrike ? 7 : 4;
 
     g.lineStyle(lw, col, 0.95);
     g.beginPath();
-    g.moveTo(cx - 28, cy - 26);
-    g.lineTo(cx + 28, cy + 26);
-    g.moveTo(cx + 28, cy - 26);
-    g.lineTo(cx - 28, cy + 26);
+    g.moveTo(-28, -26);
+    g.lineTo(28, 26);
+    g.moveTo(28, -26);
+    g.lineTo(-28, 26);
     g.strokePath();
 
     this.scene.tweens.add({
@@ -393,27 +412,32 @@ export class ClassCombatVFX {
   // ==================== KHMER MYTHIC ARSENAL VFX ====================
 
   /**
-   * 8-Biome Preah Khan elemental crescent wave tinted by active World Map Biome
+   * 8-Biome Preah Khan elemental crescent wave tinted by active World Map Biome (360° Aim)
    */
-  public playPreahKhanBiomeSlash(x: number, y: number, dir: number, biomeColorHex: number): void {
+  public playPreahKhanBiomeSlash(x: number, y: number, dir: number, biomeColorHex: number, aimAngle?: number): void {
+    const ang = aimAngle !== undefined ? aimAngle : dir < 0 ? Math.PI : 0;
+    const sx = x + Math.cos(ang) * 56;
+    const sy = y - 6 + Math.sin(ang) * 48;
     const slash = this.scene.add
-      .sprite(x + dir * 56, y - 6, 'fx_slash', 0)
+      .sprite(sx, sy, 'fx_slash', 0)
       .setScale(3.4)
       .setTint(biomeColorHex)
-      .setFlipX(dir < 0)
+      .setRotation(ang)
+      .setFlipY(Math.cos(ang) < 0)
       .setDepth(64);
     slash.play('slash_curved');
     slash.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => slash.destroy());
 
     const aura = this.scene.add
-      .arc(x + dir * 56, y - 4, 42, -55, 55, false, biomeColorHex, 0.35)
+      .arc(sx, sy, 42, -55, 55, false, biomeColorHex, 0.35)
       .setStrokeStyle(3, 0xffffff, 0.9)
-      .setScale(dir, 1)
+      .setRotation(ang)
       .setDepth(63);
     this.scene.tweens.add({
       targets: aura,
-      x: x + dir * 92,
-      scaleX: dir * 1.45,
+      x: x + Math.cos(ang) * 96,
+      y: y - 6 + Math.sin(ang) * 86,
+      scaleX: 1.45,
       scaleY: 1.45,
       alpha: 0,
       duration: 240,
@@ -422,16 +446,20 @@ export class ClassCombatVFX {
   }
 
   /**
-   * Golden Riel Coin-Shot: spinning golden coin that ricochets off bosses for escalating crit damage!
+   * Golden Riel Coin-Shot: spinning golden coin that ricochets off bosses for escalating crit damage! (360° Aim)
    */
   public spawnGoldenRielCoin(
     x: number,
     y: number,
     dir: number,
     damageScale = 1,
-    ricochetsLeft = 2
+    ricochetsLeft = 2,
+    aimAngle?: number
   ): SpawnedProjectile {
-    const container = this.scene.add.container(x + dir * 24, y - 6).setDepth(63);
+    const ang = aimAngle !== undefined ? aimAngle : dir < 0 ? Math.PI : 0;
+    const container = this.scene.add
+      .container(x + Math.cos(ang) * 24, y - 6 + Math.sin(ang) * 24)
+      .setDepth(63);
     const outer = this.scene.add.circle(0, 0, 9, 0xfacc15, 1).setStrokeStyle(2, 0x92400e);
     const inner = this.scene.add.rectangle(0, 0, 5, 5, 0xfef9c3, 1);
     container.add([outer, inner]);
@@ -443,10 +471,11 @@ export class ClassCombatVFX {
       repeat: -1,
     });
 
+    const speed = 680;
     return {
       node: container,
-      vx: dir * 680,
-      vy: -35,
+      vx: Math.cos(ang) * speed,
+      vy: Math.sin(ang) * speed - (aimAngle === undefined ? 35 : 0),
       damageScale,
       colorHex: 0xfacc15,
       kind: 'riel_coin',

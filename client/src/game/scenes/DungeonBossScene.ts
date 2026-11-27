@@ -38,6 +38,14 @@ import {
 } from '../animations/ClassCombatVFX';
 import { vfxManager } from '../animations/VFXManager';
 import {
+  GRAPPLE_MAX_DURATION_MS,
+  GRAPPLE_PULL_SPEED,
+  drawBambooVineTether,
+  getCursorAimAngle,
+  resolveCursorGrappleAnchor,
+  spawnGrappleLeafBurst,
+} from '../systems/CombatAimHelper';
+import {
   parseAppearance,
   roomClient,
   type RemoteDungeonPlayerSnapshot,
@@ -163,7 +171,7 @@ export class DungeonBossScene extends Phaser.Scene {
   // Platformer & Controls
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keys!: Record<
-    'A' | 'D' | 'W' | 'E' | 'G' | 'J' | 'K' | 'L' | 'F' | 'Q' | 'R' | 'SHIFT' | 'SPACE',
+    'A' | 'D' | 'W' | 'E' | 'G' | 'J' | 'K' | 'L' | 'F' | 'Q' | 'R' | 'X' | 'SHIFT' | 'SPACE',
     Phaser.Input.Keyboard.Key
   >;
   private joystick: JoystickVector = { x: 0, y: 0 };
@@ -341,8 +349,8 @@ export class DungeonBossScene extends Phaser.Scene {
     this.cameras.main.fadeIn(240, 8, 10, 20);
 
     this.cursors = this.input.keyboard!.createCursorKeys();
-    this.keys = this.input.keyboard!.addKeys('A,D,W,E,G,J,K,L,F,Q,R,SHIFT,SPACE', false) as Record<
-      'A' | 'D' | 'W' | 'E' | 'G' | 'J' | 'K' | 'L' | 'F' | 'Q' | 'R' | 'SHIFT' | 'SPACE',
+    this.keys = this.input.keyboard!.addKeys('A,D,W,E,G,J,K,L,F,Q,R,X,SHIFT,SPACE', false) as Record<
+      'A' | 'D' | 'W' | 'E' | 'G' | 'J' | 'K' | 'L' | 'F' | 'Q' | 'R' | 'X' | 'SHIFT' | 'SPACE',
       Phaser.Input.Keyboard.Key
     >;
     this.input.keyboard!.clearCaptures();
@@ -352,14 +360,14 @@ export class DungeonBossScene extends Phaser.Scene {
       this.input.keyboard.resetKeys();
     }
 
-    // Crisp Right-Click = Invulnerability Dash; Left-Click = Class Attack (zero browser context menu!)
+    // Crisp Right-Click = Invulnerability Dash; Left-Click = 360° Cursor-Aimed Class Attack (zero browser context menu!)
     this.input.mouse?.disableContextMenu();
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (this.playerDefeated) return;
       if (pointer.rightButtonDown()) {
         this.performClassDash();
       } else if (pointer.leftButtonDown()) {
-        this.performClassAttack();
+        this.performClassAttack({ x: pointer.worldX, y: pointer.worldY });
       }
     });
 
@@ -603,8 +611,8 @@ export class DungeonBossScene extends Phaser.Scene {
       .text(
         420,
         154,
-        '[I] Class · [1/2/3] Snacks · Space/W Jump · Shift/L Dash · J/Click Attack' +
-          (this.difficulty === 'mythic' ? ' · [F] Focus · [R] Fury' : ''),
+        '[I] Class · [1/2/3] Snacks · Space/W Jump · [Q] Grapple · [R] Signature Skill · Shift/R-Click Dash · L-Click Aim & Attack' +
+          (this.difficulty === 'mythic' ? ' · [F] Focus · [X] Fury' : ''),
         {
           fontFamily: 'Kantumruy Pro, sans-serif',
           fontSize: '12px',
@@ -1448,6 +1456,7 @@ export class DungeonBossScene extends Phaser.Scene {
     if (this.transitioning || this.playerDefeated) return;
     if (this.grappleActive) {
       this.grappleActive = false;
+      this.player.body.setAllowGravity(true);
       this.grappleGraphics.clear();
     }
     const bridge = computeVillageToDungeonBridge(this.player.state, Date.now(), this.consecutiveMeleeHits);
@@ -1493,36 +1502,35 @@ export class DungeonBossScene extends Phaser.Scene {
     const now = this.time.now;
     if (now < this.grappleCooldownUntil || this.transitioning || this.playerDefeated) return;
     const px = this.player.x;
-    const py = this.player.y;
-    const dir = this.player.facingRight ? 1 : -1;
+    const py = this.player.y - 12;
+    const aim = getCursorAimAngle(this, px, py, this.player.facingRight ? 1 : -1);
+    this.player.facing = aim.dir > 0 ? 'right' : 'left';
+    this.player.setAimAngle(aim.angle);
 
-    let best: { x: number; y: number; w: number } | null = null;
-    let bestScore = Infinity;
-    for (const p of this.arenaPlatforms) {
-      const anchorX = Phaser.Math.Clamp(px + dir * 48, p.x - p.w / 2 + 18, p.x + p.w / 2 - 18);
-      const anchorY = p.y - 10;
-      const dy = py - anchorY;
-      const dist = Phaser.Math.Distance.Between(px, py, anchorX, anchorY);
-      if (dy < 36 || dist > 380) continue;
-      const score = dist * (Math.sign(anchorX - px) === dir ? 0.72 : 1.05);
-      if (score < bestScore) {
-        bestScore = score;
-        best = p;
-      }
-    }
-    if (!best) {
-      this.spawnFloatingText(px, py - 34, '🌿 No overhead ledge in Grapple range!', '#86efac', '11px');
-      return;
-    }
+    const bossRect = this.bossCtrl?.alive
+      ? new Phaser.Geom.Rectangle(this.bossCtrl.x - 58, this.bossCtrl.y - 120, 116, 120)
+      : null;
+    const anchor = resolveCursorGrappleAnchor({
+      originX: px,
+      originY: py,
+      aimAngle: aim.angle,
+      arenaW: ARENA_W,
+      floorY: FLOOR_Y,
+      platforms: this.arenaPlatforms,
+      bossRect,
+    });
 
     this.grappleActive = true;
-    this.grappleTargetX = Phaser.Math.Clamp(px + dir * 40, best.x - best.w / 2 + 24, best.x + best.w / 2 - 24);
-    this.grappleTargetY = best.y - 34;
-    this.grappleEndAt = now + 380;
-    this.grappleCooldownUntil = now + 1150;
+    this.grappleTargetX = anchor.x;
+    this.grappleTargetY = anchor.y;
+    this.grappleEndAt = now + GRAPPLE_MAX_DURATION_MS;
+    this.grappleCooldownUntil = now + 950;
     this.jumpsUsed = 1;
+    this.player.body.setAllowGravity(false);
     soundManager.playSfx('swing');
-    this.spawnFloatingText(px, py - 34, '🌿 Bamboo Vine Grapple!', '#4ade80', '13px');
+    spawnGrappleLeafBurst(this, anchor.x, anchor.y);
+    drawBambooVineTether(this, this.grappleGraphics, px, py, anchor.x, anchor.y, now, true);
+    this.spawnFloatingText(px, py - 24, '🌿 Bamboo Vine Grapple!', '#4ade80', '13px');
   }
 
   private triggerGroundSlamShockwave(): void {
@@ -1663,7 +1671,7 @@ export class DungeonBossScene extends Phaser.Scene {
     }
 
     EventBus.emit('ui:toast', {
-      text: 'Tip: Right-Click triggers Parry (Preah Khan) or Coin Toss (Golden Riel Crossbow)! Press [Q] for your Class Signature Skill!',
+      text: 'Tip: Press [Q] for Bamboo Vine Grapple, [R] for your Class Signature Skill, and Right-Click to Dash!',
     });
   }
 
@@ -1796,7 +1804,7 @@ export class DungeonBossScene extends Phaser.Scene {
     return true;
   }
 
-  private performClassAttack(): void {
+  private performClassAttack(overrideTarget?: { x: number; y: number }): void {
     const now = this.time.now;
     if (now < this.attackCooldownUntil || this.transitioning || this.playerDefeated) return;
 
@@ -1810,7 +1818,12 @@ export class DungeonBossScene extends Phaser.Scene {
     this.lastAttackAt = now;
     this.player.triggerSquash(1.12, 0.92);
 
-    const dir = this.player.facingRight ? 1 : -1;
+    const aim = getCursorAimAngle(this, this.player.x, this.player.y - 12, this.player.facingRight ? 1 : -1, overrideTarget);
+    const dir = aim.dir;
+    const aimAngle = aim.angle;
+    this.player.facing = dir > 0 ? 'right' : 'left';
+    this.player.setAimAngle(aimAngle);
+
     if (roomClient.isInCoopDungeon) {
       roomClient.sendDungeonAttack(cls, this.player.x, this.player.y, dir);
     }
@@ -1822,25 +1835,25 @@ export class DungeonBossScene extends Phaser.Scene {
           return;
         }
         soundManager.playSfx('coin');
-        this.projectiles.push(this.vfx.spawnGoldenRielCoin(this.player.x, this.player.y, dir, 1.05, 2));
+        this.projectiles.push(this.vfx.spawnGoldenRielCoin(this.player.x, this.player.y, dir, 1.05, 2, aimAngle));
       } else {
         soundManager.playSfx('arrow');
-        this.projectiles.push(this.vfx.spawnArcherArrow(this.player.x, this.player.y, dir, 1));
+        this.projectiles.push(this.vfx.spawnArcherArrow(this.player.x, this.player.y, dir, 1, aimAngle));
       }
       return;
     }
 
     if (cls === 'mystic') {
       soundManager.playSfx('magic');
-      this.projectiles.push(this.vfx.spawnMysticOrb(this.player.x, this.player.y, dir));
+      this.projectiles.push(this.vfx.spawnMysticOrb(this.player.x, this.player.y, dir, aimAngle));
       return;
     }
 
     if (cls === 'tamer') {
       if (weapon.id === 'weapon_hanuman_banner') {
         soundManager.playSfx('magic');
-        const targetX = this.bossCtrl.alive ? this.bossCtrl.x : this.player.x + dir * 240;
-        const targetY = this.bossCtrl.alive ? this.bossCtrl.y - 84 : this.player.y - 10;
+        const targetX = this.bossCtrl.alive ? this.bossCtrl.x : this.player.x + Math.cos(aimAngle) * 240;
+        const targetY = this.bossCtrl.alive ? this.bossCtrl.y - 84 : this.player.y + Math.sin(aimAngle) * 180;
         this.vfx.playHanumanSpiritFormation(this.player.x, this.player.y - 12, targetX, targetY, (idx) => {
           if (this.bossCtrl.alive) {
             this.damageBoss(dir, {
@@ -1852,8 +1865,10 @@ export class DungeonBossScene extends Phaser.Scene {
         return;
       }
       soundManager.playSfx('krama');
-      this.vfx.playKramaWhipSnap(this.player.x, this.player.y, dir);
-      const whipBox = new Phaser.Geom.Rectangle(this.player.x + (dir > 0 ? 0 : -118), this.player.y - 44, 118, 88);
+      this.vfx.playKramaWhipSnap(this.player.x, this.player.y, dir, aimAngle);
+      const whipCx = this.player.x + Math.cos(aimAngle) * 64;
+      const whipCy = this.player.y - 8 + Math.sin(aimAngle) * 58;
+      const whipBox = new Phaser.Geom.Rectangle(whipCx - 58, whipCy - 46, 116, 92);
       this.checkMeleeBoxHits(whipBox, dir, { bonusMult: 1, tag: 'Krama Mark!' });
       if (this.bossCtrl.alive) {
         const onSpiritHit = () => {
@@ -1900,13 +1915,15 @@ export class DungeonBossScene extends Phaser.Scene {
       if (isShadowStrike && isFrostFang) {
         this.vfx.playFrostFangStealthSlice(this.player.x, this.player.y, dir);
       } else if (isShadowStrike && weapon.id === 'weapon_reality_rip_blade') {
-        this.vfx.playParryRealityRip(this.player.x + dir * 80, this.player.y - 12);
+        this.vfx.playParryRealityRip(this.player.x + Math.cos(aimAngle) * 80, this.player.y - 12 + Math.sin(aimAngle) * 64);
       } else {
-        this.vfx.playShadowTwinSlash(this.player.x, this.player.y, dir, isShadowStrike);
+        this.vfx.playShadowTwinSlash(this.player.x, this.player.y, dir, isShadowStrike, aimAngle);
       }
       const rangeScale = bridge.weaponSizeMult;
-      const slashW = Math.round((isFrostFang ? 94 : 104) * rangeScale);
-      const slashBox = new Phaser.Geom.Rectangle(this.player.x + dir * 44 - slashW / 2, this.player.y - 46, slashW, 92);
+      const slashW = Math.round((isFrostFang ? 98 : 108) * rangeScale);
+      const slashCx = this.player.x + Math.cos(aimAngle) * 52;
+      const slashCy = this.player.y - 8 + Math.sin(aimAngle) * 48;
+      const slashBox = new Phaser.Geom.Rectangle(slashCx - slashW / 2, slashCy - 48, slashW, 96);
       this.checkMeleeBoxHits(slashBox, dir, {
         bonusMult: isShadowStrike ? (weapon.id === 'weapon_reality_rip_blade' ? 1.9 : 1.55) : 1,
         guaranteedCrit: isShadowStrike,
@@ -1932,8 +1949,8 @@ export class DungeonBossScene extends Phaser.Scene {
     if (isPreahKhan && this.realityRipCharged) {
       this.realityRipCharged = false;
       soundManager.playSfx('crit');
-      const ripX = this.bossCtrl.alive ? this.bossCtrl.x : this.player.x + dir * 130;
-      const ripY = this.bossCtrl.alive ? this.bossCtrl.y - 80 : this.player.y - 14;
+      const ripX = this.bossCtrl.alive ? this.bossCtrl.x : this.player.x + Math.cos(aimAngle) * 130;
+      const ripY = this.bossCtrl.alive ? this.bossCtrl.y - 80 : this.player.y - 14 + Math.sin(aimAngle) * 100;
       this.vfx.playParryRealityRip(ripX, ripY);
       if (this.bossCtrl.alive) {
         this.damageBoss(dir, {
@@ -1951,9 +1968,9 @@ export class DungeonBossScene extends Phaser.Scene {
     const sizeMult = bridge.weaponSizeMult * (isEvolvingBlade ? 1 + Math.min(0.6, uniqueClears * 0.1) : 1);
 
     if (isPreahKhan && preahBonus) {
-      this.vfx.playPreahKhanBiomeSlash(this.player.x, this.player.y, dir, preahBonus.colorHex);
+      this.vfx.playPreahKhanBiomeSlash(this.player.x, this.player.y, dir, preahBonus.colorHex, aimAngle);
     } else {
-      this.vfx.playLbokatorSlash(this.player.x, this.player.y, dir, stance);
+      this.vfx.playLbokatorSlash(this.player.x, this.player.y, dir, stance, aimAngle);
     }
 
     // Evolving Blade of Angkor fires golden Yant wave projectile once >= 1 Boss is defeated!
@@ -2510,31 +2527,39 @@ export class DungeonBossScene extends Phaser.Scene {
       this.waterShieldRing.setPosition(ox, oy);
     }
 
-    // Bamboo Vine Grapple Zip Physics
+    // Live 360° cursor weapon tracking while pointer is over the combat arena
+    if (!this.playerDefeated && !this.transitioning) {
+      const liveAim = getCursorAimAngle(this, this.player.x, this.player.y - 12, this.player.facingRight ? 1 : -1);
+      this.player.setAimAngle(liveAim.angle);
+    }
+
+    // Bamboo Vine Grapple Zip Physics (gravity disabled during zip, smooth 520px/s pull, guaranteed restore!)
     this.grappleGraphics.clear();
     if (this.grappleActive && !this.playerDefeated) {
       const dx = this.grappleTargetX - this.player.x;
       const dy = this.grappleTargetY - this.player.y;
       const dist = Math.hypot(dx, dy);
-      this.grappleGraphics.lineStyle(4, 0x166534, 1);
-      this.grappleGraphics.beginPath();
-      this.grappleGraphics.moveTo(this.player.x, this.player.y - 8);
-      this.grappleGraphics.lineTo(this.grappleTargetX, this.grappleTargetY + 14);
-      this.grappleGraphics.strokePath();
-      this.grappleGraphics.lineStyle(2, 0x4ade80, 0.95);
-      this.grappleGraphics.beginPath();
-      this.grappleGraphics.moveTo(this.player.x, this.player.y - 8);
-      this.grappleGraphics.lineTo(this.grappleTargetX, this.grappleTargetY + 14);
-      this.grappleGraphics.strokePath();
-      this.grappleGraphics.fillStyle(0xf472b6, 1);
-      this.grappleGraphics.fillCircle(this.grappleTargetX, this.grappleTargetY + 14, 5);
+      drawBambooVineTether(
+        this,
+        this.grappleGraphics,
+        this.player.x,
+        this.player.y - 12,
+        this.grappleTargetX,
+        this.grappleTargetY,
+        time,
+        true
+      );
 
-      if (dist < 24 || time >= this.grappleEndAt) {
+      if (dist < 26 || time >= this.grappleEndAt) {
         this.grappleActive = false;
-        this.player.body.setVelocity(dx * 1.4, -220);
+        this.player.body.setAllowGravity(true);
+        this.player.body.setVelocity((dx / Math.max(1, dist)) * 180, Math.min(-180, (dy / Math.max(1, dist)) * 180));
       } else {
-        this.player.body.setVelocity((dx / dist) * 760, (dy / dist) * 760);
+        this.player.body.setAllowGravity(false);
+        this.player.body.setVelocity((dx / dist) * GRAPPLE_PULL_SPEED, (dy / dist) * GRAPPLE_PULL_SPEED);
       }
+    } else if (!this.player.body.allowGravity) {
+      this.player.body.setAllowGravity(true);
     }
 
     // Mythic Focus (fills when taking 0 damage) & Fury (fills when fighting close to boss)
@@ -2602,7 +2627,7 @@ export class DungeonBossScene extends Phaser.Scene {
         ) {
           this.performJump();
         }
-        if (Phaser.Input.Keyboard.JustDown(this.keys.G)) {
+        if (Phaser.Input.Keyboard.JustDown(this.keys.Q) || Phaser.Input.Keyboard.JustDown(this.keys.G)) {
           this.performBambooGrapple();
         }
         if (
@@ -2618,10 +2643,10 @@ export class DungeonBossScene extends Phaser.Scene {
         if (Phaser.Input.Keyboard.JustDown(this.keys.F)) {
           this.activateFocusBurst();
         }
-        if (Phaser.Input.Keyboard.JustDown(this.keys.Q)) {
+        if (Phaser.Input.Keyboard.JustDown(this.keys.R)) {
           this.performSignatureSkill();
         }
-        if (Phaser.Input.Keyboard.JustDown(this.keys.R)) {
+        if (Phaser.Input.Keyboard.JustDown(this.keys.X)) {
           this.activateFuryBurst();
         }
         if (Phaser.Input.Keyboard.JustDown(this.keys.E) && this.isNearExitPortal()) {
@@ -2709,11 +2734,14 @@ export class DungeonBossScene extends Phaser.Scene {
       this.bossCtrl.update(time, delta, this.player.x, this.player.y, playerBounds);
     }
 
-    // Walk-over auto-pickup for Secret Relic Chest & Boss Treasure Bag (extended range with QoL Lucky White Kitten!)
-    const hasAutoLootKitten =
+    // Walk-over auto-pickup for Secret Relic Chest & Boss Treasure Bag (extended range with QoL Lucky White Kitten or Mini Golden Naga!)
+    const hasAutoLootPet =
       this.player.state.loadout.pet === 'pet_lucky_kitten' ||
-      this.player.state.inventory.some((i) => i.itemId === 'pet_lucky_kitten' && i.quantity > 0);
-    const lootRadius = hasAutoLootKitten ? 240 : 56;
+      this.player.state.loadout.pet === 'pet_mini_golden_naga' ||
+      this.player.state.inventory.some(
+        (i) => (i.itemId === 'pet_lucky_kitten' || i.itemId === 'pet_mini_golden_naga') && i.quantity > 0
+      );
+    const lootRadius = hasAutoLootPet ? 260 : 56;
     if (
       this.secretWall.broken &&
       !this.secretWall.chestClaimed &&

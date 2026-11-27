@@ -69,12 +69,20 @@ const SALON_PRICES = {
   premiumHairDiamonds: {
     silver_spiky: 120,
     braided_royal: 180,
+    royal_braided_crown: 220,
+    flowing_apsara_waves: 200,
   } as Record<string, number>,
   premiumEyeDiamonds: {
     glowing_gold: 150,
+    starry_glow: 160,
+    dragon_slit: 170,
+    mystic_heterochromia: 210,
   } as Record<string, number>,
   premiumFaceDiamonds: {
     fierce_scar: 80,
+    floating_lotus_petals: 190,
+    lightning_eyes: 220,
+    sacred_third_eye: 240,
   } as Record<string, number>,
 };
 

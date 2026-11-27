@@ -1725,7 +1725,7 @@ export const HUD: React.FC<HUDProps> = ({
                 )}
               </div>
 
-              {/* Signature Active Skill [Q] Cooldown Ring Button (All 5 Khmer Classes) */}
+              {/* Signature Active Skill [R] Cooldown Ring Button (All 5 Khmer Classes) */}
               {(() => {
                 const sigDef = KHMER_SIGNATURE_SKILLS[player.activeClass];
                 const readyAt =
@@ -1742,7 +1742,7 @@ export const HUD: React.FC<HUDProps> = ({
                   <button
                     type="button"
                     onClick={() => EventBus.emit('input:signatureSkill')}
-                    title={`${sigDef.name} (${sigDef.khmerName}) [Q]`}
+                    title={`${sigDef.name} (${sigDef.khmerName}) [R]`}
                     className={`pointer-events-auto flex items-center gap-2 pl-1.5 pr-3 py-1 rounded-full border-2 shadow-lg transition cursor-pointer ${
                       ready
                         ? 'bg-gradient-to-r from-amber-900 via-purple-950 to-amber-900 text-amber-100 border-yellow-400 shadow-[0_0_16px_rgba(250,204,21,0.55)] hover:scale-[1.03]'
@@ -1775,7 +1775,7 @@ export const HUD: React.FC<HUDProps> = ({
                     </span>
                     <span className="text-left leading-tight">
                       <span className="block font-display font-bold text-[10px] text-yellow-200">
-                        {sigDef.name} [Q]
+                        {sigDef.name} [R]
                       </span>
                       <span className="block font-mono text-[9px] text-amber-200/90">
                         {ready ? '✨ READY!' : `${(remMs / 1000).toFixed(1)}s CD`}

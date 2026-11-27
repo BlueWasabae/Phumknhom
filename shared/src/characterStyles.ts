@@ -15,8 +15,14 @@ export type HairStyleId =
   | 'high_ponytail'
   | 'twin_buns'
   | 'classic_topknot'
+  | 'wolf_cut'
+  | 'spiky_anime_hero'
+  | 'cyber_undercut'
+  | 'twin_tails'
   | 'silver_spiky'
-  | 'braided_royal';
+  | 'braided_royal'
+  | 'royal_braided_crown'
+  | 'flowing_apsara_waves';
 
 export type EyeStyleId =
   | 'classic_round'
@@ -25,7 +31,11 @@ export type EyeStyleId =
   | 'chill_sleepy'
   | 'happy_curve'
   | 'almond'
-  | 'glowing_gold';
+  | 'kawaii_sparkle'
+  | 'glowing_gold'
+  | 'starry_glow'
+  | 'dragon_slit'
+  | 'mystic_heterochromia';
 
 export type EyebrowStyleId = 'normal' | 'thick' | 'arched' | 'determined' | 'soft';
 
@@ -35,7 +45,11 @@ export type FaceStyleId =
   | 'confident_smirk'
   | 'cheerful_open'
   | 'rosy_blush'
-  | 'fierce_scar';
+  | 'golden_cheek_marks'
+  | 'fierce_scar'
+  | 'floating_lotus_petals'
+  | 'lightning_eyes'
+  | 'sacred_third_eye';
 
 export type StarterOutfitId =
   | 'village_tunic'
@@ -108,11 +122,17 @@ export const FREE_HAIR_STYLES: HairStyleDef[] = [
   { id: 'high_ponytail', label: 'High Ponytail' },
   { id: 'twin_buns', label: 'Twin Buns' },
   { id: 'classic_topknot', label: 'Classic Topknot' },
+  { id: 'wolf_cut', label: 'Wolf Cut' },
+  { id: 'spiky_anime_hero', label: 'Spiky Anime Hero' },
+  { id: 'cyber_undercut', label: 'Cyber Undercut' },
+  { id: 'twin_tails', label: 'Twin Tails' },
 ];
 
 export const PREMIUM_HAIR_STYLES: HairStyleDef[] = [
   { id: 'silver_spiky', label: 'Silver Spiky', premiumItemId: 'hair_silver_spiky' },
   { id: 'braided_royal', label: 'Braided Royal', premiumItemId: 'hair_braided_royal' },
+  { id: 'royal_braided_crown', label: 'Royal Braided Crown', premiumItemId: 'hair_royal_braided_crown' },
+  { id: 'flowing_apsara_waves', label: 'Flowing Apsara Waves', premiumItemId: 'hair_flowing_apsara_waves' },
 ];
 
 export const ALL_HAIR_STYLES: HairStyleDef[] = [...FREE_HAIR_STYLES, ...PREMIUM_HAIR_STYLES];
@@ -135,10 +155,14 @@ export const FREE_EYE_STYLES: EyeStyleDef[] = [
   { id: 'chill_sleepy', label: 'Chill / Sleepy' },
   { id: 'happy_curve', label: 'Happy Curve' },
   { id: 'almond', label: 'Almond' },
+  { id: 'kawaii_sparkle', label: 'Kawaii Sparkle' },
 ];
 
 export const PREMIUM_EYE_STYLES: EyeStyleDef[] = [
   { id: 'glowing_gold', label: 'Glowing Golden', premiumItemId: 'salon_glowing_eyes' },
+  { id: 'starry_glow', label: 'Starry Glow', premiumItemId: 'salon_starry_glow_eyes' },
+  { id: 'dragon_slit', label: 'Dragon Slit', premiumItemId: 'salon_dragon_slit_eyes' },
+  { id: 'mystic_heterochromia', label: 'Mystic Heterochromia', premiumItemId: 'salon_heterochromia_eyes' },
 ];
 
 export const ALL_EYE_STYLES: EyeStyleDef[] = [...FREE_EYE_STYLES, ...PREMIUM_EYE_STYLES];
@@ -166,10 +190,14 @@ export const FREE_FACE_STYLES: FaceStyleDef[] = [
   { id: 'confident_smirk', label: 'Confident Smirk' },
   { id: 'cheerful_open', label: 'Cheerful Open' },
   { id: 'rosy_blush', label: 'Rosy Blush' },
+  { id: 'golden_cheek_marks', label: 'Golden Cheek Marks' },
 ];
 
 export const PREMIUM_FACE_STYLES: FaceStyleDef[] = [
   { id: 'fierce_scar', label: 'Fierce Scar', premiumItemId: 'salon_fierce_scar' },
+  { id: 'floating_lotus_petals', label: 'Floating Lotus Petals', premiumItemId: 'salon_floating_lotus_petals' },
+  { id: 'lightning_eyes', label: 'Lightning Eyes', premiumItemId: 'salon_lightning_eyes' },
+  { id: 'sacred_third_eye', label: 'Sacred Third-Eye Gem', premiumItemId: 'salon_sacred_third_eye' },
 ];
 
 export const ALL_FACE_STYLES: FaceStyleDef[] = [...FREE_FACE_STYLES, ...PREMIUM_FACE_STYLES];

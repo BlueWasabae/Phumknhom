@@ -26,6 +26,7 @@ import {
   waterPlot,
 } from '../systems/FarmingEngine';
 import { soundManager } from '../systems/SoundManager';
+import { MAX_INTERACT_DISTANCE, enforceInteractRange } from '../systems/CombatAimHelper';
 import { SeasonAtmosphereOverlay } from '../systems/SeasonClock';
 import { EventBus, type FarmToolMode, type JoystickVector } from '../EventBus';
 import { Player } from '../entities/Player';
@@ -333,7 +334,10 @@ export class FarmScene extends Phaser.Scene {
       .setScale(0.72)
       .setDepth(200)
       .setInteractive({ useHandCursor: true });
-    houseImg.on('pointerdown', () => this.enterHouseInterior());
+    houseImg.on('pointerdown', () => {
+      if (!enforceInteractRange(this, this.player.x, this.player.y, 330, 200, MAX_INTERACT_DISTANCE)) return;
+      this.enterHouseInterior();
+    });
     const houseCol = this.add.rectangle(330, 184, 70, 32, 0x000000, 0);
     this.colliders.add(houseCol);
     this.add
@@ -358,7 +362,10 @@ export class FarmScene extends Phaser.Scene {
       .setScale(0.54)
       .setDepth(196)
       .setInteractive({ useHandCursor: true });
-    stallImg.on('pointerdown', () => EventBus.emit('ui:openModal', { modal: 'farm', farmTab: 'seeds' }));
+    stallImg.on('pointerdown', () => {
+      if (!enforceInteractRange(this, this.player.x, this.player.y, STALL_X, STALL_Y, MAX_INTERACT_DISTANCE)) return;
+      EventBus.emit('ui:openModal', { modal: 'farm', farmTab: 'seeds' });
+    });
 
     const stallArrow = this.add.image(STALL_X, STALL_Y - 64, 'join_arrow').setScale(0.5).setDepth(250);
     this.tweens.add({ targets: stallArrow, y: STALL_Y - 70, duration: 560, yoyo: true, repeat: -1 });
@@ -436,7 +443,10 @@ export class FarmScene extends Phaser.Scene {
       .setStrokeStyle(2, 0xfacc15)
       .setDepth(15)
       .setInteractive({ useHandCursor: true });
-    exitPad.on('pointerdown', () => this.returnToOverworld());
+    exitPad.on('pointerdown', () => {
+      if (!enforceInteractRange(this, this.player.x, this.player.y, EXIT_X, EXIT_Y, MAX_INTERACT_DISTANCE)) return;
+      this.returnToOverworld();
+    });
 
     const exitArrow = this.add.image(EXIT_X, EXIT_Y - 26, 'join_arrow').setScale(0.56).setDepth(600);
     this.tweens.add({ targets: exitArrow, y: EXIT_Y - 32, duration: 540, yoyo: true, repeat: -1 });
@@ -559,6 +569,7 @@ export class FarmScene extends Phaser.Scene {
     const plot = this.player.state.farm.plots[index];
     const visual = this.plots[index];
     if (!plot || !visual) return;
+    if (!enforceInteractRange(this, this.player.x, this.player.y, visual.cx, visual.cy, MAX_INTERACT_DISTANCE)) return;
 
     const now = Date.now();
     if (!plot.unlocked) {
@@ -798,6 +809,7 @@ export class FarmScene extends Phaser.Scene {
         .setOrigin(0.5, 0);
 
       img.on('pointerdown', () => {
+        if (!enforceInteractRange(this, this.player.x, this.player.y, tx, ty, MAX_INTERACT_DISTANCE)) return;
         if (prog.ready) {
           const res = harvestFruitTree(this.player.state, idx, Date.now());
           if (res.ok) this.spawnPopSparkle(tx, ty - 20, 0xfacc15, `+${def.outputQuantity} Fruit!`);
@@ -835,6 +847,7 @@ export class FarmScene extends Phaser.Scene {
         .rectangle(lx, ly, 26, 22, 0x000000, 0)
         .setInteractive({ useHandCursor: true });
       hit.on('pointerdown', () => {
+        if (!enforceInteractRange(this, this.player.x, this.player.y, lx, ly, MAX_INTERACT_DISTANCE)) return;
         if (prog.ready) {
           const res = collectLivestock(this.player.state, idx, Date.now());
           if (res.ok) this.spawnPopSparkle(lx, ly - 8, 0xfacc15, 'Collected!');
@@ -906,6 +919,7 @@ export class FarmScene extends Phaser.Scene {
         this.hoveredTip = null;
       });
       hit.on('pointerdown', () => {
+        if (!enforceInteractRange(this, this.player.x, this.player.y, mx, my, MAX_INTERACT_DISTANCE)) return;
         if (busy && prog.ready) {
           const res = collectArtisanOutput(this.player.state, idx, Date.now());
           if (res.ok) this.spawnPopSparkle(mx, my - 10, 0xfacc15, 'Artisan Ready!');

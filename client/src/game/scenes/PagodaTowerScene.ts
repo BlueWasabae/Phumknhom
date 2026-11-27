@@ -12,6 +12,15 @@ import { Player } from '../entities/Player';
 import { soundManager } from '../systems/SoundManager';
 import { ClassCombatVFX, KHMER_SIGNATURE_SKILLS } from '../animations/ClassCombatVFX';
 import { vfxManager } from '../animations/VFXManager';
+import {
+  GRAPPLE_MAX_DURATION_MS,
+  GRAPPLE_PULL_SPEED,
+  drawBambooVineTether,
+  enforceInteractRange,
+  getCursorAimAngle,
+  resolveCursorGrappleAnchor,
+  spawnGrappleLeafBurst,
+} from '../systems/CombatAimHelper';
 
 const ARENA_W = 1360;
 const ARENA_H = 720;
@@ -75,7 +84,7 @@ export class PagodaTowerScene extends Phaser.Scene {
   private projectiles: TowerProjectile[] = [];
 
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
-  private keys!: Record<'W' | 'A' | 'S' | 'D' | 'E' | 'G' | 'J' | 'K' | 'Q' | 'SHIFT' | 'SPACE', Phaser.Input.Keyboard.Key>;
+  private keys!: Record<'W' | 'A' | 'S' | 'D' | 'E' | 'G' | 'J' | 'K' | 'Q' | 'R' | 'SHIFT' | 'SPACE', Phaser.Input.Keyboard.Key>;
   private dashVelX = 0;
   private joystick: JoystickVector = { x: 0, y: 0 };
   private vfx!: ClassCombatVFX;
@@ -191,11 +200,12 @@ export class PagodaTowerScene extends Phaser.Scene {
     this.signatureCooldownUntil = 0;
 
     this.cursors = this.input.keyboard!.createCursorKeys();
-    this.keys = this.input.keyboard!.addKeys('W,A,S,D,E,G,J,K,Q,SHIFT,SPACE', false) as Record<
-      'W' | 'A' | 'S' | 'D' | 'E' | 'G' | 'J' | 'K' | 'Q' | 'SHIFT' | 'SPACE',
+    this.keys = this.input.keyboard!.addKeys('W,A,S,D,E,G,J,K,Q,R,SHIFT,SPACE', false) as Record<
+      'W' | 'A' | 'S' | 'D' | 'E' | 'G' | 'J' | 'K' | 'Q' | 'R' | 'SHIFT' | 'SPACE',
       Phaser.Input.Keyboard.Key
     >;
     this.input.keyboard!.clearCaptures();
+    this.input.mouse?.disableContextMenu();
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (this.transitioning || this.defeated) return;
@@ -543,8 +553,14 @@ export class PagodaTowerScene extends Phaser.Scene {
     this.lastAttackAt = now;
     this.attackAnimUntil = now + 200;
 
-    const dir = targetX < this.player.x ? -1 : 1;
+    const aim = getCursorAimAngle(this, this.player.x, this.player.y - 16, this.player.facing === 'left' ? -1 : 1, {
+      x: targetX,
+      y: targetY,
+    });
+    const dir = aim.dir;
+    const ang = aim.angle;
     this.player.facing = dir < 0 ? 'left' : 'right';
+    this.player.setAimAngle(ang);
     this.player.playStateAnimation('attack');
     soundManager.playSfx('swing');
 
@@ -556,9 +572,12 @@ export class PagodaTowerScene extends Phaser.Scene {
     const isCrit = Math.random() < bridge.effectiveCritChance;
     const finalDmg = Math.max(24, Math.round(baseDmg * (isCrit ? bridge.critMultiplier : 1)));
 
-    // Slash arc visual
+    // 360° Cursor-Aligned Slash Arc Visual
+    const slashX = this.player.x + Math.cos(ang) * 34;
+    const slashY = this.player.y - 16 + Math.sin(ang) * 34;
     const slash = this.add
-      .arc(this.player.x + dir * 32, this.player.y - 16, 46, dir > 0 ? -70 : 110, dir > 0 ? 70 : 250, false, isCrit ? 0xfacc15 : 0x38bdf8, 0.48)
+      .arc(slashX, slashY, 46, -70, 70, false, isCrit ? 0xfacc15 : 0x38bdf8, 0.48)
+      .setRotation(ang)
       .setDepth(75);
     this.tweens.add({
       targets: slash,
@@ -568,28 +587,29 @@ export class PagodaTowerScene extends Phaser.Scene {
       onComplete: () => slash.destroy(),
     });
 
-    // Melee hit check
+    // 360° Cursor-Aligned Melee Hit Check
     let hitAny = false;
     for (const e of this.enemies) {
       if (!e.alive) continue;
-      const dist = Phaser.Math.Distance.Between(this.player.x + dir * 24, this.player.y - 16, e.sprite.x, e.sprite.y);
+      const dist = Phaser.Math.Distance.Between(slashX, slashY, e.sprite.x, e.sprite.y);
       if (dist <= (e.isBoss ? 145 : 115)) {
         this.damageEnemy(e, finalDmg, isCrit);
         hitAny = true;
       }
     }
 
-    // Also fire a spirit bolt toward pointer for ranged classes or distant targets
+    // Fire cursor-aimed spirit bolt for ranged classes or distant targets
     if (!hitAny || this.player.state.activeClass === 'archer' || this.player.state.activeClass === 'mystic' || this.player.state.activeClass === 'tamer') {
-      const ang = Phaser.Math.Angle.Between(this.player.x, this.player.y - 16, targetX, targetY);
-      const speed = 520;
+      const speed = 540;
       const orbColor =
         this.player.state.loadout.weaponAura === 'celestial_angkor'
           ? 0xc084fc
           : this.player.state.loadout.weaponAura === 'emerald_naga'
             ? 0x10b981
             : 0xfacc15;
-      const gfx = this.add.circle(this.player.x + dir * 14, this.player.y - 16, 6, orbColor, 0.95).setDepth(78);
+      const gfx = this.add
+        .circle(this.player.x + Math.cos(ang) * 18, this.player.y - 16 + Math.sin(ang) * 18, 6, orbColor, 0.95)
+        .setDepth(78);
       this.projectiles.push({
         x: gfx.x,
         y: gfx.y,
@@ -871,18 +891,41 @@ export class PagodaTowerScene extends Phaser.Scene {
     soundManager.playSfx('swing');
   }
 
-  private fireBambooGrapple(tx: number, ty: number): void {
+  private fireBambooGrapple(tx?: number, ty?: number): void {
     const now = this.time.now;
-    if (now - this.lastGrappleAt < 650) return;
+    if (now - this.lastGrappleAt < 650 || this.defeated || this.transitioning) return;
     this.lastGrappleAt = now;
-    const clampedX = Phaser.Math.Clamp(tx, 60, ARENA_W - 60);
-    const clampedY = Phaser.Math.Clamp(ty, 220, FLOOR_Y - 20);
-    this.grappleTarget = { x: clampedX, y: clampedY };
-    this.grappleActiveUntil = now + 240;
-    const ang = Phaser.Math.Angle.Between(this.player.x, this.player.y - 16, clampedX, clampedY);
-    this.player.body.setVelocity(Math.cos(ang) * 560, Math.sin(ang) * 560 - 90);
+    const px = this.player.x;
+    const py = this.player.y - 14;
+    const aim = getCursorAimAngle(
+      this,
+      px,
+      py,
+      this.player.facing === 'left' ? -1 : 1,
+      tx !== undefined && ty !== undefined ? { x: tx, y: ty } : undefined
+    );
+    this.player.facing = aim.dir < 0 ? 'left' : 'right';
+    this.player.setAimAngle(aim.angle);
+    const towerPlatforms = [
+      { x: 340, y: 495, w: 220 },
+      { x: 680, y: 395, w: 260 },
+      { x: 1020, y: 495, w: 220 },
+    ];
+    const anchor = resolveCursorGrappleAnchor({
+      originX: px,
+      originY: py,
+      aimAngle: aim.angle,
+      arenaW: ARENA_W,
+      floorY: FLOOR_Y,
+      platforms: towerPlatforms,
+    });
+    this.grappleTarget = { x: anchor.x, y: anchor.y };
+    this.grappleActiveUntil = now + GRAPPLE_MAX_DURATION_MS;
+    this.player.body.setAllowGravity(false);
     this.jumpsUsed = 1;
     soundManager.playSfx('swing');
+    spawnGrappleLeafBurst(this, anchor.x, anchor.y);
+    drawBambooVineTether(this, this.grappleLine, px, py, anchor.x, anchor.y, now, true);
   }
 
   private tryInteractNearest(): void {
@@ -968,22 +1011,54 @@ export class PagodaTowerScene extends Phaser.Scene {
       if (Phaser.Input.Keyboard.JustDown(this.keys.SHIFT) || Phaser.Input.Keyboard.JustDown(this.keys.K)) {
         this.tryDash();
       }
-      if (Phaser.Input.Keyboard.JustDown(this.keys.Q)) {
+      if (Phaser.Input.Keyboard.JustDown(this.keys.R)) {
         this.performSignatureSkill();
       }
-      if (Phaser.Input.Keyboard.JustDown(this.keys.G)) {
-        const dir = this.player.facing === 'left' ? -1 : 1;
-        this.fireBambooGrapple(this.player.x + dir * 240, this.player.y - 170);
+      if (Phaser.Input.Keyboard.JustDown(this.keys.Q) || Phaser.Input.Keyboard.JustDown(this.keys.G)) {
+        this.fireBambooGrapple();
       }
       if (Phaser.Input.Keyboard.JustDown(this.keys.E)) {
         this.tryInteractNearest();
       }
     }
 
+    if (!this.defeated && !this.transitioning) {
+      const liveAim = getCursorAimAngle(this, this.player.x, this.player.y - 14, this.player.facing === 'left' ? -1 : 1);
+      this.player.setAimAngle(liveAim.angle);
+    }
+
+    // Active Bamboo Vine Grapple zip physics (gravity suspended during pull, guaranteed restore!)
+    this.grappleLine.clear();
+    if (time < this.grappleActiveUntil && !this.defeated) {
+      const dx = this.grappleTarget.x - this.player.x;
+      const dy = this.grappleTarget.y - this.player.y;
+      const dist = Math.hypot(dx, dy);
+      drawBambooVineTether(
+        this,
+        this.grappleLine,
+        this.player.x,
+        this.player.y - 16,
+        this.grappleTarget.x,
+        this.grappleTarget.y,
+        time,
+        true
+      );
+      if (dist < 26) {
+        this.grappleActiveUntil = 0;
+        this.player.body.setAllowGravity(true);
+        this.player.body.setVelocity(0, -180);
+      } else {
+        this.player.body.setAllowGravity(false);
+        this.player.body.setVelocity((dx / dist) * GRAPPLE_PULL_SPEED, (dy / dist) * GRAPPLE_PULL_SPEED);
+      }
+    } else if (!this.player.body.allowGravity) {
+      this.player.body.setAllowGravity(true);
+    }
+
     if (time <= this.dashUntil) {
       this.player.body.setDragX(0);
       this.player.body.setVelocityX(this.dashVelX);
-    } else if (time > this.dashUntil && time > this.grappleActiveUntil) {
+    } else if (time > this.dashUntil && time >= this.grappleActiveUntil) {
       const moveSpeed = 240 * (1 + Math.min(0.45, bridge.moveSpeedBonusPct));
       this.player.body.setVelocityX(Phaser.Math.Clamp(moveX, -1, 1) * moveSpeed);
     }
@@ -1001,13 +1076,6 @@ export class PagodaTowerScene extends Phaser.Scene {
       this.player.playStateAnimation('idle');
     }
     this.player.syncVisuals(time, false);
-
-    // Draw grapple rope
-    this.grappleLine.clear();
-    if (time < this.grappleActiveUntil) {
-      this.grappleLine.lineStyle(3, 0x4ade80, 0.95);
-      this.grappleLine.lineBetween(this.player.x, this.player.y - 18, this.grappleTarget.x, this.grappleTarget.y);
-    }
 
     // Update enemies & boss AI
     const dt = delta / 1000;

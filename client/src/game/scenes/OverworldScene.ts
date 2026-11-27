@@ -27,6 +27,8 @@ import { SeasonAtmosphereOverlay, seasonClock } from '../systems/SeasonClock';
 import { travelManager, type TravelRequestPayload } from '../systems/TravelAndPylons';
 import { worldEventManager } from '../systems/WorldEventManager';
 import { vfxManager } from '../animations/VFXManager';
+import { FishingSystem } from '../systems/FishingSystem';
+import { MAX_FISHING_DISTANCE, MAX_INTERACT_DISTANCE, enforceInteractRange } from '../systems/CombatAimHelper';
 import type { ActiveWorldEventSnapshot } from '@shared/worldEvents';
 import type { FestivalId } from '@shared/festivals';
 
@@ -159,10 +161,21 @@ export class OverworldScene extends Phaser.Scene {
   private arrivalGoldenFlash = false;
   private busActive = false;
   private busTimer?: Phaser.Time.TimerEvent;
+  private fishingSystem?: FishingSystem;
   private unsubs: Array<() => void> = [];
 
   constructor() {
     super('OverworldScene');
+  }
+
+  private guardInteractRange(
+    targetX: number,
+    targetY: number,
+    maxDist = MAX_INTERACT_DISTANCE,
+    msg = '🚶 Move closer'
+  ): boolean {
+    if (typeof document !== 'undefined' && document.querySelector('dialog[open]')) return false;
+    return enforceInteractRange(this, this.player.x, this.player.y, targetX, targetY, maxDist, msg);
   }
 
   init(data?: OverworldSceneInitData): void {
@@ -291,13 +304,17 @@ export class OverworldScene extends Phaser.Scene {
     this.gateLockUntil = this.time.now + 850;
 
     // 8B. Living Khmer Villager NPCs patrolling this map!
-    this.npcs = getNpcsForMap(this.mapId).map(
-      (npcDef) =>
-        new NpcVillager(this, npcDef, (npcId) => {
-          soundManager.playSfx('click');
-          EventBus.emit('npc:openDialogue', { npcId });
-        })
-    );
+    this.npcs = getNpcsForMap(this.mapId).map((npcDef) => {
+      const entity = new NpcVillager(this, npcDef, (npcId) => {
+        if (!this.guardInteractRange(entity.x, entity.y)) return;
+        soundManager.playSfx('click');
+        EventBus.emit('npc:openDialogue', { npcId });
+      });
+      return entity;
+    });
+
+    // 8C. Full 4-Stage Animated Mekong River Fishing System (Green Park pier & water edge)
+    this.fishingSystem = new FishingSystem(this);
 
     // 9. Scheduled Animated Green Village Bus in Central Plaza
     if (this.mapId === 'central_plaza') {
@@ -434,6 +451,9 @@ export class OverworldScene extends Phaser.Scene {
       }),
       EventBus.on('input:interact', () => {
         this.tryInteractNearest();
+      }),
+      EventBus.on('fishing:reelComplete', ({ success }) => {
+        this.fishingSystem?.resolveReelResult(success);
       })
     );
 
@@ -485,6 +505,8 @@ export class OverworldScene extends Phaser.Scene {
       this.statueDolls = [];
       this.atmosphere?.destroy();
       this.atmosphere = undefined;
+      this.fishingSystem?.destroy();
+      this.fishingSystem = undefined;
       void roomClient.leavePlaza(false);
       this.player.destroy();
     });
@@ -803,6 +825,7 @@ export class OverworldScene extends Phaser.Scene {
       bodyH: 8,
     });
     signImg.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+      if (!this.guardInteractRange(642, 600)) return;
       EventBus.emit('ui:openModal', { modal: 'areaSwitcher' });
     });
     this.areaSignText = this.add
@@ -820,6 +843,7 @@ export class OverworldScene extends Phaser.Scene {
       .setDepth(612)
       .setInteractive({ useHandCursor: true });
     this.areaSignText.on('pointerdown', () => {
+      if (!this.guardInteractRange(642, 600)) return;
       EventBus.emit('ui:openModal', { modal: 'areaSwitcher' });
     });
     this.landmarks.push({
@@ -867,7 +891,7 @@ export class OverworldScene extends Phaser.Scene {
       .setDepth(614)
       .setInteractive({ useHandCursor: true });
     const openBounties = () => {
-      if (typeof document !== 'undefined' && document.querySelector('dialog[open]')) return;
+      if (!this.guardInteractRange(958, 600)) return;
       EventBus.emit('ui:openModal', { modal: 'bounties' });
     };
     bountyBoard.setInteractive({ useHandCursor: true }).on('pointerdown', openBounties);
@@ -935,6 +959,7 @@ export class OverworldScene extends Phaser.Scene {
       .setDepth(670)
       .setInteractive({ useHandCursor: true });
     const openExpressMap = () => {
+      if (!this.guardInteractRange(446, 656)) return;
       soundManager.playSfx('click');
       EventBus.emit('ui:openModal', { modal: 'worldMap' });
     };
@@ -965,6 +990,7 @@ export class OverworldScene extends Phaser.Scene {
     this.add.image(552, 355, 'na_chest').setScale(1.12).setOrigin(0.5, 0.9).setDepth(357);
     this.add.image(520, 304, 'na_gold_coin').setScale(1.55).setDepth(360);
     atmImg.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+      if (!this.guardInteractRange(520, 355)) return;
       EventBus.emit('ui:openModal', { modal: 'reforge', reforgeTab: 'bank' });
     });
     this.landmarks.push({
@@ -997,7 +1023,10 @@ export class OverworldScene extends Phaser.Scene {
       .setDepth(368)
       .setInteractive({ useHandCursor: true });
     if (this.anims.exists('lucky_wheel_spin')) luckyWheelProp.play('lucky_wheel_spin');
-    const openWheel = () => EventBus.emit('ui:openModal', { modal: 'luckyWheel' });
+    const openWheel = () => {
+      if (!this.guardInteractRange(1080, 362)) return;
+      EventBus.emit('ui:openModal', { modal: 'luckyWheel' });
+    };
     wheelStall.setInteractive({ useHandCursor: true }).on('pointerdown', openWheel);
     luckyWheelProp.on('pointerdown', openWheel);
     this.landmarks.push({
@@ -1022,7 +1051,7 @@ export class OverworldScene extends Phaser.Scene {
     });
     kromBanner.setTint(0xfde047);
     const openKrom = () => {
-      if (typeof document !== 'undefined' && document.querySelector('dialog[open]')) return;
+      if (!this.guardInteractRange(560, 485)) return;
       EventBus.emit('ui:openModal', { modal: 'krom' });
     };
     kromBanner.setInteractive({ useHandCursor: true }).on('pointerdown', openKrom);
@@ -1055,7 +1084,7 @@ export class OverworldScene extends Phaser.Scene {
     });
     scryingMirror.setTint(0x7dd3fc);
     const openMirror = () => {
-      if (typeof document !== 'undefined' && document.querySelector('dialog[open]')) return;
+      if (!this.guardInteractRange(1040, 485)) return;
       EventBus.emit('ui:openModal', { modal: 'scryingMirror' });
     };
     scryingMirror.setInteractive({ useHandCursor: true }).on('pointerdown', openMirror);
@@ -1081,7 +1110,10 @@ export class OverworldScene extends Phaser.Scene {
       label: 'MY KHMER HOME · ENTER',
       joinArrowY: 375,
     });
-    homeImg.setInteractive({ useHandCursor: true }).on('pointerdown', () => this.enterHouseInterior());
+    homeImg.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+      if (!this.guardInteractRange(280, 485)) return;
+      this.enterHouseInterior();
+    });
     this.landmarks.push({
       x: 280,
       y: 498,
@@ -1145,7 +1177,7 @@ export class OverworldScene extends Phaser.Scene {
         .setDepth(p.y - 2)
         .setInteractive({ useHandCursor: true });
       const openBoard = () => {
-        if (typeof document !== 'undefined' && document.querySelector('dialog[open]')) return;
+        if (!this.guardInteractRange(p.x, p.y)) return;
         EventBus.emit('ui:openModal', { modal: 'leaderboard', leaderboardCategory: p.category });
       };
       ped.on('pointerdown', openBoard);
@@ -1230,6 +1262,7 @@ export class OverworldScene extends Phaser.Scene {
       joinArrowY: 365,
     });
     cart.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+      if (!this.guardInteractRange(400, 445)) return;
       EventBus.emit('ui:openModal', { modal: 'snackShop', shopTab: 'primary' });
     });
     this.landmarks.push({
@@ -1256,6 +1289,7 @@ export class OverworldScene extends Phaser.Scene {
     });
     this.add.image(800, 456, 'sv_flower_box').setScale(0.95).setDepth(456);
     boutique.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+      if (!this.guardInteractRange(800, 438)) return;
       EventBus.emit('ui:openModal', { modal: 'fashionShop', shopTab: 'primary' });
     });
     this.landmarks.push({
@@ -1287,7 +1321,10 @@ export class OverworldScene extends Phaser.Scene {
       .setOrigin(0.5, 0.9)
       .setDepth(444)
       .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => EventBus.emit('ui:openModal', { modal: 'reforge', reforgeTab: 'reforge' }));
+      .on('pointerdown', () => {
+        if (!this.guardInteractRange(1185, 442)) return;
+        EventBus.emit('ui:openModal', { modal: 'reforge', reforgeTab: 'reforge' });
+      });
 
     this.add.image(1222, 444, 'soft_shadow').setDisplaySize(24, 8).setDepth(440);
     const masterNpc = this.add
@@ -1297,7 +1334,10 @@ export class OverworldScene extends Phaser.Scene {
       .setDepth(445)
       .setInteractive({ useHandCursor: true });
     this.tweens.add({ targets: masterNpc, y: 442, duration: 520, yoyo: true, repeat: -1 });
-    const openForge = () => EventBus.emit('ui:openModal', { modal: 'reforge', reforgeTab: 'reforge' });
+    const openForge = () => {
+      if (!this.guardInteractRange(1185, 442)) return;
+      EventBus.emit('ui:openModal', { modal: 'reforge', reforgeTab: 'reforge' });
+    };
     forge.setInteractive({ useHandCursor: true }).on('pointerdown', openForge);
     masterNpc.on('pointerdown', openForge);
     this.landmarks.push({
@@ -1324,6 +1364,7 @@ export class OverworldScene extends Phaser.Scene {
       joinArrowY: 752,
     });
     market.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+      if (!this.guardInteractRange(560, 816)) return;
       EventBus.emit('ui:openModal', { modal: 'market' });
     });
     this.landmarks.push({
@@ -1348,7 +1389,10 @@ export class OverworldScene extends Phaser.Scene {
       label: 'PHUM CLUB · KLA KLOK & OUK',
       joinArrowY: 742,
     });
-    club.setInteractive({ useHandCursor: true }).on('pointerdown', () => this.enterClub());
+    club.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+      if (!this.guardInteractRange(1060, 820)) return;
+      this.enterClub();
+    });
     this.landmarks.push({
       x: 1060,
       y: 830,
@@ -1425,6 +1469,7 @@ export class OverworldScene extends Phaser.Scene {
       .setDepth(ry + 16);
 
     const openRunway = () => {
+      if (!this.guardInteractRange(rx, ry)) return;
       soundManager.playSfx('magic');
       EventBus.emit('ui:openModal', { modal: 'runway' });
     };
@@ -1473,6 +1518,7 @@ export class OverworldScene extends Phaser.Scene {
       joinArrowY: 545,
     });
     pagoda.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+      if (!this.guardInteractRange(455, 635)) return;
       EventBus.emit('ui:openModal', { modal: 'pagoda' });
     });
     this.landmarks.push({
@@ -1505,6 +1551,7 @@ export class OverworldScene extends Phaser.Scene {
       joinArrowY: 506,
     });
     angkor.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+      if (!this.guardInteractRange(1145, 642)) return;
       EventBus.emit('ui:openModal', { modal: 'modeSelector' });
     });
     this.landmarks.push({
@@ -1581,7 +1628,10 @@ export class OverworldScene extends Phaser.Scene {
         label: arch.title,
         joinArrowY: arch.y - 68,
       });
-      gate.setInteractive({ useHandCursor: true }).on('pointerdown', arch.onEnter);
+      gate.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+        if (!this.guardInteractRange(arch.x, arch.y)) return;
+        arch.onEnter();
+      });
       this.landmarks.push({
         x: arch.x,
         y: arch.y + 8,
@@ -1616,7 +1666,7 @@ export class OverworldScene extends Phaser.Scene {
     });
     museum.setTint(0xfef3c7);
     museum.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
-      if (typeof document !== 'undefined' && document.querySelector('dialog[open]')) return;
+      if (!this.guardInteractRange(800, 635)) return;
       EventBus.emit('ui:openModal', { modal: 'museum' });
     });
     this.landmarks.push({
@@ -1649,7 +1699,7 @@ export class OverworldScene extends Phaser.Scene {
     });
     tmMirror.setTint(0x7dd3fc);
     tmMirror.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
-      if (typeof document !== 'undefined' && document.querySelector('dialog[open]')) return;
+      if (!this.guardInteractRange(625, 808)) return;
       EventBus.emit('ui:openModal', { modal: 'scryingMirror' });
     });
     this.landmarks.push({
@@ -1710,6 +1760,7 @@ export class OverworldScene extends Phaser.Scene {
       joinArrowY: 386,
     });
     const prayAtShrine = () => {
+      if (!this.guardInteractRange(490, 445)) return;
       this.cameras.main.flash(220, 250, 204, 21);
       EventBus.emit('shrine:pray');
     };
@@ -1745,6 +1796,7 @@ export class OverworldScene extends Phaser.Scene {
       joinArrowY: 386,
     });
     pylonImg.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+      if (!this.guardInteractRange(1110, 445)) return;
       EventBus.emit('ui:openModal', { modal: 'worldMap' });
     });
     this.landmarks.push({
@@ -1816,16 +1868,31 @@ export class OverworldScene extends Phaser.Scene {
       label: 'RIVERSIDE FISHING PIER',
       joinArrowY: 758,
     });
+    const castFishingLine = () => {
+      const fishingLv = this.player.state.skills?.skills?.fishing?.level ?? 1;
+      this.fishingSystem?.startCast(this.player.x, this.player.y, fishingLv, (facing) => {
+        this.player.facing = facing;
+      });
+    };
+    const riverHit = this.add
+      .rectangle(440, 840, 260, 155, 0x000000, 0)
+      .setDepth(14)
+      .setInteractive({ useHandCursor: true });
+    riverHit.on('pointerdown', () => {
+      if (typeof document !== 'undefined' && document.querySelector('dialog[open]')) return;
+      castFishingLine();
+    });
     pier.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
-      EventBus.emit('ui:openModal', { modal: 'fishing' });
+      if (typeof document !== 'undefined' && document.querySelector('dialog[open]')) return;
+      castFishingLine();
     });
     this.landmarks.push({
       x: 535,
       y: 815,
-      radius: 66,
-      label: 'Press [E] or Click → Cast Line at Riverside Fishing Pier',
+      radius: MAX_FISHING_DISTANCE,
+      label: 'Press [E] or Click River → Cast Bamboo Fishing Rod (4-Stage Animated Fishing!)',
       isDungeonPortal: false,
-      onInteract: () => EventBus.emit('ui:openModal', { modal: 'fishing' }),
+      onInteract: castFishingLine,
     });
   }
 
@@ -1884,6 +1951,7 @@ export class OverworldScene extends Phaser.Scene {
 
       const harvestHerb = () => {
         if (!node.ready) return;
+        if (!this.guardInteractRange(hx, hy)) return;
         node.ready = false;
         soundManager.playSfx('harvest');
         sprite.setAlpha(0.28).setScale(0.8);
@@ -1968,7 +2036,10 @@ export class OverworldScene extends Phaser.Scene {
           labelText.setText(`⛏️ ${rockName}`);
         });
       };
-      sprite.on('pointerdown', mineRock);
+      sprite.on('pointerdown', () => {
+        if (!this.guardInteractRange(rx, ry)) return;
+        mineRock();
+      });
       this.landmarks.push({
         x: rx,
         y: ry,
@@ -2005,7 +2076,10 @@ export class OverworldScene extends Phaser.Scene {
       soundManager.playSfx('magic');
       EventBus.emit('ui:openModal', { modal: 'reforge', reforgeTab: 'shimmer' });
     };
-    shimmerGate.setInteractive({ useHandCursor: true }).on('pointerdown', openShimmer);
+    shimmerGate.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+      if (!this.guardInteractRange(1310, 300)) return;
+      openShimmer();
+    });
     this.landmarks.push({
       x: 1310,
       y: 318,
@@ -2035,7 +2109,10 @@ export class OverworldScene extends Phaser.Scene {
       joinArrowY: 230,
     });
     const enterFrontierCavern = () => this.enterCavernExplore('wild_frontier');
-    cavGate.setInteractive({ useHandCursor: true }).on('pointerdown', enterFrontierCavern);
+    cavGate.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+      if (!this.guardInteractRange(285, 315)) return;
+      enterFrontierCavern();
+    });
     this.landmarks.push({
       x: 285,
       y: 332,
@@ -2088,7 +2165,10 @@ export class OverworldScene extends Phaser.Scene {
       lastHitAt: 0,
     };
 
-    const strikeMiniBoss = () => this.damageFrontierMiniBoss();
+    const strikeMiniBoss = () => {
+      if (!this.miniBoss || !this.guardInteractRange(this.miniBoss.sprite.x, this.miniBoss.sprite.y)) return;
+      this.damageFrontierMiniBoss();
+    };
     mbSprite.on('pointerdown', strikeMiniBoss);
   }
 
@@ -2219,6 +2299,7 @@ export class OverworldScene extends Phaser.Scene {
 
       const mineVein = () => {
         if (!node.ready) return;
+        if (!this.guardInteractRange(vx, vy)) return;
         node.ready = false;
         soundManager.playSfx('ore_shatter');
         this.cameras.main.shake(100, 0.0045);
@@ -2347,6 +2428,7 @@ export class OverworldScene extends Phaser.Scene {
 
       const gather = () => {
         if (!node.ready) return;
+        if (!this.guardInteractRange(hx, hy)) return;
         node.ready = false;
         soundManager.playSfx('harvest');
         sprite.setAlpha(0.28).setScale(0.8);
@@ -2468,6 +2550,7 @@ export class OverworldScene extends Phaser.Scene {
 
       const mineMythic = () => {
         if (!node.ready) return;
+        if (!this.guardInteractRange(vx, vy)) return;
         node.ready = false;
         soundManager.playSfx('ore_shatter');
         this.cameras.main.shake(110, 0.005);
@@ -2530,6 +2613,7 @@ export class OverworldScene extends Phaser.Scene {
 
       const openRelicChest = () => {
         if (!node.ready) return;
+        if (!this.guardInteractRange(cx, cy)) return;
         node.ready = false;
         soundManager.playSfx('coin');
         sprite.setAlpha(0.35);
@@ -2651,7 +2735,10 @@ export class OverworldScene extends Phaser.Scene {
         .setScale(isNorthOrSouth ? 1.24 : 1.14)
         .setDepth(portal.y + 4)
         .setInteractive({ useHandCursor: true });
-      gateImg.on('pointerdown', () => this.enterRoadPortal(portal));
+      gateImg.on('pointerdown', () => {
+        if (!this.guardInteractRange(portal.x, portal.y)) return;
+        this.enterRoadPortal(portal);
+      });
 
       // Symmetrical flanking Khmer lanterns / flags strictly aligned horizontally or vertically
       const flagTex = isNorthOrSouth ? 'na_flag_yellow' : 'na_flag_red';
@@ -2929,6 +3016,7 @@ export class OverworldScene extends Phaser.Scene {
       .setVisible(false);
 
     bus.on('pointerdown', () => {
+      if (!this.guardInteractRange(bus.x, bus.y)) return;
       soundManager.playSfx('click');
       EventBus.emit('ui:openModal', { modal: 'worldMap' });
     });
@@ -3210,7 +3298,7 @@ export class OverworldScene extends Phaser.Scene {
         .setOrigin(0.5, 0)
         .setDepth(by + 20);
       const startRace = () => {
-        if (typeof document !== 'undefined' && document.querySelector('dialog[open]')) return;
+        if (!this.guardInteractRange(bx, by)) return;
         this.enterFestivalRace();
       };
       boatProp.on('pointerdown', startRace);
@@ -3260,7 +3348,7 @@ export class OverworldScene extends Phaser.Scene {
           .setDepth(sy + 14);
 
         const doSplash = () => {
-          if (typeof document !== 'undefined' && document.querySelector('dialog[open]')) return;
+          if (!this.guardInteractRange(sx, sy)) return;
           soundManager.playSfx('splash');
           for (let i = 0; i < 10; i++) {
             const ang = (Math.PI * 2 * i) / 10;
@@ -3338,7 +3426,7 @@ export class OverworldScene extends Phaser.Scene {
         .setOrigin(0.5, 0)
         .setDepth(ry + 18);
       const releaseLantern = () => {
-        if (typeof document !== 'undefined' && document.querySelector('dialog[open]')) return;
+        if (!this.guardInteractRange(rx, ry)) return;
         soundManager.playSfx('magic');
         const drifted = this.add.circle(rx - 40, ry + 35, 7, 0xf472b6, 0.95).setStrokeStyle(2, 0xfef08a).setDepth(ry + 22);
         this.tweens.add({
@@ -3438,6 +3526,7 @@ export class OverworldScene extends Phaser.Scene {
         .setDepth(cy + 14);
 
       const openCart = () => {
+        if (!this.guardInteractRange(cx, cy)) return;
         soundManager.playSfx('click');
         EventBus.emit('ui:openModal', { modal: 'tukTukCart', cartId: cart.cartId });
       };
@@ -3540,7 +3629,10 @@ export class OverworldScene extends Phaser.Scene {
       ease: 'Sine.easeInOut',
     });
 
-    const digNow = () => this.digTreasureSpot(tx, ty, mapClue.spotId);
+    const digNow = () => {
+      if (!this.guardInteractRange(tx, ty)) return;
+      this.digTreasureSpot(tx, ty, mapClue.spotId);
+    };
     ringOuter.on('pointerdown', digNow);
     xMark.setInteractive({ useHandCursor: true }).on('pointerdown', digNow);
 
@@ -3858,7 +3950,7 @@ export class OverworldScene extends Phaser.Scene {
         .setDepth(my + 2)
         .setInteractive({ useHandCursor: true });
       merchant.on('pointerdown', () => {
-        if (typeof document !== 'undefined' && document.querySelector('dialog[open]')) return;
+        if (!this.guardInteractRange(mx, my)) return;
         EventBus.emit('ui:openModal', { modal: 'nightMarket' });
       });
       const merchArrow = this.add.image(mx, my - 46, 'join_arrow').setScale(0.58).setDepth(my + 18);
@@ -3962,7 +4054,7 @@ export class OverworldScene extends Phaser.Scene {
     };
     this.worldEventMobs.push(mob);
     sprite.on('pointerdown', () => {
-      if (typeof document !== 'undefined' && document.querySelector('dialog[open]')) return;
+      if (!this.guardInteractRange(mob.sprite.x, mob.sprite.y)) return;
       this.damageWorldEventMob(mob);
     });
   }
@@ -4331,6 +4423,10 @@ export class OverworldScene extends Phaser.Scene {
     this.remotePlayers.forEach((remote) => remote.update(time, delta));
     this.npcs.forEach((npc) => npc.update(time, delta, this.player.x, this.player.y));
     this.atmosphere?.update(time, delta);
+    if (this.fishingSystem) {
+      this.fishingSystem.cancelIfMoved(this.player.x, this.player.y);
+      this.fishingSystem.update(time, this.player.x, this.player.y);
+    }
 
     // Smooth walk-through trigger on Road Portals!
     if (!this.transitioning && time > this.gateLockUntil) {

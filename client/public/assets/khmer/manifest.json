@@ -2,5 +2,16 @@
   "angkor_portal": "/assets/khmer/buildings/angkor_portal.png",
   "khmer_stilt_house": "/assets/khmer/buildings/khmer_stilt_house.png",
   "num_pang_cart": "/assets/khmer/buildings/num_pang_cart.png",
-  "boss_yeak_thmor": "/assets/khmer/bosses/boss_yeak_thmor.png"
+  "boss_yeak_thmor": "/assets/khmer/bosses/boss_yeak_thmor.png",
+  "wings_bamboo_leaf_glider": "/assets/khmer/wings/wings_bamboo_leaf_glider.png",
+  "wings_golden_apsara_feathers": "/assets/khmer/wings/wings_golden_apsara_feathers.png",
+  "wings_storm_crystal": "/assets/khmer/wings/wings_storm_crystal.png",
+  "wings_celestial_naga_dragon": "/assets/khmer/wings/wings_celestial_naga_dragon.png",
+  "wings_solar_angkor_seraph": "/assets/khmer/wings/wings_solar_angkor_seraph.png",
+  "wings_void_phantom_butterfly": "/assets/khmer/wings/wings_void_phantom_butterfly.png",
+  "pet_village_puppy": "/assets/khmer/pets/pet_village_puppy.png",
+  "pet_baby_water_buffalo": "/assets/khmer/pets/pet_baby_water_buffalo.png",
+  "pet_mini_golden_naga": "/assets/khmer/pets/pet_mini_golden_naga.png",
+  "pet_celestial_lotus_kitsune": "/assets/khmer/pets/pet_celestial_lotus_kitsune.png",
+  "pet_baby_angkor_singha": "/assets/khmer/pets/pet_baby_angkor_singha.png"
 }

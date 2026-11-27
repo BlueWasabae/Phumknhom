@@ -46,6 +46,17 @@ export interface SignatureSkillHudPayload {
   readyAt: number; // Date.now() epoch ms when ready
 }
 
+export interface FishingBitePayload {
+  fishId: string;
+  label: string;
+  khmerName: string;
+  emoji: string;
+  rarity: 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary' | 'mythic' | 'ancient';
+  color: string;
+  fishingXp: number;
+  difficulty: number;
+}
+
 export type FarmToolMode = 'smart' | 'fertilize' | 'infuse';
 
 export interface SkillXpToastPayload {
@@ -321,6 +332,8 @@ export interface EventMap {
   'house:restHeal': void;
   'ticker:push': { text: string; category?: 'boss' | 'reforge' | 'weather' | 'club' | 'market' };
   'shrine:pray': void;
+  'fishing:biteReady': FishingBitePayload;
+  'fishing:reelComplete': { success: boolean; bite: FishingBitePayload };
   'mobile:joystick': JoystickVector;
   'input:interact': void;
   'input:jump': void;

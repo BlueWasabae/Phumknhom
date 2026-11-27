@@ -10,6 +10,16 @@ import { EventBus, type JoystickVector } from '../EventBus';
 import { Player } from '../entities/Player';
 import { soundManager } from '../systems/SoundManager';
 import { vfxManager } from '../animations/VFXManager';
+import {
+  GRAPPLE_MAX_DURATION_MS,
+  GRAPPLE_PULL_SPEED,
+  MAX_INTERACT_DISTANCE,
+  drawBambooVineTether,
+  enforceInteractRange,
+  getCursorAimAngle,
+  resolveCursorGrappleAnchor,
+  spawnGrappleLeafBurst,
+} from '../systems/CombatAimHelper';
 
 const WORLD_W = 2400;
 const WORLD_H = 1040;
@@ -127,7 +137,7 @@ export class CavernExploreScene extends Phaser.Scene {
   private spores: Array<{ dot: Phaser.GameObjects.Arc; vx: number; vy: number }> = [];
 
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
-  private keys!: Record<'A' | 'D' | 'W' | 'E' | 'J' | 'G' | 'SHIFT' | 'SPACE', Phaser.Input.Keyboard.Key>;
+  private keys!: Record<'A' | 'D' | 'W' | 'E' | 'J' | 'G' | 'Q' | 'SHIFT' | 'SPACE', Phaser.Input.Keyboard.Key>;
   private joystick: JoystickVector = { x: 0, y: 0 };
 
   private jumpsUsed = 0;
@@ -237,21 +247,33 @@ export class CavernExploreScene extends Phaser.Scene {
     this.cameras.main.fadeIn(220, 8, 12, 22);
 
     // Controls
+    this.input.mouse?.disableContextMenu();
     if (this.input.keyboard) {
       this.cursors = this.input.keyboard.createCursorKeys();
-      this.keys = this.input.keyboard.addKeys('A,D,W,E,J,G,SHIFT,SPACE', false) as Record<
-        'A' | 'D' | 'W' | 'E' | 'J' | 'G' | 'SHIFT' | 'SPACE',
+      this.keys = this.input.keyboard.addKeys('A,D,W,E,J,G,Q,SHIFT,SPACE', false) as Record<
+        'A' | 'D' | 'W' | 'E' | 'J' | 'G' | 'Q' | 'SHIFT' | 'SPACE',
         Phaser.Input.Keyboard.Key
       >;
       this.input.keyboard.clearCaptures();
     }
+
+    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer, currentlyOver: Phaser.GameObjects.GameObject[]) => {
+      if (this.transitioning || document.querySelector('dialog[open]')) return;
+      if (pointer.rightButtonDown()) {
+        this.performDash();
+        return;
+      }
+      if (currentlyOver.length === 0 && pointer.leftButtonDown()) {
+        this.performAttackOrMine({ x: pointer.worldX, y: pointer.worldY });
+      }
+    });
 
     // Banner helper tooltip at bottom-left of cavern entrance
     this.add
       .text(
         295,
         FLOOR_Y - 122,
-        '⛏️ ANCIENT KHMER CAVERNS\n[A/D] Move · [W/Space] Jump · [G] Bamboo Vine Grapple\n[J / Click] Mine Ores & Fight · [E] Open Chests / Exit',
+        '⛏️ ANCIENT KHMER CAVERNS\n[A/D] Move · [W/Space] Jump · [Q] Bamboo Vine Grapple\n[J / Click] Aim & Mine Ores / Fight · [E] Open Chests / Exit',
         {
           fontFamily: 'Fredoka, sans-serif',
           fontSize: '11px',
@@ -570,11 +592,7 @@ export class CavernExploreScene extends Phaser.Scene {
       this.oreVeins.push(node);
 
       sprite.on('pointerdown', () => {
-        const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, node.x, node.y);
-        if (dist > 260) {
-          this.spawnFloatingText(node.x, node.y - 42, 'Move closer to mine!', '#cbd5e1', '11px');
-          return;
-        }
+        if (!enforceInteractRange(this, this.player.x, this.player.y, node.x, node.y, MAX_INTERACT_DISTANCE)) return;
         this.strikeOreVein(node);
       });
     });
@@ -898,11 +916,7 @@ export class CavernExploreScene extends Phaser.Scene {
 
   private openRelicChest(node: RelicChestNode): void {
     if (node.opened || this.transitioning) return;
-    const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, node.x, node.y);
-    if (dist > 150) {
-      this.spawnFloatingText(node.x, node.y - 42, 'Climb/Grapple closer to open!', '#fde047', '11px');
-      return;
-    }
+    if (!enforceInteractRange(this, this.player.x, this.player.y, node.x, node.y, MAX_INTERACT_DISTANCE)) return;
 
     node.opened = true;
     node.sprite.setTint(0x64748b).setAlpha(0.6);
@@ -1022,6 +1036,7 @@ export class CavernExploreScene extends Phaser.Scene {
     if (this.transitioning) return;
     if (this.grappleActive) {
       this.grappleActive = false;
+      this.player.body.setAllowGravity(true);
       this.grappleGraphics.clear();
     }
     const bridge = computeVillageToDungeonBridge(this.player.state);
@@ -1066,75 +1081,67 @@ export class CavernExploreScene extends Phaser.Scene {
   }
 
   /**
-   * Bamboo Vine Grapple ([G] key or touch GRAPPLE button):
-   * Finds the nearest overhead/forward platform ledge within 360px and zips player smoothly onto it.
+   * Bamboo Vine Grapple ([Q] key or touch GRAPPLE button):
+   * Fires strictly toward the mouse cursor (max 340px), suspends gravity, and zips smoothly at 520px/s!
    */
   private performBambooGrapple(): void {
     const now = this.time.now;
     if (now < this.grappleCooldownUntil || this.transitioning) return;
 
     const px = this.player.x;
-    const py = this.player.y;
-    const dir = this.player.facingRight ? 1 : -1;
+    const py = this.player.y - 12;
+    const aim = getCursorAimAngle(this, px, py, this.player.facingRight ? 1 : -1);
+    this.player.facing = aim.dir > 0 ? 'right' : 'left';
+    this.player.setAimAngle(aim.angle);
 
-    let bestPlat: PlatformDef | null = null;
-    let bestScore = Infinity;
-
-    for (const p of this.platformDefs) {
-      const anchorX = Phaser.Math.Clamp(px + dir * 48, p.x - p.w / 2 + 18, p.x + p.w / 2 - 18);
-      const anchorY = p.y - 10;
-      const dy = py - anchorY; // positive when platform is above player
-      const dist = Phaser.Math.Distance.Between(px, py, anchorX, anchorY);
-      if (dy < 36 || dist > 380) continue;
-      // Prefer overhead platforms in facing direction
-      const forwardBias = Math.sign(anchorX - px) === dir ? 0.72 : 1.05;
-      const score = dist * forwardBias;
-      if (score < bestScore) {
-        bestScore = score;
-        bestPlat = p;
-      }
-    }
-
-    if (!bestPlat) {
-      this.spawnFloatingText(px, py - 34, '🌿 No overhead ledge in Grapple range!', '#86efac', '11px');
-      return;
-    }
-
-    const targetX = Phaser.Math.Clamp(px + dir * 40, bestPlat.x - bestPlat.w / 2 + 24, bestPlat.x + bestPlat.w / 2 - 24);
-    const targetY = bestPlat.y - 34;
+    const anchor = resolveCursorGrappleAnchor({
+      originX: px,
+      originY: py,
+      aimAngle: aim.angle,
+      arenaW: WORLD_W,
+      floorY: FLOOR_Y,
+      platforms: this.platformDefs,
+    });
 
     this.grappleActive = true;
-    this.grappleTargetX = targetX;
-    this.grappleTargetY = targetY;
-    this.grappleEndAt = now + 380;
-    this.grappleCooldownUntil = now + 1150;
+    this.grappleTargetX = anchor.x;
+    this.grappleTargetY = anchor.y;
+    this.grappleEndAt = now + GRAPPLE_MAX_DURATION_MS;
+    this.grappleCooldownUntil = now + 950;
     this.jumpsUsed = 1; // Allow Lotus Double-Jump right after zipping!
+    this.player.body.setAllowGravity(false);
 
     soundManager.playSfx('swing');
-    this.spawnStoneBurst(targetX, bestPlat.y, 0x4ade80, 8);
-    this.spawnFloatingText(px, py - 32, '🌿 Bamboo Vine Grapple!', '#4ade80', '13px');
+    spawnGrappleLeafBurst(this, anchor.x, anchor.y);
+    drawBambooVineTether(this, this.grappleGraphics, px, py, anchor.x, anchor.y, now, true);
+    this.spawnFloatingText(px, py - 24, '🌿 Bamboo Vine Grapple!', '#4ade80', '13px');
   }
 
-  private performAttackOrMine(): void {
+  private performAttackOrMine(overrideTarget?: { x: number; y: number }): void {
     const now = this.time.now;
     const bridge = computeVillageToDungeonBridge(this.player.state);
     const cd = Math.max(170, Math.round(290 / (1 + bridge.miningSpeedPct)));
     if (now < this.attackCooldownUntil || this.transitioning) return;
     this.attackCooldownUntil = now + cd;
     this.attackAnimUntil = now + 200;
+
+    const aim = getCursorAimAngle(this, this.player.x, this.player.y - 10, this.player.facingRight ? 1 : -1, overrideTarget);
+    const ang = aim.angle;
+    this.player.facing = aim.dir > 0 ? 'right' : 'left';
+    this.player.setAimAngle(ang);
     this.player.playStateAnimation('attack');
     soundManager.playSfx('swing');
 
-    const dir = this.player.facingRight ? 1 : -1;
-    const hitX = this.player.x + dir * 42;
-    const hitY = this.player.y;
+    const hitX = this.player.x + Math.cos(ang) * 44;
+    const hitY = this.player.y - 8 + Math.sin(ang) * 40;
 
-    // Slash visual
+    // 360° Cursor-Aligned Slash visual
     if (this.textures.exists('fx_slash')) {
       const slash = this.add
         .sprite(hitX, hitY, 'fx_slash', 0)
         .setScale(1.85)
-        .setFlipX(dir < 0)
+        .setRotation(ang)
+        .setFlipY(Math.cos(ang) < 0)
         .setTint(0xfde047)
         .setDepth(60);
       if (this.anims.exists('slash_curved')) {
@@ -1379,65 +1386,70 @@ export class CavernExploreScene extends Phaser.Scene {
     }
     this.prevOnGround = onGround;
 
-    // Bamboo Vine Grapple Zip Physics
+    // Live cursor aiming for weapon sprite in caverns
+    const liveAim = getCursorAimAngle(this, this.player.x, this.player.y - 10, this.player.facingRight ? 1 : -1);
+    this.player.setAimAngle(liveAim.angle);
+
+    // Bamboo Vine Grapple Zip Physics (gravity suspended during zip, smooth 520px/s pull, guaranteed restore!)
     this.grappleGraphics.clear();
     if (this.grappleActive) {
       const dx = this.grappleTargetX - this.player.x;
       const dy = this.grappleTargetY - this.player.y;
       const dist = Math.hypot(dx, dy);
 
-      // Draw segmented bamboo vine line + lotus hook ring
-      this.grappleGraphics.lineStyle(4, 0x166534, 1);
-      this.grappleGraphics.beginPath();
-      this.grappleGraphics.moveTo(this.player.x, this.player.y - 8);
-      this.grappleGraphics.lineTo(this.grappleTargetX, this.grappleTargetY + 14);
-      this.grappleGraphics.strokePath();
+      drawBambooVineTether(
+        this,
+        this.grappleGraphics,
+        this.player.x,
+        this.player.y - 12,
+        this.grappleTargetX,
+        this.grappleTargetY,
+        time,
+        true
+      );
 
-      this.grappleGraphics.lineStyle(2, 0x4ade80, 0.95);
-      this.grappleGraphics.beginPath();
-      this.grappleGraphics.moveTo(this.player.x, this.player.y - 8);
-      this.grappleGraphics.lineTo(this.grappleTargetX, this.grappleTargetY + 14);
-      this.grappleGraphics.strokePath();
-
-      this.grappleGraphics.fillStyle(0xf472b6, 1);
-      this.grappleGraphics.fillCircle(this.grappleTargetX, this.grappleTargetY + 14, 5);
-
-      if (dist < 24 || time >= this.grappleEndAt) {
+      if (dist < 26 || time >= this.grappleEndAt) {
         this.grappleActive = false;
-        this.player.body.setVelocity(dx * 1.4, -220);
+        this.player.body.setAllowGravity(true);
+        this.player.body.setVelocity((dx / Math.max(1, dist)) * 180, Math.min(-180, (dy / Math.max(1, dist)) * 180));
       } else {
-        const zipSpeed = 760;
-        this.player.body.setVelocity((dx / dist) * zipSpeed, (dy / dist) * zipSpeed);
+        this.player.body.setAllowGravity(false);
+        this.player.body.setVelocity((dx / dist) * GRAPPLE_PULL_SPEED, (dy / dist) * GRAPPLE_PULL_SPEED);
       }
-    } else if (!typing && time >= this.dashActiveUntil) {
-      let moveX = this.joystick.x;
-      if (this.cursors?.left.isDown || this.keys?.A.isDown) moveX -= 1;
-      if (this.cursors?.right.isDown || this.keys?.D.isDown) moveX += 1;
-      moveX = Phaser.Math.Clamp(moveX, -1, 1);
+    } else {
+      if (!this.player.body.allowGravity) {
+        this.player.body.setAllowGravity(true);
+      }
+      if (!typing && time >= this.dashActiveUntil) {
+        let moveX = this.joystick.x;
+        if (this.cursors?.left.isDown || this.keys?.A.isDown) moveX -= 1;
+        if (this.cursors?.right.isDown || this.keys?.D.isDown) moveX += 1;
+        moveX = Phaser.Math.Clamp(moveX, -1, 1);
 
-      const moveSpeed = 238 * (1 + bridge.moveSpeedBonusPct);
-      this.player.body.setVelocityX(moveX * moveSpeed);
+        const moveSpeed = 238 * (1 + bridge.moveSpeedBonusPct);
+        this.player.body.setVelocityX(moveX * moveSpeed);
 
-      if (moveX < -0.1) this.player.facing = 'left';
-      else if (moveX > 0.1) this.player.facing = 'right';
+        if (moveX < -0.1) this.player.facing = 'left';
+        else if (moveX > 0.1) this.player.facing = 'right';
 
-      if (
-        (this.cursors && Phaser.Input.Keyboard.JustDown(this.cursors.up)) ||
-        (this.keys && (Phaser.Input.Keyboard.JustDown(this.keys.W) || Phaser.Input.Keyboard.JustDown(this.keys.SPACE)))
-      ) {
-        this.performJump();
-      }
-      if (this.keys && Phaser.Input.Keyboard.JustDown(this.keys.G)) {
-        this.performBambooGrapple();
-      }
-      if (this.keys && Phaser.Input.Keyboard.JustDown(this.keys.SHIFT)) {
-        this.performDash();
-      }
-      if (this.keys && Phaser.Input.Keyboard.JustDown(this.keys.J)) {
-        this.performAttackOrMine();
-      }
-      if (this.keys && Phaser.Input.Keyboard.JustDown(this.keys.E)) {
-        this.tryInteractNearest();
+        if (
+          (this.cursors && Phaser.Input.Keyboard.JustDown(this.cursors.up)) ||
+          (this.keys && (Phaser.Input.Keyboard.JustDown(this.keys.W) || Phaser.Input.Keyboard.JustDown(this.keys.SPACE)))
+        ) {
+          this.performJump();
+        }
+        if (this.keys && (Phaser.Input.Keyboard.JustDown(this.keys.Q) || Phaser.Input.Keyboard.JustDown(this.keys.G))) {
+          this.performBambooGrapple();
+        }
+        if (this.keys && Phaser.Input.Keyboard.JustDown(this.keys.SHIFT)) {
+          this.performDash();
+        }
+        if (this.keys && Phaser.Input.Keyboard.JustDown(this.keys.J)) {
+          this.performAttackOrMine();
+        }
+        if (this.keys && Phaser.Input.Keyboard.JustDown(this.keys.E)) {
+          this.tryInteractNearest();
+        }
       }
     }
 

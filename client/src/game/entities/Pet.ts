@@ -10,10 +10,63 @@ interface PetSpriteMapping {
   url: string;
   frameW: number;
   frameH: number;
+  frames?: number;
+  scaleMult?: number;
   tint?: number;
 }
 
+const CUSTOM_PNG_PETS: Record<string, PetSpriteMapping> = {
+  pet_village_puppy: {
+    texKey: 'pet_village_puppy',
+    animKey: 'pet_village_puppy_anim',
+    url: '/assets/khmer/pets/pet_village_puppy.png',
+    frameW: 32,
+    frameH: 32,
+    frames: 4,
+    scaleMult: 0.65,
+  },
+  pet_baby_water_buffalo: {
+    texKey: 'pet_baby_water_buffalo',
+    animKey: 'pet_baby_water_buffalo_anim',
+    url: '/assets/khmer/pets/pet_baby_water_buffalo.png',
+    frameW: 32,
+    frameH: 32,
+    frames: 4,
+    scaleMult: 0.68,
+  },
+  pet_mini_golden_naga: {
+    texKey: 'pet_mini_golden_naga',
+    animKey: 'pet_mini_golden_naga_anim',
+    url: '/assets/khmer/pets/pet_mini_golden_naga.png',
+    frameW: 32,
+    frameH: 32,
+    frames: 4,
+    scaleMult: 0.72,
+  },
+  pet_celestial_lotus_kitsune: {
+    texKey: 'pet_celestial_lotus_kitsune',
+    animKey: 'pet_celestial_lotus_kitsune_anim',
+    url: '/assets/khmer/pets/pet_celestial_lotus_kitsune.png',
+    frameW: 32,
+    frameH: 32,
+    frames: 4,
+    scaleMult: 0.68,
+  },
+  pet_baby_angkor_singha: {
+    texKey: 'pet_baby_angkor_singha',
+    animKey: 'pet_baby_angkor_singha_anim',
+    url: '/assets/khmer/pets/pet_baby_angkor_singha.png',
+    frameW: 32,
+    frameH: 32,
+    frames: 4,
+    scaleMult: 0.68,
+  },
+};
+
 function resolvePetSprite(petId: string): PetSpriteMapping {
+  if (CUSTOM_PNG_PETS[petId]) {
+    return CUSTOM_PNG_PETS[petId];
+  }
   const variant = ITEM_CATALOG[petId]?.styleVariant;
   if (variant === 'golden_frog') {
     return {
@@ -94,9 +147,12 @@ export function drawPetToCanvas(
   ctx.imageSmoothingEnabled = false;
   ctx.translate(cx, cy + bob);
   if (img) {
-    const w = map.frameW * scale * 1.35;
-    const h = map.frameH * scale * 1.35;
-    ctx.drawImage(img, 0, 0, map.frameW, map.frameH, -w / 2, -h / 2, w, h);
+    const frameCount = map.frames ?? 1;
+    const frameIdx = frameCount > 1 ? Math.floor(timeMs / 170) % frameCount : 0;
+    const mult = (map.scaleMult ?? 1) * 1.35;
+    const w = map.frameW * scale * mult;
+    const h = map.frameH * scale * mult;
+    ctx.drawImage(img, frameIdx * map.frameW, 0, map.frameW, map.frameH, -w / 2, -h / 2, w, h);
   }
   ctx.restore();
 }
@@ -224,7 +280,7 @@ export class Pet {
       return;
     }
 
-    const scale = this.zone === 'overworld' ? 0.82 : 2.05;
+    const scale = (this.zone === 'overworld' ? 0.82 : 2.05) * (map.scaleMult ?? 1);
     if (!this.shadow) {
       this.shadow = this.scene.add
         .image(this.curX, this.curY + (this.zone === 'overworld' ? 6 : 16), 'soft_shadow')
@@ -237,7 +293,7 @@ export class Pet {
         .setScale(scale)
         .setOrigin(0.5, 0.85);
     } else {
-      this.sprite.setTexture(map.texKey, 0);
+      this.sprite.setTexture(map.texKey, 0).setScale(scale);
     }
 
     if (map.tint) this.sprite.setTint(map.tint);

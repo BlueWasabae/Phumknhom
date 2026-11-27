@@ -23,6 +23,9 @@ KHMER_ROOT = REPO_ROOT / "client" / "public" / "assets" / "khmer"
 OUT_BUILDINGS = KHMER_ROOT / "buildings"
 OUT_BOSSES = KHMER_ROOT / "bosses"
 OUT_TREES = KHMER_ROOT / "trees"
+OUT_WINGS = KHMER_ROOT / "wings"
+OUT_PETS = KHMER_ROOT / "pets"
+OUT_COSMETICS = KHMER_ROOT / "cosmetics"
 MANIFEST_PATH = KHMER_ROOT / "manifest.json"
 
 WHITE_THRESHOLD = 240
@@ -40,6 +43,17 @@ SPRITE_RULES: dict[str, tuple[Path, Literal["width", "height"], int]] = {
     "boss_sdech_kongkaeb": (OUT_BOSSES, "height", 112),
     "boss_arp_prey_chrov": (OUT_BOSSES, "height", 96),
     "boss_neak_reach_head": (OUT_BOSSES, "height", 84),
+    "wings_bamboo_leaf_glider": (OUT_WINGS, "height", 48),
+    "wings_golden_apsara_feathers": (OUT_WINGS, "height", 48),
+    "wings_storm_crystal": (OUT_WINGS, "height", 48),
+    "wings_celestial_naga_dragon": (OUT_WINGS, "height", 48),
+    "wings_solar_angkor_seraph": (OUT_WINGS, "height", 48),
+    "wings_void_phantom_butterfly": (OUT_WINGS, "height", 48),
+    "pet_village_puppy": (OUT_PETS, "height", 32),
+    "pet_baby_water_buffalo": (OUT_PETS, "height", 32),
+    "pet_mini_golden_naga": (OUT_PETS, "height", 32),
+    "pet_celestial_lotus_kitsune": (OUT_PETS, "height", 32),
+    "pet_baby_angkor_singha": (OUT_PETS, "height", 32),
 }
 
 
@@ -107,9 +121,8 @@ def trim_and_resize(
 
 
 def clean_all() -> None:
-    OUT_BUILDINGS.mkdir(parents=True, exist_ok=True)
-    OUT_BOSSES.mkdir(parents=True, exist_ok=True)
-    OUT_TREES.mkdir(parents=True, exist_ok=True)
+    for d in (OUT_BUILDINGS, OUT_BOSSES, OUT_TREES, OUT_WINGS, OUT_PETS, OUT_COSMETICS):
+        d.mkdir(parents=True, exist_ok=True)
 
     sources = sorted(
         p for p in RAW_DIR.iterdir() if p.is_file() and p.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}
@@ -122,6 +135,12 @@ def clean_all() -> None:
             (
                 OUT_BOSSES
                 if stem.startswith("boss_")
+                else OUT_WINGS
+                if stem.startswith("wings_")
+                else OUT_PETS
+                if stem.startswith("pet_")
+                else OUT_COSMETICS
+                if stem.startswith("cosmetic_")
                 else OUT_TREES
                 if stem.endswith("_tree")
                 else OUT_BUILDINGS,
@@ -140,7 +159,7 @@ def clean_all() -> None:
 
     # Build manifest of all cleaned transparent Khmer PNGs currently on disk
     manifest: dict[str, str] = {}
-    for folder in (OUT_BUILDINGS, OUT_BOSSES, OUT_TREES):
+    for folder in (OUT_BUILDINGS, OUT_BOSSES, OUT_TREES, OUT_WINGS, OUT_PETS, OUT_COSMETICS):
         if not folder.exists():
             continue
         for png in sorted(folder.glob("*.png")):

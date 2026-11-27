@@ -3,6 +3,7 @@ import { INITIAL_PLAYER_STATE, type PlayerState } from '@shared/types';
 import { EventBus, type JoystickVector } from '../EventBus';
 import { Player } from '../entities/Player';
 import { soundManager } from '../systems/SoundManager';
+import { MAX_INTERACT_DISTANCE, enforceInteractRange } from '../systems/CombatAimHelper';
 
 const ROOM_W = 1040;
 const ROOM_H = 620;
@@ -358,6 +359,7 @@ export class ClubScene extends Phaser.Scene {
         .setDepth(32)
         .setInteractive({ useHandCursor: true });
       hit.on('pointerdown', () => {
+        if (!enforceInteractRange(this, this.player.x, this.player.y, node.x, node.y, MAX_INTERACT_DISTANCE)) return;
         soundManager.playSfx('click');
         EventBus.emit('ui:openModal', {
           modal: 'clubGames',
@@ -387,7 +389,10 @@ export class ClubScene extends Phaser.Scene {
       .setStrokeStyle(2, 0xfacc15)
       .setDepth(15)
       .setInteractive({ useHandCursor: true });
-    exitMat.on('pointerdown', () => this.returnToOverworld());
+    exitMat.on('pointerdown', () => {
+      if (!enforceInteractRange(this, this.player.x, this.player.y, EXIT_X, EXIT_Y, MAX_INTERACT_DISTANCE)) return;
+      this.returnToOverworld();
+    });
     const exitArrow = this.add.image(EXIT_X, EXIT_Y - 26, 'join_arrow').setScale(0.58).setDepth(35);
     this.tweens.add({ targets: exitArrow, y: EXIT_Y - 32, duration: 540, yoyo: true, repeat: -1 });
     this.add

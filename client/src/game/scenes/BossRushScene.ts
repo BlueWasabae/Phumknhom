@@ -18,6 +18,14 @@ import {
 } from '../animations/ClassCombatVFX';
 import { vfxManager } from '../animations/VFXManager';
 import { soundManager } from '../systems/SoundManager';
+import {
+  GRAPPLE_MAX_DURATION_MS,
+  GRAPPLE_PULL_SPEED,
+  drawBambooVineTether,
+  getCursorAimAngle,
+  resolveCursorGrappleAnchor,
+  spawnGrappleLeafBurst,
+} from '../systems/CombatAimHelper';
 
 const ARENA_W = 1680;
 const ARENA_H = 720;
@@ -51,7 +59,7 @@ export class BossRushScene extends Phaser.Scene {
 
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keys!: Record<
-    'A' | 'D' | 'W' | 'E' | 'G' | 'J' | 'K' | 'L' | 'F' | 'Q' | 'R' | 'SHIFT' | 'SPACE',
+    'A' | 'D' | 'W' | 'E' | 'G' | 'J' | 'K' | 'L' | 'F' | 'Q' | 'R' | 'X' | 'SHIFT' | 'SPACE',
     Phaser.Input.Keyboard.Key
   >;
   private joystick: JoystickVector = { x: 0, y: 0 };
@@ -181,8 +189,8 @@ export class BossRushScene extends Phaser.Scene {
     this.cameras.main.fadeIn(220, 12, 8, 24);
 
     this.cursors = this.input.keyboard!.createCursorKeys();
-    this.keys = this.input.keyboard!.addKeys('A,D,W,E,G,J,K,L,F,Q,R,SHIFT,SPACE', false) as Record<
-      'A' | 'D' | 'W' | 'E' | 'G' | 'J' | 'K' | 'L' | 'F' | 'Q' | 'R' | 'SHIFT' | 'SPACE',
+    this.keys = this.input.keyboard!.addKeys('A,D,W,E,G,J,K,L,F,Q,R,X,SHIFT,SPACE', false) as Record<
+      'A' | 'D' | 'W' | 'E' | 'G' | 'J' | 'K' | 'L' | 'F' | 'Q' | 'R' | 'X' | 'SHIFT' | 'SPACE',
       Phaser.Input.Keyboard.Key
     >;
     this.input.keyboard!.clearCaptures();
@@ -192,11 +200,12 @@ export class BossRushScene extends Phaser.Scene {
       this.input.keyboard.resetKeys();
     }
 
+    this.input.mouse?.disableContextMenu();
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (this.defeated || this.transitioning) return;
       if (document.querySelector('dialog[open]')) return;
       if (pointer.rightButtonDown()) this.performDash();
-      else if (pointer.leftButtonDown()) this.performClassAttack();
+      else if (pointer.leftButtonDown()) this.performClassAttack({ x: pointer.worldX, y: pointer.worldY });
     });
 
     this.spawnBossStage(0);
@@ -501,6 +510,11 @@ export class BossRushScene extends Phaser.Scene {
 
   private performJump(): void {
     if (this.defeated || this.transitioning) return;
+    if (this.grappleActive) {
+      this.grappleActive = false;
+      this.player.body.setAllowGravity(true);
+      this.grappleGraphics.clear();
+    }
     const bridge = computeVillageToDungeonBridge(this.player.state);
     const onGround = this.player.body.blocked.down || this.player.body.touching.down;
     if (onGround) {
@@ -540,16 +554,33 @@ export class BossRushScene extends Phaser.Scene {
     const now = this.time.now;
     if (now < this.grappleCooldownUntil || this.defeated) return;
     const px = this.player.x;
-    const py = this.player.y;
-    const best = this.arenaPlatforms.find((p) => py - p.y > 32 && Phaser.Math.Distance.Between(px, py, p.x, p.y) < 390);
-    if (!best) return;
+    const py = this.player.y - 12;
+    const aim = getCursorAimAngle(this, px, py, this.player.facingRight ? 1 : -1);
+    this.player.facing = aim.dir > 0 ? 'right' : 'left';
+    this.player.setAimAngle(aim.angle);
+    const bossRect = this.bossCtrl?.alive
+      ? new Phaser.Geom.Rectangle(this.bossCtrl.x - 58, this.bossCtrl.y - 120, 116, 120)
+      : null;
+    const anchor = resolveCursorGrappleAnchor({
+      originX: px,
+      originY: py,
+      aimAngle: aim.angle,
+      arenaW: ARENA_W,
+      floorY: FLOOR_Y,
+      platforms: this.arenaPlatforms,
+      bossRect,
+    });
     this.grappleActive = true;
-    this.grappleTargetX = best.x;
-    this.grappleTargetY = best.y - 34;
-    this.grappleEndAt = now + 360;
-    this.grappleCooldownUntil = now + 1000;
+    this.grappleTargetX = anchor.x;
+    this.grappleTargetY = anchor.y;
+    this.grappleEndAt = now + GRAPPLE_MAX_DURATION_MS;
+    this.grappleCooldownUntil = now + 950;
     this.jumpsUsed = 1;
+    this.player.body.setAllowGravity(false);
     soundManager.playSfx('swing');
+    spawnGrappleLeafBurst(this, anchor.x, anchor.y);
+    drawBambooVineTether(this, this.grappleGraphics, px, py, anchor.x, anchor.y, now, true);
+    this.spawnFloatingText(px, py - 24, '🌿 Bamboo Vine Grapple!', '#4ade80', '13px');
   }
 
   private activateFocus(): void {
@@ -568,27 +599,32 @@ export class BossRushScene extends Phaser.Scene {
     this.spawnFloatingText(this.player.x, this.player.y - 48, '🔥 FURY (+40% SPD)!', '#fb7185', '16px');
   }
 
-  private performClassAttack(): void {
+  private performClassAttack(overrideTarget?: { x: number; y: number }): void {
     const now = this.time.now;
     if (now < this.attackCooldownUntil || this.defeated || this.inBreather) return;
     const cls = this.player.state.activeClass;
-    const dir = this.bossCtrl?.alive ? (this.bossCtrl.x >= this.player.x ? 1 : -1) : this.player.facingRight ? 1 : -1;
+    const aim = getCursorAimAngle(this, this.player.x, this.player.y - 12, this.player.facingRight ? 1 : -1, overrideTarget);
+    const dir = aim.dir;
+    const aimAngle = aim.angle;
     this.player.facing = dir > 0 ? 'right' : 'left';
+    this.player.setAimAngle(aimAngle);
     const furyMult = now < this.furyActiveUntil ? 1.4 : 1;
     this.attackCooldownUntil = now + Math.round(this.player.state.weapon.attackCooldownMs / furyMult);
     this.attackAnimUntil = now + 180;
     soundManager.playSfx('swing');
 
     if (cls === 'archer') {
-      this.projectiles.push(this.vfx.spawnArcherArrow(this.player.x, this.player.y - 8, dir, 1.1));
+      this.projectiles.push(this.vfx.spawnArcherArrow(this.player.x, this.player.y - 8, dir, 1.1, aimAngle));
     } else if (cls === 'mystic') {
-      this.projectiles.push(this.vfx.spawnMysticOrb(this.player.x, this.player.y - 10, dir));
+      this.projectiles.push(this.vfx.spawnMysticOrb(this.player.x, this.player.y - 10, dir, aimAngle));
     } else {
-      if (cls === 'tamer') this.vfx.playKramaWhipSnap(this.player.x, this.player.y, dir);
-      else if (cls === 'shadow') this.vfx.playShadowTwinSlash(this.player.x, this.player.y, dir, false);
-      else this.vfx.playLbokatorSlash(this.player.x, this.player.y, dir, 2);
+      if (cls === 'tamer') this.vfx.playKramaWhipSnap(this.player.x, this.player.y, dir, aimAngle);
+      else if (cls === 'shadow') this.vfx.playShadowTwinSlash(this.player.x, this.player.y, dir, false, aimAngle);
+      else this.vfx.playLbokatorSlash(this.player.x, this.player.y, dir, 2, aimAngle);
 
-      const hitBox = new Phaser.Geom.Rectangle(this.player.x + dir * 24 - 64, this.player.y - 54, 150, 96);
+      const hitCx = this.player.x + Math.cos(aimAngle) * 58;
+      const hitCy = this.player.y - 8 + Math.sin(aimAngle) * 50;
+      const hitBox = new Phaser.Geom.Rectangle(hitCx - 72, hitCy - 48, 144, 96);
       if (this.bossCtrl?.alive && this.bossCtrl.intersectsHitbox(hitBox)) {
         this.damageBoss(dir, 1.05);
       }
@@ -731,19 +767,37 @@ export class BossRushScene extends Phaser.Scene {
       }
     }
 
-    // Grapple line
+    if (!this.defeated && !this.transitioning) {
+      const liveAim = getCursorAimAngle(this, this.player.x, this.player.y - 12, this.player.facingRight ? 1 : -1);
+      this.player.setAimAngle(liveAim.angle);
+    }
+
+    // Grapple line (gravity suspended during zip, smooth 520px/s pull, guaranteed restore!)
     this.grappleGraphics.clear();
     if (this.grappleActive && !this.defeated) {
       const dx = this.grappleTargetX - this.player.x;
       const dy = this.grappleTargetY - this.player.y;
       const dist = Math.hypot(dx, dy);
-      this.grappleGraphics.lineStyle(3, 0x4ade80, 0.95).lineBetween(this.player.x, this.player.y - 8, this.grappleTargetX, this.grappleTargetY + 12);
-      if (dist < 24 || time >= this.grappleEndAt) {
+      drawBambooVineTether(
+        this,
+        this.grappleGraphics,
+        this.player.x,
+        this.player.y - 12,
+        this.grappleTargetX,
+        this.grappleTargetY,
+        time,
+        true
+      );
+      if (dist < 26 || time >= this.grappleEndAt) {
         this.grappleActive = false;
-        this.player.body.setVelocity(dx * 1.3, -210);
+        this.player.body.setAllowGravity(true);
+        this.player.body.setVelocity((dx / Math.max(1, dist)) * 180, Math.min(-180, (dy / Math.max(1, dist)) * 180));
       } else {
-        this.player.body.setVelocity((dx / dist) * 760, (dy / dist) * 760);
+        this.player.body.setAllowGravity(false);
+        this.player.body.setVelocity((dx / dist) * GRAPPLE_PULL_SPEED, (dy / dist) * GRAPPLE_PULL_SPEED);
       }
+    } else if (!this.player.body.allowGravity) {
+      this.player.body.setAllowGravity(true);
     }
 
     if (!this.defeated && !this.transitioning && !this.inBreather && this.bossCtrl?.alive) {
@@ -764,7 +818,7 @@ export class BossRushScene extends Phaser.Scene {
         if (Phaser.Input.Keyboard.JustDown(this.keys.SPACE) || Phaser.Input.Keyboard.JustDown(this.keys.W) || Phaser.Input.Keyboard.JustDown(this.cursors.up)) {
           this.performJump();
         }
-        if (Phaser.Input.Keyboard.JustDown(this.keys.G)) this.performGrapple();
+        if (Phaser.Input.Keyboard.JustDown(this.keys.Q) || Phaser.Input.Keyboard.JustDown(this.keys.G)) this.performGrapple();
         if (
           Phaser.Input.Keyboard.JustDown(this.keys.SHIFT) ||
           Phaser.Input.Keyboard.JustDown(this.keys.K) ||
@@ -773,9 +827,9 @@ export class BossRushScene extends Phaser.Scene {
           this.performDash();
         }
         if (Phaser.Input.Keyboard.JustDown(this.keys.J)) this.performClassAttack();
-        if (Phaser.Input.Keyboard.JustDown(this.keys.Q)) this.performSignatureSkill();
+        if (Phaser.Input.Keyboard.JustDown(this.keys.R)) this.performSignatureSkill();
         if (Phaser.Input.Keyboard.JustDown(this.keys.F)) this.activateFocus();
-        if (Phaser.Input.Keyboard.JustDown(this.keys.R)) this.activateFury();
+        if (Phaser.Input.Keyboard.JustDown(this.keys.X)) this.activateFury();
         if (Phaser.Input.Keyboard.JustDown(this.keys.E) && Math.abs(this.player.x - EXIT_X) < 88) this.returnToVillage();
       }
       const bridge = computeVillageToDungeonBridge(this.player.state);

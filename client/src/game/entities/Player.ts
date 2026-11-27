@@ -161,6 +161,13 @@ export class Player {
     this.squashY = sy;
   }
 
+  /**
+   * Sets live 360° cursor-following weapon aim angle (radians) in combat/cavern scenes.
+   */
+  public setAimAngle(angle: number | null): void {
+    this.paperDoll.setAimAngle(angle);
+  }
+
   private syncPetInstance(petId: string | null): void {
     if (!petId) {
       this.pet?.destroy();

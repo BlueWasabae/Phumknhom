@@ -37,6 +37,48 @@ const WEAPON_URLS: Record<string, string> = {
   wp_club: `${NA_BASE}/Items/Weapons/Club/SpriteInHand.png`,
 };
 
+/**
+ * Update 2.3 — High-Detail 4-Frame Animated PNG Wings (192x48 = 4 frames of 48x48)
+ */
+const ANIMATED_PNG_WINGS: Record<string, { url: string; animKey: string; glowColor: number; bloomStrength: number }> = {
+  wings_bamboo_leaf_glider: {
+    url: '/assets/khmer/wings/wings_bamboo_leaf_glider.png',
+    animKey: 'wings_bamboo_leaf_glider_anim',
+    glowColor: 0x4ade80,
+    bloomStrength: 1.0,
+  },
+  wings_golden_apsara_feathers: {
+    url: '/assets/khmer/wings/wings_golden_apsara_feathers.png',
+    animKey: 'wings_golden_apsara_feathers_anim',
+    glowColor: 0xfacc15,
+    bloomStrength: 1.4,
+  },
+  wings_storm_crystal: {
+    url: '/assets/khmer/wings/wings_storm_crystal.png',
+    animKey: 'wings_storm_crystal_anim',
+    glowColor: 0x38bdf8,
+    bloomStrength: 1.45,
+  },
+  wings_celestial_naga_dragon: {
+    url: '/assets/khmer/wings/wings_celestial_naga_dragon.png',
+    animKey: 'wings_celestial_naga_dragon_anim',
+    glowColor: 0x10b981,
+    bloomStrength: 1.6,
+  },
+  wings_solar_angkor_seraph: {
+    url: '/assets/khmer/wings/wings_solar_angkor_seraph.png',
+    animKey: 'wings_solar_angkor_seraph_anim',
+    glowColor: 0xfde047,
+    bloomStrength: 1.85,
+  },
+  wings_void_phantom_butterfly: {
+    url: '/assets/khmer/wings/wings_void_phantom_butterfly.png',
+    animKey: 'wings_void_phantom_butterfly_anim',
+    glowColor: 0xc084fc,
+    bloomStrength: 1.65,
+  },
+};
+
 const OUTLINE = '#2b1b17';
 const CANVAS_W = 36;
 const CANVAS_H = 40;
@@ -193,7 +235,8 @@ function renderHumanChibiPixels(
   const legY = 29 + bodyBob;
 
   // ==================== LAYER 1: WINGS / BACK ====================
-  if (wingsDef) {
+  // Skip flat procedural fallback when an animated 4-frame PNG Wing spritesheet is equipped!
+  if (wingsDef && !(loadout.wings && ANIMATED_PNG_WINGS[loadout.wings])) {
     const wMain = wingsDef.primaryColor;
     const wAcc = wingsDef.accentColor;
     const wVar = wingsDef.styleVariant;
@@ -233,16 +276,51 @@ function renderHumanChibiPixels(
   if (
     hairStyle === 'long_straight' ||
     hairStyle === 'braided_royal' ||
+    hairStyle === 'royal_braided_crown' ||
+    hairStyle === 'flowing_apsara_waves' ||
+    hairStyle === 'wolf_cut' ||
+    hairStyle === 'twin_tails' ||
     hairStyle === 'high_ponytail' ||
     hairStyle === 'bob_cut'
   ) {
-    if (hairStyle === 'long_straight' || hairStyle === 'braided_royal') {
+    if (
+      hairStyle === 'long_straight' ||
+      hairStyle === 'braided_royal' ||
+      hairStyle === 'royal_braided_crown' ||
+      hairStyle === 'flowing_apsara_waves'
+    ) {
       px(ctx, cx - 8, headY + 4, 16, 16, OUTLINE);
       px(ctx, cx - 7, headY + 5, 14, 14, hairShade);
       px(ctx, cx - 6, headY + 6, 12, 12, hairMain);
-      if (hairStyle === 'braided_royal') {
+      if (hairStyle === 'flowing_apsara_waves') {
+        px(ctx, cx - 9, headY + 11, 2, 8, OUTLINE);
+        px(ctx, cx - 8, headY + 12, 2, 6, hairMain);
+        px(ctx, cx + 7, headY + 11, 2, 8, OUTLINE);
+        px(ctx, cx + 6, headY + 12, 2, 6, hairMain);
+        px(ctx, cx - 5, headY + 14, 10, 1, hairHi);
+      }
+      if (hairStyle === 'braided_royal' || hairStyle === 'royal_braided_crown') {
         px(ctx, cx - 7, headY + 13, 2, 6, '#facc15');
         px(ctx, cx + 5, headY + 13, 2, 6, '#facc15');
+      }
+    } else if (hairStyle === 'wolf_cut') {
+      // Shaggy layered wolf-cut mullet back locks
+      px(ctx, cx - 9, headY + 6, 18, 10, OUTLINE);
+      px(ctx, cx - 8, headY + 7, 16, 8, hairShade);
+      px(ctx, cx - 7, headY + 8, 14, 6, hairMain);
+      px(ctx, cx - 9, headY + 14, 3, 2, hairMain);
+      px(ctx, cx + 6, headY + 14, 3, 2, hairMain);
+    } else if (hairStyle === 'twin_tails') {
+      // Long bouncy twin tails framing both shoulders
+      px(ctx, cx - 12, headY + 3, 5, 14, OUTLINE);
+      px(ctx, cx - 11, headY + 4, 3, 12, hairMain);
+      px(ctx, cx - 10, headY + 5, 1, 9, hairHi);
+      px(ctx, cx - 11, headY + 4, 3, 1, '#f472b6');
+      if (!isSide) {
+        px(ctx, cx + 7, headY + 3, 5, 14, OUTLINE);
+        px(ctx, cx + 8, headY + 4, 3, 12, hairMain);
+        px(ctx, cx + 9, headY + 5, 1, 9, hairHi);
+        px(ctx, cx + 8, headY + 4, 3, 1, '#f472b6');
       }
     } else if (hairStyle === 'bob_cut') {
       px(ctx, cx - 8, headY + 4, 16, 10, OUTLINE);
@@ -421,43 +499,62 @@ function renderHumanChibiPixels(
     const leftEyeX = isSide ? cx + 1 : cx - 4;
     const rightEyeX = cx + 2;
 
-    const drawSingleEye = (ex: number) => {
+    const drawSingleEye = (ex: number, isRightEye = false) => {
+      const activeEyeColor =
+        eyeStyle === 'mystic_heterochromia' ? (isRightEye ? '#facc15' : '#0ea5e9') : eyeColor;
       if (eyeStyle === 'happy_curve') {
         px(ctx, ex, eyeY + 1, 3, 1, OUTLINE);
         px(ctx, ex + 1, eyeY, 1, 1, OUTLINE);
       } else if (eyeStyle === 'chill_sleepy') {
         px(ctx, ex, eyeY, 3, 1, OUTLINE);
         px(ctx, ex, eyeY + 1, 3, 1, '#ffffff');
-        px(ctx, ex + 1, eyeY + 1, 2, 1, eyeColor);
+        px(ctx, ex + 1, eyeY + 1, 2, 1, activeEyeColor);
       } else if (eyeStyle === 'sharp_fierce') {
         px(ctx, ex, eyeY, 3, 2, '#ffffff');
-        px(ctx, ex + 1, eyeY, 2, 2, eyeColor);
+        px(ctx, ex + 1, eyeY, 2, 2, activeEyeColor);
         px(ctx, ex, eyeY, 3, 1, OUTLINE);
         px(ctx, ex + 1, eyeY + 1, 1, 1, '#ffffff');
       } else if (eyeStyle === 'bright_big') {
         px(ctx, ex, eyeY - 1, 3, 3, '#ffffff');
-        px(ctx, ex, eyeY, 3, 2, eyeColor);
+        px(ctx, ex, eyeY, 3, 2, activeEyeColor);
         px(ctx, ex + 1, eyeY, 1, 1, '#ffffff');
       } else if (eyeStyle === 'almond') {
         px(ctx, ex, eyeY, 3, 2, '#ffffff');
-        px(ctx, ex + 1, eyeY, 2, 2, eyeColor);
+        px(ctx, ex + 1, eyeY, 2, 2, activeEyeColor);
         px(ctx, ex + 1, eyeY, 1, 1, '#ffffff');
       } else if (eyeStyle === 'glowing_gold') {
         px(ctx, ex, eyeY, 3, 2, '#fef08a');
         px(ctx, ex + 1, eyeY, 2, 2, '#f59e0b');
         px(ctx, ex + 1, eyeY, 1, 1, '#ffffff');
+      } else if (eyeStyle === 'starry_glow') {
+        px(ctx, ex, eyeY - 1, 3, 3, '#312e81');
+        px(ctx, ex, eyeY, 3, 2, '#6366f1');
+        px(ctx, ex + 1, eyeY, 1, 1, '#fef08a');
+        px(ctx, ex, eyeY + 1, 1, 1, '#ffffff');
+      } else if (eyeStyle === 'dragon_slit') {
+        px(ctx, ex, eyeY, 3, 2, '#facc15');
+        px(ctx, ex + 1, eyeY, 1, 2, '#991b1b');
+        px(ctx, ex, eyeY, 1, 1, '#fef9c3');
+      } else if (eyeStyle === 'kawaii_sparkle') {
+        px(ctx, ex, eyeY - 1, 3, 3, activeEyeColor);
+        px(ctx, ex, eyeY - 1, 1, 1, '#ffffff');
+        px(ctx, ex + 2, eyeY + 1, 1, 1, '#fbcfe8');
+      } else if (eyeStyle === 'mystic_heterochromia') {
+        px(ctx, ex, eyeY - 1, 3, 3, '#ffffff');
+        px(ctx, ex, eyeY, 3, 2, activeEyeColor);
+        px(ctx, ex + 1, eyeY, 1, 1, '#ffffff');
       } else {
         // classic_round
-        px(ctx, ex, eyeY, 2, 2, eyeColor);
+        px(ctx, ex, eyeY, 2, 2, activeEyeColor);
         px(ctx, ex, eyeY, 1, 1, '#ffffff');
       }
     };
 
     if (isSide) {
-      drawSingleEye(leftEyeX);
+      drawSingleEye(leftEyeX, false);
     } else {
-      drawSingleEye(leftEyeX);
-      drawSingleEye(rightEyeX);
+      drawSingleEye(leftEyeX, false);
+      drawSingleEye(rightEyeX, true);
     }
 
     // Layer 6: Eyebrows
@@ -510,6 +607,38 @@ function renderHumanChibiPixels(
       px(ctx, cx + 2, headY + 6, 1, 1, '#be123c');
       px(ctx, cx + 3, headY + 7, 1, 1, '#be123c');
       px(ctx, cx + 4, headY + 8, 1, 1, '#be123c');
+    } else if (faceStyle === 'golden_cheek_marks') {
+      // Ornate royal Khmer golden cheek filigree marks
+      px(ctx, mouthX, mouthY, 2, 1, '#9f4a3c');
+      if (!isSide) {
+        px(ctx, cx - 5, headY + 7, 2, 1, '#facc15');
+        px(ctx, cx - 4, headY + 8, 1, 1, '#fef08a');
+        px(ctx, cx + 3, headY + 7, 2, 1, '#facc15');
+        px(ctx, cx + 3, headY + 8, 1, 1, '#fef08a');
+      } else {
+        px(ctx, cx + 1, headY + 7, 2, 1, '#facc15');
+      }
+    } else if (faceStyle === 'floating_lotus_petals') {
+      // Soft smile + floating luminous pink lotus petals flanking head!
+      px(ctx, mouthX, mouthY, 2, 1, '#9f4a3c');
+      px(ctx, headX - 3, headY + 1, 2, 2, '#f472b6');
+      px(ctx, headX - 2, headY + 1, 1, 1, '#fef08a');
+      px(ctx, headX + headW + 1, headY + 4, 2, 2, '#f472b6');
+      px(ctx, headX + headW + 1, headY + 4, 1, 1, '#ffffff');
+    } else if (faceStyle === 'lightning_eyes') {
+      // Electric cyan-gold lightning crackles flaring from the eyes!
+      px(ctx, mouthX, mouthY, 3, 1, OUTLINE);
+      px(ctx, leftEyeX - 2, eyeY, 2, 1, '#38bdf8');
+      px(ctx, leftEyeX - 3, eyeY - 1, 2, 1, '#fef08a');
+      if (!isSide) {
+        px(ctx, rightEyeX + 3, eyeY, 2, 1, '#38bdf8');
+        px(ctx, rightEyeX + 4, eyeY - 1, 2, 1, '#fef08a');
+      }
+    } else if (faceStyle === 'sacred_third_eye') {
+      // Glowing emerald-gold Sacred Third-Eye Gem centered on forehead!
+      px(ctx, mouthX, mouthY, 2, 1, '#9f4a3c');
+      px(ctx, cx - 1 + faceOffsetX, headY + 2, 2, 2, '#facc15');
+      px(ctx, cx - 1 + faceOffsetX, headY + 2, 1, 1, '#22d3ee');
     } else {
       // warm_smile
       px(ctx, mouthX - 1, mouthY - 1, 1, 1, '#9f4a3c');
@@ -578,8 +707,8 @@ function renderHumanChibiPixels(
       px(ctx, cx - 3, headY - 6, 6, 5, OUTLINE);
       px(ctx, cx - 2, headY - 5, 4, 3, hairMain);
       px(ctx, cx - 2, headY - 2, 4, 1, '#facc15');
-    } else if (hairStyle === 'silver_spiky') {
-      // Premium dramatic anime spikes
+    } else if (hairStyle === 'silver_spiky' || hairStyle === 'spiky_anime_hero') {
+      // Dramatic anime spikes
       px(ctx, headX - 1, headY - 4, 4, 4, OUTLINE);
       px(ctx, cx - 2, headY - 6, 5, 5, OUTLINE);
       px(ctx, headX + headW - 3, headY - 4, 4, 4, OUTLINE);
@@ -588,6 +717,41 @@ function renderHumanChibiPixels(
       px(ctx, headX + headW - 3, headY - 3, 3, 3, hairMain);
       px(ctx, headX + 3, headY + 2, 3, 3, hairMain);
       px(ctx, headX + 8, headY + 2, 2, 2, hairMain);
+      if (hairStyle === 'spiky_anime_hero') {
+        px(ctx, cx - 3, headY - 4, 2, 2, hairHi);
+        px(ctx, cx + 2, headY - 5, 2, 3, hairMain);
+      }
+    } else if (hairStyle === 'wolf_cut') {
+      // Layered wispy wolf-cut bangs + textured crown tufts
+      px(ctx, headX + 1, headY + 2, 3, 3, hairMain);
+      px(ctx, headX + 5, headY + 2, 2, 2, hairMain);
+      px(ctx, headX + 9, headY + 2, 3, 3, hairMain);
+      px(ctx, headX + 2, headY - 3, 3, 2, hairMain);
+      px(ctx, headX + 8, headY - 3, 3, 2, hairHi);
+    } else if (hairStyle === 'royal_braided_crown') {
+      // Woven golden Khmer braided halo crown
+      px(ctx, headX + 1, headY - 3, headW - 2, 3, OUTLINE);
+      px(ctx, headX + 2, headY - 2, headW - 4, 2, hairMain);
+      px(ctx, headX + 2, headY - 2, headW - 4, 1, '#facc15');
+      px(ctx, cx - 1, headY - 3, 2, 2, '#fef08a');
+      px(ctx, headX + 2, headY + 2, 3, 2, hairMain);
+      px(ctx, headX + headW - 5, headY + 2, 3, 2, hairMain);
+    } else if (hairStyle === 'flowing_apsara_waves') {
+      // Graceful curved Apsara temple-dancer waves + lotus clasp
+      px(ctx, headX + 1, headY + 2, 4, 2, hairMain);
+      px(ctx, headX + headW - 5, headY + 2, 4, 2, hairMain);
+      px(ctx, cx - 2, headY - 3, 4, 2, '#facc15');
+      px(ctx, cx - 1, headY - 3, 2, 1, '#f472b6');
+    } else if (hairStyle === 'cyber_undercut') {
+      // Sharp swept undercut with neon-cyan fade stripe!
+      px(ctx, headX, headY + 2, 2, 4, hairShade);
+      px(ctx, headX + 2, headY - 3, headW - 4, 3, hairMain);
+      px(ctx, headX + 3, headY - 2, headW - 6, 1, '#22d3ee');
+      px(ctx, headX + 4, headY + 2, 6, 2, hairMain);
+    } else if (hairStyle === 'twin_tails') {
+      // Cute center-split bangs matching twin tails
+      px(ctx, headX + 2, headY + 2, 4, 2, hairMain);
+      px(ctx, headX + headW - 6, headY + 2, 4, 2, hairMain);
     } else {
       // short_neat / high_ponytail front bangs
       px(ctx, headX + 2, headY + 2, headW - 4, 1, hairMain);
@@ -678,6 +842,16 @@ export function drawFullPaperDollToCanvas(
   ctx.save();
   ctx.imageSmoothingEnabled = false;
 
+  // Draw High-Detail 4-Frame Animated PNG Wings directly behind Human Chibi in React UI Previews!
+  const pngWingMeta = loadout.wings ? ANIMATED_PNG_WINGS[loadout.wings] : undefined;
+  if (pngWingMeta) {
+    const wingImg = getCachedHtmlImg(pngWingMeta.url);
+    if (wingImg) {
+      const frameIdx = Math.floor(timeMs / 150) % 4;
+      ctx.drawImage(wingImg, frameIdx * 48, 0, 48, 48, 2, 4 + bob, 60, 60);
+    }
+  }
+
   // Draw crisp 36x40 pixel-art human chibi scaled cleanly into the 64x64 preview coordinate frame
   ctx.drawImage(scratch, 0, 0, CANVAS_W, CANVAS_H, 8, 5 + bob, 48, 53);
 
@@ -706,6 +880,7 @@ export function drawFullPaperDollToCanvas(
  * Caches generated pixel-snapped CanvasTextures per (appearance, pose, facing) for 60 FPS performance.
  */
 export class PaperDoll extends Phaser.GameObjects.Container {
+  private wingSprite: Phaser.GameObjects.Sprite;
   private bodySprite: Phaser.GameObjects.Image;
   private weaponSprite: Phaser.GameObjects.Image;
   private weaponAuraGlow: Phaser.GameObjects.Image;
@@ -718,6 +893,7 @@ export class PaperDoll extends Phaser.GameObjects.Container {
   private currentFacing: PaperDollFacing = 'down';
   private lastTexKey = '';
   private isStealth = false;
+  private aimAngle: number | null = null;
 
   constructor(
     scene: Phaser.Scene,
@@ -737,6 +913,12 @@ export class PaperDoll extends Phaser.GameObjects.Container {
 
     const initKey = this.ensureFrameTexture('idle', 'down');
     this.lastTexKey = initKey;
+
+    this.wingSprite = scene.add
+      .sprite(0, -22, 'wings_bamboo_leaf_glider', 0)
+      .setOrigin(0.5, 0.5)
+      .setScale(1.18)
+      .setVisible(false);
 
     this.bodySprite = scene.add
       .image(0, 0, initKey)
@@ -766,6 +948,7 @@ export class PaperDoll extends Phaser.GameObjects.Container {
 
     this.add([
       this.auraGlow,
+      this.wingSprite,
       this.bodySprite,
       this.weaponAuraGlow,
       this.weaponSprite,
@@ -840,7 +1023,21 @@ export class PaperDoll extends Phaser.GameObjects.Container {
       this.weaponAuraSparks.forEach((sp) => sp.setVisible(false));
     }
 
-    const wingDef = this.loadout.wings ? ITEM_CATALOG[this.loadout.wings] : undefined;
+    const wingId = this.loadout.wings;
+    const pngWing = wingId ? ANIMATED_PNG_WINGS[wingId] : undefined;
+    if (pngWing && wingId && this.scene.textures.exists(wingId)) {
+      this.wingSprite.setTexture(wingId, 0).setVisible(true);
+      this.wingSprite.postFX?.clear?.();
+      vfxManager.applyGlow(this.scene, this.wingSprite, pngWing.glowColor, pngWing.bloomStrength * 2.1, 0.35);
+      if (this.scene.anims.exists(pngWing.animKey)) {
+        this.wingSprite.play(pngWing.animKey, true);
+      }
+    } else {
+      this.wingSprite.stop();
+      this.wingSprite.setVisible(false);
+    }
+
+    const wingDef = wingId ? ITEM_CATALOG[wingId] : undefined;
     const accList = this.loadout.accessories ?? [];
     const hasApexAcc =
       accList.includes('acc_angkor_phantom_stride') ||
@@ -874,6 +1071,10 @@ export class PaperDoll extends Phaser.GameObjects.Container {
     this.applyWeaponAndAura();
   }
 
+  public setAimAngle(angle: number | null): void {
+    this.aimAngle = angle;
+  }
+
   public setPoseAndFacing(pose: PaperDollPose, facing: PaperDollFacing, time: number): void {
     this.currentPose = pose;
     this.currentFacing = facing;
@@ -888,29 +1089,50 @@ export class PaperDoll extends Phaser.GameObjects.Container {
     const idleBob = !isWalking && pose === 'idle' ? (Math.sin(time / 340) > 0.25 ? -1 : 0) : 0;
     this.bodySprite.setY(idleBob);
 
-    // Layer 10: Held Khmer Weapon positioned cleanly at character's hand & swung on attack
+    if (this.wingSprite.visible) {
+      const wingHover = Math.sin(time / 220) * 1.4;
+      const wingOffsetX = facing === 'left' ? 4 : facing === 'right' ? -4 : 0;
+      this.wingSprite.setPosition(wingOffsetX, -22 + idleBob + wingHover);
+      this.wingSprite.setFlipX(facing === 'left');
+    }
+
+    // Layer 10: Held Khmer Weapon positioned cleanly at character's hand & rotated along cursor aimAngle when active
     const dir = facing === 'left' ? -1 : 1;
     const isUp = facing === 'up';
-    const handX = facing === 'down' ? 15 : facing === 'up' ? -14 : dir * 16;
-    const handY = (pose === 'attack' ? -16 : -12) + idleBob;
 
-    this.weaponSprite.setPosition(handX, handY);
-    this.weaponSprite.setFlipX(dir < 0);
-    this.weaponSprite.setDepth(isUp ? -1 : 2);
-    if (pose === 'attack') {
-      this.weaponSprite.setRotation(dir * 1.15);
-    } else if (pose === 'parry') {
-      this.weaponSprite.setRotation(dir * -0.15);
+    if (this.aimAngle !== null) {
+      const aimDir = Math.cos(this.aimAngle) < 0 ? -1 : 1;
+      const handX = Math.cos(this.aimAngle) * 15;
+      const handY = -16 + idleBob + Math.sin(this.aimAngle) * 12;
+      this.weaponSprite.setPosition(handX, handY);
+      this.weaponSprite.setFlipX(aimDir < 0);
+      this.weaponSprite.setDepth(2);
+      const swingOffset = pose === 'attack' ? aimDir * 0.95 : 0;
+      this.weaponSprite.setRotation(this.aimAngle + Math.PI / 2 + swingOffset);
     } else {
-      this.weaponSprite.setRotation(dir * -0.28 + (isWalking ? Math.sin(time / 120) * 0.14 : 0));
+      const handX = facing === 'down' ? 15 : facing === 'up' ? -14 : dir * 16;
+      const handY = (pose === 'attack' ? -16 : -12) + idleBob;
+
+      this.weaponSprite.setPosition(handX, handY);
+      this.weaponSprite.setFlipX(dir < 0);
+      this.weaponSprite.setDepth(isUp ? -1 : 2);
+      if (pose === 'attack') {
+        this.weaponSprite.setRotation(dir * 1.15);
+      } else if (pose === 'parry') {
+        this.weaponSprite.setRotation(dir * -0.15);
+      } else {
+        this.weaponSprite.setRotation(dir * -0.28 + (isWalking ? Math.sin(time / 120) * 0.14 : 0));
+      }
     }
 
     if (this.weaponAuraGlow.visible) {
-      this.weaponAuraGlow.setPosition(handX, handY - 6);
+      const wx = this.weaponSprite.x;
+      const wy = this.weaponSprite.y;
+      this.weaponAuraGlow.setPosition(wx, wy - 6);
       this.weaponAuraGlow.setScale(0.22 + Math.sin(time / 180) * 0.04);
       this.weaponAuraSparks.forEach((sp, idx) => {
         const ang = time / 240 + (idx * Math.PI * 2) / 3;
-        sp.setPosition(handX + Math.cos(ang) * 10, handY - 6 + Math.sin(ang) * 8);
+        sp.setPosition(wx + Math.cos(ang) * 10, wy - 6 + Math.sin(ang) * 8);
       });
     }
 

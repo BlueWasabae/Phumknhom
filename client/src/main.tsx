@@ -38,6 +38,16 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     },
     { passive: false }
   );
+
+  // Ensure PWA updates activate cleanly without leaving returning players on a stale cached bundle
+  if ('serviceWorker' in navigator) {
+    let swReloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (swReloaded) return;
+      swReloaded = true;
+      window.location.reload();
+    });
+  }
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
