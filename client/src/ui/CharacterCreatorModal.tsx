@@ -562,8 +562,8 @@ export const CharacterCreatorModal: React.FC<CharacterCreatorModalProps> = ({
 
           {/* Confirm CTA */}
           <div className="pt-1 flex flex-wrap items-center justify-between gap-2 border-t border-amber-900/20">
-            <span className="text-[10px] text-amber-900 font-semibold">
-              Tip: Visit the Downtown Fashion Boutique anytime for Premium Sets &amp; Salon Styles!
+            <span className="text-[10px] text-emerald-900 font-bold bg-emerald-100 px-2 py-1 rounded-lg border border-emerald-600/35">
+              ✨ FREE One-Time Hero Registration · Future changes at Bopha&apos;s Salon cost Coins / 💎 Diamonds
             </span>
             <button
               type="button"

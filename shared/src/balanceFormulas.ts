@@ -37,10 +37,17 @@ const DEFENSE_MODE_MULTIPLIER: Record<DifficultyMode, number> = {
 };
 
 const BOSS_DIFFICULTY_MULTIPLIER: Record<DifficultyMode, number> = {
-  normal: 1.0,
-  expert: 1.5,
-  mythic: 1.9,
-  death: 2.3,
+  normal: 1.15,
+  expert: 1.75,
+  mythic: 2.2,
+  death: 2.75,
+};
+
+const BOSS_ATTACK_DIFFICULTY_MULTIPLIER: Record<DifficultyMode, number> = {
+  normal: 1.1,
+  expert: 1.32,
+  mythic: 1.55,
+  death: 1.85,
 };
 
 /**
@@ -164,11 +171,12 @@ export function calculateEffectiveDR(rawDR: number): number {
 export function calculateDamageTaken(input: DamageTakenInput): number {
   const difficulty = input.difficulty ?? 'normal';
   const dMode = DEFENSE_MODE_MULTIPLIER[difficulty];
+  const atkScale = BOSS_ATTACK_DIFFICULTY_MULTIPLIER[difficulty];
   const reforge = computeReforgeDeltas(null, input.armorPrefix);
   const effectiveDef = input.currentDefense + reforge.defenseFlat;
   const effectiveDR = calculateEffectiveDR(input.rawDR ?? 0);
-  const mitigated = (input.bossAttack - effectiveDef * dMode) * (1 - effectiveDR);
-  return Math.max(1, Math.round(mitigated));
+  const mitigated = (input.bossAttack * atkScale - effectiveDef * dMode) * (1 - effectiveDR);
+  return Math.max(2, Math.round(mitigated));
 }
 
 /**

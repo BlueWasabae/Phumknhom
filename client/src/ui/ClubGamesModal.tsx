@@ -1,7 +1,27 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import type { PlayerState } from '@shared/types';
+import {
+  CLUB_PVP_TABLES,
+  OUK_PIECE_META,
+  applyOukMove,
+  canBeatTienLenCombo,
+  classifyTienLenCombo,
+  createAuthenticOukBoard,
+  dealAuthenticTienLen,
+  getAuthenticOukLegalMoves,
+  hasAnyLegalOukMove,
+  isOukKingInCheck,
+  type OukBoard,
+  type OukPiece,
+  type OukPieceKind,
+  type OukSide,
+  type TienLenCard,
+  type TienLenCombo,
+} from '@shared/clubRules';
 import { soundManager } from '../game/systems/SoundManager';
-import { Crown, Dices, RotateCcw, Spade, Trophy } from 'lucide-react';
+import { EventBus } from '../game/EventBus';
+import { roomClient } from '../game/network/RoomClient';
+import { CheckCircle2, Coins, Crown, Dices, RotateCcw, Spade, Trophy, Users } from 'lucide-react';
 import { NativeDialog } from './NativeDialog';
 
 export type ClubGameTab = 'kla_klok' | 'ouk_chaktrang' | 'tien_len';
@@ -9,12 +29,13 @@ export type ClubGameTab = 'kla_klok' | 'ouk_chaktrang' | 'tien_len';
 interface ClubGamesModalProps {
   open: boolean;
   initialGame?: ClubGameTab;
+  initialTableId?: string;
   player: PlayerState;
   onClose: () => void;
   onWinClubReward: (coinsDelta: number, happyGain: number, label: string) => void;
 }
 
-// ==================== 1. KLA KLOK (KHMER TRADITIONAL 3-DICE) ====================
+// ==================== 1. KLA KLOK (KHMER TRADITIONAL 3-DICE — PRESERVED AS-IS) ====================
 type KlaKlokSymbolId = 'gourd' | 'crab' | 'fish' | 'rooster' | 'shrimp' | 'tiger';
 
 const KLA_KLOK_SYMBOLS: Array<{
@@ -34,194 +55,278 @@ const KLA_KLOK_SYMBOLS: Array<{
 
 const WAGER_CHIPS = [10, 50, 100, 250] as const;
 
-// ==================== 2. OUK CHAKTRANG (8x8 FAST-BLITZ KHMER CHESS) ====================
-type PieceSide = 'w' | 'b';
-type PieceKind = 'K' | 'Q' | 'B' | 'N' | 'R' | 'P';
-
-interface ChessPiece {
-  side: PieceSide;
-  kind: PieceKind;
+interface LiveClubSeat {
+  sessionId: string;
+  name: string;
+  ready: boolean;
+  cardCount: number;
+  passed: boolean;
 }
 
-type Board8x8 = (ChessPiece | null)[][];
+interface LiveClubTable {
+  tableId: string;
+  game: 'tien_len' | 'ouk_chaktrang';
+  stakeCoins: number;
+  maxSeats: number;
+  status: 'waiting' | 'playing' | 'finished';
+  seats: LiveClubSeat[];
+  turnIndex: number;
+  potCoins: number;
+  lastSummary: string;
+  winnerName: string | null;
+  tableCards: TienLenCard[];
+  tableComboLabel: string;
+  mustIncludeThreeSpades: boolean;
+  oukBoardJson: string | null;
+  oukTurnSide: OukSide;
+}
 
-const PIECE_GLYPH: Record<PieceSide, Record<PieceKind, string>> = {
-  w: { K: '♔', Q: '♕', B: '♗', N: '♘', R: '♖', P: '♙' },
-  b: { K: '♚', Q: '♛', B: '♝', N: '♞', R: '♜', P: '♟' },
+/**
+ * Custom Khmer Pixel-Art SVG Piece Renderer for Authentic Ouk Chaktrang:
+ * - Ang (King/Crown), Neang (Queen/Lotus), Koul (General/Mitre),
+ * - Ses (War Horse), Tuk (Khmer Longboat), Trey (Mekong Fish), Trey Bork (Promoted Lotus Fish)
+ */
+const KhmerOukPieceSvg: React.FC<{ piece: OukPiece }> = ({ piece }) => {
+  const isWhite = piece.side === 'w';
+  const fill = isWhite ? '#fef3c7' : '#291c14';
+  const accent = isWhite ? '#d97706' : '#f59e0b';
+  const stroke = isWhite ? '#5c3a1e' : '#fde68a';
+
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="w-7 h-7 sm:w-8 sm:h-8 drop-shadow-sm select-none"
+      style={{ imageRendering: 'pixelated' }}
+      aria-label={`${isWhite ? 'Gold' : 'Ebony'} ${OUK_PIECE_META[piece.kind].khmer}`}
+    >
+      {/* Carved pedestal base */}
+      <rect x="4" y="19" width="16" height="3" rx="1" fill={fill} stroke={stroke} strokeWidth="1.2" />
+
+      {piece.kind === 'K' && (
+        <>
+          {/* Ang — Spired Angkor Royal Crown */}
+          <polygon points="12,2 15,8 19,6 17,18 7,18 5,6 9,8" fill={fill} stroke={stroke} strokeWidth="1.2" />
+          <rect x="11" y="2" width="2" height="4" fill={accent} />
+          <circle cx="12" cy="12" r="2.2" fill={accent} />
+        </>
+      )}
+
+      {piece.kind === 'Q' && (
+        <>
+          {/* Neang — Sacred Blooming Lotus Diadem */}
+          <path d="M12 4 C9 8, 7 13, 8 18 L16 18 C17 13, 15 8, 12 4 Z" fill={fill} stroke={stroke} strokeWidth="1.2" />
+          <path d="M5 12 C7 11, 9 13, 9 18 L6 18 Z" fill={accent} stroke={stroke} strokeWidth="1" />
+          <path d="M19 12 C17 11, 15 13, 15 18 L18 18 Z" fill={accent} stroke={stroke} strokeWidth="1" />
+          <circle cx="12" cy="11" r="1.8" fill={accent} />
+        </>
+      )}
+
+      {piece.kind === 'B' && (
+        <>
+          {/* Koul — Tall Khmer General Mitre / Pagoda Spire */}
+          <polygon points="12,3 17,10 15,18 9,18 7,10" fill={fill} stroke={stroke} strokeWidth="1.2" />
+          <line x1="9" y1="11" x2="15" y2="11" stroke={accent} strokeWidth="2" />
+          <circle cx="12" cy="6.5" r="1.4" fill={accent} />
+        </>
+      )}
+
+      {piece.kind === 'N' && (
+        <>
+          {/* Ses — Carved Khmer War Horse */}
+          <path
+            d="M8 18 L8 12 L6 10 L10 5 L14 4 L17 7 L16 11 L13 10 L15 14 L16 18 Z"
+            fill={fill}
+            stroke={stroke}
+            strokeWidth="1.2"
+          />
+          <circle cx="13.5" cy="7.5" r="1.1" fill={accent} />
+        </>
+      )}
+
+      {piece.kind === 'R' && (
+        <>
+          {/* Tuk — Traditional Curved Khmer Longboat */}
+          <path d="M3 13 Q12 20 21 13 L19 18 L5 18 Z" fill={fill} stroke={stroke} strokeWidth="1.2" />
+          <rect x="8" y="9" width="8" height="4" fill={accent} stroke={stroke} strokeWidth="1" />
+          <polygon points="12,5 15,9 9,9" fill={fill} stroke={stroke} strokeWidth="1" />
+        </>
+      )}
+
+      {piece.kind === 'P' && (
+        <>
+          {/* Trey — Carved Mekong Fish / Shell Pawn */}
+          <ellipse cx="12" cy="12" rx="6" ry="4.5" fill={fill} stroke={stroke} strokeWidth="1.2" />
+          <polygon points="12,5 15,8 9,8" fill={accent} />
+          <circle cx="10.2" cy="11.5" r="1" fill={accent} />
+        </>
+      )}
+
+      {piece.kind === 'PB' && (
+        <>
+          {/* Trey Bork — Promoted Golden Lotus Fish */}
+          <ellipse cx="12" cy="13" rx="6.5" ry="4.5" fill={accent} stroke={stroke} strokeWidth="1.3" />
+          <polygon points="12,3 15,9 9,9" fill={fill} stroke={stroke} strokeWidth="1.1" />
+          <circle cx="12" cy="13" r="1.8" fill={fill} />
+        </>
+      )}
+    </svg>
+  );
 };
 
-const PIECE_KHMER: Record<PieceKind, string> = {
-  K: 'Sdach (King)',
-  Q: 'Neang (Queen)',
-  B: 'Khon (General)',
-  N: 'Ses (Knight)',
-  R: 'Tuuk (Boat)',
-  P: 'Trey (Fish/Pawn)',
-};
-
-function createInitialOukBoard(): Board8x8 {
-  const b: Board8x8 = Array.from({ length: 8 }, () => Array<ChessPiece | null>(8).fill(null));
-  const backRow: PieceKind[] = ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R'];
-  for (let c = 0; c < 8; c++) {
-    b[0][c] = { side: 'b', kind: backRow[c] };
-    b[2][c] = { side: 'b', kind: 'P' }; // Authentic Khmer Ouk Chaktrang puts Trey pawns on 3rd & 6th ranks!
-    b[5][c] = { side: 'w', kind: 'P' };
-    b[7][c] = { side: 'w', kind: backRow[c] };
-  }
-  return b;
+// ==================== LOCAL 2P PASS-AND-PLAY STATE (STRICTLY 2 REAL HUMANS, ZERO AI) ====================
+interface LocalTienLenState {
+  active: boolean;
+  stakeCoins: number;
+  hands: [TienLenCard[], TienLenCard[]];
+  turnIndex: 0 | 1;
+  tableCombo: TienLenCombo | null;
+  lastPlayBy: 0 | 1 | null;
+  mustIncludeThreeSpades: boolean;
+  status: string;
+  winnerIndex: 0 | 1 | null;
 }
 
-function getLegalMoves(board: Board8x8, r: number, c: number): Array<[number, number]> {
-  const piece = board[r][c];
-  if (!piece) return [];
-  const moves: Array<[number, number]> = [];
-  const inBounds = (rr: number, cc: number) => rr >= 0 && rr < 8 && cc >= 0 && cc < 8;
-  const canLand = (rr: number, cc: number) => {
-    if (!inBounds(rr, cc)) return false;
-    const t = board[rr][cc];
-    return !t || t.side !== piece.side;
-  };
-
-  if (piece.kind === 'P') {
-    const dir = piece.side === 'w' ? -1 : 1;
-    if (inBounds(r + dir, c) && !board[r + dir][c]) moves.push([r + dir, c]);
-    for (const dc of [-1, 1]) {
-      if (inBounds(r + dir, c + dc) && board[r + dir][c + dc]?.side && board[r + dir][c + dc]?.side !== piece.side) {
-        moves.push([r + dir, c + dc]);
-      }
-    }
-  } else if (piece.kind === 'N') {
-    for (const [dr, dc] of [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]]) {
-      if (canLand(r + dr, c + dc)) moves.push([r + dr, c + dc]);
-    }
-  } else if (piece.kind === 'K') {
-    for (let dr = -1; dr <= 1; dr++) {
-      for (let dc = -1; dc <= 1; dc++) {
-        if ((dr !== 0 || dc !== 0) && canLand(r + dr, c + dc)) moves.push([r + dr, c + dc]);
-      }
-    }
-  } else if (piece.kind === 'Q') {
-    // Ouk Neang: 1 square diagonally (plus fast-blitz 1 forward)
-    for (const [dr, dc] of [[-1, -1], [-1, 1], [1, -1], [1, 1], [piece.side === 'w' ? -1 : 1, 0]]) {
-      if (canLand(r + dr, c + dc)) moves.push([r + dr, c + dc]);
-    }
-  } else if (piece.kind === 'B') {
-    // Ouk Khon: 4 diagonals 1 step + 1 step forward
-    for (const [dr, dc] of [[-1, -1], [-1, 1], [1, -1], [1, 1], [piece.side === 'w' ? -1 : 1, 0]]) {
-      if (canLand(r + dr, c + dc)) moves.push([r + dr, c + dc]);
-    }
-  } else if (piece.kind === 'R') {
-    for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
-      for (let step = 1; step < 8; step++) {
-        const rr = r + dr * step;
-        const cc = c + dc * step;
-        if (!inBounds(rr, cc)) break;
-        const target = board[rr][cc];
-        if (!target) {
-          moves.push([rr, cc]);
-        } else {
-          if (target.side !== piece.side) moves.push([rr, cc]);
-          break;
-        }
-      }
-    }
-  }
-  return moves;
-}
-
-// ==================== 3. TIEN LEN (13-CARD KHMER POKER) ====================
-interface CardItem {
-  id: string;
-  label: string;
-  rank: number;
-  suitWeight: number;
-  red: boolean;
-}
-
-const RANKS: Array<[string, number]> = [
-  ['3', 3], ['4', 4], ['5', 5], ['6', 6], ['7', 7], ['8', 8],
-  ['9', 9], ['10', 10], ['J', 11], ['Q', 12], ['K', 13], ['A', 14], ['2', 15],
-];
-const SUITS: Array<[string, number, boolean]> = [
-  ['♠', 0, false], ['♣', 1, false], ['♦', 2, true], ['♥', 3, true],
-];
-
-function cardPower(c: CardItem): number {
-  return c.rank * 4 + c.suitWeight;
-}
-
-function dealTienLenRound(): { playerHand: CardItem[]; npcHand: CardItem[] } {
-  const deck: CardItem[] = [];
-  for (const [rl, rv] of RANKS) {
-    for (const [sl, sw, red] of SUITS) {
-      deck.push({ id: `${rl}${sl}`, label: `${rl}${sl}`, rank: rv, suitWeight: sw, red });
-    }
-  }
-  for (let i = deck.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [deck[i], deck[j]] = [deck[j], deck[i]];
-  }
-  return {
-    playerHand: deck.slice(0, 7).sort((a, b) => cardPower(a) - cardPower(b)),
-    npcHand: deck.slice(7, 14).sort((a, b) => cardPower(a) - cardPower(b)),
-  };
+interface LocalOukState {
+  active: boolean;
+  stakeCoins: number;
+  board: OukBoard;
+  turnSide: OukSide;
+  status: string;
+  winnerSide: OukSide | null;
 }
 
 export const ClubGamesModal: React.FC<ClubGamesModalProps> = ({
   open,
-  initialGame = 'kla_klok',
+  initialGame = 'tien_len',
+  initialTableId = 'tl_50',
   player,
   onClose,
   onWinClubReward,
 }) => {
   const [tab, setTab] = useState<ClubGameTab>(initialGame);
+  const [selectedTableId, setSelectedTableId] = useState<string>(initialTableId);
 
-  // ---- Kla Klok state ----
+  // Live Multiplayer Colyseus ClubRoom State
+  const [clubOnline, setClubOnline] = useState(false);
+  const [mySessionId, setMySessionId] = useState<string | null>(null);
+  const [liveTables, setLiveTables] = useState<LiveClubTable[]>([]);
+  const [privateHand, setPrivateHand] = useState<TienLenCard[]>([]);
+  const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);
+
+  // Local 2-Player Human Pass-and-Play (NO AI!) for playing side-by-side when solo/offline
+  const [localTl, setLocalTl] = useState<LocalTienLenState | null>(null);
+  const [localOuk, setLocalOuk] = useState<LocalOukState | null>(null);
+  const [oukSelectedSq, setOukSelectedSq] = useState<[number, number] | null>(null);
+
+  // ---- Kla Klok state (Preserved As-Is!) ----
   const [chipSize, setChipSize] = useState<number>(50);
   const [bets, setBets] = useState<Partial<Record<KlaKlokSymbolId, number>>>({ gourd: 50 });
   const [dice, setDice] = useState<[KlaKlokSymbolId, KlaKlokSymbolId, KlaKlokSymbolId]>(['gourd', 'crab', 'fish']);
   const [rolling, setRolling] = useState(false);
   const [kkResultText, setKkResultText] = useState('Place Coins on 1 or more symbols and hit Roll 3 Dice!');
 
-  // ---- Ouk Chaktrang 8x8 state ----
-  const [board, setBoard] = useState<Board8x8>(() => createInitialOukBoard());
-  const [selectedSq, setSelectedSq] = useState<[number, number] | null>(null);
-  const [oukStatus, setOukStatus] = useState('Your Turn (Gold/White) — Capture the Black Sdach (♚) or 3 pieces to win +220c & Club Champion badge!');
-  const [oukCaptures, setOukCaptures] = useState(0);
-  const [oukOver, setOukOver] = useState(false);
-
-  // ---- Tien Len state ----
-  const [hand, setHand] = useState<CardItem[]>([]);
-  const [npcHand, setNpcHand] = useState<CardItem[]>([]);
-  const [tableCard, setTableCard] = useState<CardItem | null>(null);
-  const [tlStatus, setTlStatus] = useState('Beat the table card with a higher card (2♥ is strongest)!');
-  const [tlFinished, setTlFinished] = useState(false);
-
-  const resetTienLen = () => {
-    const dealt = dealTienLenRound();
-    setHand(dealt.playerHand);
-    setNpcHand(dealt.npcHand);
-    setTableCard(null);
-    setTlFinished(false);
-    setTlStatus('Your lead! Play any card from your hand (2♥ beats everything).');
-  };
-
-  const resetOukBoard = () => {
-    setBoard(createInitialOukBoard());
-    setSelectedSq(null);
-    setOukCaptures(0);
-    setOukOver(false);
-    setOukStatus('New 8×8 Fast-Blitz Ouk Chaktrang match! Click any White piece to move.');
-  };
-
   useEffect(() => {
-    if (open) {
-      setTab(initialGame);
-      if (hand.length === 0) resetTienLen();
+    if (!open) return;
+    setTab(initialGame);
+    if (initialTableId) {
+      setSelectedTableId(initialTableId);
+    } else if (initialGame === 'tien_len') {
+      setSelectedTableId('tl_50');
+    } else if (initialGame === 'ouk_chaktrang') {
+      setSelectedTableId('ouk_50');
     }
-  }, [initialGame, open]);
+    setSelectedCardIds([]);
+    setOukSelectedSq(null);
+  }, [open, initialGame, initialTableId]);
 
-  // ---- Kla Klok handlers ----
+  // Connect to Multiplayer Colyseus ClubRoom while modal is open
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    const unsubTables = EventBus.on('club:tablesSync', ({ tables, sessionId, online }) => {
+      if (!active) return;
+      setClubOnline(online);
+      setMySessionId(sessionId);
+      setLiveTables(tables as LiveClubTable[]);
+    });
+    const unsubHand = EventBus.on('club:privateHand', ({ hand }) => {
+      if (!active) return;
+      setPrivateHand(hand as TienLenCard[]);
+      setSelectedCardIds([]);
+    });
+    const unsubPayout = EventBus.on('club:payout', ({ game, winnerSessionId, winnerName, potCoins, stakeCoins }) => {
+      if (!active) return;
+      const sid = roomClient.getClubSessionId();
+      if (sid && winnerSessionId === sid) {
+        soundManager.playSfx('victory');
+        onWinClubReward(potCoins - stakeCoins, 14, `🏆 Won PvP ${game === 'tien_len' ? 'Tien Len' : 'Ouk Chaktrang'} (+${potCoins.toLocaleString()} C pot)!`);
+      } else if (sid) {
+        soundManager.playSfx('hit');
+        onWinClubReward(-stakeCoins, 4, `${winnerName} won the PvP table (-${stakeCoins} C stake).`);
+      }
+    });
+
+    void roomClient
+      .connectClub({
+        cityServer: player.cityServer ?? 'phnom_penh',
+        name: player.name,
+      })
+      .then((res) => {
+        if (!active) return;
+        setClubOnline(res.online);
+        setMySessionId(res.sessionId);
+      });
+
+    return () => {
+      active = false;
+      unsubTables();
+      unsubHand();
+      unsubPayout();
+    };
+  }, [open, player.cityServer, player.name, onWinClubReward]);
+
+  const tablesForCurrentTab = useMemo(() => {
+    if (tab === 'kla_klok') return [];
+    return CLUB_PVP_TABLES.filter((cfg) => cfg.game === tab).map((cfg) => {
+      const live = liveTables.find((lt) => lt.tableId === cfg.tableId);
+      return {
+        cfg,
+        live: live ?? {
+          tableId: cfg.tableId,
+          game: cfg.game,
+          stakeCoins: cfg.stakeCoins,
+          maxSeats: cfg.maxSeats,
+          status: 'waiting' as const,
+          seats: [],
+          turnIndex: 0,
+          potCoins: 0,
+          lastSummary: 'Waiting for real players to sit down & Ready (Multiplayer PvP Only — No AI).',
+          winnerName: null,
+          tableCards: [],
+          tableComboLabel: '',
+          mustIncludeThreeSpades: false,
+          oukBoardJson: null,
+          oukTurnSide: 'w' as OukSide,
+        },
+      };
+    });
+  }, [tab, liveTables]);
+
+  const activeEntry =
+    tablesForCurrentTab.find((e) => e.cfg.tableId === selectedTableId) ?? tablesForCurrentTab[0];
+  const activeLiveTable = activeEntry?.live ?? null;
+  const activeCfg = activeEntry?.cfg ?? null;
+
+  const mySeatIndex =
+    activeLiveTable && mySessionId
+      ? activeLiveTable.seats.findIndex((s) => s.sessionId === mySessionId)
+      : -1;
+  const isSeatedHere = mySeatIndex >= 0;
+  const mySeat = isSeatedHere && activeLiveTable ? activeLiveTable.seats[mySeatIndex] : null;
+  const isMyOnlineTurn =
+    Boolean(activeLiveTable && activeLiveTable.status === 'playing' && isSeatedHere && activeLiveTable.turnIndex === mySeatIndex);
+
+  // ==================== KLA KLOK HANDLERS ====================
   const totalBet = Object.values(bets).reduce((s, v) => s + (v ?? 0), 0);
 
   const addBetOnSymbol = (sym: KlaKlokSymbolId) => {
@@ -240,7 +345,6 @@ export const ClubGamesModal: React.FC<ClubGamesModalProps> = ({
     setRolling(true);
     soundManager.playSfx('swing');
     setKkResultText('🎲 Shaking the Kla Klok bowl...');
-
     const faceIds = KLA_KLOK_SYMBOLS.map((s) => s.id);
     let ticks = 0;
     const anim = window.setInterval(() => {
@@ -258,8 +362,6 @@ export const ClubGamesModal: React.FC<ClubGamesModalProps> = ({
           faceIds[Math.floor(Math.random() * 6)],
         ];
         setDice(finalDice);
-
-        // Compute payout: each bet pays 1x, 2x, or 3x profit per matching die; losing bets lose their stake
         let netDelta = 0;
         let totalMatches = 0;
         for (const [symKey, stake] of Object.entries(bets) as Array<[KlaKlokSymbolId, number]>) {
@@ -272,7 +374,6 @@ export const ClubGamesModal: React.FC<ClubGamesModalProps> = ({
             netDelta -= stake;
           }
         }
-
         const icons = finalDice.map((id) => KLA_KLOK_SYMBOLS.find((s) => s.id === id)?.icon ?? id).join(' ');
         if (netDelta > 0) {
           soundManager.playSfx('level_up');
@@ -293,118 +394,224 @@ export const ClubGamesModal: React.FC<ClubGamesModalProps> = ({
     }, 75);
   };
 
-  // ---- Ouk Chaktrang 8x8 handlers ----
-  const legalMovesForSelected = selectedSq ? getLegalMoves(board, selectedSq[0], selectedSq[1]) : [];
+  // ==================== TIEN LEN PVP ACTIONS (ONLINE + LOCAL 2P HUMAN PASS-AND-PLAY) ====================
+  const startLocal2PTienLen = () => {
+    const stake = activeCfg?.stakeCoins ?? 50;
+    const dealt = dealAuthenticTienLen(2);
+    const starter = dealt.starterIndex === 1 ? 1 : 0;
+    soundManager.playSfx('click');
+    setSelectedCardIds([]);
+    setLocalTl({
+      active: true,
+      stakeCoins: stake,
+      hands: [dealt.hands[0], dealt.hands[1]],
+      turnIndex: starter,
+      tableCombo: null,
+      lastPlayBy: null,
+      mustIncludeThreeSpades: dealt.requiresThreeSpades,
+      status: `🃏 Dealer dealt 13 cards each! ${starter === 0 ? player.name : 'Player 2'} leads${
+        dealt.requiresThreeSpades ? ' with 3♠' : ''
+      }.`,
+      winnerIndex: null,
+    });
+  };
 
-  const handleOukSquareClick = (r: number, c: number) => {
-    if (oukOver) return;
-    const clicked = board[r][c];
+  const currentTlHand: TienLenCard[] = localTl?.active
+    ? localTl.hands[localTl.turnIndex]
+    : privateHand;
+  const currentTableCombo: TienLenCombo | null = localTl?.active
+    ? localTl.tableCombo
+    : activeLiveTable && activeLiveTable.tableCards.length > 0
+      ? classifyTienLenCombo(activeLiveTable.tableCards)
+      : null;
 
-    // If a move target is clicked
-    if (selectedSq && legalMovesForSelected.some(([mr, mc]) => mr === r && mc === c)) {
-      const next = board.map((row) => row.slice());
-      const moving = next[selectedSq[0]][selectedSq[1]]!;
-      const captured = next[r][c];
-      next[r][c] = moving;
-      next[selectedSq[0]][selectedSq[1]] = null;
-      setSelectedSq(null);
-      soundManager.playSfx('click');
+  const selectedCards = currentTlHand.filter((c) => selectedCardIds.includes(c.id));
+  const selectedCombo = classifyTienLenCombo(selectedCards);
+  const tlPlayCheck = selectedCombo
+    ? canBeatTienLenCombo(
+        selectedCombo,
+        currentTableCombo,
+        localTl?.active ? localTl.mustIncludeThreeSpades : Boolean(activeLiveTable?.mustIncludeThreeSpades)
+      )
+    : { ok: false, reason: 'Select valid combo: Single, Pair, Triple, Straight (3+, no 2), or Bomb (4-of-a-Kind / 3-4 Consec Pairs).' };
 
-      const nextCaps = oukCaptures + (captured ? 1 : 0);
-      setOukCaptures(nextCaps);
+  const toggleSelectCard = (cardId: string) => {
+    soundManager.playSfx('click');
+    setSelectedCardIds((prev) =>
+      prev.includes(cardId) ? prev.filter((id) => id !== cardId) : [...prev, cardId]
+    );
+  };
 
-      if (captured?.kind === 'K' || nextCaps >= 3) {
-        setBoard(next);
-        setOukOver(true);
-        soundManager.playSfx('level_up');
-        const reason = captured?.kind === 'K' ? 'CHECKMATE on Enemy Sdach!' : 'Fast-Blitz Victory (3 Captures)!';
-        setOukStatus(`🏆 ${reason} Earned +220 Coins & Club Champion Title!`);
-        onWinClubReward(220, 8, `♟️ Ouk Chaktrang ${reason} (+220c & 🏆 Club Champion)!`);
+  const submitTienLenPlay = () => {
+    if (!selectedCombo || !tlPlayCheck.ok) return;
+    soundManager.playSfx('coin');
+    if (localTl?.active) {
+      const idx = localTl.turnIndex;
+      const nextHands: [TienLenCard[], TienLenCard[]] = [
+        localTl.hands[0].slice(),
+        localTl.hands[1].slice(),
+      ];
+      nextHands[idx] = nextHands[idx].filter((c) => !selectedCardIds.includes(c.id));
+      const playerName = idx === 0 ? player.name : 'Player 2';
+      setSelectedCardIds([]);
+      if (nextHands[idx].length === 0) {
+        soundManager.playSfx('victory');
+        setLocalTl({
+          ...localTl,
+          hands: nextHands,
+          tableCombo: selectedCombo,
+          lastPlayBy: idx,
+          mustIncludeThreeSpades: false,
+          winnerIndex: idx,
+          status: `🏆 ${playerName} cleared all 13 cards & won the ${localTl.stakeCoins * 2} C table pot!`,
+        });
         return;
       }
-
-      // Quick Club AI Bot response
-      const aiMoves: Array<{ fr: number; fc: number; tr: number; tc: number; score: number }> = [];
-      for (let ar = 0; ar < 8; ar++) {
-        for (let ac = 0; ac < 8; ac++) {
-          if (next[ar][ac]?.side !== 'b') continue;
-          for (const [tr, tc] of getLegalMoves(next, ar, ac)) {
-            const target = next[tr][tc];
-            const score = target ? (target.kind === 'K' ? 50 : 12) : tr * 0.5 + Math.random() * 2;
-            aiMoves.push({ fr: ar, fc: ac, tr, tc, score });
-          }
-        }
-      }
-
-      if (aiMoves.length === 0) {
-        setBoard(next);
-        setOukOver(true);
-        onWinClubReward(220, 8, '♟️ Ouk Chaktrang Victory — Bot had no legal moves (+220c)!');
-        return;
-      }
-
-      aiMoves.sort((a, b) => b.score - a.score);
-      const pick = aiMoves[0];
-      const aiCaptured = next[pick.tr][pick.tc];
-      const aiPiece = next[pick.fr][pick.fc]!;
-      next[pick.tr][pick.tc] = aiPiece;
-      next[pick.fr][pick.fc] = null;
-      setBoard(next);
-
-      if (aiCaptured?.kind === 'K') {
-        setOukOver(true);
-        soundManager.playSfx('hit');
-        setOukStatus('Club Bot captured your Sdach! Hit New Match for a rematch.');
-      } else {
-        setOukStatus(
-          `Bot moved ${PIECE_KHMER[aiPiece.kind]} · Your Captures: ${nextCaps}/3 (or capture ♚ King to win!).`
-        );
-      }
+      setLocalTl({
+        ...localTl,
+        hands: nextHands,
+        tableCombo: selectedCombo,
+        lastPlayBy: idx,
+        turnIndex: idx === 0 ? 1 : 0,
+        mustIncludeThreeSpades: false,
+        status: `${playerName} played ${selectedCombo.label}! Now ${idx === 0 ? 'Player 2' : player.name}'s turn.`,
+      });
       return;
     }
 
-    // Select own piece
-    if (clicked?.side === 'w') {
-      setSelectedSq([r, c]);
-      soundManager.playSfx('click');
-    } else {
-      setSelectedSq(null);
+    if (activeLiveTable && isMyOnlineTurn) {
+      roomClient.sendClubMessage('tienLenAction', {
+        tableId: activeLiveTable.tableId,
+        action: 'play',
+        cardIds: selectedCardIds,
+        comboLabel: selectedCombo.label,
+      });
+      setSelectedCardIds([]);
     }
   };
 
-  // ---- Tien Len handlers ----
-  const playCard = (card: CardItem) => {
-    if (tlFinished) return;
-    if (tableCard && cardPower(card) <= cardPower(tableCard)) {
-      soundManager.playSfx('hit');
-      setTlStatus(`Need a card higher than ${tableCard.label} — or click Pass!`);
-      return;
-    }
+  const submitTienLenPass = () => {
+    if (!currentTableCombo) return;
     soundManager.playSfx('click');
-    const nextHand = hand.filter((c) => c.id !== card.id);
-    setHand(nextHand);
-    setTableCard(card);
-    if (nextHand.length === 0) {
-      setTlFinished(true);
-      soundManager.playSfx('level_up');
-      setTlStatus('🏆 You cleared your hand! Won +150 Coins & +8 Happy!');
-      onWinClubReward(150, 8, '🃏 Won Phum Club Tien Len match (+150c, Happy +8)!');
+    if (localTl?.active) {
+      const passer = localTl.turnIndex;
+      const nextLeader: 0 | 1 = passer === 0 ? 1 : 0;
+      const leaderName = nextLeader === 0 ? player.name : 'Player 2';
+      setSelectedCardIds([]);
+      setLocalTl({
+        ...localTl,
+        tableCombo: null,
+        lastPlayBy: null,
+        turnIndex: nextLeader,
+        status: `${passer === 0 ? player.name : 'Player 2'} passed! ${leaderName} wins control & leads fresh.`,
+      });
       return;
     }
-    const aiCounter = npcHand.find((c) => cardPower(c) > cardPower(card));
-    if (aiCounter) {
-      const nextNpc = npcHand.filter((c) => c.id !== aiCounter.id);
-      setNpcHand(nextNpc);
-      setTableCard(aiCounter);
-      if (nextNpc.length === 0) {
-        setTlFinished(true);
-        setTlStatus('Club Dealer cleared their hand! Deal again for a rematch.');
-      } else {
-        setTlStatus(`Dealer countered with ${aiCounter.label} (${nextNpc.length} left). Beat it or Pass!`);
+    if (activeLiveTable && isMyOnlineTurn) {
+      roomClient.sendClubMessage('tienLenAction', {
+        tableId: activeLiveTable.tableId,
+        action: 'pass',
+      });
+      setSelectedCardIds([]);
+    }
+  };
+
+  // ==================== OUK CHAKTRANG PVP ACTIONS (ONLINE + LOCAL 2P HUMAN PASS-AND-PLAY) ====================
+  const startLocal2POuk = () => {
+    soundManager.playSfx('click');
+    setOukSelectedSq(null);
+    setLocalOuk({
+      active: true,
+      stakeCoins: activeCfg?.stakeCoins ?? 50,
+      board: createAuthenticOukBoard(),
+      turnSide: 'w',
+      status: `♟️ Authentic Ouk Chaktrang (2P PvP): Gold (${player.name}) moves first!`,
+      winnerSide: null,
+    });
+  };
+
+  const activeOukBoard: OukBoard = useMemo(() => {
+    if (localOuk?.active) return localOuk.board;
+    if (activeLiveTable?.oukBoardJson) {
+      try {
+        return JSON.parse(activeLiveTable.oukBoardJson) as OukBoard;
+      } catch {
+        return createAuthenticOukBoard();
       }
+    }
+    return createAuthenticOukBoard();
+  }, [localOuk, activeLiveTable?.oukBoardJson]);
+
+  const activeOukTurnSide: OukSide = localOuk?.active
+    ? localOuk.turnSide
+    : activeLiveTable?.oukTurnSide ?? 'w';
+
+  const myOnlineOukSide: OukSide | null =
+    activeLiveTable && isSeatedHere ? (mySeatIndex === 0 ? 'w' : 'b') : null;
+
+  const canMoveOukNow = localOuk?.active
+    ? !localOuk.winnerSide
+    : Boolean(activeLiveTable?.status === 'playing' && isMyOnlineTurn && myOnlineOukSide === activeOukTurnSide);
+
+  const oukLegalTargets = useMemo(() => {
+    if (!oukSelectedSq || !canMoveOukNow) return [];
+    return getAuthenticOukLegalMoves(activeOukBoard, oukSelectedSq[0], oukSelectedSq[1]);
+  }, [oukSelectedSq, canMoveOukNow, activeOukBoard]);
+
+  const handleOukSquareClick = (r: number, c: number) => {
+    if (!canMoveOukNow) return;
+    const clicked = activeOukBoard[r][c];
+    const allowedSide: OukSide = localOuk?.active ? localOuk.turnSide : myOnlineOukSide ?? 'w';
+
+    if (oukSelectedSq && oukLegalTargets.some(([mr, mc]) => mr === r && mc === c)) {
+      const mover = activeOukBoard[oukSelectedSq[0]][oukSelectedSq[1]]!;
+      const { nextBoard, captured, promoted } = applyOukMove(activeOukBoard, oukSelectedSq, [r, c]);
+      const nextSide: OukSide = allowedSide === 'w' ? 'b' : 'w';
+      const oppInCheck = isOukKingInCheck(nextBoard, nextSide);
+      const oppHasMove = hasAnyLegalOukMove(nextBoard, nextSide);
+      const winnerSide: OukSide | null =
+        captured?.kind === 'K' || (oppInCheck && !oppHasMove) ? allowedSide : null;
+
+      const fileChar = String.fromCharCode(65 + c);
+      const rankNum = 8 - r;
+      const pieceName = OUK_PIECE_META[mover.kind].khmer.split(' ')[1]?.replace(/[()]/g, '') ?? mover.kind;
+      const moveNote = `${pieceName} → ${fileChar}${rankNum}${promoted ? ' ★ Promoted to Trey Bork!' : ''}${
+        winnerSide ? ' · CHECKMATE!' : oppInCheck ? ' · OUK (Check!)' : ''
+      }`;
+
+      setOukSelectedSq(null);
+      soundManager.playSfx(winnerSide ? 'victory' : captured ? 'hit' : 'click');
+
+      if (localOuk?.active) {
+        setLocalOuk({
+          ...localOuk,
+          board: nextBoard,
+          turnSide: nextSide,
+          winnerSide,
+          status: winnerSide
+            ? `🏆 ${winnerSide === 'w' ? `Gold (${player.name})` : 'Ebony (Player 2)'} wins by Checkmate (${moveNote})!`
+            : `${moveNote} · Now ${nextSide === 'w' ? `Gold (${player.name})` : 'Ebony (Player 2)'}'s turn.`,
+        });
+        return;
+      }
+
+      if (activeLiveTable && isMyOnlineTurn) {
+        roomClient.sendClubMessage('oukAction', {
+          tableId: activeLiveTable.tableId,
+          boardJson: JSON.stringify(nextBoard),
+          moveNotation: moveNote,
+          nextTurnSide: nextSide,
+          winnerSide,
+        });
+      }
+      return;
+    }
+
+    if (clicked && clicked.side === allowedSide) {
+      soundManager.playSfx('click');
+      setOukSelectedSq([r, c]);
     } else {
-      setTableCard(null);
-      setTlStatus(`Dealer passed against ${card.label}! You keep the lead!`);
+      setOukSelectedSq(null);
     }
   };
 
@@ -412,241 +619,555 @@ export const ClubGamesModal: React.FC<ClubGamesModalProps> = ({
     <NativeDialog
       open={open}
       onClose={onClose}
-      title="✨ Phum Night Club · Kla Klok · Ouk Chaktrang · Tien Len"
-      subtitle={`Wallet: ${player.currencies.coins.toLocaleString()}c · Happy: ${player.lifeStats.happy}/100 · Coins saved automatically`}
-      maxWidthClass="w-[min(96vw,740px)]"
+      title="Phum Night Club · Multiplayer PvP Tables"
+      subtitle="Kla Klok (3-Dice) · Authentic 13-Card Tien Len (PvP Only) · Authentic Uncheckered Ouk Chaktrang (PvP Only)"
+      maxWidthClass="w-[min(96vw,840px)]"
     >
-      <div className="space-y-3 text-xs">
-        <div className="grid grid-cols-3 gap-1.5">
-          {(
-            [
-              ['kla_klok', '🎲 Kla Klok (3-Dice)', Dices],
-              ['ouk_chaktrang', '♟️ Ouk Chaktrang (8×8)', Crown],
-              ['tien_len', '🃏 Tien Len (13-Card)', Spade],
-            ] as const
-          ).map(([id, label, Icon]) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setTab(id)}
-              className={`py-2 px-2 rounded-xl font-display font-bold text-xs border-2 flex items-center justify-center gap-1.5 transition ${
-                tab === id
-                  ? 'bg-amber-800 text-amber-50 border-amber-950'
-                  : 'bg-amber-50 text-amber-950 border-amber-900/35 hover:bg-amber-100'
-              }`}
-            >
-              <Icon className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">{label}</span>
-            </button>
-          ))}
+      {/* Top 3-Game Tabs */}
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            id="tab-club-klaklok"
+            type="button"
+            onClick={() => {
+              soundManager.playSfx('click');
+              setTab('kla_klok');
+            }}
+            className={`px-3 py-1.5 rounded-xl font-display font-bold text-xs border-2 flex items-center gap-1.5 cursor-pointer ${
+              tab === 'kla_klok'
+                ? 'bg-amber-700 text-amber-50 border-amber-950'
+                : 'bg-amber-50 text-amber-950 border-amber-900/30'
+            }`}
+          >
+            <Dices className="w-3.5 h-3.5" /> Kla Klok (3-Dice)
+          </button>
+          <button
+            id="tab-club-tienlen"
+            type="button"
+            onClick={() => {
+              soundManager.playSfx('click');
+              setTab('tien_len');
+              setSelectedTableId('tl_50');
+            }}
+            className={`px-3 py-1.5 rounded-xl font-display font-bold text-xs border-2 flex items-center gap-1.5 cursor-pointer ${
+              tab === 'tien_len'
+                ? 'bg-emerald-800 text-amber-50 border-emerald-950'
+                : 'bg-amber-50 text-amber-950 border-amber-900/30'
+            }`}
+          >
+            <Spade className="w-3.5 h-3.5" /> Tien Len (13-Card PvP)
+          </button>
+          <button
+            id="tab-club-ouk"
+            type="button"
+            onClick={() => {
+              soundManager.playSfx('click');
+              setTab('ouk_chaktrang');
+              setSelectedTableId('ouk_50');
+            }}
+            className={`px-3 py-1.5 rounded-xl font-display font-bold text-xs border-2 flex items-center gap-1.5 cursor-pointer ${
+              tab === 'ouk_chaktrang'
+                ? 'bg-amber-900 text-amber-50 border-amber-950'
+                : 'bg-amber-50 text-amber-950 border-amber-900/30'
+            }`}
+          >
+            <Crown className="w-3.5 h-3.5" /> Ouk Chaktrang (Khmer Chess PvP)
+          </button>
         </div>
 
-        {/* GAME 1: KLA KLOK (KHMER TRADITIONAL 3-DICE) */}
-        {tab === 'kla_klok' && (
-          <div className="p-3 rounded-2xl bg-gradient-to-b from-amber-950 via-stone-900 to-amber-950 text-amber-50 border-2 border-amber-500/70 space-y-3">
-            {/* 3 Animated Dice Bowl */}
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                {dice.map((faceId, i) => {
-                  const sym = KLA_KLOK_SYMBOLS.find((s) => s.id === faceId)!;
+        <div className="flex items-center gap-1.5 text-[11px] font-display font-bold">
+          <span
+            className={`px-2 py-0.5 rounded-lg border inline-flex items-center gap-1 ${
+              clubOnline
+                ? 'bg-emerald-100 text-emerald-900 border-emerald-600/40'
+                : 'bg-stone-100 text-stone-700 border-stone-400/50'
+            }`}
+          >
+            <span className={`w-2 h-2 rounded-full ${clubOnline ? 'bg-emerald-500 animate-pulse' : 'bg-stone-400'}`} />
+            {clubOnline ? 'PvP Server Live' : 'Offline Lounge'}
+          </span>
+          <span className="px-2 py-0.5 rounded-lg bg-amber-100 text-amber-950 border border-amber-700/40 inline-flex items-center gap-1">
+            <Coins className="w-3.5 h-3.5 text-amber-600" />
+            {player.currencies.coins.toLocaleString()} C
+          </span>
+        </div>
+      </div>
+
+      {/* ==================== TAB 1: KLA KLOK (PRESERVED) ==================== */}
+      {tab === 'kla_klok' && (
+        <div className="space-y-3 text-xs">
+          <div className="p-2.5 rounded-xl bg-amber-100/90 border-2 border-amber-800/40 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <div className="font-display font-bold text-amber-950">
+                🎲 Kla Klok (ឃ្លោក ក្ដាម ត្រី មាន់ បង្គា ខ្លា)
+              </div>
+              <div className="text-[11px] text-amber-900">{kkResultText}</div>
+            </div>
+            <div className="flex items-center gap-1">
+              {WAGER_CHIPS.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => {
+                    soundManager.playSfx('click');
+                    setChipSize(c);
+                  }}
+                  className={`px-2 py-1 rounded-lg border font-display font-bold text-[10px] cursor-pointer ${
+                    chipSize === c
+                      ? 'bg-amber-800 text-amber-50 border-amber-950'
+                      : 'bg-white text-amber-950 border-amber-900/30'
+                  }`}
+                >
+                  +{c}c
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-center gap-3 py-2">
+            {dice.map((faceId, idx) => {
+              const sym = KLA_KLOK_SYMBOLS.find((s) => s.id === faceId)!;
+              return (
+                <div
+                  key={idx}
+                  className={`w-16 h-16 rounded-2xl border-2 border-amber-900 bg-amber-50 shadow-md flex flex-col items-center justify-center ${
+                    rolling ? 'animate-bounce' : ''
+                  }`}
+                >
+                  <span className="text-2xl">{sym.icon}</span>
+                  <span className="text-[9px] font-bold text-amber-950">{sym.name}</span>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            {KLA_KLOK_SYMBOLS.map((sym) => {
+              const staked = bets[sym.id] ?? 0;
+              return (
+                <button
+                  key={sym.id}
+                  type="button"
+                  onClick={() => addBetOnSymbol(sym.id)}
+                  className={`p-2.5 rounded-2xl border-2 text-center transition cursor-pointer hover:scale-[1.02] ${sym.colorClass}`}
+                >
+                  <div className="text-2xl">{sym.icon}</div>
+                  <div className="font-display font-bold text-amber-950 text-xs">{sym.name}</div>
+                  <div className="text-[10px] text-amber-800">{sym.khmerName}</div>
+                  <div className="mt-1 px-2 py-0.5 rounded-full bg-amber-950/15 font-bold text-[10px] text-amber-950">
+                    {staked > 0 ? `Bet: ${staked} C` : `Tap +${chipSize}c`}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center justify-between gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => setBets({})}
+              className="px-3 py-2 rounded-xl bg-stone-200 hover:bg-stone-300 text-stone-800 font-display font-bold text-xs cursor-pointer"
+            >
+              Clear Bets ({totalBet}c)
+            </button>
+            <button
+              type="button"
+              disabled={rolling || totalBet <= 0 || totalBet > player.currencies.coins}
+              onClick={rollKlaKlok}
+              className="phum-btn px-5 py-2 rounded-xl font-display font-bold text-xs disabled:opacity-45 cursor-pointer"
+            >
+              🎲 Roll 3 Dice (Total Bet: {totalBet} C)
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== MULTI-TABLE PVP LOBBY SELECTOR (NO AI — TIEN LEN & OUK) ==================== */}
+      {tab !== 'kla_klok' && (
+        <div className="space-y-3 text-xs max-h-[68dvh] overflow-y-auto pr-1">
+          {/* 3 Distinct Stake Tables */}
+          <div className="grid grid-cols-3 gap-2">
+            {tablesForCurrentTab.map(({ cfg, live }) => {
+              const selected = activeCfg?.tableId === cfg.tableId;
+              return (
+                <button
+                  key={cfg.tableId}
+                  type="button"
+                  onClick={() => {
+                    soundManager.playSfx('click');
+                    setSelectedTableId(cfg.tableId);
+                  }}
+                  className={`p-2 rounded-xl border-2 text-left transition cursor-pointer ${
+                    selected
+                      ? 'bg-slate-900 text-amber-50 border-amber-400 shadow'
+                      : 'bg-amber-50 hover:bg-amber-100 text-amber-950 border-amber-900/30'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="font-display font-bold text-[11px] truncate">{cfg.label}</span>
+                    <span
+                      className={`px-1.5 py-0.2 rounded text-[9px] font-bold shrink-0 ${
+                        cfg.stakeCoins >= 1000
+                          ? 'bg-amber-400 text-amber-950'
+                          : 'bg-emerald-700 text-white'
+                      }`}
+                    >
+                      {cfg.tierBadge}
+                    </span>
+                  </div>
+                  <div className={`text-[10px] mt-0.5 flex items-center justify-between ${selected ? 'text-amber-200' : 'text-amber-800'}`}>
+                    <span>{cfg.khmerLabel}</span>
+                    <span className="font-mono font-bold inline-flex items-center gap-0.5">
+                      <Users className="w-3 h-3" /> {live.seats.length}/{cfg.maxSeats}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Seated Players Bar + Sit / Ready / Local 2P PvP Controls (STRICTLY NO AI!) */}
+          {activeCfg && activeLiveTable && (
+            <div className="p-2.5 rounded-xl bg-slate-900/95 text-amber-50 border-2 border-amber-500/50 space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="font-display font-bold text-amber-300 flex items-center gap-1.5">
+                    <span>{tab === 'tien_len' ? '🃏' : '♟️'}</span>
+                    <span>{activeCfg.label} — Strictly Multiplayer PvP (Zero AI)</span>
+                  </div>
+                  <div className="text-[10px] text-amber-100/90">{activeLiveTable.lastSummary}</div>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {clubOnline && !isSeatedHere && activeLiveTable.status !== 'playing' && (
+                    <button
+                      type="button"
+                      disabled={player.currencies.coins < activeCfg.stakeCoins || activeLiveTable.seats.length >= activeCfg.maxSeats}
+                      onClick={() => {
+                        soundManager.playSfx('click');
+                        setLocalTl(null);
+                        setLocalOuk(null);
+                        roomClient.sendClubMessage('seatTable', { tableId: activeCfg.tableId });
+                      }}
+                      className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-display font-bold text-[11px] disabled:opacity-45 cursor-pointer"
+                    >
+                      Sit Down ({activeCfg.stakeCoins} C)
+                    </button>
+                  )}
+                  {clubOnline && isSeatedHere && activeLiveTable.status !== 'playing' && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          soundManager.playSfx('click');
+                          roomClient.sendClubMessage('readyTable', {
+                            tableId: activeCfg.tableId,
+                            ready: !mySeat?.ready,
+                          });
+                        }}
+                        className={`px-3 py-1 rounded-lg font-display font-bold text-[11px] flex items-center gap-1 cursor-pointer ${
+                          mySeat?.ready
+                            ? 'bg-amber-400 text-amber-950'
+                            : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                        }`}
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        {mySeat?.ready ? 'Ready ✓' : 'Click Ready'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => roomClient.sendClubMessage('leaveTable', {})}
+                        className="px-2.5 py-1 rounded-lg bg-rose-700 hover:bg-rose-600 text-white font-bold text-[10px] cursor-pointer"
+                      >
+                        Leave Seat
+                      </button>
+                    </>
+                  )}
+                  <button
+                    id={tab === 'tien_len' ? 'btn-start-local-2p-tl' : 'btn-start-local-2p-ouk'}
+                    type="button"
+                    onClick={tab === 'tien_len' ? startLocal2PTienLen : startLocal2POuk}
+                    className="px-2.5 py-1 rounded-lg bg-sky-700 hover:bg-sky-600 text-white font-display font-bold text-[10px] cursor-pointer"
+                    title="2 real humans taking turns on the same screen (zero AI bots)"
+                  >
+                    👥 Local 2P PvP (No AI)
+                  </button>
+                </div>
+              </div>
+
+              {/* Live Seat Badges */}
+              <div className="flex flex-wrap gap-1.5">
+                {Array.from({ length: activeCfg.maxSeats }, (_, i) => {
+                  const s = activeLiveTable.seats[i];
                   return (
                     <div
                       key={i}
-                      className={`w-14 h-14 rounded-2xl bg-amber-50 border-2 border-amber-400 shadow-lg flex flex-col items-center justify-center text-slate-900 ${
-                        rolling ? 'animate-bounce' : ''
+                      className={`px-2 py-1 rounded-lg border text-[10px] font-bold flex items-center gap-1.5 ${
+                        s
+                          ? activeLiveTable.status === 'playing' && activeLiveTable.turnIndex === i
+                            ? 'bg-amber-400 text-slate-950 border-yellow-200 animate-pulse'
+                            : 'bg-slate-800 text-amber-100 border-amber-500/40'
+                          : 'bg-slate-950/60 text-slate-400 border-slate-700 border-dashed'
                       }`}
                     >
-                      <span className="text-2xl leading-none">{sym.icon}</span>
-                      <span className="text-[9px] font-display font-bold">{sym.name}</span>
+                      <span>Seat {i + 1}:</span>
+                      <span>{s ? s.name : 'Empty (Waiting for Player)'}</span>
+                      {s && activeLiveTable.status !== 'playing' && (
+                        <span className={s.ready ? 'text-emerald-400' : 'text-amber-300'}>
+                          {s.ready ? '✓ READY' : '…'}
+                        </span>
+                      )}
+                      {s && activeLiveTable.status === 'playing' && tab === 'tien_len' && (
+                        <span className="px-1 rounded bg-black/25 font-mono">{s.cardCount}🃏</span>
+                      )}
                     </div>
                   );
                 })}
               </div>
-              <div className="flex flex-col items-end gap-1">
-                <div className="text-[10px] font-bold text-amber-300">Wager Chip:</div>
-                <div className="flex gap-1">
-                  {WAGER_CHIPS.map((c) => (
+            </div>
+          )}
+
+          {/* ==================== TAB 2: AUTHENTIC 13-CARD TIEN LEN PVP TABLE ==================== */}
+          {tab === 'tien_len' && (
+            <div className="p-3 rounded-2xl bg-gradient-to-b from-emerald-950 via-emerald-900 to-emerald-950 border-2 border-amber-500/80 text-amber-50 space-y-3">
+              {/* Visible Dealer NPC at the Head of the Table */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-emerald-700/70">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-11 h-11 rounded-full bg-amber-950 border-2 border-amber-400 flex flex-col items-center justify-center shrink-0 shadow">
+                    <span className="text-lg leading-none">🤵</span>
+                    <span className="text-[7px] font-bold text-amber-300 uppercase">DEALER</span>
+                  </div>
+                  <div>
+                    <div className="font-display font-bold text-amber-300 text-xs">
+                      Dealer Sokha · Authentic 13-Card Tien Len (52-Card Deck)
+                    </div>
+                    <div className="text-[10px] text-emerald-100">
+                      {localTl?.active
+                        ? localTl.status
+                        : activeLiveTable?.status === 'playing'
+                          ? activeLiveTable.lastSummary
+                          : 'Sit at a table with 2–4 real players & click Ready (or launch Local 2P PvP) so the Dealer deals 13 cards!'}
+                    </div>
+                  </div>
+                </div>
+                <div className="text-[9px] text-amber-200 bg-black/30 px-2 py-1 rounded-lg border border-amber-400/30 leading-tight">
+                  <div><strong>Order:</strong> 3 &lt; 4 … &lt; A &lt; 2 · <strong>Suits:</strong> ♠ &lt; ♣ &lt; ♦ &lt; ♥</div>
+                  <div><strong>Bombs (Chặt):</strong> Four-of-a-Kind or 3/4 Consecutive Pairs chop 2s!</div>
+                </div>
+              </div>
+
+              {/* Center Felt Pile */}
+              <div className="min-h-[82px] rounded-xl bg-emerald-950/75 border border-emerald-600/50 p-2.5 flex flex-col items-center justify-center gap-1.5">
+                {currentTableCombo ? (
+                  <>
+                    <div className="text-[10px] font-bold uppercase text-amber-300">
+                      Current Table Combo: {currentTableCombo.label}
+                    </div>
+                    <div className="flex flex-wrap justify-center gap-1.5">
+                      {currentTableCombo.cards.map((c) => (
+                        <div
+                          key={c.id}
+                          className={`w-11 h-14 rounded-lg bg-white border-2 border-amber-400 shadow-md flex flex-col items-center justify-center font-display font-bold text-sm ${
+                            c.red ? 'text-rose-600' : 'text-slate-900'
+                          }`}
+                        >
+                          {c.label}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-[11px] text-emerald-200/80 italic">
+                    Fresh Lead — play any valid Single, Pair, Triple, Straight (3+, no 2), or Bomb!
+                  </div>
+                )}
+              </div>
+
+              {/* Active Player's 13-Card Sorted Hand */}
+              {(localTl?.active || activeLiveTable?.status === 'playing') && (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="font-display font-bold text-xs text-amber-200">
+                      {localTl?.active
+                        ? `Active Turn: ${localTl.turnIndex === 0 ? player.name : 'Player 2'} (${currentTlHand.length} cards)`
+                        : isMyOnlineTurn
+                          ? `🟢 YOUR TURN (${currentTlHand.length} cards)`
+                          : `Waiting for ${activeLiveTable?.seats[activeLiveTable.turnIndex]?.name ?? 'opponent'}...`}
+                    </div>
+                    {selectedCombo ? (
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          tlPlayCheck.ok ? 'bg-emerald-600 text-white' : 'bg-rose-700 text-white'
+                        }`}
+                      >
+                        {selectedCombo.label} {!tlPlayCheck.ok && tlPlayCheck.reason ? `— ${tlPlayCheck.reason}` : '✓'}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-emerald-200/85">
+                        Click 1+ cards to build a Single, Pair, Triple, Straight, or Bomb
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap justify-center gap-1.5 pt-1">
+                    {currentTlHand.map((card) => {
+                      const picked = selectedCardIds.includes(card.id);
+                      return (
+                        <button
+                          key={card.id}
+                          type="button"
+                          onClick={() => toggleSelectCard(card.id)}
+                          className={`w-11 h-16 rounded-lg bg-white border-2 font-display font-bold text-sm flex flex-col items-center justify-center transition cursor-pointer shadow ${
+                            card.red ? 'text-rose-600' : 'text-slate-900'
+                          } ${
+                            picked
+                              ? 'border-amber-400 -translate-y-2.5 ring-2 ring-yellow-300 shadow-lg'
+                              : 'border-slate-300 hover:-translate-y-1'
+                          }`}
+                        >
+                          <span>{card.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
                     <button
-                      key={c}
                       type="button"
-                      onClick={() => setChipSize(c)}
-                      className={`px-2 py-1 rounded-lg font-display font-bold text-[11px] border ${
-                        chipSize === c
-                          ? 'bg-amber-400 text-amber-950 border-white'
-                          : 'bg-slate-800 text-amber-200 border-amber-500/40'
-                      }`}
+                      disabled={
+                        !tlPlayCheck.ok ||
+                        (localTl?.active ? localTl.winnerIndex !== null : !isMyOnlineTurn)
+                      }
+                      onClick={submitTienLenPlay}
+                      className="phum-btn px-4 py-1.5 rounded-xl font-display font-bold text-xs disabled:opacity-40 cursor-pointer"
                     >
-                      {c}c
+                      Play Selected Combo
                     </button>
+                    <button
+                      type="button"
+                      disabled={
+                        !currentTableCombo ||
+                        (localTl?.active ? localTl.winnerIndex !== null : !isMyOnlineTurn)
+                      }
+                      onClick={submitTienLenPass}
+                      className="px-4 py-1.5 rounded-xl bg-rose-700 hover:bg-rose-600 text-white font-display font-bold text-xs disabled:opacity-40 cursor-pointer"
+                    >
+                      Pass Turn
+                    </button>
+                    {localTl?.active && localTl.winnerIndex !== null && (
+                      <button
+                        type="button"
+                        onClick={startLocal2PTienLen}
+                        className="px-4 py-1.5 rounded-xl bg-amber-400 text-amber-950 font-display font-bold text-xs flex items-center gap-1 cursor-pointer"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" /> Deal New 13-Card Round
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ==================== TAB 3: AUTHENTIC UNCHECKERED OUK CHAKTRANG PVP ==================== */}
+          {tab === 'ouk_chaktrang' && (
+            <div className="grid md:grid-cols-[auto_1fr] gap-3 items-start">
+              {/* Uncheckered Carved Teak-Wood 8x8 Grid (ZERO Black/White Western Checkerboard!) */}
+              <div className="p-2.5 rounded-2xl bg-[#6b3f1d] border-4 border-[#45240d] shadow-xl mx-auto">
+                <div
+                  id="ouk-uncheckered-board"
+                  className="grid grid-cols-8 border-2 border-[#4a2b13] bg-[#d8b27c]"
+                  style={{
+                    backgroundImage:
+                      'repeating-linear-gradient(90deg, rgba(92,58,30,0.06) 0px, rgba(92,58,30,0.06) 3px, transparent 3px, transparent 11px)',
+                  }}
+                >
+                  {activeOukBoard.map((row, r) =>
+                    row.map((piece, c) => {
+                      const isSel = oukSelectedSq?.[0] === r && oukSelectedSq?.[1] === c;
+                      const isTarget = oukLegalTargets.some(([mr, mc]) => mr === r && mc === c);
+                      // Subtle traditional promotion-rank wood trim on 3rd (row 5) & 6th (row 2) ranks
+                      const isPromoLine = r === 2 || r === 5;
+                      return (
+                        <button
+                          key={`${r}-${c}`}
+                          type="button"
+                          onClick={() => handleOukSquareClick(r, c)}
+                          className={`w-9 h-9 sm:w-11 sm:h-11 border border-[#5c3a1e]/85 flex items-center justify-center relative transition cursor-pointer ${
+                            isSel
+                              ? 'bg-[#facc15]/60 ring-2 ring-inset ring-amber-950'
+                              : isTarget
+                                ? 'bg-emerald-500/35 hover:bg-emerald-500/50'
+                                : 'bg-[#d8b27c] hover:bg-[#e3c08d]'
+                          }`}
+                          title={
+                            piece
+                              ? `${piece.side === 'w' ? 'Gold' : 'Ebony'} ${OUK_PIECE_META[piece.kind].khmer} — ${OUK_PIECE_META[piece.kind].rule}`
+                              : `${String.fromCharCode(65 + c)}${8 - r}`
+                          }
+                        >
+                          {isPromoLine && !piece && !isTarget && (
+                            <span className="w-1 h-1 rounded-full bg-[#5c3a1e]/25 pointer-events-none" />
+                          )}
+                          {isTarget && !piece && (
+                            <span className="w-3 h-3 rounded-full bg-emerald-700/80 border border-amber-100 pointer-events-none" />
+                          )}
+                          {isTarget && piece && (
+                            <span className="absolute inset-0.5 rounded border-2 border-rose-600 pointer-events-none" />
+                          )}
+                          {piece && <KhmerOukPieceSvg piece={piece} />}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              {/* Authentic Rules Reference & Match Status */}
+              <div className="p-3 rounded-2xl bg-amber-50 border-2 border-amber-900/35 space-y-2.5 text-[11px]">
+                <div className="font-display font-bold text-sm text-amber-950 flex items-center justify-between gap-2">
+                  <span>♟️ អុកចត្រង្គ · Authentic Ouk Chaktrang</span>
+                  <span className="px-2 py-0.5 rounded-full bg-amber-800 text-amber-50 text-[10px]">
+                    Turn: {activeOukTurnSide === 'w' ? 'Gold (White)' : 'Ebony (Black)'}
+                  </span>
+                </div>
+
+                <div className="p-2 rounded-xl bg-amber-100/90 border border-amber-900/25 font-bold text-amber-950">
+                  {localOuk?.active
+                    ? localOuk.status
+                    : activeLiveTable?.status === 'playing'
+                      ? activeLiveTable.lastSummary
+                      : 'Sit down with a real opponent & click Ready (or launch Local 2P PvP) to play Authentic Khmer Chess!'}
+                </div>
+
+                {localOuk?.active && localOuk.winnerSide && (
+                  <button
+                    type="button"
+                    onClick={startLocal2POuk}
+                    className="w-full phum-btn py-1.5 rounded-xl font-display font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Trophy className="w-3.5 h-3.5" /> Play Rematch (Local 2P PvP)
+                  </button>
+                )}
+
+                <div className="space-y-1 text-[10px] text-amber-900">
+                  <div className="font-display font-bold uppercase text-amber-950">Authentic Khmer Piece Rules:</div>
+                  {(['K', 'Q', 'B', 'N', 'R', 'P', 'PB'] as OukPieceKind[]).map((kind) => (
+                    <div key={kind} className="flex items-center gap-2 bg-white/75 px-2 py-1 rounded-lg border border-amber-900/15">
+                      <div className="w-6 h-6 shrink-0 flex items-center justify-center">
+                        <KhmerOukPieceSvg piece={{ side: 'w', kind, hasMoved: false }} />
+                      </div>
+                      <div className="leading-tight">
+                        <strong className="text-amber-950">{OUK_PIECE_META[kind].khmer}:</strong>{' '}
+                        {OUK_PIECE_META[kind].rule}
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
             </div>
-
-            <div className="p-2 rounded-xl bg-slate-950/75 border border-amber-400/35 text-center font-semibold text-amber-200">
-              {kkResultText}
-            </div>
-
-            {/* 6 Symbol Board */}
-            <div className="grid grid-cols-3 gap-2">
-              {KLA_KLOK_SYMBOLS.map((sym) => {
-                const amt = bets[sym.id] ?? 0;
-                return (
-                  <button
-                    key={sym.id}
-                    type="button"
-                    disabled={rolling}
-                    onClick={() => addBetOnSymbol(sym.id)}
-                    className={`p-2.5 rounded-xl border-2 text-slate-950 flex flex-col items-center gap-0.5 transition hover:scale-[1.02] active:scale-95 ${sym.colorClass} ${
-                      amt > 0 ? 'ring-2 ring-amber-400' : ''
-                    }`}
-                  >
-                    <span className="text-2xl leading-none">{sym.icon}</span>
-                    <span className="font-display font-bold text-xs">
-                      {sym.name} ({sym.khmerName})
-                    </span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-900 text-amber-300">
-                      {amt > 0 ? `Bet: ${amt}c` : `Click +${chipSize}c`}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="flex items-center justify-between gap-2">
-              <button
-                type="button"
-                disabled={rolling}
-                onClick={() => setBets({})}
-                className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-200 font-display font-bold text-xs"
-              >
-                Clear Bets
-              </button>
-              <button
-                type="button"
-                disabled={rolling || totalBet <= 0 || totalBet > player.currencies.coins}
-                onClick={rollKlaKlok}
-                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 text-amber-950 border-2 border-amber-950 font-display font-bold text-xs shadow disabled:opacity-45"
-              >
-                {rolling ? '🎲 Rolling...' : `🎲 Roll 3 Dice! (Total Bet: ${totalBet}c · Pays 1× / 2× / 3×)`}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* GAME 2: OUK CHAKTRANG (PLAYABLE 8x8 FAST-BLITZ KHMER CHESS) */}
-        {tab === 'ouk_chaktrang' && (
-          <div className="p-3 rounded-2xl bg-amber-50 border-2 border-amber-900/35 space-y-2.5">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="font-display font-bold text-xs text-amber-950 flex items-center gap-1.5">
-                <Trophy className="w-4 h-4 text-amber-600" />
-                8×8 Ouk Chaktrang · Fast-Blitz Table (Pot: +220c &amp; Club Champion)
-              </div>
-              <button
-                type="button"
-                onClick={resetOukBoard}
-                className="px-2.5 py-1 rounded-lg bg-amber-200 hover:bg-amber-300 text-amber-950 font-bold text-[11px] inline-flex items-center gap-1"
-              >
-                <RotateCcw className="w-3 h-3" /> New Match
-              </button>
-            </div>
-
-            <div className="text-[11px] font-semibold text-amber-900 bg-amber-100/90 px-2.5 py-1.5 rounded-xl border border-amber-800/20">
-              {oukStatus}
-            </div>
-
-            <div className="flex justify-center">
-              <div className="grid grid-cols-8 border-4 border-amber-950 rounded-xl overflow-hidden shadow-md">
-                {board.map((row, r) =>
-                  row.map((cell, c) => {
-                    const isDark = (r + c) % 2 === 1;
-                    const isSelected = selectedSq?.[0] === r && selectedSq?.[1] === c;
-                    const isLegalTarget = legalMovesForSelected.some(([mr, mc]) => mr === r && mc === c);
-                    return (
-                      <button
-                        key={`${r}_${c}`}
-                        type="button"
-                        onClick={() => handleOukSquareClick(r, c)}
-                        className={`w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center text-xl sm:text-2xl transition relative ${
-                          isSelected
-                            ? 'bg-amber-400 ring-2 ring-inset ring-amber-950'
-                            : isLegalTarget
-                              ? 'bg-emerald-300 ring-2 ring-inset ring-emerald-700'
-                              : isDark
-                                ? 'bg-amber-800/85'
-                                : 'bg-amber-100'
-                        }`}
-                      >
-                        {cell ? (
-                          <span className={cell.side === 'w' ? 'text-amber-50 drop-shadow-[0_1px_2px_rgba(0,0,0,0.95)]' : 'text-slate-950'}>
-                            {PIECE_GLYPH[cell.side][cell.kind]}
-                          </span>
-                        ) : isLegalTarget ? (
-                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-700/80" />
-                        ) : null}
-                      </button>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* GAME 3: TIEN LEN (13-CARD KHMER POKER) */}
-        {tab === 'tien_len' && (
-          <div className="p-3 rounded-2xl bg-emerald-950 text-emerald-50 border-2 border-amber-500/60 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="font-display font-bold text-xs text-amber-300">
-                Dealer Hand: {npcHand.length} cards
-              </span>
-              <button
-                type="button"
-                onClick={resetTienLen}
-                className="px-2.5 py-1 rounded-lg bg-amber-500 text-amber-950 font-bold text-[11px] inline-flex items-center gap-1"
-              >
-                <RotateCcw className="w-3 h-3" /> Deal New Round
-              </button>
-            </div>
-            <div className="p-3 rounded-xl bg-emerald-900/80 border border-emerald-700 flex flex-col items-center gap-1">
-              <div className="text-[10px] text-emerald-200 uppercase font-bold">Table Card</div>
-              <div className="w-16 h-20 rounded-xl bg-white border-2 border-amber-500 flex items-center justify-center font-display font-bold text-xl text-slate-900 shadow">
-                {tableCard ? (
-                  <span className={tableCard.red ? 'text-rose-600' : 'text-slate-900'}>{tableCard.label}</span>
-                ) : (
-                  <span className="text-xs text-slate-400">LEAD</span>
-                )}
-              </div>
-              <div className="text-[11px] text-amber-200 text-center">{tlStatus}</div>
-            </div>
-            <div className="flex flex-wrap justify-center gap-1.5">
-              {hand.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  disabled={tlFinished}
-                  onClick={() => playCard(c)}
-                  className="w-12 h-16 rounded-xl bg-white hover:-translate-y-1 border-2 border-amber-400 font-display font-bold text-sm shadow transition disabled:opacity-45"
-                >
-                  <span className={c.red ? 'text-rose-600' : 'text-slate-900'}>{c.label}</span>
-                </button>
-              ))}
-              {tableCard && !tlFinished && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTableCard(null);
-                    setTlStatus('You passed! Dealer plays a fresh lead — your turn to beat it or lead!');
-                  }}
-                  className="px-3 h-16 rounded-xl bg-amber-700 hover:bg-amber-600 text-white font-display font-bold text-xs"
-                >
-                  Pass
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </NativeDialog>
   );
 };

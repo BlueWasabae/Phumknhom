@@ -77,6 +77,7 @@ export class FestivalRaceScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.input.mouse?.disableContextMenu();
     const w = this.scale.width;
     const h = this.scale.height;
     soundManager.playBgm('festival');

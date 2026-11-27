@@ -224,6 +224,63 @@ export const ACCESSORY_DEFS: Record<string, AccessoryDefinition> = {
       critChanceBonus: 0.03,
     },
   },
+  // ==================== UPDATE 2.2 ULTRA-RARE CHASE ACCESSORIES ====================
+  acc_mythic_mekong_pearl: {
+    id: 'acc_mythic_mekong_pearl',
+    name: 'Mythic Mekong Pearl',
+    khmerName: 'គុជមេគង្គមហាអស្ចារ្យ',
+    rarity: 'mythic',
+    tier: 'base',
+    icon: '🫧',
+    primaryColor: '#ef4444',
+    accentColor: '#fde047',
+    stylishScore: 165,
+    summary: '+18% Crit Chance & +35 Max HP (0.5% Fishing Drop)',
+    description:
+      'Ultra-rare crimson-luminous river pearl (0.5% drop from Riverside Pier & Sunken Ruins Fishing).',
+    effects: {
+      maxHpFlat: 35,
+      critChanceBonus: 0.18,
+    },
+  },
+  acc_mythic_kampot_ember_ring: {
+    id: 'acc_mythic_kampot_ember_ring',
+    name: 'Mythic Kampot Ember Ring',
+    khmerName: 'ចិញ្ចៀនភ្លើងម្រេចកំពត',
+    rarity: 'mythic',
+    tier: 'base',
+    icon: '💍',
+    primaryColor: '#dc2626',
+    accentColor: '#fb923c',
+    stylishScore: 160,
+    summary: '+12% Move Speed, +8% Crit & +6 Defense (0.55% Boss/Forage Drop)',
+    description:
+      'Ultra-rare ember ring infused with volcanic Kampot fire (0.55% drop from Mythic Bosses & Wild Frontier).',
+    effects: {
+      moveSpeedPct: 0.12,
+      defenseFlat: 6,
+      critChanceBonus: 0.08,
+    },
+  },
+  acc_legendary_laterite_core: {
+    id: 'acc_legendary_laterite_core',
+    name: 'Legendary Golden Laterite Core',
+    khmerName: 'ស្នូលថ្មបាយក្រៀមមាស',
+    rarity: 'legendary',
+    tier: 'base',
+    icon: '🪨',
+    primaryColor: '#f59e0b',
+    accentColor: '#fef08a',
+    stylishScore: 120,
+    summary: '+10 Defense, +45 Max HP & +20% Mining Speed (1.5% Mining Drop)',
+    description:
+      'Ultra-rare condensed golden laterite heart (1.5% drop from Laterite Quarry & Deep Caverns).',
+    effects: {
+      defenseFlat: 10,
+      maxHpFlat: 45,
+      miningSpeedPct: 0.2,
+    },
+  },
 };
 
 export const ACCESSORY_LIST: AccessoryDefinition[] = Object.values(ACCESSORY_DEFS);
@@ -237,8 +294,8 @@ export const ACCESSORY_FUSION_RECIPES: AccessoryFusionRecipe[] = [
     inputAccessoryIds: ['acc_swift_sandals', 'acc_lotus_jump_charm'],
     oreItemId: 'ore_laterite',
     oreLabel: 'Laterite Ore',
-    oreQty: 3,
-    coinCost: 500,
+    oreQty: 4,
+    coinCost: 700,
     summary: '+18% Move Speed + Lotus Double-Jump in 1 slot!',
   },
   {
@@ -249,8 +306,8 @@ export const ACCESSORY_FUSION_RECIPES: AccessoryFusionRecipe[] = [
     inputAccessoryIds: ['acc_jade_poison_ward', 'acc_yaksha_iron_band'],
     oreItemId: 'ore_jade_crystal',
     oreLabel: 'Jade Crystal',
-    oreQty: 3,
-    coinCost: 650,
+    oreQty: 4,
+    coinCost: 910,
     summary: '+6 Defense + Poison Immunity in 1 slot!',
   },
   {
@@ -261,8 +318,8 @@ export const ACCESSORY_FUSION_RECIPES: AccessoryFusionRecipe[] = [
     inputAccessoryIds: ['acc_wind_walker_boots', 'acc_naga_dash_ring'],
     oreItemId: 'ore_angkor_gold',
     oreLabel: 'Angkor Gold',
-    oreQty: 3,
-    coinCost: 1200,
+    oreQty: 5,
+    coinCost: 1680,
     summary: '+22% Speed + Lotus Double-Jump + -30% Dash CD in 1 slot!',
   },
 ];

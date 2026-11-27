@@ -1,6 +1,12 @@
 import React from 'react';
 import type { BossId, PlayerState } from '@shared/types';
 import { KHMER_BOSS_LIST } from '@shared/khmerBosses';
+import {
+  CHASE_DROP_TABLE,
+  RARITY_TIER_LIST,
+  formatDropRatePct,
+  getRarityTierDef,
+} from '@shared/raritySystem';
 import { BookOpen, Lock, Shield, Skull, Sparkles, Swords, Trophy } from 'lucide-react';
 import { NativeDialog } from './NativeDialog';
 
@@ -39,6 +45,57 @@ export const BestiaryModal: React.FC<BestiaryModalProps> = ({
           <span className="px-2 py-0.5 rounded-lg bg-amber-800 text-amber-50 font-bold text-[10px]">
             🏆 {unlockedTrophies}/{KHMER_BOSS_LIST.length} Trophies
           </span>
+        </div>
+
+        {/* Update 2.2 — 7-Tier Rarity & Exact Drop Rates Legend + Ultra-Rare Chase Table */}
+        <div className="p-3 rounded-2xl bg-gradient-to-br from-slate-900 via-amber-950/95 to-slate-900 border-2 border-amber-500/60 text-amber-50 space-y-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="font-display font-bold text-xs text-amber-300 flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-cyan-300" />
+              7-Tier Item Rarity &amp; Ultra-Rare Chase Drops
+            </div>
+            <span className="text-[10px] text-cyan-200 font-semibold">
+              Mythic (0.55%) &amp; Ancient (0.15%) broadcast server-wide!
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {RARITY_TIER_LIST.map((tier) => (
+              <span
+                key={tier.id}
+                className={`px-2 py-0.5 rounded-full text-[10px] font-display font-bold inline-flex items-center gap-1 ${tier.pillClass}`}
+              >
+                <span>{tier.label}</span>
+                <span className="font-mono opacity-90">{formatDropRatePct(tier.dropRatePct)}</span>
+              </span>
+            ))}
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
+            {CHASE_DROP_TABLE.map((item) => {
+              const tier = getRarityTierDef(item.rarity);
+              const owned = player.inventory.some((i) => i.itemId === item.itemId && i.quantity > 0);
+              return (
+                <div
+                  key={item.itemId}
+                  className={`p-2 rounded-xl bg-slate-950/75 border ${tier.borderClass} flex flex-col justify-between gap-1`}
+                >
+                  <div className="flex items-start justify-between gap-1.5">
+                    <div className="font-display font-bold text-[11px] text-amber-50 leading-tight">
+                      {item.icon} {item.name}
+                    </div>
+                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold shrink-0 ${tier.pillClass}`}>
+                      {formatDropRatePct(item.dropRatePct)}
+                    </span>
+                  </div>
+                  <div className="text-[9px] text-amber-200/85">{item.sourceLabel}</div>
+                  {owned && (
+                    <span className="self-start px-1.5 py-0.2 rounded bg-emerald-700 text-white text-[9px] font-bold">
+                      ✓ Collected
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         <div className="grid sm:grid-cols-2 gap-3">

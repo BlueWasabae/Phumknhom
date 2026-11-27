@@ -7,6 +7,12 @@ import {
   aggregateAccessoryBonuses,
   normalizeAccessorySlots,
 } from '@shared/accessoryFusions';
+import {
+  RARITY_TIERS,
+  formatDropRatePct,
+  getItemDropRatePct,
+  getRarityTierDef,
+} from '@shared/raritySystem';
 import { COMBAT_ARMOR_SETS } from '../data/armorSets';
 import { ITEM_CATALOG } from '../data/items';
 import { FARM_ITEMS } from '../data/cropsAndArtisan';
@@ -45,11 +51,13 @@ const VANITY_SLOTS: Array<{ slot: 'hat' | 'hair' | 'shirt' | 'pants' | 'wings' |
 ];
 
 const RARITY_BADGE: Record<ItemRarity, { border: string; pill: string }> = {
-  common: { border: 'border-stone-500/70', pill: 'bg-stone-600 text-white' },
-  uncommon: { border: 'border-emerald-600', pill: 'bg-emerald-700 text-white' },
-  rare: { border: 'border-sky-600', pill: 'bg-sky-700 text-white' },
-  epic: { border: 'border-purple-600', pill: 'bg-purple-700 text-white' },
-  legendary: { border: 'border-amber-500', pill: 'bg-amber-600 text-white' },
+  common: { border: RARITY_TIERS.common.borderClass, pill: RARITY_TIERS.common.pillClass },
+  uncommon: { border: RARITY_TIERS.uncommon.borderClass, pill: RARITY_TIERS.uncommon.pillClass },
+  rare: { border: RARITY_TIERS.rare.borderClass, pill: RARITY_TIERS.rare.pillClass },
+  epic: { border: RARITY_TIERS.epic.borderClass, pill: RARITY_TIERS.epic.pillClass },
+  legendary: { border: RARITY_TIERS.legendary.borderClass, pill: RARITY_TIERS.legendary.pillClass },
+  mythic: { border: RARITY_TIERS.mythic.borderClass, pill: RARITY_TIERS.mythic.pillClass },
+  ancient: { border: RARITY_TIERS.ancient.borderClass, pill: RARITY_TIERS.ancient.pillClass },
 };
 
 type ContainerFilter = EquipSlot | 'all' | 'farm_goods' | 'snacks';
@@ -437,6 +445,18 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
               {selectedEquipDef ? (
                 <>
                   <div>
+                    <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[9px] font-display font-bold uppercase ${
+                          RARITY_BADGE[selectedEquipDef.rarity].pill
+                        }`}
+                      >
+                        {getRarityTierDef(selectedEquipDef.rarity).label}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full bg-amber-950/10 text-amber-900 font-mono font-bold text-[9px]">
+                        Drop: {formatDropRatePct(selectedEquipDef.dropRatePct ?? getItemDropRatePct(selectedEquipDef.id, selectedEquipDef.rarity))}
+                      </span>
+                    </div>
                     <div className="font-display font-bold text-sm text-amber-950">{selectedEquipDef.name}</div>
                     <div className="text-[11px] font-semibold text-amber-800">{selectedEquipDef.khmerName}</div>
                     <p className="text-[11px] text-amber-900/90 mt-1 leading-snug">{selectedEquipDef.description}</p>
@@ -496,6 +516,18 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
               ) : selectedFarmDef && selectedEntry ? (
                 <>
                   <div>
+                    <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[9px] font-display font-bold uppercase ${
+                          RARITY_BADGE[selectedFarmDef.rarity].pill
+                        }`}
+                      >
+                        {getRarityTierDef(selectedFarmDef.rarity).label}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full bg-amber-950/10 text-amber-900 font-mono font-bold text-[9px]">
+                        Drop: {formatDropRatePct(getItemDropRatePct(selectedFarmDef.id, selectedFarmDef.rarity))}
+                      </span>
+                    </div>
                     <div className="font-display font-bold text-sm text-amber-950">
                       {selQuality === 'gold_star' ? '★ Gold-Star ' : ''}
                       {selectedFarmDef.name} (×{selectedEntry.quantity})
@@ -536,8 +568,8 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                     >
                       Sell 1 (+
                       {(selQuality === 'gold_star'
-                        ? Math.round(selectedFarmDef.sellCoins * 1.5)
-                        : selectedFarmDef.sellCoins
+                        ? Math.round(Math.max(1, Math.round(selectedFarmDef.sellCoins * 0.7)) * 1.5)
+                        : Math.max(1, Math.round(selectedFarmDef.sellCoins * 0.7))
                       ).toLocaleString()}
                       c)
                     </button>

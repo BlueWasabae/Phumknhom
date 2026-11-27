@@ -62,7 +62,15 @@ export interface ActiveDungeonFightInfo {
 
 export interface ActiveTreasureMap {
   spotId: string;
-  mapId: 'central_plaza' | 'market_street' | 'temple_district' | 'green_park' | 'wild_frontier';
+  mapId:
+    | 'central_plaza'
+    | 'market_street'
+    | 'temple_district'
+    | 'green_park'
+    | 'wild_frontier'
+    | 'mining_quarry'
+    | 'bamboo_forest'
+    | 'sunken_ruins';
   clueTitle: string;
   clueDescription: string;
   x: number;
@@ -208,7 +216,14 @@ export type EquipSlot =
   | 'mount'
   | 'accessory';
 
-export type ItemRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+export type ItemRarity =
+  | 'common'
+  | 'uncommon'
+  | 'rare'
+  | 'epic'
+  | 'legendary'
+  | 'mythic'
+  | 'ancient';
 
 export type QualityTier = 'normal' | 'gold_star';
 
@@ -374,7 +389,15 @@ export interface PlayerState {
   activeMount?: string | null;
   dailyFreeCoinSpinDate?: string | null;
   cityServer?: 'phnom_penh' | 'siem_reap' | 'kampot' | 'battambang';
-  currentMapId?: 'central_plaza' | 'market_street' | 'temple_district' | 'green_park' | 'wild_frontier';
+  currentMapId?:
+    | 'central_plaza'
+    | 'market_street'
+    | 'temple_district'
+    | 'green_park'
+    | 'wild_frontier'
+    | 'mining_quarry'
+    | 'bamboo_forest'
+    | 'sunken_ruins';
   currentWorldId?: string;
   activeBiome?: string;
   discoveredBiomes?: string[];
@@ -579,11 +602,11 @@ export const INITIAL_PLAYER_STATE: PlayerState = {
   xp: 0,
   hp: 150,
   maxHp: 150,
-  coins: 2500,
+  coins: 150,
   currencies: {
-    coins: 2500,
-    gold: 10,
-    diamonds: 50,
+    coins: 150,
+    gold: 0,
+    diamonds: 0,
   },
   lifeStats: {
     farmLevel: 5,

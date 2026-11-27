@@ -112,6 +112,7 @@ export class KhmerWorldScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.input.mouse?.disableContextMenu();
     this.physics.world.gravity.y = 0;
     this.physics.world.setBounds(18, HORIZON_H, MAP_W - 36, MAP_H - HORIZON_H - 14);
     this.glowLights = [];

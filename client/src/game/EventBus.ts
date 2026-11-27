@@ -383,8 +383,19 @@ export interface EventMap {
     friendsTab?: 'friends' | 'inbox';
     reforgeTab?: 'reforge' | 'fusion' | 'shimmer' | 'bank';
     clubGame?: 'kla_klok' | 'ouk_chaktrang' | 'tien_len';
+    clubTableId?: string;
     cartId?: string;
     bondPartnerName?: string;
+  };
+  'club:tablesSync': { tables: unknown[]; sessionId: string | null; online: boolean };
+  'club:privateHand': { tableId: string; hand: unknown[] };
+  'club:payout': {
+    tableId: string;
+    game: 'tien_len' | 'ouk_chaktrang';
+    winnerSessionId: string;
+    winnerName: string;
+    potCoins: number;
+    stakeCoins: number;
   };
   'ui:toast': { text: string };
 }

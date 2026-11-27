@@ -217,6 +217,7 @@ class PlazaRoomClient {
   private client: Client | null = null;
   private room: Room<RawPlazaStateSchema> | null = null;
   private dungeonRoom: Room<RawDungeonStateSchema> | null = null;
+  private clubRoom: Room | null = null;
   private lastDungeonMoveAt = 0;
   private currentAreaId = 'AREA 0';
   private online = false;
@@ -780,6 +781,101 @@ class PlazaRoomClient {
   public sendDungeonBossDamage(amount: number, isCrit: boolean): void {
     if (!this.dungeonRoom) return;
     this.dungeonRoom.send('bossDamage', { amount: Math.round(amount), isCrit });
+  }
+
+  // ==================== MULTIPLAYER CLUB ROOM (PVP TABLES: TIEN LEN & OUK CHAKTRANG) ====================
+  public async connectClub(opts: {
+    cityServer?: string;
+    playerId?: string;
+    name: string;
+  }): Promise<{ online: boolean; sessionId: string | null }> {
+    if (this.clubRoom) {
+      this.clubRoom.send('requestTables', {});
+      return { online: true, sessionId: this.clubRoom.sessionId };
+    }
+    const { wsUrl } = getServerEndpoints();
+    try {
+      const client = this.client ?? new Client(wsUrl);
+      this.client = client;
+      const room = await client.joinOrCreate('club', {
+        cityServer: opts.cityServer ?? 'phnom_penh',
+        playerId: opts.playerId ?? '',
+        name: opts.name,
+      });
+      this.clubRoom = room;
+      room.onMessage('clubTablesSnapshot', (msg: { tables?: unknown[] }) => {
+        EventBus.emit('club:tablesSync', {
+          tables: Array.isArray(msg?.tables) ? msg.tables : [],
+          sessionId: room.sessionId,
+          online: true,
+        });
+      });
+      room.onMessage('clubPrivateHand', (msg: { tableId?: string; hand?: unknown[] }) => {
+        if (msg?.tableId && Array.isArray(msg.hand)) {
+          EventBus.emit('club:privateHand', { tableId: msg.tableId, hand: msg.hand });
+        }
+      });
+      room.onMessage(
+        'clubTablePayout',
+        (msg: {
+          tableId?: string;
+          game?: 'tien_len' | 'ouk_chaktrang';
+          winnerSessionId?: string;
+          winnerName?: string;
+          potCoins?: number;
+          stakeCoins?: number;
+        }) => {
+          if (msg?.tableId && msg.game && msg.winnerSessionId) {
+            EventBus.emit('club:payout', {
+              tableId: msg.tableId,
+              game: msg.game,
+              winnerSessionId: msg.winnerSessionId,
+              winnerName: msg.winnerName ?? 'Winner',
+              potCoins: msg.potCoins ?? 0,
+              stakeCoins: msg.stakeCoins ?? 0,
+            });
+          }
+        }
+      );
+      room.onLeave(() => {
+        if (this.clubRoom === room) {
+          this.clubRoom = null;
+          EventBus.emit('club:tablesSync', { tables: [], sessionId: null, online: false });
+        }
+      });
+      room.send('requestTables', {});
+      return { online: true, sessionId: room.sessionId };
+    } catch {
+      this.clubRoom = null;
+      return { online: false, sessionId: null };
+    }
+  }
+
+  public sendClubMessage(type: string, payload: Record<string, unknown>): boolean {
+    if (!this.clubRoom) return false;
+    try {
+      this.clubRoom.send(type, payload);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  public getClubSessionId(): string | null {
+    return this.clubRoom?.sessionId ?? null;
+  }
+
+  public async leaveClub(): Promise<void> {
+    const active = this.clubRoom;
+    this.clubRoom = null;
+    if (active) {
+      try {
+        active.send('leaveTable', {});
+        await active.leave();
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
   }
 
   public async fetchAreas(): Promise<{ online: boolean; areas: AreaChannelInfo[]; totalPlayers: number }> {

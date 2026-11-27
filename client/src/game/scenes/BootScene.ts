@@ -206,6 +206,7 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.input.mouse?.disableContextMenu();
     try {
       const manifest = this.cache.json.get('khmer_manifest') as Record<string, string> | undefined;
       const extraEntries =

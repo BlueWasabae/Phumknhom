@@ -21,6 +21,7 @@ export type SfxName =
 
 export interface AudioSettings {
   muted: boolean;
+  masterVolume: number; // 0..1
   bgmVolume: number; // 0..1
   sfxVolume: number; // 0..1
   currentTrack: BgmTrack | null;
@@ -84,8 +85,9 @@ interface ActiveTrackChannel {
 class SoundManagerEngine {
   private settings: AudioSettings = {
     muted: false,
-    bgmVolume: 0.36,
-    sfxVolume: 0.58,
+    masterVolume: 0.85,
+    bgmVolume: 0.42,
+    sfxVolume: 0.65,
     currentTrack: null,
   };
 
@@ -121,6 +123,9 @@ class SoundManagerEngine {
       if (!raw) return;
       const parsed = JSON.parse(raw) as Partial<AudioSettings>;
       if (typeof parsed.muted === 'boolean') this.settings.muted = parsed.muted;
+      if (typeof parsed.masterVolume === 'number') {
+        this.settings.masterVolume = Math.max(0, Math.min(1, parsed.masterVolume));
+      }
       if (typeof parsed.bgmVolume === 'number') {
         this.settings.bgmVolume = Math.max(0, Math.min(1, parsed.bgmVolume));
       }
@@ -139,6 +144,7 @@ class SoundManagerEngine {
           STORAGE_KEY,
           JSON.stringify({
             muted: this.settings.muted,
+            masterVolume: this.settings.masterVolume,
             bgmVolume: this.settings.bgmVolume,
             sfxVolume: this.settings.sfxVolume,
           })
@@ -177,11 +183,15 @@ class SoundManagerEngine {
       this.ctx = new AudioCtx();
 
       this.bgmMasterGain = this.ctx.createGain();
-      this.bgmMasterGain.gain.value = this.settings.muted ? 0 : this.settings.bgmVolume;
+      this.bgmMasterGain.gain.value = this.settings.muted
+        ? 0
+        : this.settings.masterVolume * this.settings.bgmVolume;
       this.bgmMasterGain.connect(this.ctx.destination);
 
       this.sfxMasterGain = this.ctx.createGain();
-      this.sfxMasterGain.gain.value = this.settings.muted ? 0 : this.settings.sfxVolume;
+      this.sfxMasterGain.gain.value = this.settings.muted
+        ? 0
+        : this.settings.masterVolume * this.settings.sfxVolume;
       this.sfxMasterGain.connect(this.ctx.destination);
 
       // Shared 1-second white noise buffer for percussion, ore shatters, splashes & thunder
@@ -224,8 +234,26 @@ class SoundManagerEngine {
     return this.settings.muted;
   }
 
+  public setMasterVolume(vol: number): void {
+    this.settings.masterVolume = Math.max(0, Math.min(1, vol));
+    if (this.settings.masterVolume > 0 && this.settings.muted) {
+      this.settings.muted = false;
+    }
+    this.applyMasterGains();
+    if (
+      this.settings.masterVolume > 0 &&
+      this.settings.bgmVolume > 0 &&
+      this.unlocked &&
+      this.currentTrack &&
+      !this.activeChannel
+    ) {
+      this.crossfadeToTrack(this.currentTrack);
+    }
+    this.persistSettings();
+  }
+
   public setBgmEnabled(enabled: boolean): void {
-    this.setBgmVolume(enabled ? Math.max(0.28, this.settings.bgmVolume || 0.36) : 0);
+    this.setBgmVolume(enabled ? Math.max(0.28, this.settings.bgmVolume || 0.42) : 0);
   }
 
   public setBgmVolume(vol: number): void {
@@ -234,7 +262,13 @@ class SoundManagerEngine {
       this.settings.muted = false;
     }
     this.applyMasterGains();
-    if (this.settings.bgmVolume > 0 && this.unlocked && this.currentTrack && !this.activeChannel) {
+    if (
+      this.settings.masterVolume > 0 &&
+      this.settings.bgmVolume > 0 &&
+      this.unlocked &&
+      this.currentTrack &&
+      !this.activeChannel
+    ) {
       this.crossfadeToTrack(this.currentTrack);
     }
     this.persistSettings();
@@ -252,21 +286,14 @@ class SoundManagerEngine {
   private applyMasterGains(): void {
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
+    const master = this.settings.muted ? 0 : this.settings.masterVolume;
     if (this.bgmMasterGain) {
       this.bgmMasterGain.gain.cancelScheduledValues(now);
-      this.bgmMasterGain.gain.setTargetAtTime(
-        this.settings.muted ? 0 : this.settings.bgmVolume,
-        now,
-        0.05
-      );
+      this.bgmMasterGain.gain.setTargetAtTime(master * this.settings.bgmVolume, now, 0.05);
     }
     if (this.sfxMasterGain) {
       this.sfxMasterGain.gain.cancelScheduledValues(now);
-      this.sfxMasterGain.gain.setTargetAtTime(
-        this.settings.muted ? 0 : this.settings.sfxVolume,
-        now,
-        0.03
-      );
+      this.sfxMasterGain.gain.setTargetAtTime(master * this.settings.sfxVolume, now, 0.03);
     }
   }
 

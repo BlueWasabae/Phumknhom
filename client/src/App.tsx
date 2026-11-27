@@ -19,6 +19,13 @@ import {
   type ZoneType,
 } from '@shared/types';
 import { rollRandomTreasureMap } from '@shared/treasureMaps';
+import {
+  formatDropRatePct,
+  getRarityTierDef,
+  isAnnouncementRarity,
+  rollChaseDropForSource,
+  type DropSourceCategory,
+} from '@shared/raritySystem';
 import { donateItemToMuseum } from '@shared/museumCatalog';
 import type { ActiveWorldEventSnapshot, NightMarketOffer } from '@shared/worldEvents';
 import type { FestivalId } from '@shared/festivals';
@@ -389,6 +396,7 @@ export const App: React.FC = () => {
   const [shopTab, setShopTab] = useState<'primary' | 'secondary'>('primary');
   const [reforgeTab, setReforgeTab] = useState<ReforgeTab>('reforge');
   const [clubGameTab, setClubGameTab] = useState<ClubGameTab>('tien_len');
+  const [clubTableId, setClubTableId] = useState<string>('tl_50');
   const [preselectedBossId, setPreselectedBossId] = useState<BossId>('sdech_kongkaeb');
   const [selectedCropId, setSelectedCropId] = useState('trakuon');
   const [farmToolMode, setFarmToolMode] = useState<FarmToolMode>('smart');
@@ -1100,7 +1108,7 @@ export const App: React.FC = () => {
   const handleFishingCatch = useCallback(
     (reward: FishingCatchReward) => {
       runStateAction((prev) => {
-        let nextInv = prev.inventory.map((i) => ({ ...i }));
+        const nextInv = prev.inventory.map((i) => ({ ...i }));
         if (reward.itemId) {
           const existing = nextInv.find(
             (i) => i.itemId === reward.itemId && (i.quality ?? 'normal') === 'normal'
@@ -1120,6 +1128,25 @@ export const App: React.FC = () => {
           }
           mapNote = ' + 🗺️ Torn Angkor Treasure Map!';
         }
+        let chaseNote = '';
+        const chase = rollChaseDropForSource('fishing');
+        if (chase) {
+          const exChase = nextInv.find((i) => i.itemId === chase.itemId);
+          if (exChase) exChase.quantity += 1;
+          else nextInv.push({ itemId: chase.itemId, quantity: 1, itemLevel: 5, quality: 'normal' });
+          const tier = getRarityTierDef(chase.rarity);
+          chaseNote = ` + ${chase.icon} [${tier.label.toUpperCase()} ${formatDropRatePct(chase.dropRatePct)}] ${chase.name}!`;
+          if (isAnnouncementRarity(chase.rarity)) {
+            const pName = prev.name;
+            window.setTimeout(() => {
+              soundManager.playSfx('victory');
+              EventBus.emit('ticker:push', {
+                text: `🌟 [${tier.label.toUpperCase()} DROP · ${formatDropRatePct(chase.dropRatePct)}] ${pName} fished ${chase.icon} ${chase.name}!`,
+                category: 'boss',
+              });
+            }, 0);
+          }
+        }
         const base: PlayerState = {
           ...prev,
           coins: nextCoins,
@@ -1134,7 +1161,7 @@ export const App: React.FC = () => {
         return {
           state: xpRes.state,
           ok: true,
-          message: `🎣 Caught ${reward.label} (+${reward.fishingXp} Fishing XP)${mapNote}!`,
+          message: `🎣 Caught ${reward.label} (+${reward.fishingXp} Fishing XP)${mapNote}${chaseNote}!`,
         };
       });
     },
@@ -1513,6 +1540,11 @@ export const App: React.FC = () => {
     sanitizeLegacyLocalStoragePets();
     const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     if (isTouch) setTouchUiEnabled(true);
+    const blockContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener('contextmenu', blockContextMenu);
+    return () => window.removeEventListener('contextmenu', blockContextMenu);
   }, []);
 
   useEffect(() => {
@@ -1545,7 +1577,9 @@ export const App: React.FC = () => {
       } else if (k === 'p') {
         setActiveModal((cur) => (cur === 'profile' ? null : 'profile'));
       } else if (k === 'k') {
-        setActiveModal((cur) => (cur === 'skills' ? null : 'skills'));
+        if (zone !== 'dungeon' && zone !== 'tower' && zone !== 'cavern') {
+          setActiveModal((cur) => (cur === 'skills' ? null : 'skills'));
+        }
       } else if (k === 'm') {
         setActiveModal((cur) => (cur === 'worldMap' ? null : 'worldMap'));
       } else if (k === '1') {
@@ -1558,7 +1592,7 @@ export const App: React.FC = () => {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [handleEatQuickSlot]);
+  }, [handleEatQuickSlot, zone]);
 
   useEffect(() => {
     if (!mountRef.current) return;
@@ -1748,6 +1782,26 @@ export const App: React.FC = () => {
             if (!nextTreasureMap) nextTreasureMap = rollRandomTreasureMap();
             mapNote = ' + 🗺️ Torn Angkor Treasure Map!';
           }
+          let chaseNote = '';
+          const chaseSource: DropSourceCategory = skillId === 'mining' ? 'mining' : 'foraging';
+          const chase = rollChaseDropForSource(chaseSource);
+          if (chase) {
+            const exChase = nextInv.find((i) => i.itemId === chase.itemId);
+            if (exChase) exChase.quantity += 1;
+            else nextInv.push({ itemId: chase.itemId, quantity: 1, itemLevel: 5, quality: 'normal' });
+            const tier = getRarityTierDef(chase.rarity);
+            chaseNote = ` + ${chase.icon} [${tier.label.toUpperCase()} ${formatDropRatePct(chase.dropRatePct)}] ${chase.name}!`;
+            if (isAnnouncementRarity(chase.rarity)) {
+              const pName = prev.name;
+              window.setTimeout(() => {
+                soundManager.playSfx('victory');
+                EventBus.emit('ticker:push', {
+                  text: `🌟 [${tier.label.toUpperCase()} DROP · ${formatDropRatePct(chase.dropRatePct)}] ${pName} discovered ${chase.icon} ${chase.name}!`,
+                  category: 'boss',
+                });
+              }, 0);
+            }
+          }
           const withLoot: PlayerState = {
             ...prev,
             coins: nextCoins,
@@ -1764,7 +1818,7 @@ export const App: React.FC = () => {
           return {
             state: xpRes.state,
             ok: true,
-            message: `${label}${mapNote}`,
+            message: `${label}${mapNote}${chaseNote}`,
           };
         });
       }),
@@ -1782,6 +1836,25 @@ export const App: React.FC = () => {
               );
               if (existing) existing.quantity += drop.quantity;
               else nextInv.push({ itemId: drop.itemId, quantity: drop.quantity, itemLevel: 1, quality: 'normal' });
+            }
+          }
+          let chaseNote = '';
+          const chase = rollChaseDropForSource('mining');
+          if (chase) {
+            const exChase = nextInv.find((i) => i.itemId === chase.itemId);
+            if (exChase) exChase.quantity += 1;
+            else nextInv.push({ itemId: chase.itemId, quantity: 1, itemLevel: 5, quality: 'normal' });
+            const tier = getRarityTierDef(chase.rarity);
+            chaseNote = ` + ${chase.icon} [${tier.label.toUpperCase()} ${formatDropRatePct(chase.dropRatePct)}] ${chase.name}!`;
+            if (isAnnouncementRarity(chase.rarity)) {
+              const pName = prev.name;
+              window.setTimeout(() => {
+                soundManager.playSfx('victory');
+                EventBus.emit('ticker:push', {
+                  text: `🌟 [${tier.label.toUpperCase()} DROP · ${formatDropRatePct(chase.dropRatePct)}] ${pName} mined ${chase.icon} ${chase.name}!`,
+                  category: 'boss',
+                });
+              }, 0);
             }
           }
           let nextState: PlayerState = {
@@ -1806,7 +1879,7 @@ export const App: React.FC = () => {
           return {
             state: nextState,
             ok: true,
-            message: label,
+            message: `${label}${chaseNote}`,
           };
         });
       }),
@@ -2029,6 +2102,24 @@ export const App: React.FC = () => {
           addDrop('mat_reforge_stone', reforgeStones);
           if (cosmeticItemId) addDrop(cosmeticItemId, 1);
 
+          let chaseNote = '';
+          const chase = rollChaseDropForSource('treasure_map', 1.4);
+          if (chase) {
+            addDrop(chase.itemId, 1);
+            const tier = getRarityTierDef(chase.rarity);
+            chaseNote = ` · ${chase.icon} [${tier.label.toUpperCase()} ${formatDropRatePct(chase.dropRatePct)}] ${chase.name}`;
+            if (isAnnouncementRarity(chase.rarity)) {
+              const pName = prev.name;
+              window.setTimeout(() => {
+                soundManager.playSfx('victory');
+                EventBus.emit('ticker:push', {
+                  text: `🌟 [${tier.label.toUpperCase()} RELIC · ${formatDropRatePct(chase.dropRatePct)}] ${pName} dug up ${chase.icon} ${chase.name}!`,
+                  category: 'boss',
+                });
+              }, 0);
+            }
+          }
+
           const nextActiveMap = remainingMaps > 0 ? rollRandomTreasureMap(spotId) : null;
           const base: PlayerState = {
             ...prev,
@@ -2043,7 +2134,7 @@ export const App: React.FC = () => {
             ok: true,
             message: `🏆 Ancient Relic Chest! +${coins.toLocaleString()}c · +${gold} Gold · +${reforgeStones}× Reforge Stone${
               cosmeticLabel ? ` · Unlocked ${cosmeticLabel}` : ''
-            }!`,
+            }${chaseNote}!`,
           };
         });
         EventBus.emit('ticker:push', {
@@ -2066,6 +2157,37 @@ export const App: React.FC = () => {
         setBossHud(payload);
       }),
       EventBus.on('dungeon:outcome', (outcome) => {
+        if (outcome && outcome.outcome === 'victory') {
+          const diffMult =
+            outcome.difficulty === 'death'
+              ? 2.2
+              : outcome.difficulty === 'mythic'
+                ? 1.75
+                : outcome.difficulty === 'expert'
+                  ? 1.35
+                  : 1.0;
+          const chase = rollChaseDropForSource('boss', diffMult);
+          if (chase) {
+            const tier = getRarityTierDef(chase.rarity);
+            runStateAction((prev) => {
+              const nextInv = prev.inventory.map((i) => ({ ...i }));
+              const ex = nextInv.find((i) => i.itemId === chase.itemId);
+              if (ex) ex.quantity += 1;
+              else nextInv.push({ itemId: chase.itemId, quantity: 1, itemLevel: 6, quality: 'normal' });
+              return {
+                state: { ...prev, inventory: nextInv },
+                ok: true,
+                message: `🌟 [${tier.label.toUpperCase()} BOSS DROP · ${formatDropRatePct(chase.dropRatePct)}] ${chase.icon} ${chase.name}!`,
+              };
+            });
+            if (isAnnouncementRarity(chase.rarity)) {
+              EventBus.emit('ticker:push', {
+                text: `🌟 [${tier.label.toUpperCase()} DROP · ${formatDropRatePct(chase.dropRatePct)}] ${playerRef.current.name} looted ${chase.icon} ${chase.name} from a Boss!`,
+                category: 'boss',
+              });
+            }
+          }
+        }
         setDungeonOutcome(outcome);
       }),
       EventBus.on('network:status', (status) => {
@@ -2165,6 +2287,7 @@ export const App: React.FC = () => {
           friendsTab: reqFriendsTab,
           reforgeTab: reqReforgeTab,
           clubGame,
+          clubTableId: reqClubTableId,
           leaderboardCategory: reqLbCat,
           cartId,
           bondPartnerName,
@@ -2173,6 +2296,7 @@ export const App: React.FC = () => {
           if (modal === 'friends' && reqFriendsTab) setFriendsTab(reqFriendsTab);
           if (modal === 'reforge' && reqReforgeTab) setReforgeTab(reqReforgeTab);
           if (modal === 'clubGames' && clubGame) setClubGameTab(clubGame);
+          if (modal === 'clubGames' && reqClubTableId) setClubTableId(reqClubTableId);
           if (modal === 'leaderboard' && reqLbCat) setLeaderboardCategory(reqLbCat);
           if (modal === 'tukTukCart') setFocusedCartId(cartId ?? null);
           if (modal === 'bond') setBondPrefillPartner(bondPartnerName ?? null);
@@ -2733,6 +2857,7 @@ export const App: React.FC = () => {
       <ClubGamesModal
         open={activeModal === 'clubGames'}
         initialGame={clubGameTab}
+        initialTableId={clubTableId}
         player={player}
         onClose={() => setActiveModal(null)}
         onWinClubReward={(coinsDelta, happyGain, label) => {
@@ -3681,7 +3806,52 @@ export const App: React.FC = () => {
           })
         }
         onEquipFashion={handleEquipItem}
-        onCustomizeLook={(patch) => applyLoadoutPatch(patch)}
+        onCustomizeLook={(patch, cost) => {
+          if (!cost || (cost.coins <= 0 && cost.diamonds <= 0)) {
+            applyLoadoutPatch(patch);
+            return;
+          }
+          runStateAction((s) => {
+            if (s.currencies.coins < cost.coins) {
+              return { state: s, ok: false, message: `Need ${cost.coins.toLocaleString()} Coins for this Salon makeover!` };
+            }
+            if (s.currencies.diamonds < cost.diamonds) {
+              return { state: s, ok: false, message: `Need ${cost.diamonds} Diamonds for these Premium Salon styles!` };
+            }
+            const nextCoins = s.currencies.coins - cost.coins;
+            const nextDiamonds = s.currencies.diamonds - cost.diamonds;
+            const nextInv = s.inventory.map((i) => ({ ...i }));
+            for (const unlockId of cost.unlockItemIds ?? []) {
+              if (!nextInv.some((i) => i.itemId === unlockId)) {
+                nextInv.push({ itemId: unlockId, quantity: 1, itemLevel: 1, quality: 'normal' });
+              }
+            }
+            const nextLoadout: EquippedLoadout = { ...s.loadout, ...patch };
+            const nextState: PlayerState = {
+              ...s,
+              coins: nextCoins,
+              currencies: { ...s.currencies, coins: nextCoins, diamonds: nextDiamonds },
+              loadout: nextLoadout,
+              inventory: nextInv,
+            };
+            soundManager.playSfx('coin');
+            window.setTimeout(() => {
+              EventBus.emit('player:loadoutChanged', {
+                loadout: nextLoadout,
+                activeClass: nextState.activeClass,
+                playerState: nextState,
+              });
+            }, 0);
+            const parts: string[] = [];
+            if (cost.coins > 0) parts.push(`-${cost.coins.toLocaleString()} C`);
+            if (cost.diamonds > 0) parts.push(`-${cost.diamonds} 💎`);
+            return {
+              state: nextState,
+              ok: true,
+              message: `💈 Salon Makeover Applied (${parts.join(' & ')})!`,
+            };
+          });
+        }}
       />
 
       <NpcDialogueModal

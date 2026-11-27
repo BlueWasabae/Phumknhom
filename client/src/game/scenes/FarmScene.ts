@@ -107,6 +107,7 @@ export class FarmScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.input.mouse?.disableContextMenu();
     this.physics.world.gravity.y = 0;
     this.physics.world.setBounds(0, HORIZON_H, FARM_W, FARM_H - HORIZON_H);
     soundManager.playBgm('village');
@@ -990,7 +991,15 @@ export class FarmScene extends Phaser.Scene {
     spawnX = 220,
     spawnY = 600,
     goldenFlash = false,
-    mapId: 'central_plaza' | 'market_street' | 'temple_district' | 'green_park' | 'wild_frontier' = 'central_plaza'
+    mapId:
+      | 'central_plaza'
+      | 'market_street'
+      | 'temple_district'
+      | 'green_park'
+      | 'wild_frontier'
+      | 'mining_quarry'
+      | 'bamboo_forest'
+      | 'sunken_ruins' = 'central_plaza'
   ): void {
     if (this.transitioning) return;
     this.transitioning = true;

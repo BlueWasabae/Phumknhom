@@ -51,13 +51,14 @@ export class BossRushScene extends Phaser.Scene {
 
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keys!: Record<
-    'A' | 'D' | 'W' | 'E' | 'G' | 'J' | 'L' | 'F' | 'Q' | 'R' | 'SHIFT' | 'SPACE',
+    'A' | 'D' | 'W' | 'E' | 'G' | 'J' | 'K' | 'L' | 'F' | 'Q' | 'R' | 'SHIFT' | 'SPACE',
     Phaser.Input.Keyboard.Key
   >;
   private joystick: JoystickVector = { x: 0, y: 0 };
   private jumpsUsed = 0;
   private dashActiveUntil = 0;
   private dashCooldownUntil = 0;
+  private dashVelX = 0;
   private invulnerableUntil = 0;
   private attackCooldownUntil = 0;
   private attackAnimUntil = 0;
@@ -125,6 +126,7 @@ export class BossRushScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.input.mouse?.disableContextMenu();
     this.physics.world.resume();
     this.physics.world.gravity.y = 820;
     this.physics.world.setBounds(0, 0, ARENA_W, ARENA_H);
@@ -179,8 +181,8 @@ export class BossRushScene extends Phaser.Scene {
     this.cameras.main.fadeIn(220, 12, 8, 24);
 
     this.cursors = this.input.keyboard!.createCursorKeys();
-    this.keys = this.input.keyboard!.addKeys('A,D,W,E,G,J,L,F,Q,R,SHIFT,SPACE', false) as Record<
-      'A' | 'D' | 'W' | 'E' | 'G' | 'J' | 'L' | 'F' | 'Q' | 'R' | 'SHIFT' | 'SPACE',
+    this.keys = this.input.keyboard!.addKeys('A,D,W,E,G,J,K,L,F,Q,R,SHIFT,SPACE', false) as Record<
+      'A' | 'D' | 'W' | 'E' | 'G' | 'J' | 'K' | 'L' | 'F' | 'Q' | 'R' | 'SHIFT' | 'SPACE',
       Phaser.Input.Keyboard.Key
     >;
     this.input.keyboard!.clearCaptures();
@@ -193,7 +195,8 @@ export class BossRushScene extends Phaser.Scene {
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (this.defeated || this.transitioning) return;
       if (document.querySelector('dialog[open]')) return;
-      if (pointer.leftButtonDown()) this.performClassAttack();
+      if (pointer.rightButtonDown()) this.performDash();
+      else if (pointer.leftButtonDown()) this.performClassAttack();
     });
 
     this.spawnBossStage(0);
@@ -512,12 +515,25 @@ export class BossRushScene extends Phaser.Scene {
   private performDash(): void {
     const now = this.time.now;
     if (now < this.dashCooldownUntil || this.defeated) return;
-    const dir = this.player.facingRight ? 1 : -1;
-    this.dashCooldownUntil = now + 850;
-    this.dashActiveUntil = now + 190;
-    this.invulnerableUntil = Math.max(this.invulnerableUntil, now + 380);
-    this.player.body.setVelocity(dir * 620, -40);
-    vfxManager.spawnAfterimage(this, this.player.x, this.player.y, 0xfacc15, 1, 240, 52);
+    const bridge = computeVillageToDungeonBridge(this.player.state);
+    let dir = this.player.facingRight ? 1 : -1;
+    if (this.cursors.left.isDown || this.keys.A.isDown || this.joystick.x < -0.2) dir = -1;
+    else if (this.cursors.right.isDown || this.keys.D.isDown || this.joystick.x > 0.2) dir = 1;
+    this.player.facing = dir > 0 ? 'right' : 'left';
+    this.dashCooldownUntil = now + Math.round(1200 * bridge.dashCooldownMult);
+    this.dashActiveUntil = now + 220;
+    this.invulnerableUntil = Math.max(this.invulnerableUntil, now + 320);
+    this.dashVelX = dir * 660;
+    this.player.body.setDragX(0);
+    this.player.body.setVelocity(this.dashVelX, -38);
+    soundManager.playSfx('swing');
+    for (const d of [0, 75, 150]) {
+      this.time.delayedCall(d, () => {
+        if (!this.defeated && this.scene.isActive('BossRushScene')) {
+          vfxManager.spawnAfterimage(this, this.player.x, this.player.y, 0xfacc15, 1, 240, 52);
+        }
+      });
+    }
   }
 
   private performGrapple(): void {
@@ -737,7 +753,10 @@ export class BossRushScene extends Phaser.Scene {
       }
     }
 
-    if (!this.defeated && time > this.dashActiveUntil && !this.grappleActive && !this.transitioning) {
+    if (!this.defeated && time <= this.dashActiveUntil && !this.grappleActive && !this.transitioning) {
+      this.player.body.setDragX(0);
+      this.player.body.setVelocityX(this.dashVelX);
+    } else if (!this.defeated && time > this.dashActiveUntil && !this.grappleActive && !this.transitioning) {
       let moveX = this.joystick.x;
       if (!typing) {
         if (this.cursors.left.isDown || this.keys.A.isDown) moveX -= 1;
@@ -746,7 +765,13 @@ export class BossRushScene extends Phaser.Scene {
           this.performJump();
         }
         if (Phaser.Input.Keyboard.JustDown(this.keys.G)) this.performGrapple();
-        if (Phaser.Input.Keyboard.JustDown(this.keys.SHIFT) || Phaser.Input.Keyboard.JustDown(this.keys.L)) this.performDash();
+        if (
+          Phaser.Input.Keyboard.JustDown(this.keys.SHIFT) ||
+          Phaser.Input.Keyboard.JustDown(this.keys.K) ||
+          Phaser.Input.Keyboard.JustDown(this.keys.L)
+        ) {
+          this.performDash();
+        }
         if (Phaser.Input.Keyboard.JustDown(this.keys.J)) this.performClassAttack();
         if (Phaser.Input.Keyboard.JustDown(this.keys.Q)) this.performSignatureSkill();
         if (Phaser.Input.Keyboard.JustDown(this.keys.F)) this.activateFocus();

@@ -519,6 +519,14 @@ export function buyFarmSupply(state: PlayerState, itemId: string, qty = 1): Acti
   };
 }
 
+/** Hardcore Economy (Update 2.2): Base NPC vendor sell price is 70% (-30%) so artisan goods & P2P Market shine. */
+export const VENDOR_SELL_MULTIPLIER = 0.7;
+
+export function getVendorSellPrice(baseSellCoins: number, quality: QualityTier = 'normal'): number {
+  const discounted = Math.max(1, Math.round(baseSellCoins * VENDOR_SELL_MULTIPLIER));
+  return quality === 'gold_star' ? Math.round(discounted * 1.5) : discounted;
+}
+
 export function sellFarmProduce(
   state: PlayerState,
   itemId: string,
@@ -530,7 +538,7 @@ export function sellFarmProduce(
   const nextInv = consumeInventory(state.inventory, itemId, qty, quality);
   if (!nextInv) return { state, ok: false, message: 'Not enough items to sell.' };
 
-  const unitPrice = quality === 'gold_star' ? Math.round(meta.sellCoins * 1.5) : meta.sellCoins;
+  const unitPrice = getVendorSellPrice(meta.sellCoins, quality);
   const earned = unitPrice * qty;
   const nextState = earnCoins({ ...state, inventory: nextInv }, earned);
 

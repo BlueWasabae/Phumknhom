@@ -94,6 +94,7 @@ export class HouseInteriorScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.input.mouse?.disableContextMenu();
     this.physics.world.gravity.y = 0;
     this.physics.world.setBounds(ROOM_LEFT, ROOM_TOP, ROOM_RIGHT - ROOM_LEFT, ROOM_BOTTOM - ROOM_TOP);
     soundManager.playBgm('village');

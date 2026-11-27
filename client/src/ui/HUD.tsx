@@ -229,6 +229,7 @@ export const HUD: React.FC<HUDProps> = ({
     worldEventManager.getActiveEvent()
   );
   const [emoteOpen, setEmoteOpen] = useState(false);
+  const [audioPopoverOpen, setAudioPopoverOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [previewDiff, setPreviewDiff] = useState<DifficultyMode>('normal');
   const [previewParty, setPreviewParty] = useState(2);
@@ -1224,20 +1225,136 @@ export const HUD: React.FC<HUDProps> = ({
           {/* TOP-RIGHT */}
           <div className="pointer-events-auto flex items-center gap-1 sm:gap-1.5 shrink-0 relative max-w-full">
             <button
+              id="btn-hud-audio"
               type="button"
-              onClick={() => soundManager.toggleMute()}
-              aria-label={audioSettings.muted ? 'Unmute Audio' : 'Mute Audio'}
-              title={audioSettings.muted ? 'Audio Muted — Click to Unmute' : 'Audio On — Click to Mute'}
-              className={`phum-btn p-2 rounded-xl shrink-0 ${
-                audioSettings.muted ? 'opacity-70 ring-1 ring-rose-500' : ''
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                soundManager.unlock();
+                soundManager.playSfx('click');
+                setEmoteOpen(false);
+                setAudioPopoverOpen((o) => !o);
+              }}
+              aria-expanded={audioPopoverOpen}
+              aria-label="Audio & Volume Controls"
+              title="Quick Audio Controls (Master / BGM / SFX)"
+              className={`phum-btn p-2 rounded-xl shrink-0 cursor-pointer ${
+                audioSettings.muted || audioSettings.masterVolume <= 0.01
+                  ? 'opacity-75 ring-1 ring-rose-500'
+                  : audioPopoverOpen
+                    ? 'ring-2 ring-amber-400'
+                    : ''
               }`}
             >
-              {audioSettings.muted ? (
+              {audioSettings.muted || audioSettings.masterVolume <= 0.01 ? (
                 <VolumeX className="w-4 h-4 text-rose-700" />
               ) : (
                 <Volume2 className="w-4 h-4 text-emerald-800" />
               )}
             </button>
+
+            {audioPopoverOpen && (
+              <div
+                id="hud-audio-popover"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+                className="absolute right-0 top-12 w-64 phum-panel rounded-2xl p-3 z-40 shadow-2xl border-2 border-amber-900/60 space-y-2.5 text-xs"
+              >
+                <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-amber-900/20">
+                  <span className="font-display font-bold text-amber-950 flex items-center gap-1.5">
+                    {audioSettings.muted ? (
+                      <VolumeX className="w-4 h-4 text-rose-700" />
+                    ) : (
+                      <Volume2 className="w-4 h-4 text-emerald-700" />
+                    )}
+                    Quick Volume
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => soundManager.toggleMute()}
+                      className={`px-2 py-0.5 rounded-lg font-display font-bold text-[10px] border cursor-pointer ${
+                        audioSettings.muted
+                          ? 'bg-rose-700 text-white border-rose-950'
+                          : 'bg-emerald-700 text-white border-emerald-950'
+                      }`}
+                    >
+                      {audioSettings.muted ? 'Unmute' : 'Mute'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAudioPopoverOpen(false)}
+                      className="px-1.5 py-0.5 rounded-lg bg-amber-950/10 hover:bg-amber-950/20 font-bold text-[10px] text-amber-950 cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+
+                <label className="block space-y-0.5">
+                  <div className="flex justify-between font-bold text-amber-950 text-[11px]">
+                    <span>🔊 Master</span>
+                    <span>{Math.round(audioSettings.masterVolume * 100)}%</span>
+                  </div>
+                  <input
+                    id="slider-hud-master"
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={Math.round(audioSettings.masterVolume * 100)}
+                    onChange={(e) => soundManager.setMasterVolume(Number(e.target.value) / 100)}
+                    className="w-full accent-sky-700 cursor-pointer"
+                  />
+                </label>
+
+                <label className="block space-y-0.5">
+                  <div className="flex justify-between font-bold text-amber-900 text-[11px]">
+                    <span>🎵 Music (BGM)</span>
+                    <span>{Math.round(audioSettings.bgmVolume * 100)}%</span>
+                  </div>
+                  <input
+                    id="slider-hud-bgm"
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={Math.round(audioSettings.bgmVolume * 100)}
+                    onChange={(e) => soundManager.setBgmVolume(Number(e.target.value) / 100)}
+                    className="w-full accent-amber-700 cursor-pointer"
+                  />
+                </label>
+
+                <label className="block space-y-0.5">
+                  <div className="flex justify-between font-bold text-amber-900 text-[11px]">
+                    <span>✨ Effects (SFX)</span>
+                    <span>{Math.round(audioSettings.sfxVolume * 100)}%</span>
+                  </div>
+                  <input
+                    id="slider-hud-sfx"
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={Math.round(audioSettings.sfxVolume * 100)}
+                    onChange={(e) => {
+                      soundManager.setSfxVolume(Number(e.target.value) / 100);
+                    }}
+                    onMouseUp={() => soundManager.playSfx('click')}
+                    className="w-full accent-emerald-700 cursor-pointer"
+                  />
+                </label>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    soundManager.playSfx('click');
+                    setAudioPopoverOpen(false);
+                    setSettingsModalOpen(true);
+                  }}
+                  className="w-full py-1 rounded-lg bg-amber-950/10 hover:bg-amber-950/20 text-amber-950 font-display font-bold text-[10px] cursor-pointer"
+                >
+                  Open Full Audio &amp; Weather Settings →
+                </button>
+              </div>
+            )}
 
             <button
               type="button"
@@ -1946,6 +2063,21 @@ export const HUD: React.FC<HUDProps> = ({
                 {audioSettings.muted ? 'Muted All' : 'Mute All: Off'}
               </button>
             </div>
+
+            <label className="block space-y-1">
+              <div className="flex justify-between font-bold text-amber-950 text-[11px]">
+                <span>Master Volume</span>
+                <span>{Math.round(audioSettings.masterVolume * 100)}%</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={Math.round(audioSettings.masterVolume * 100)}
+                onChange={(e) => soundManager.setMasterVolume(Number(e.target.value) / 100)}
+                className="w-full accent-sky-700"
+              />
+            </label>
 
             <label className="block space-y-1">
               <div className="flex justify-between font-bold text-amber-900 text-[11px]">

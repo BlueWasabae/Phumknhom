@@ -163,7 +163,7 @@ export class DungeonBossScene extends Phaser.Scene {
   // Platformer & Controls
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keys!: Record<
-    'A' | 'D' | 'W' | 'E' | 'G' | 'J' | 'L' | 'F' | 'Q' | 'R' | 'SHIFT' | 'SPACE',
+    'A' | 'D' | 'W' | 'E' | 'G' | 'J' | 'K' | 'L' | 'F' | 'Q' | 'R' | 'SHIFT' | 'SPACE',
     Phaser.Input.Keyboard.Key
   >;
   private joystick: JoystickVector = { x: 0, y: 0 };
@@ -172,6 +172,7 @@ export class DungeonBossScene extends Phaser.Scene {
   private peakAirVy = 0;
   private dashActiveUntil = 0;
   private dashCooldownUntil = 0;
+  private dashVelX = 0;
   private invulnerableUntil = 0;
   private attackCooldownUntil = 0;
   private attackAnimUntil = 0;
@@ -340,8 +341,8 @@ export class DungeonBossScene extends Phaser.Scene {
     this.cameras.main.fadeIn(240, 8, 10, 20);
 
     this.cursors = this.input.keyboard!.createCursorKeys();
-    this.keys = this.input.keyboard!.addKeys('A,D,W,E,G,J,L,F,Q,R,SHIFT,SPACE', false) as Record<
-      'A' | 'D' | 'W' | 'E' | 'G' | 'J' | 'L' | 'F' | 'Q' | 'R' | 'SHIFT' | 'SPACE',
+    this.keys = this.input.keyboard!.addKeys('A,D,W,E,G,J,K,L,F,Q,R,SHIFT,SPACE', false) as Record<
+      'A' | 'D' | 'W' | 'E' | 'G' | 'J' | 'K' | 'L' | 'F' | 'Q' | 'R' | 'SHIFT' | 'SPACE',
       Phaser.Input.Keyboard.Key
     >;
     this.input.keyboard!.clearCaptures();
@@ -351,12 +352,12 @@ export class DungeonBossScene extends Phaser.Scene {
       this.input.keyboard.resetKeys();
     }
 
-    // Enable crisp Right-Click for Preah Khan Parry & Golden Riel Coin Toss without browser menu popup
+    // Crisp Right-Click = Invulnerability Dash; Left-Click = Class Attack (zero browser context menu!)
     this.input.mouse?.disableContextMenu();
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (this.playerDefeated) return;
       if (pointer.rightButtonDown()) {
-        this.performSecondaryWeaponAction();
+        this.performClassDash();
       } else if (pointer.leftButtonDown()) {
         this.performClassAttack();
       }
@@ -1551,41 +1552,73 @@ export class DungeonBossScene extends Phaser.Scene {
 
     const bridge = computeVillageToDungeonBridge(this.player.state, Date.now(), this.consecutiveMeleeHits);
     const cls = this.player.state.activeClass;
-    const dir = this.player.facingRight ? 1 : -1;
-    this.dashCooldownUntil = now + Math.round(920 * bridge.dashCooldownMult);
-    this.dashActiveUntil = now + 200;
-    this.invulnerableUntil = Math.max(this.invulnerableUntil, now + 420);
+    // Respect currently held horizontal input so players can dash away instantly!
+    let dir = this.player.facingRight ? 1 : -1;
+    if (this.cursors.left.isDown || this.keys.A.isDown || this.joystick.x < -0.2) dir = -1;
+    else if (this.cursors.right.isDown || this.keys.D.isDown || this.joystick.x > 0.2) dir = 1;
+    this.player.facing = dir > 0 ? 'right' : 'left';
+
+    this.dashCooldownUntil = now + Math.round(1200 * bridge.dashCooldownMult);
+    this.dashActiveUntil = now + 220;
+    this.invulnerableUntil = Math.max(this.invulnerableUntil, now + 320);
+    this.player.body.setDragX(0);
+    soundManager.playSfx('swing');
+
+    const trailColor =
+      cls === 'shadow'
+        ? 0xc084fc
+        : cls === 'mystic'
+          ? 0x38bdf8
+          : cls === 'archer'
+            ? 0x4ade80
+            : cls === 'tamer'
+              ? 0x34d399
+              : 0xfacc15;
+    // Spawn 3 crisp afterimage ghosts across the 220ms burst
+    for (const delay of [0, 70, 145]) {
+      this.time.delayedCall(delay, () => {
+        if (!this.playerDefeated && this.scene.isActive('DungeonBossScene')) {
+          vfxManager.spawnAfterimage(this, this.player.x, this.player.y, trailColor, 0.95, 220, 52);
+        }
+      });
+    }
 
     if (cls === 'archer') {
-      this.player.body.setVelocityX(-dir * 420);
-      this.player.body.setVelocityY(-280);
+      this.dashVelX = dir * 610;
+      this.player.body.setVelocityX(this.dashVelX);
+      this.player.body.setVelocityY(-140);
       this.projectiles.push(this.vfx.spawnArcherArrow(this.player.x, this.player.y - 8, dir, 1.15));
-      this.spawnFloatingText(this.player.x, this.player.y - 36, 'Backflip Shot!', '#4ade80', '14px');
+      this.spawnFloatingText(this.player.x, this.player.y - 36, '⚡ Evade Shot!', '#4ade80', '14px');
     } else if (cls === 'mystic') {
       const fromX = this.player.x;
       const fromY = this.player.y;
-      const toX = Phaser.Math.Clamp(fromX + dir * 165, 60, ARENA_W - 60);
+      const toX = Phaser.Math.Clamp(fromX + dir * 175, 60, ARENA_W - 60);
+      this.dashVelX = dir * 560;
       this.player.sprite.setPosition(toX, fromY - 6);
+      this.player.body.setVelocityX(this.dashVelX * 0.5);
       this.vfx.playMysticLotusBlink(fromX, fromY, toX, fromY - 6);
-      this.spawnFloatingText(toX, fromY - 36, 'Lotus Blink!', '#facc15', '14px');
+      this.spawnFloatingText(toX, fromY - 36, '✨ Lotus Blink!', '#facc15', '14px');
     } else if (cls === 'shadow') {
       this.vfx.playShadowDecoyDash(this.player.x, this.player.y);
-      this.player.body.setVelocityX(dir * 690);
-      this.player.body.setVelocityY(-40);
+      this.dashVelX = dir * 700;
+      this.player.body.setVelocityX(this.dashVelX);
+      this.player.body.setVelocityY(-35);
       this.stealthPct = Math.min(100, this.stealthPct + 35);
-      this.spawnFloatingText(this.player.x, this.player.y - 36, 'Smoke Vanish!', '#c084fc', '14px');
+      this.spawnFloatingText(this.player.x, this.player.y - 36, '💨 Smoke Dash!', '#c084fc', '14px');
       this.broadcastClassMeter();
     } else if (cls === 'tamer') {
-      this.player.body.setVelocityX(dir * 610);
-      this.player.body.setVelocityY(-45);
+      this.dashVelX = dir * 640;
+      this.player.body.setVelocityX(this.dashVelX);
+      this.player.body.setVelocityY(-35);
       this.player.paperDoll.setAlpha(0.5);
-      this.spawnFloatingText(this.player.x, this.player.y - 36, 'Spirit Phase!', '#34d399', '14px');
+      this.spawnFloatingText(this.player.x, this.player.y - 36, '🌀 Spirit Dash!', '#34d399', '14px');
     } else {
-      this.player.body.setVelocityX(dir * 640);
-      this.player.body.setVelocityY(-45);
+      this.dashVelX = dir * 660;
+      this.player.body.setVelocityX(this.dashVelX);
+      this.player.body.setVelocityY(-35);
       this.vfx.playLbokatorDashDust(this.player.x, this.player.y);
       this.player.paperDoll.flashWhite(120);
-      this.spawnFloatingText(this.player.x, this.player.y - 36, 'Roll Dash!', '#facc15', '14px');
+      this.spawnFloatingText(this.player.x, this.player.y - 36, '⚡ Roll Dash!', '#facc15', '14px');
     }
   }
 
@@ -2552,7 +2585,11 @@ export class DungeonBossScene extends Phaser.Scene {
       );
     }
 
-    if (!this.playerDefeated && time > this.dashActiveUntil && !this.grappleActive && !this.transitioning) {
+    if (!this.playerDefeated && time <= this.dashActiveUntil && !this.grappleActive && !this.transitioning) {
+      // Lock dash velocity during the 220ms burst so ground friction never stalls the dodge!
+      this.player.body.setDragX(0);
+      this.player.body.setVelocityX(this.dashVelX);
+    } else if (!this.playerDefeated && time > this.dashActiveUntil && !this.grappleActive && !this.transitioning) {
       let moveX = this.joystick.x;
       if (!typing) {
         if (this.cursors.left.isDown || this.keys.A.isDown) moveX -= 1;
@@ -2568,7 +2605,11 @@ export class DungeonBossScene extends Phaser.Scene {
         if (Phaser.Input.Keyboard.JustDown(this.keys.G)) {
           this.performBambooGrapple();
         }
-        if (Phaser.Input.Keyboard.JustDown(this.keys.SHIFT) || Phaser.Input.Keyboard.JustDown(this.keys.L)) {
+        if (
+          Phaser.Input.Keyboard.JustDown(this.keys.SHIFT) ||
+          Phaser.Input.Keyboard.JustDown(this.keys.K) ||
+          Phaser.Input.Keyboard.JustDown(this.keys.L)
+        ) {
           this.performClassDash();
         }
         if (Phaser.Input.Keyboard.JustDown(this.keys.J)) {

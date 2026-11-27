@@ -236,6 +236,7 @@ export class OverworldScene extends Phaser.Scene {
   }
 
   private createSceneContent(): void {
+    this.input.mouse?.disableContextMenu();
     this.physics.world.gravity.y = 0;
     this.physics.world.setBounds(24, HORIZON_H, MAP_W - 48, MAP_H - HORIZON_H - 18);
     this.glowLights = [];
@@ -266,6 +267,12 @@ export class OverworldScene extends Phaser.Scene {
       this.buildGreenParkMap();
     } else if (this.mapId === 'wild_frontier') {
       this.buildWildFrontierMap();
+    } else if (this.mapId === 'mining_quarry') {
+      this.buildMiningQuarryMap();
+    } else if (this.mapId === 'bamboo_forest') {
+      this.buildBambooForestMap();
+    } else if (this.mapId === 'sunken_ruins') {
+      this.buildSunkenRuinsMap();
     }
 
     // 5. Walk-Through Glowing Road Portals & Wooden Signposts at Map Edges
@@ -484,7 +491,12 @@ export class OverworldScene extends Phaser.Scene {
   }
 
   private syncDynamicBgm(): void {
-    if (this.mapId === 'wild_frontier') {
+    if (
+      this.mapId === 'wild_frontier' ||
+      this.mapId === 'mining_quarry' ||
+      this.mapId === 'bamboo_forest' ||
+      this.mapId === 'sunken_ruins'
+    ) {
       soundManager.playBgm('cavern');
       return;
     }
@@ -648,13 +660,33 @@ export class OverworldScene extends Phaser.Scene {
       borderGfx.fillRoundedRect(640, 460, 320, 190, 14);
       this.add.tileSprite(800, 555, 308, 178, 'sv_plaza_tile').setDepth(3);
     } else if (this.mapId === 'wild_frontier') {
-      // Branching dirt trail into northern Shimmer woods and eastern Mini-Boss clearing
-      borderGfx.fillRoundedRect(760, 290, 560, 52, 10);
-      this.add.tileSprite(1040, 316, 548, 42, 'sv_path').setDepth(2);
-      borderGfx.fillRoundedRect(760, 316, 52, 310, 10);
-      this.add.tileSprite(786, 471, 42, 298, 'sv_path').setDepth(2);
-      borderGfx.fillRoundedRect(880, 725, 420, 56, 10);
-      this.add.tileSprite(1090, 753, 408, 46, 'sv_path').setDepth(2);
+      // Straight grid-aligned crossroad connecting West Market, North Quarry, East Bamboo Forest & South Sunken Ruins
+      borderGfx.fillStyle(0x7c5b3b, 0.85);
+      borderGfx.fillRoundedRect(710, 520, 180, 160, 14);
+      this.add.tileSprite(800, 600, 168, 148, 'sv_plaza_tile').setDepth(3);
+    } else if (this.mapId === 'mining_quarry') {
+      // Terraced red-laterite excavation courtyard
+      borderGfx.fillStyle(0x7c2d12, 0.88);
+      borderGfx.fillRoundedRect(320, 320, 960, 560, 18);
+      this.add.tileSprite(800, 600, 944, 544, 'sv_path').setTint(0xd97757).setDepth(3);
+      const qFrame = this.add.graphics().setDepth(4);
+      qFrame.lineStyle(2, 0xf97316, 0.55);
+      qFrame.strokeRoundedRect(336, 336, 928, 528, 14);
+    } else if (this.mapId === 'bamboo_forest') {
+      // Misty emerald forest glade & clearing
+      borderGfx.fillStyle(0x14532d, 0.78);
+      borderGfx.fillRoundedRect(300, 310, 1020, 580, 22);
+      this.add.tileSprite(810, 600, 1004, 564, 'sv_path').setTint(0x86efac).setAlpha(0.55).setDepth(3);
+    } else if (this.mapId === 'sunken_ruins') {
+      // Flooded ancient Angkor sandstone temple courtyard surrounded by luminous shallow pools
+      const poolGfx = this.add.graphics().setDepth(1);
+      poolGfx.fillStyle(0x0c4a6e, 0.92);
+      poolGfx.fillRoundedRect(210, 250, 1180, 740, 24);
+      poolGfx.lineStyle(3, 0x38bdf8, 0.65);
+      poolGfx.strokeRoundedRect(216, 256, 1168, 728, 22);
+      borderGfx.fillStyle(0x78716c, 0.95);
+      borderGfx.fillRoundedRect(350, 340, 900, 560, 14);
+      this.add.tileSprite(800, 620, 886, 546, 'sv_plaza_tile').setTint(0xbae6fd).setDepth(3);
     }
   }
 
@@ -853,29 +885,68 @@ export class OverworldScene extends Phaser.Scene {
       onInteract: openBounties,
     });
 
-    // 2. EXPRESS BUS STOP + WAITING BENCH (West-Center Avenue)
+    // 2. EXPRESS BUS STOP + ROOFED WAITING SHELTER & ROUTE MAP (West-Center Avenue)
+    const shelterGfx = this.add.graphics().setDepth(652);
+    // Concrete sidewalk pad
+    shelterGfx.fillStyle(0x94a3b8, 0.92);
+    shelterGfx.fillRoundedRect(378, 636, 116, 36, 6);
+    shelterGfx.lineStyle(2, 0x475569, 0.9);
+    shelterGfx.strokeRoundedRect(378, 636, 116, 36, 6);
+    // Wooden waiting shelter back wall & glass panel
+    shelterGfx.fillStyle(0x78350f, 1);
+    shelterGfx.fillRect(388, 610, 68, 34);
+    shelterGfx.fillStyle(0xbae6fd, 0.75);
+    shelterGfx.fillRect(394, 616, 26, 20);
+    // Illuminated Phnom Penh Express Route Map inside shelter
+    shelterGfx.fillStyle(0x0f172a, 0.95);
+    shelterGfx.fillRect(424, 615, 28, 22);
+    shelterGfx.lineStyle(1.5, 0xfacc15, 0.95);
+    shelterGfx.lineBetween(428, 626, 448, 626);
+    shelterGfx.fillStyle(0x22c55e, 1);
+    shelterGfx.fillCircle(430, 626, 2.5);
+    shelterGfx.fillStyle(0x38bdf8, 1);
+    shelterGfx.fillCircle(438, 626, 2.5);
+    shelterGfx.fillStyle(0xf97316, 1);
+    shelterGfx.fillCircle(446, 626, 2.5);
+    // Shelter roof & pillars
+    const shelterRoof = this.add.graphics().setDepth(666);
+    shelterRoof.fillStyle(0x14532d, 1);
+    shelterRoof.fillRoundedRect(380, 598, 84, 15, 5);
+    shelterRoof.fillStyle(0xfacc15, 0.95);
+    shelterRoof.fillRect(384, 608, 76, 3);
+    shelterRoof.fillStyle(0x57534e, 1);
+    shelterRoof.fillRect(386, 613, 4, 42);
+    shelterRoof.fillRect(454, 613, 4, 42);
+
     const busStop = this.addBuildingOrProp({
       texture: 'bus_stop_sign',
-      x: 455,
+      x: 476,
       y: 660,
       scale: 1.2,
       shadowW: 28,
       shadowH: 9,
-      label: 'EXPRESS BUS STOP',
-      joinArrowY: 610,
+      label: 'PHUM EXPRESS TERMINAL',
+      joinArrowY: 604,
     });
-    this.add.image(420, 660, 'soft_shadow').setDisplaySize(32, 9).setDepth(656);
-    this.add.image(420, 658, 'na_bench').setScale(0.78).setDepth(659);
-    busStop.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+    this.add.image(422, 656, 'soft_shadow').setDisplaySize(44, 10).setDepth(655);
+    this.add.image(422, 653, 'na_bench').setScale(0.9).setDepth(659);
+    const busZoneHit = this.add
+      .rectangle(432, 636, 118, 64, 0x000000, 0)
+      .setDepth(670)
+      .setInteractive({ useHandCursor: true });
+    const openExpressMap = () => {
+      soundManager.playSfx('click');
       EventBus.emit('ui:openModal', { modal: 'worldMap' });
-    });
+    };
+    busStop.setInteractive({ useHandCursor: true }).on('pointerdown', openExpressMap);
+    busZoneHit.on('pointerdown', openExpressMap);
     this.landmarks.push({
-      x: 455,
-      y: 660,
-      radius: 52,
-      label: 'Press [E] or Click → Express Bus & Fullscreen World Map [M]',
+      x: 446,
+      y: 656,
+      radius: 62,
+      label: 'Press [E] or Click → Board Phnom Penh Express Bus & World Map [M]',
       isDungeonPortal: false,
-      onInteract: () => EventBus.emit('ui:openModal', { modal: 'worldMap' }),
+      onInteract: openExpressMap,
     });
 
     // 3. ATM BANK VAULT (North-West Lawn — generous spacing!)
@@ -2093,69 +2164,539 @@ export class OverworldScene extends Phaser.Scene {
     });
   }
 
-  // ==================== WALK-THROUGH GLOWING ROAD PORTALS ====================
+  // ==================== MAP 6: LATERITE QUARRY (COPPER, IRON, LATERITE & RARE JADE VEINS) ====================
+  private buildMiningQuarryMap(): void {
+    this.add
+      .text(800, 290, '⛏️ LATERITE QUARRY · អណ្តូងរ៉ែថ្មបាយក្រៀម\nMine Copper, Iron, Red Laterite & Rare Imperial Jade Veins', {
+        fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
+        fontSize: '13px',
+        fontStyle: 'bold',
+        color: '#fed7aa',
+        backgroundColor: 'rgba(67, 20, 7, 0.9)',
+        align: 'center',
+        padding: { x: 10, y: 4 },
+      })
+      .setResolution(2)
+      .setScale(0.55)
+      .setOrigin(0.5)
+      .setDepth(295);
+
+    const veins: Array<[number, number, string, string, number, number, number]> = [
+      [440, 440, 'Copper Vein', 'ore_copper', 0xfb923c, 28, 22],
+      [620, 420, 'Iron Vein', 'ore_iron', 0x94a3b8, 32, 26],
+      [980, 430, 'Red Laterite Vein', 'ore_laterite', 0xef4444, 36, 30],
+      [1160, 460, 'Copper Vein', 'ore_copper', 0xfb923c, 28, 22],
+      [420, 680, 'Iron Vein', 'ore_iron', 0x94a3b8, 32, 26],
+      [640, 760, 'Red Laterite Vein', 'ore_laterite', 0xef4444, 36, 30],
+      [980, 750, 'Rare Imperial Jade Vein', 'ore_jade_crystal', 0x10b981, 52, 48],
+      [1180, 690, 'Rare Imperial Jade Vein', 'ore_jade_crystal', 0x10b981, 52, 48],
+    ];
+
+    veins.forEach(([vx, vy, vName, itemId, tint, xp, coins], idx) => {
+      this.add.image(vx, vy + 6, 'soft_shadow').setDisplaySize(48, 14).setDepth(vy - 2);
+      const sprite = this.add
+        .image(vx, vy, 'lf_boulder')
+        .setScale(itemId === 'ore_jade_crystal' ? 0.88 : 0.78)
+        .setTint(tint)
+        .setDepth(vy)
+        .setInteractive({ useHandCursor: true });
+      const labelText = this.add
+        .text(vx, vy + 18, `⛏️ ${vName}`, {
+          fontFamily: 'Fredoka, sans-serif',
+          fontSize: '10px',
+          fontStyle: 'bold',
+          color: itemId === 'ore_jade_crystal' ? '#6ee7b7' : '#fed7aa',
+          backgroundColor: 'rgba(15, 23, 42, 0.86)',
+          padding: { x: 5, y: 2 },
+        })
+        .setResolution(2)
+        .setScale(0.42)
+        .setOrigin(0.5, 0)
+        .setDepth(vy + 6);
+
+      const node: GatherNode = { id: `quarry_${idx}`, kind: 'rock', x: vx, y: vy, sprite, labelText, ready: true };
+      this.gatherNodes.push(node);
+
+      const mineVein = () => {
+        if (!node.ready) return;
+        node.ready = false;
+        soundManager.playSfx('ore_shatter');
+        this.cameras.main.shake(100, 0.0045);
+        sprite.setAlpha(0.28).setScale(0.55);
+        labelText.setText('Respawning...');
+        this.spawnFloatingText(vx, vy - 16, `+${xp} Mining XP · +${coins}c`, '#fbbf24');
+        EventBus.emit('frontier:gather', {
+          skillId: 'mining',
+          xp,
+          coins,
+          itemId,
+          label: `Mined ${vName} (+${xp} Mining XP & +${coins}c)!`,
+        });
+        this.time.delayedCall(19000, () => {
+          if (!sprite.active) return;
+          node.ready = true;
+          sprite.setAlpha(1).setScale(itemId === 'ore_jade_crystal' ? 0.88 : 0.78);
+          labelText.setText(`⛏️ ${vName}`);
+        });
+      };
+      sprite.on('pointerdown', mineVein);
+      this.landmarks.push({
+        x: vx,
+        y: vy,
+        radius: 52,
+        label: `Press [E] or Click → Mine ${vName} (+${xp} Mining XP)`,
+        isDungeonPortal: false,
+        onInteract: mineVein,
+      });
+    });
+
+    // Quarry Cavern Shaft shortcut right inside the Quarry!
+    const shaft = this.addBuildingOrProp({
+      texture: 'angkor_portal',
+      x: 800,
+      y: 520,
+      scale: 0.72,
+      shadowW: 84,
+      shadowH: 18,
+      bodyW: 54,
+      bodyH: 20,
+      label: 'DEEP CAVERN SHAFT',
+      joinArrowY: 455,
+    });
+    const enterShaft = () => {
+      soundManager.playSfx('magic');
+      EventBus.emit('cavern:enterRequest', { returnMapId: 'wild_frontier' });
+    };
+    shaft.setInteractive({ useHandCursor: true }).on('pointerdown', enterShaft);
+    this.landmarks.push({
+      x: 800,
+      y: 530,
+      radius: 64,
+      label: 'Press [E] or Click → Descend into Ancient Laterite Cavern',
+      isDungeonPortal: true,
+      onInteract: enterShaft,
+    });
+  }
+
+  // ==================== MAP 7: MISTY BAMBOO FOREST (RARE HERBS, ANCIENT WOOD & FOREST SPIRITS) ====================
+  private buildBambooForestMap(): void {
+    this.add
+      .text(800, 290, '🎋 MISTY BAMBOO FOREST · ព្រៃឫស្សីអ័ព្ទ\nGather Rare Herbs, Ancient Bamboo Wood & Commune with Forest Spirits', {
+        fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
+        fontSize: '13px',
+        fontStyle: 'bold',
+        color: '#a7f3d0',
+        backgroundColor: 'rgba(6, 78, 59, 0.9)',
+        align: 'center',
+        padding: { x: 10, y: 4 },
+      })
+      .setResolution(2)
+      .setScale(0.55)
+      .setOrigin(0.5)
+      .setDepth(295);
+
+    // Bamboo grove pillars & floating cyan forest spirit wisps
+    for (const [bx, by] of [
+      [420, 390], [620, 360], [1020, 380], [1220, 410],
+      [460, 820], [820, 860], [1160, 810],
+    ]) {
+      this.addBuildingOrProp({
+        texture: 'sugar_palm_tree',
+        x: bx,
+        y: by,
+        scale: 1.05,
+        shadowW: 36,
+        shadowH: 11,
+        bodyW: 16,
+        bodyH: 12,
+      });
+    }
+
+    const herbs: Array<[number, number, string, string, number, number]> = [
+      [480, 480, 'Sacred Pink Lotus Herb', 'crop_pink_lotus', 38, 24],
+      [720, 430, 'Ancient Spirit Bamboo', 'seed_spirit_bamboo', 45, 32],
+      [980, 490, 'Wild Kampot Pepper', 'crop_kampot_pepper', 42, 30],
+      [1180, 580, 'Ancient Bamboo Wood', 'crop_slek_krey', 32, 22],
+      [560, 730, 'Dewy Jasmine Blossom', 'crop_phka_rumduol', 34, 24],
+      [880, 760, 'Sacred Pink Lotus Herb', 'crop_pink_lotus', 38, 24],
+      [1120, 730, 'Wild Forest Spirit Essence', 'drop_spirit_orb', 50, 40],
+    ];
+    herbs.forEach(([hx, hy, hName, itemId, xp, coins], idx) => {
+      const sprite = this.add
+        .image(hx, hy, idx % 2 === 0 ? 'sv_blossoms' : 'sv_flowers')
+        .setScale(1.18)
+        .setTint(itemId === 'drop_spirit_orb' ? 0x67e8f9 : 0xffffff)
+        .setDepth(hy)
+        .setInteractive({ useHandCursor: true });
+      const labelText = this.add
+        .text(hx, hy + 15, `🎋 ${hName}`, {
+          fontFamily: 'Fredoka, sans-serif',
+          fontSize: '10px',
+          fontStyle: 'bold',
+          color: '#a7f3d0',
+          backgroundColor: 'rgba(15, 23, 42, 0.84)',
+          padding: { x: 5, y: 2 },
+        })
+        .setResolution(2)
+        .setScale(0.42)
+        .setOrigin(0.5, 0)
+        .setDepth(hy + 6);
+
+      const node: GatherNode = { id: `bamboo_${idx}`, kind: 'herb', x: hx, y: hy, sprite, labelText, ready: true };
+      this.gatherNodes.push(node);
+
+      const gather = () => {
+        if (!node.ready) return;
+        node.ready = false;
+        soundManager.playSfx('harvest');
+        sprite.setAlpha(0.28).setScale(0.8);
+        labelText.setText('Regrowing...');
+        this.spawnFloatingText(hx, hy - 14, `+${xp} Foraging XP · +${coins}c`, '#34d399');
+        EventBus.emit('frontier:gather', {
+          skillId: 'foraging',
+          xp,
+          coins,
+          itemId,
+          label: `Gathered ${hName} (+${xp} Foraging XP & +${coins}c)!`,
+        });
+        this.time.delayedCall(18000, () => {
+          if (!sprite.active) return;
+          node.ready = true;
+          sprite.setAlpha(1).setScale(1.18);
+          labelText.setText(`🎋 ${hName}`);
+        });
+      };
+      sprite.on('pointerdown', gather);
+      this.landmarks.push({
+        x: hx,
+        y: hy,
+        radius: 50,
+        label: `Press [E] or Click → Gather ${hName} (+${xp} Foraging XP)`,
+        isDungeonPortal: false,
+        onInteract: gather,
+      });
+    });
+
+    // Wandering cyan forest spirits
+    for (let i = 0; i < 6; i++) {
+      const sx = 450 + i * 145;
+      const sy = 520 + (i % 2 === 0 ? -70 : 90);
+      const wisp = this.add
+        .circle(sx, sy, 7, 0x67e8f9, 0.72)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(sy + 40);
+      this.tweens.add({
+        targets: wisp,
+        y: sy - 22,
+        x: sx + (i % 2 === 0 ? 28 : -28),
+        alpha: 0.28,
+        duration: 1800 + i * 240,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    }
+  }
+
+  // ==================== MAP 8: SUNKEN ANGKOR RUINS (MYTHIC ORE, RELIC CHESTS & ELITE GUARDIANS) ====================
+  private buildSunkenRuinsMap(): void {
+    this.add
+      .text(800, 290, '🏺 SUNKEN ANGKOR RUINS · ប្រាសាទលិចទឹកអង្គរ\nMine Mythic Angkor Gold, Open Sunken Relic Chests & Challenge Elite Guardians', {
+        fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
+        fontSize: '13px',
+        fontStyle: 'bold',
+        color: '#67e8f9',
+        backgroundColor: 'rgba(12, 74, 110, 0.92)',
+        align: 'center',
+        padding: { x: 10, y: 4 },
+      })
+      .setResolution(2)
+      .setScale(0.55)
+      .setOrigin(0.5)
+      .setDepth(295);
+
+    // Sunken temple columns
+    for (const [rx, ry, tex] of [
+      [420, 410, 'na_ruin_pillar'],
+      [1180, 410, 'na_ruin_pillar'],
+      [420, 810, 'na_ruin_statue'],
+      [1180, 810, 'na_ruin_statue'],
+    ] as Array<[number, number, string]>) {
+      this.addBuildingOrProp({
+        texture: tex,
+        x: rx,
+        y: ry,
+        scale: 1.25,
+        shadowW: 56,
+        shadowH: 15,
+        bodyW: 36,
+        bodyH: 20,
+      });
+    }
+
+    // 4 Mythic Angkor Gold & Sunken Relic Ore Veins
+    const mythicVeins: Array<[number, number, string, string]> = [
+      [520, 520, 'Mythic Angkor Gold Vein', 'ore_angkor_gold'],
+      [1080, 520, 'Mythic Angkor Gold Vein', 'ore_angkor_gold'],
+      [520, 720, 'Sunken Jade Relic Vein', 'ore_jade_crystal'],
+      [1080, 720, 'Sunken Jade Relic Vein', 'ore_jade_crystal'],
+    ];
+    mythicVeins.forEach(([vx, vy, vName, itemId], idx) => {
+      this.add.image(vx, vy + 6, 'soft_shadow').setDisplaySize(50, 14).setDepth(vy - 2);
+      const sprite = this.add
+        .image(vx, vy, 'lf_boulder')
+        .setScale(0.88)
+        .setTint(itemId === 'ore_angkor_gold' ? 0xfacc15 : 0x22d3ee)
+        .setDepth(vy)
+        .setInteractive({ useHandCursor: true });
+      const labelText = this.add
+        .text(vx, vy + 18, `✨ ${vName}`, {
+          fontFamily: 'Fredoka, sans-serif',
+          fontSize: '10px',
+          fontStyle: 'bold',
+          color: '#fef08a',
+          backgroundColor: 'rgba(15, 23, 42, 0.88)',
+          padding: { x: 5, y: 2 },
+        })
+        .setResolution(2)
+        .setScale(0.42)
+        .setOrigin(0.5, 0)
+        .setDepth(vy + 6);
+
+      const node: GatherNode = { id: `sunken_vein_${idx}`, kind: 'rock', x: vx, y: vy, sprite, labelText, ready: true };
+      this.gatherNodes.push(node);
+
+      const mineMythic = () => {
+        if (!node.ready) return;
+        node.ready = false;
+        soundManager.playSfx('ore_shatter');
+        this.cameras.main.shake(110, 0.005);
+        sprite.setAlpha(0.28).setScale(0.55);
+        labelText.setText('Recharging...');
+        this.spawnFloatingText(vx, vy - 18, '+65 Mining XP · +60c', '#22d3ee');
+        EventBus.emit('frontier:gather', {
+          skillId: 'mining',
+          xp: 65,
+          coins: 60,
+          itemId,
+          label: `Mined ${vName} (+65 Mining XP & +60c)!`,
+        });
+        this.time.delayedCall(24000, () => {
+          if (!sprite.active) return;
+          node.ready = true;
+          sprite.setAlpha(1).setScale(0.88);
+          labelText.setText(`✨ ${vName}`);
+        });
+      };
+      sprite.on('pointerdown', mineMythic);
+      this.landmarks.push({
+        x: vx,
+        y: vy,
+        radius: 54,
+        label: `Press [E] or Click → Mine ${vName} (+65 Mining XP)`,
+        isDungeonPortal: false,
+        onInteract: mineMythic,
+      });
+    });
+
+    // 2 Sunken Relic Chests (Respawn every 45s — grants Reforge Stones + Coins + Chase Roll!)
+    const chests: Array<[number, number, string]> = [
+      [680, 620, 'Sunken Angkor Relic Chest'],
+      [920, 620, 'Ancient Naga Vault Chest'],
+    ];
+    chests.forEach(([cx, cy, cName], idx) => {
+      const sprite = this.add
+        .image(cx, cy, 'na_chest')
+        .setScale(1.35)
+        .setTint(0x67e8f9)
+        .setDepth(cy)
+        .setInteractive({ useHandCursor: true });
+      const labelText = this.add
+        .text(cx, cy + 16, `🏺 ${cName}`, {
+          fontFamily: 'Fredoka, sans-serif',
+          fontSize: '10px',
+          fontStyle: 'bold',
+          color: '#fde047',
+          backgroundColor: 'rgba(15, 23, 42, 0.9)',
+          padding: { x: 5, y: 2 },
+        })
+        .setResolution(2)
+        .setScale(0.42)
+        .setOrigin(0.5, 0)
+        .setDepth(cy + 6);
+
+      const node: GatherNode = { id: `sunken_chest_${idx}`, kind: 'rock', x: cx, y: cy, sprite, labelText, ready: true };
+      this.gatherNodes.push(node);
+
+      const openRelicChest = () => {
+        if (!node.ready) return;
+        node.ready = false;
+        soundManager.playSfx('coin');
+        sprite.setAlpha(0.35);
+        labelText.setText('Refilling...');
+        this.spawnFloatingText(cx, cy - 18, '+110c · Reforge Stone', '#facc15');
+        EventBus.emit('frontier:gather', {
+          skillId: 'mining',
+          xp: 55,
+          coins: 110,
+          itemId: 'mat_reforge_stone',
+          label: `Opened ${cName} (+110 Coins & +1 Reforge Stone)!`,
+        });
+        this.time.delayedCall(45000, () => {
+          if (!sprite.active) return;
+          node.ready = true;
+          sprite.setAlpha(1);
+          labelText.setText(`🏺 ${cName}`);
+        });
+      };
+      sprite.on('pointerdown', openRelicChest);
+      this.landmarks.push({
+        x: cx,
+        y: cy,
+        radius: 50,
+        label: `Press [E] or Click → Open ${cName}`,
+        isDungeonPortal: false,
+        onInteract: openRelicChest,
+      });
+    });
+
+    // Elite Sunken Guardian Altar → Direct Mythic Raid Shortcut to Neak Reach / Krong Reap
+    const guardianStatue = this.addBuildingOrProp({
+      texture: 'angkor_portal',
+      x: 800,
+      y: 455,
+      scale: 0.72,
+      shadowW: 84,
+      shadowH: 18,
+      bodyW: 54,
+      bodyH: 20,
+      label: 'ELITE GUARDIAN SANCTUM',
+      joinArrowY: 390,
+    });
+    const openGuardian = () => {
+      soundManager.playSfx('click');
+      EventBus.emit('ui:openModal', { modal: 'modeSelector' });
+    };
+    guardianStatue.setInteractive({ useHandCursor: true }).on('pointerdown', openGuardian);
+    this.landmarks.push({
+      x: 800,
+      y: 465,
+      radius: 62,
+      label: 'Press [E] or Click → Challenge Sunken Elite Guardian (Boss Portal)',
+      isDungeonPortal: true,
+      onInteract: openGuardian,
+    });
+  }
+
+  // ==================== WALK-THROUGH GLOWING ROAD PORTALS (STRICTLY GRID-ALIGNED) ====================
   private buildWalkThroughRoadPortals(): void {
     for (const portal of this.mapPortals) {
       const isNorthOrSouth = portal.edge === 'north' || portal.edge === 'south';
       const archTex = isNorthOrSouth ? 'angkor_arch_gate' : 'wood_fence_gate';
+      const padColor =
+        portal.targetType === 'farm'
+          ? 0x4ade80
+          : portal.targetMapId === 'mining_quarry'
+            ? 0xf97316
+            : portal.targetMapId === 'bamboo_forest'
+              ? 0x10b981
+              : portal.targetMapId === 'sunken_ruins'
+                ? 0x06b6d4
+                : 0x38bdf8;
 
-      // Glowing animated portal aura nestled inside the road archway
-      const aura = this.add
-        .image(portal.x, portal.y - 16, 'portal_vortex')
-        .setTint(portal.targetType === 'farm' ? 0x4ade80 : 0x38bdf8)
-        .setScale(0.85)
-        .setAlpha(0.55)
-        .setBlendMode(Phaser.BlendModes.ADD)
-        .setDepth(portal.y - 1);
+      // Crisp axis-aligned glowing threshold pad flush with the road grid
+      const padW = isNorthOrSouth ? 74 : 26;
+      const padH = isNorthOrSouth ? 26 : 74;
+      const thresholdPad = this.add.graphics().setDepth(portal.y - 6);
+      thresholdPad.fillStyle(padColor, 0.24);
+      thresholdPad.fillRoundedRect(portal.x - padW / 2, portal.y - padH / 2, padW, padH, 6);
+      thresholdPad.lineStyle(2, padColor, 0.85);
+      thresholdPad.strokeRoundedRect(portal.x - padW / 2, portal.y - padH / 2, padW, padH, 6);
       this.tweens.add({
-        targets: aura,
-        alpha: 0.22,
-        scale: 1.04,
-        duration: 820,
+        targets: thresholdPad,
+        alpha: 0.45,
+        duration: 900,
         yoyo: true,
         repeat: -1,
         ease: 'Sine.easeInOut',
       });
 
-      this.add.image(portal.x, portal.y + 4, 'soft_shadow').setDisplaySize(64, 16).setDepth(portal.y - 3);
+      // Glowing animated portal aura strictly centered on road coordinates (zero tilt/rotation)
+      const aura = this.add
+        .image(portal.x, portal.y - (isNorthOrSouth ? 18 : 12), 'portal_vortex')
+        .setTint(padColor)
+        .setScale(0.78)
+        .setAlpha(0.5)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(portal.y - 2);
+      this.tweens.add({
+        targets: aura,
+        alpha: 0.2,
+        scale: 0.96,
+        duration: 850,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+
+      // Proper foot shadow + setOrigin(0.5, 1) grounded depth sorting
+      this.add
+        .image(portal.x, portal.y + 4, 'soft_shadow')
+        .setDisplaySize(isNorthOrSouth ? 76 : 56, 14)
+        .setDepth(portal.y - 4);
       const gateImg = this.add
-        .image(portal.x, portal.y, archTex)
-        .setOrigin(0.5, 0.85)
-        .setScale(isNorthOrSouth ? 1.24 : 1.18)
-        .setDepth(portal.y + 16)
+        .image(portal.x, portal.y + 4, archTex)
+        .setOrigin(0.5, 1)
+        .setRotation(0)
+        .setScale(isNorthOrSouth ? 1.24 : 1.14)
+        .setDepth(portal.y + 4)
         .setInteractive({ useHandCursor: true });
       gateImg.on('pointerdown', () => this.enterRoadPortal(portal));
 
-      // Waving Cambodian flags flanking every road gate
+      // Symmetrical flanking Khmer lanterns / flags strictly aligned horizontally or vertically
       const flagTex = isNorthOrSouth ? 'na_flag_yellow' : 'na_flag_red';
       const flagAnim = isNorthOrSouth ? 'flag_yellow_wave' : 'flag_red_wave';
-      for (const fx of [-32, 32]) {
-        const fl = this.add.sprite(portal.x + fx, portal.y - 12, flagTex, 0).setScale(1.05).setDepth(portal.y + 18);
+      const offsets: Array<[number, number]> = isNorthOrSouth
+        ? [[-38, -6], [38, -6]]
+        : [[0, -40], [0, 32]];
+      for (const [fx, fy] of offsets) {
+        const fl = this.add
+          .sprite(portal.x + fx, portal.y + fy, flagTex, 0)
+          .setOrigin(0.5, 1)
+          .setScale(1.0)
+          .setDepth(portal.y + fy + 8);
         if (this.anims.exists(flagAnim)) fl.play(flagAnim);
       }
 
-      // Wooden Road Signpost right beside the arch
-      this.add.image(portal.x + 42, portal.y + 2, 'sv_sign_wood').setScale(1.05).setDepth(portal.y + 17);
-
+      // Signpost neatly aligned to road edge
+      const signX = isNorthOrSouth ? portal.x + 54 : portal.x;
+      const signY = isNorthOrSouth ? portal.y + 4 : portal.y - 52;
       this.add
-        .text(portal.x, portal.y + 10, `${portal.signLabel}\n${portal.khmerLabel}`, {
+        .image(signX, signY, 'sv_sign_wood')
+        .setOrigin(0.5, 1)
+        .setScale(1.0)
+        .setDepth(signY + 6);
+
+      const labelY = isNorthOrSouth ? portal.y + 12 : portal.y + 40;
+      this.add
+        .text(portal.x, labelY, `${portal.signLabel}\n${portal.khmerLabel}`, {
           fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
           fontSize: '11px',
           fontStyle: 'bold',
           color: '#fef08a',
-          backgroundColor: 'rgba(15, 23, 42, 0.9)',
+          backgroundColor: 'rgba(15, 23, 42, 0.92)',
           align: 'center',
           padding: { x: 8, y: 3 },
         })
         .setResolution(2)
         .setScale(0.45)
         .setOrigin(0.5, 0)
-        .setDepth(portal.y + 24);
+        .setDepth(portal.y + 46);
 
       this.landmarks.push({
         x: portal.x,
         y: portal.y,
-        radius: 50,
+        radius: 52,
         label: portal.prompt,
         isDungeonPortal: false,
         onInteract: () => this.enterRoadPortal(portal),
@@ -2268,29 +2809,117 @@ export class OverworldScene extends Phaser.Scene {
     if (this.busActive || !this.scene.isActive('OverworldScene')) return;
     this.busActive = true;
 
-    const busY = 602;
-    const stopX = 455;
-    const bus = this.add
-      .image(-60, busY, 'village_bus')
-      .setScale(1.05)
-      .setDepth(610)
-      .setInteractive({ useHandCursor: true });
+    const busY = 598;
+    const stopX = 442;
     const shadow = this.add
-      .image(-60, busY + 14, 'soft_shadow')
-      .setDisplaySize(72, 16)
+      .image(-120, busY + 24, 'soft_shadow')
+      .setDisplaySize(134, 22)
       .setDepth(606);
+
+    // Detailed Layered Pixel-Art Phnom Penh Express Bus Container
+    const bus = this.add.container(-120, busY).setDepth(612);
+    const bodyGfx = this.add.graphics();
+    // Roof luggage rack & AC unit
+    bodyGfx.fillStyle(0x334155, 1);
+    bodyGfx.fillRoundedRect(-46, -34, 72, 6, 2);
+    bodyGfx.fillStyle(0xe2e8f0, 1);
+    bodyGfx.fillRoundedRect(-24, -37, 28, 7, 3);
+    bodyGfx.lineStyle(1.5, 0x0f172a, 0.9);
+    bodyGfx.strokeRect(-42, -35, 62, 5);
+    // Main two-tone Cambodian Emerald & Gold coach chassis
+    bodyGfx.fillStyle(0x15803d, 1);
+    bodyGfx.fillRoundedRect(-58, -28, 118, 42, 8);
+    bodyGfx.fillStyle(0x166534, 1);
+    bodyGfx.fillRoundedRect(-58, -4, 118, 18, 5);
+    // Gold & cream Angkor livery stripes
+    bodyGfx.fillStyle(0xfacc15, 1);
+    bodyGfx.fillRect(-56, -4, 114, 4);
+    bodyGfx.fillStyle(0xfef9c3, 0.95);
+    bodyGfx.fillRect(-56, -26, 114, 4);
+    bodyGfx.lineStyle(2, 0x052e16, 1);
+    bodyGfx.strokeRoundedRect(-58, -28, 118, 42, 8);
+    // Tinted panoramic passenger windows + windshield
+    bodyGfx.fillStyle(0x0f172a, 0.88);
+    for (const wx of [-48, -28, -8, 12]) {
+      bodyGfx.fillRoundedRect(wx, -21, 16, 13, 3);
+      bodyGfx.fillStyle(0x38bdf8, 0.36);
+      bodyGfx.fillRect(wx + 2, -19, 12, 4);
+      bodyGfx.fillStyle(0x0f172a, 0.88);
+    }
+    // Front panoramic windshield
+    bodyGfx.fillStyle(0x1e293b, 0.95);
+    bodyGfx.fillRoundedRect(42, -22, 15, 17, 3);
+    bodyGfx.fillStyle(0x7dd3fc, 0.48);
+    bodyGfx.fillRect(45, -20, 10, 6);
+    // Warm LED destination signboard "PHUM EXPRESS"
+    bodyGfx.fillStyle(0x090d16, 1);
+    bodyGfx.fillRoundedRect(-30, -29, 64, 8, 2);
+    // Chrome bumper, tail light & warm glowing headlights
+    bodyGfx.fillStyle(0xcbd5e1, 1);
+    bodyGfx.fillRect(-60, 8, 6, 6);
+    bodyGfx.fillRect(56, 8, 6, 6);
+    bodyGfx.fillStyle(0xef4444, 1);
+    bodyGfx.fillRect(-59, 0, 4, 7);
+    bodyGfx.fillStyle(0xfef08a, 1);
+    bodyGfx.fillCircle(58, 3, 3.5);
+    // Headlight beam cone
+    const headlightCone = this.add
+      .triangle(82, 5, 0, -4, 46, -16, 46, 14, 0xfef08a, 0.24)
+      .setBlendMode(Phaser.BlendModes.ADD);
+
+    // Animated boarding door (slides open at stop!)
+    const doorFrame = this.add.rectangle(34, -4, 12, 24, 0x052e16, 0.95).setStrokeStyle(1, 0xfacc15);
+    const doorLeaf = this.add.rectangle(34, -4, 10, 22, 0x16a34a, 0.95).setStrokeStyle(1, 0xbae6fd);
+
+    // Destination LED sign text
+    const signText = this.add
+      .text(2, -25, 'PHUM EXPRESS', {
+        fontFamily: 'monospace',
+        fontSize: '10px',
+        fontStyle: 'bold',
+        color: '#fde047',
+      })
+      .setResolution(2)
+      .setScale(0.42)
+      .setOrigin(0.5);
+
+    // Spinning pixel wheels (rims + lug cross)
+    const makeWheel = (wx: number) => {
+      const wCont = this.add.container(wx, 15);
+      const tire = this.add.circle(0, 0, 8.5, 0x0f172a).setStrokeStyle(1.5, 0x334155);
+      const hub = this.add.circle(0, 0, 4, 0xe2e8f0);
+      const spoke = this.add.rectangle(0, 0, 7, 1.5, 0x475569);
+      const spoke2 = this.add.rectangle(0, 0, 1.5, 7, 0x475569);
+      wCont.add([tire, hub, spoke, spoke2]);
+      return wCont;
+    };
+    const wheelRear = makeWheel(-34);
+    const wheelFront = makeWheel(32);
+
+    bus.add([headlightCone, bodyGfx, doorFrame, doorLeaf, signText, wheelRear, wheelFront]);
+    bus.setSize(124, 52);
+    bus.setInteractive({ useHandCursor: true });
+
+    const wheelSpin = this.tweens.add({
+      targets: [wheelRear, wheelFront],
+      angle: 360,
+      duration: 420,
+      repeat: -1,
+      ease: 'Linear',
+    });
+
     const joinArrow = this.add
-      .image(stopX, busY - 36, 'join_arrow')
+      .image(stopX, busY - 46, 'join_arrow')
       .setScale(0.62)
       .setDepth(650)
       .setVisible(false);
     const busBadge = this.add
-      .text(stopX, busY - 52, '🚌 EXPRESS BUS · TAP TO BOARD', {
+      .text(stopX, busY - 62, '🚌 PHUM EXPRESS · TAP TO BOARD', {
         fontFamily: 'Fredoka, sans-serif',
         fontSize: '10px',
         fontStyle: 'bold',
         color: '#fef08a',
-        backgroundColor: 'rgba(20, 83, 45, 0.92)',
+        backgroundColor: 'rgba(20, 83, 45, 0.94)',
         padding: { x: 6, y: 2 },
       })
       .setResolution(2)
@@ -2311,18 +2940,27 @@ export class OverworldScene extends Phaser.Scene {
       ease: 'Cubic.easeOut',
       onComplete: () => {
         if (!bus.active) return;
+        wheelSpin.pause();
+        // Slide boarding door open cleanly
+        this.tweens.add({
+          targets: doorLeaf,
+          x: 26,
+          scaleX: 0.3,
+          duration: 260,
+          ease: 'Quad.easeOut',
+        });
         joinArrow.setVisible(true);
         busBadge.setVisible(true);
         const arrowBounce = this.tweens.add({
           targets: joinArrow,
-          y: busY - 44,
+          y: busY - 54,
           duration: 420,
           yoyo: true,
           repeat: -1,
           ease: 'Sine.easeInOut',
         });
 
-        this.time.delayedCall(6000, () => {
+        this.time.delayedCall(6200, () => {
           arrowBounce.stop();
           joinArrow.destroy();
           busBadge.destroy();
@@ -2330,12 +2968,22 @@ export class OverworldScene extends Phaser.Scene {
             this.busActive = false;
             return;
           }
+          // Close boarding door & resume wheel spin
+          this.tweens.add({
+            targets: doorLeaf,
+            x: 34,
+            scaleX: 1,
+            duration: 220,
+            ease: 'Quad.easeIn',
+          });
+          wheelSpin.resume();
           this.tweens.add({
             targets: [bus, shadow],
-            x: MAP_W + 90,
+            x: MAP_W + 140,
             duration: 3600,
             ease: 'Cubic.easeIn',
             onComplete: () => {
+              wheelSpin.stop();
               bus.destroy();
               shadow.destroy();
               this.busActive = false;

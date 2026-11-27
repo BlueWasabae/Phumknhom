@@ -14,15 +14,23 @@ import {
   HAIR_COLORS,
   SKIN_TONES,
 } from '@shared/characterStyles';
-import { Armchair, Coins, ChefHat, Crown, Sparkles, UtensilsCrossed } from 'lucide-react';
+import { Armchair, Coins, ChefHat, Crown, Gem, RotateCcw, Sparkles, UtensilsCrossed } from 'lucide-react';
 import { HOUSE_FURNITURE_LIST, getOwnedFurnitureCount } from '@shared/houseDecor';
 import { getNpcPerkFlags } from '@shared/npcSchedules';
+import { RARITY_TIERS } from '@shared/raritySystem';
 import { FASHION_SHOP_ITEMS, ITEM_CATALOG } from '../data/items';
 import { STREET_SNACK_LIST, countInventoryAnyQuality } from '../data/recipes';
 import { NativeDialog } from './NativeDialog';
 import { PaperDollPreview } from './PaperDollPreview';
 
 export type ShopMode = 'snack' | 'fashion';
+
+export interface SalonPurchaseCost {
+  coins: number;
+  diamonds: number;
+  unlockItemIds?: string[];
+  summary?: string;
+}
 
 interface ShopModalProps {
   open: boolean;
@@ -37,15 +45,37 @@ interface ShopModalProps {
   onBuyFashion: (itemId: string) => void;
   onBuyFurniture?: (itemId: string) => void;
   onEquipFashion: (itemId: string) => void;
-  onCustomizeLook: (patch: Partial<EquippedLoadout>) => void;
+  onCustomizeLook: (patch: Partial<EquippedLoadout>, cost?: SalonPurchaseCost) => void;
 }
 
 const RARITY_STYLES: Record<ItemRarity, { border: string; pill: string }> = {
-  common: { border: 'border-stone-500/60', pill: 'bg-stone-600 text-white' },
-  uncommon: { border: 'border-emerald-600', pill: 'bg-emerald-700 text-white' },
-  rare: { border: 'border-sky-600', pill: 'bg-sky-700 text-white' },
-  epic: { border: 'border-purple-600', pill: 'bg-purple-700 text-white' },
-  legendary: { border: 'border-amber-500', pill: 'bg-amber-600 text-white' },
+  common: { border: RARITY_TIERS.common.borderClass, pill: RARITY_TIERS.common.pillClass },
+  uncommon: { border: RARITY_TIERS.uncommon.borderClass, pill: RARITY_TIERS.uncommon.pillClass },
+  rare: { border: RARITY_TIERS.rare.borderClass, pill: RARITY_TIERS.rare.pillClass },
+  epic: { border: RARITY_TIERS.epic.borderClass, pill: RARITY_TIERS.epic.pillClass },
+  legendary: { border: RARITY_TIERS.legendary.borderClass, pill: RARITY_TIERS.legendary.pillClass },
+  mythic: { border: RARITY_TIERS.mythic.borderClass, pill: RARITY_TIERS.mythic.pillClass },
+  ancient: { border: RARITY_TIERS.ancient.borderClass, pill: RARITY_TIERS.ancient.pillClass },
+};
+
+const SALON_PRICES = {
+  skinCoins: 200,
+  normalHairCoins: 300,
+  hairColorCoins: 150,
+  normalEyeCoins: 250,
+  eyeColorCoins: 150,
+  eyebrowCoins: 150,
+  normalFaceCoins: 200,
+  premiumHairDiamonds: {
+    silver_spiky: 120,
+    braided_royal: 180,
+  } as Record<string, number>,
+  premiumEyeDiamonds: {
+    glowing_gold: 150,
+  } as Record<string, number>,
+  premiumFaceDiamonds: {
+    fierce_scar: 80,
+  } as Record<string, number>,
 };
 
 export const ShopModal: React.FC<ShopModalProps> = ({
@@ -66,6 +96,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({
   const [tab, setTab] = useState<'primary' | 'secondary' | 'furniture'>(initialTab);
   const [fashionFilter, setFashionFilter] = useState<'all' | EquipSlot>('all');
   const [previewItemId, setPreviewItemId] = useState<string | null>(null);
+  const [salonDraft, setSalonDraft] = useState<EquippedLoadout>(() => ({ ...player.loadout }));
   const npcPerks = getNpcPerkFlags(player);
   const starterFurniture = HOUSE_FURNITURE_LIST.filter((f) => f.category === 'starter');
 
@@ -73,8 +104,9 @@ export const ShopModal: React.FC<ShopModalProps> = ({
     if (open) {
       setTab(initialTab);
       setPreviewItemId(null);
+      setSalonDraft({ ...player.loadout });
     }
-  }, [open, mode, initialTab]);
+  }, [open, mode, initialTab, player.loadout]);
 
   const cookingSkill = player.skills.skills.cooking;
 
@@ -505,169 +537,395 @@ export const ShopModal: React.FC<ShopModalProps> = ({
         </div>
       )}
 
-      {/* ==================== FASHION BOUTIQUE: WARDROBE MIRROR ==================== */}
-      {mode === 'fashion' && tab === 'secondary' && (
-        <div className="grid sm:grid-cols-[164px_1fr] gap-4 items-start">
-          <div className="flex flex-col items-center gap-2">
-            <PaperDollPreview loadout={player.loadout} width={156} height={156} includePet />
-            <span className="text-[11px] font-bold text-amber-900">Updates in Village Live!</span>
+      {/* ==================== FASHION BOUTIQUE: PAID SALON & WARDROBE MIRROR (UPDATE 2.2) ==================== */}
+      {mode === 'fashion' && tab === 'secondary' && (() => {
+        // Compute itemized Paid Salon bill for every option changed relative to current player.loadout
+        let totalCoins = 0;
+        let totalDiamonds = 0;
+        const changes: string[] = [];
+        const unlockItemIds: string[] = [];
+        const patch: Partial<EquippedLoadout> = {};
+
+        if (salonDraft.skinTone !== player.loadout.skinTone || salonDraft.skinColor !== player.loadout.skinColor) {
+          totalCoins += SALON_PRICES.skinCoins;
+          changes.push(`Skin Tone (${SALON_PRICES.skinCoins} C)`);
+          patch.skinTone = salonDraft.skinTone;
+          patch.skinColor = salonDraft.skinColor;
+        }
+        if (salonDraft.hairStyle !== player.loadout.hairStyle) {
+          const hDef = ALL_HAIR_STYLES.find((h) => h.id === salonDraft.hairStyle);
+          const premDia = SALON_PRICES.premiumHairDiamonds[salonDraft.hairStyle];
+          if (premDia && hDef?.premiumItemId && !isOwned(hDef.premiumItemId)) {
+            totalDiamonds += premDia;
+            unlockItemIds.push(hDef.premiumItemId);
+            changes.push(`${hDef.label} (${premDia} 💎)`);
+          } else {
+            totalCoins += SALON_PRICES.normalHairCoins;
+            changes.push(`${hDef?.label ?? salonDraft.hairStyle} (${SALON_PRICES.normalHairCoins} C)`);
+          }
+          patch.hairStyle = salonDraft.hairStyle;
+          patch.hair = hDef?.premiumItemId ?? null;
+        }
+        if (salonDraft.hairColor !== player.loadout.hairColor) {
+          totalCoins += SALON_PRICES.hairColorCoins;
+          changes.push(`Hair Color (${SALON_PRICES.hairColorCoins} C)`);
+          patch.hairColor = salonDraft.hairColor;
+        }
+        if (salonDraft.eyeStyle !== player.loadout.eyeStyle) {
+          const eDef = ALL_EYE_STYLES.find((e) => e.id === salonDraft.eyeStyle);
+          const premDia = SALON_PRICES.premiumEyeDiamonds[salonDraft.eyeStyle];
+          if (premDia && eDef?.premiumItemId && !isOwned(eDef.premiumItemId)) {
+            totalDiamonds += premDia;
+            unlockItemIds.push(eDef.premiumItemId);
+            changes.push(`${eDef.label} (${premDia} 💎)`);
+          } else {
+            totalCoins += SALON_PRICES.normalEyeCoins;
+            changes.push(`${eDef?.label ?? salonDraft.eyeStyle} (${SALON_PRICES.normalEyeCoins} C)`);
+          }
+          patch.eyeStyle = salonDraft.eyeStyle;
+        }
+        if (salonDraft.eyeColor !== player.loadout.eyeColor) {
+          totalCoins += SALON_PRICES.eyeColorCoins;
+          changes.push(`Eye Color (${SALON_PRICES.eyeColorCoins} C)`);
+          patch.eyeColor = salonDraft.eyeColor;
+        }
+        if (salonDraft.eyebrowStyle !== player.loadout.eyebrowStyle) {
+          totalCoins += SALON_PRICES.eyebrowCoins;
+          changes.push(`Eyebrows (${SALON_PRICES.eyebrowCoins} C)`);
+          patch.eyebrowStyle = salonDraft.eyebrowStyle;
+        }
+        if (salonDraft.faceStyle !== player.loadout.faceStyle) {
+          const fDef = ALL_FACE_STYLES.find((f) => f.id === salonDraft.faceStyle);
+          const premDia = SALON_PRICES.premiumFaceDiamonds[salonDraft.faceStyle];
+          if (premDia && fDef?.premiumItemId && !isOwned(fDef.premiumItemId)) {
+            totalDiamonds += premDia;
+            unlockItemIds.push(fDef.premiumItemId);
+            changes.push(`${fDef.label} (${premDia} 💎)`);
+          } else {
+            totalCoins += SALON_PRICES.normalFaceCoins;
+            changes.push(`${fDef?.label ?? salonDraft.faceStyle} (${SALON_PRICES.normalFaceCoins} C)`);
+          }
+          patch.faceStyle = salonDraft.faceStyle;
+        }
+
+        const discountedCoins =
+          npcPerks.boutiqueDiscountPct > 0
+            ? Math.max(0, Math.round(totalCoins * (1 - npcPerks.boutiqueDiscountPct)))
+            : totalCoins;
+        const hasChanges = changes.length > 0;
+        const canAffordCoins = player.currencies.coins >= discountedCoins;
+        const canAffordDia = player.currencies.diamonds >= totalDiamonds;
+        const canConfirm = hasChanges && canAffordCoins && canAffordDia;
+
+        return (
+          <div className="grid sm:grid-cols-[188px_1fr] gap-4 items-start">
+            <div className="flex flex-col items-center gap-2 p-2.5 rounded-2xl bg-amber-50/95 border-2 border-amber-900/30">
+              <PaperDollPreview loadout={salonDraft} width={156} height={156} includePet />
+              <div className="w-full text-center space-y-1 text-[10px]">
+                <div className="font-display font-bold text-amber-950">
+                  Bopha&apos;s Paid Salon Preview
+                </div>
+                <div className="flex items-center justify-center gap-2 font-bold">
+                  <span className="inline-flex items-center gap-0.5 text-amber-900">
+                    <Coins className="w-3 h-3 text-amber-600" />
+                    {player.currencies.coins.toLocaleString()} C
+                  </span>
+                  <span className="inline-flex items-center gap-0.5 text-sky-800">
+                    <Gem className="w-3 h-3 text-sky-600" />
+                    {player.currencies.diamonds.toLocaleString()} 💎
+                  </span>
+                </div>
+              </div>
+
+              {hasChanges ? (
+                <div className="w-full p-2 rounded-xl bg-amber-100/90 border border-amber-900/25 text-[10px] space-y-1">
+                  <div className="font-display font-bold text-amber-950 uppercase">
+                    Salon Bill ({changes.length} changes)
+                  </div>
+                  <ul className="space-y-0.5 text-amber-900 leading-tight">
+                    {changes.map((c) => (
+                      <li key={c}>• {c}</li>
+                    ))}
+                  </ul>
+                  <div className="pt-1 border-t border-amber-900/20 font-display font-bold text-amber-950">
+                    Total:{' '}
+                    {discountedCoins > 0 ? `${discountedCoins.toLocaleString()} C` : ''}
+                    {discountedCoins > 0 && totalDiamonds > 0 ? ' + ' : ''}
+                    {totalDiamonds > 0 ? `${totalDiamonds} 💎` : ''}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-[10px] text-amber-800 text-center px-1">
+                  Select options on the right to preview. Initial registration was free; Salon updates charge per option.
+                </div>
+              )}
+
+              <button
+                id="btn-confirm-salon-look"
+                type="button"
+                disabled={!canConfirm}
+                onClick={() => {
+                  onCustomizeLook(patch, {
+                    coins: discountedCoins,
+                    diamonds: totalDiamonds,
+                    unlockItemIds,
+                    summary: changes.join(', '),
+                  });
+                }}
+                className="w-full phum-btn py-2 px-2 rounded-xl font-display font-bold text-[11px] disabled:opacity-45 cursor-pointer"
+              >
+                {!hasChanges
+                  ? 'Select Changes to Apply'
+                  : !canAffordCoins
+                    ? `Need ${discountedCoins.toLocaleString()} C`
+                    : !canAffordDia
+                      ? `Need ${totalDiamonds} 💎`
+                      : `Confirm Look · ${discountedCoins > 0 ? `${discountedCoins} C` : ''}${
+                          discountedCoins > 0 && totalDiamonds > 0 ? ' + ' : ''
+                        }${totalDiamonds > 0 ? `${totalDiamonds} 💎` : ''}`}
+              </button>
+
+              {hasChanges && (
+                <button
+                  type="button"
+                  onClick={() => setSalonDraft({ ...player.loadout })}
+                  className="w-full py-1 rounded-lg bg-stone-200 hover:bg-stone-300 text-stone-800 font-bold text-[10px] flex items-center justify-center gap-1 cursor-pointer"
+                >
+                  <RotateCcw className="w-3 h-3" /> Reset Preview
+                </button>
+              )}
+            </div>
+
+            <div className="space-y-3 text-xs max-h-[54dvh] overflow-y-auto pr-1">
+              <div className="px-2.5 py-1.5 rounded-xl bg-sky-50 border border-sky-600/35 text-[10px] text-sky-950 font-semibold">
+                💈 <strong>Paid Salon Pricing:</strong> Normal styles cost <strong>150 C – 300 C</strong> per change. Cool / Premium styles (Glowing Golden Eyes, Silver Spiky, Braided Royal, Fierce Scar) cost <strong>80 – 180 💎 Diamonds</strong>!
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-display font-bold text-amber-950">Skin Tone</span>
+                  <span className="text-[10px] font-bold text-amber-800">{SALON_PRICES.skinCoins} C</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {SKIN_TONES.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      title={`${s.label} (${SALON_PRICES.skinCoins} C)`}
+                      onClick={() => setSalonDraft((p) => ({ ...p, skinTone: s.id, skinColor: s.hex }))}
+                      style={{ backgroundColor: s.hex }}
+                      aria-label={`Skin ${s.label}`}
+                      className={`w-7 h-7 rounded-full border-2 transition cursor-pointer ${
+                        salonDraft.skinColor === s.hex || salonDraft.skinTone === s.id
+                          ? 'border-amber-950 scale-110 ring-2 ring-amber-500'
+                          : 'border-amber-900/40'
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-display font-bold text-amber-950">Hair Style &amp; Color</span>
+                  <span className="text-[10px] font-bold text-amber-800">
+                    Normal: {SALON_PRICES.normalHairCoins} C · Color: {SALON_PRICES.hairColorCoins} C
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {ALL_HAIR_STYLES.map((h) => {
+                    const premDia = SALON_PRICES.premiumHairDiamonds[h.id];
+                    const alreadyOwned = Boolean(h.premiumItemId && isOwned(h.premiumItemId));
+                    const isCurrent = player.loadout.hairStyle === h.id;
+                    const priceTag = isCurrent
+                      ? 'Equipped'
+                      : premDia && !alreadyOwned
+                        ? `${premDia} 💎`
+                        : `${SALON_PRICES.normalHairCoins} C`;
+                    return (
+                      <button
+                        key={h.id}
+                        type="button"
+                        onClick={() =>
+                          setSalonDraft((p) => ({ ...p, hairStyle: h.id, hair: h.premiumItemId ?? null }))
+                        }
+                        className={`px-2 py-1 rounded-xl font-bold border-2 text-[10px] cursor-pointer flex items-center gap-1 ${
+                          salonDraft.hairStyle === h.id
+                            ? 'bg-amber-800 text-amber-50 border-amber-950'
+                            : premDia
+                              ? 'bg-sky-50 text-sky-950 border-sky-500/60 hover:bg-sky-100'
+                              : 'bg-amber-50 text-amber-950 border-amber-900/35 hover:bg-amber-100'
+                        }`}
+                      >
+                        <span>{premDia ? `★ ${h.label}` : h.label}</span>
+                        <span
+                          className={`px-1 rounded text-[9px] ${
+                            premDia && !alreadyOwned && !isCurrent
+                              ? 'bg-sky-600 text-white'
+                              : 'bg-amber-950/15'
+                          }`}
+                        >
+                          {priceTag}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="flex flex-wrap gap-1.5 mt-1.5">
+                  {HAIR_COLORS.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      title={`${c.label} (${SALON_PRICES.hairColorCoins} C)`}
+                      onClick={() => setSalonDraft((p) => ({ ...p, hairColor: c.hex }))}
+                      style={{ backgroundColor: c.hex }}
+                      aria-label={`Hair color ${c.label}`}
+                      className={`w-6 h-6 rounded-full border-2 transition cursor-pointer ${
+                        salonDraft.hairColor === c.hex
+                          ? 'border-amber-950 scale-110 ring-2 ring-amber-500'
+                          : 'border-amber-900/40'
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-display font-bold text-amber-950">Eyes &amp; Color</span>
+                  <span className="text-[10px] font-bold text-amber-800">
+                    Normal: {SALON_PRICES.normalEyeCoins} C · Color: {SALON_PRICES.eyeColorCoins} C
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {ALL_EYE_STYLES.map((ey) => {
+                    const premDia = SALON_PRICES.premiumEyeDiamonds[ey.id];
+                    const alreadyOwned = Boolean(ey.premiumItemId && isOwned(ey.premiumItemId));
+                    const isCurrent = player.loadout.eyeStyle === ey.id;
+                    const priceTag = isCurrent
+                      ? 'Equipped'
+                      : premDia && !alreadyOwned
+                        ? `${premDia} 💎`
+                        : `${SALON_PRICES.normalEyeCoins} C`;
+                    return (
+                      <button
+                        key={ey.id}
+                        type="button"
+                        onClick={() => setSalonDraft((p) => ({ ...p, eyeStyle: ey.id }))}
+                        className={`px-2 py-1 rounded-xl font-bold border-2 text-[10px] cursor-pointer flex items-center gap-1 ${
+                          salonDraft.eyeStyle === ey.id
+                            ? 'bg-amber-800 text-amber-50 border-amber-950'
+                            : premDia
+                              ? 'bg-sky-50 text-sky-950 border-sky-500/60 hover:bg-sky-100'
+                              : 'bg-amber-50 text-amber-950 border-amber-900/35 hover:bg-amber-100'
+                        }`}
+                      >
+                        <span>{premDia ? `★ ${ey.label}` : ey.label}</span>
+                        <span
+                          className={`px-1 rounded text-[9px] ${
+                            premDia && !alreadyOwned && !isCurrent
+                              ? 'bg-sky-600 text-white'
+                              : 'bg-amber-950/15'
+                          }`}
+                        >
+                          {priceTag}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="flex flex-wrap gap-1.5 mt-1.5">
+                  {EYE_COLORS.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      title={`${c.label} (${SALON_PRICES.eyeColorCoins} C)`}
+                      onClick={() => setSalonDraft((p) => ({ ...p, eyeColor: c.hex }))}
+                      style={{ backgroundColor: c.hex }}
+                      aria-label={`Eye color ${c.label}`}
+                      className={`w-6 h-6 rounded-full border-2 transition cursor-pointer ${
+                        salonDraft.eyeColor === c.hex
+                          ? 'border-amber-950 scale-110 ring-2 ring-amber-500'
+                          : 'border-amber-900/40'
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-display font-bold text-amber-950">Eyebrows</span>
+                  <span className="text-[10px] font-bold text-amber-800">{SALON_PRICES.eyebrowCoins} C</span>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {EYEBROW_STYLES.map((b) => (
+                    <button
+                      key={b.id}
+                      type="button"
+                      onClick={() => setSalonDraft((p) => ({ ...p, eyebrowStyle: b.id }))}
+                      className={`px-2 py-1 rounded-xl font-bold border-2 text-[10px] cursor-pointer flex items-center gap-1 ${
+                        salonDraft.eyebrowStyle === b.id
+                          ? 'bg-amber-800 text-amber-50 border-amber-950'
+                          : 'bg-amber-50 text-amber-950 border-amber-900/35 hover:bg-amber-100'
+                      }`}
+                    >
+                      <span>{b.label}</span>
+                      <span className="px-1 rounded text-[9px] bg-amber-950/15">
+                        {player.loadout.eyebrowStyle === b.id ? 'Equipped' : `${SALON_PRICES.eyebrowCoins} C`}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-display font-bold text-amber-950">Face &amp; Expression</span>
+                  <span className="text-[10px] font-bold text-amber-800">Normal: {SALON_PRICES.normalFaceCoins} C</span>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {ALL_FACE_STYLES.map((f) => {
+                    const premDia = SALON_PRICES.premiumFaceDiamonds[f.id];
+                    const alreadyOwned = Boolean(f.premiumItemId && isOwned(f.premiumItemId));
+                    const isCurrent = player.loadout.faceStyle === f.id;
+                    const priceTag = isCurrent
+                      ? 'Equipped'
+                      : premDia && !alreadyOwned
+                        ? `${premDia} 💎`
+                        : `${SALON_PRICES.normalFaceCoins} C`;
+                    return (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => setSalonDraft((p) => ({ ...p, faceStyle: f.id }))}
+                        className={`px-2 py-1 rounded-xl font-bold border-2 text-[10px] cursor-pointer flex items-center gap-1 ${
+                          salonDraft.faceStyle === f.id
+                            ? 'bg-amber-800 text-amber-50 border-amber-950'
+                            : premDia
+                              ? 'bg-sky-50 text-sky-950 border-sky-500/60 hover:bg-sky-100'
+                              : 'bg-amber-50 text-amber-950 border-amber-900/35 hover:bg-amber-100'
+                        }`}
+                      >
+                        <span>{premDia ? `★ ${f.label}` : f.label}</span>
+                        <span
+                          className={`px-1 rounded text-[9px] ${
+                            premDia && !alreadyOwned && !isCurrent
+                              ? 'bg-sky-600 text-white'
+                              : 'bg-amber-950/15'
+                          }`}
+                        >
+                          {priceTag}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
           </div>
-
-          <div className="space-y-2.5 text-xs max-h-[54dvh] overflow-y-auto pr-1">
-            <div>
-              <div className="font-display font-bold text-amber-950 mb-1">Skin Tone</div>
-              <div className="flex flex-wrap gap-1.5">
-                {SKIN_TONES.map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    title={s.label}
-                    onClick={() => onCustomizeLook({ skinTone: s.id, skinColor: s.hex })}
-                    style={{ backgroundColor: s.hex }}
-                    aria-label={`Skin ${s.label}`}
-                    className={`w-7 h-7 rounded-full border-2 transition ${
-                      player.loadout.skinColor === s.hex || player.loadout.skinTone === s.id
-                        ? 'border-amber-950 scale-110 ring-2 ring-amber-500'
-                        : 'border-amber-900/40'
-                    }`}
-                  />
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <div className="font-display font-bold text-amber-950 mb-1">Hair Style &amp; Color</div>
-              <div className="flex flex-wrap gap-1">
-                {ALL_HAIR_STYLES.map((h) => {
-                  const unlocked = !h.premiumItemId || isOwned(h.premiumItemId);
-                  return (
-                    <button
-                      key={h.id}
-                      type="button"
-                      disabled={!unlocked}
-                      onClick={() =>
-                        onCustomizeLook({ hairStyle: h.id, hair: h.premiumItemId ?? null })
-                      }
-                      className={`px-2.5 py-1 rounded-xl font-bold border-2 text-[11px] disabled:opacity-45 ${
-                        player.loadout.hairStyle === h.id
-                          ? 'bg-amber-800 text-amber-50 border-amber-950'
-                          : 'bg-amber-50 text-amber-950 border-amber-900/35'
-                      }`}
-                    >
-                      {h.premiumItemId ? `★ ${h.label}` : h.label}
-                      {!unlocked ? ' 🔒' : ''}
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="flex flex-wrap gap-1.5 mt-1.5">
-                {HAIR_COLORS.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    title={c.label}
-                    onClick={() => onCustomizeLook({ hairColor: c.hex })}
-                    style={{ backgroundColor: c.hex }}
-                    aria-label={`Hair color ${c.label}`}
-                    className={`w-6 h-6 rounded-full border-2 transition ${
-                      player.loadout.hairColor === c.hex
-                        ? 'border-amber-950 scale-110 ring-2 ring-amber-500'
-                        : 'border-amber-900/40'
-                    }`}
-                  />
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <div className="font-display font-bold text-amber-950 mb-1">Eyes &amp; Color</div>
-              <div className="flex flex-wrap gap-1">
-                {ALL_EYE_STYLES.map((ey) => {
-                  const unlocked = !ey.premiumItemId || isOwned(ey.premiumItemId);
-                  return (
-                    <button
-                      key={ey.id}
-                      type="button"
-                      disabled={!unlocked}
-                      onClick={() => onCustomizeLook({ eyeStyle: ey.id })}
-                      className={`px-2.5 py-1 rounded-xl font-bold border-2 text-[11px] disabled:opacity-45 ${
-                        player.loadout.eyeStyle === ey.id
-                          ? 'bg-amber-800 text-amber-50 border-amber-950'
-                          : 'bg-amber-50 text-amber-950 border-amber-900/35'
-                      }`}
-                    >
-                      {ey.premiumItemId ? `★ ${ey.label}` : ey.label}
-                      {!unlocked ? ' 🔒' : ''}
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="flex flex-wrap gap-1.5 mt-1.5">
-                {EYE_COLORS.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    title={c.label}
-                    onClick={() => onCustomizeLook({ eyeColor: c.hex })}
-                    style={{ backgroundColor: c.hex }}
-                    aria-label={`Eye color ${c.label}`}
-                    className={`w-6 h-6 rounded-full border-2 transition ${
-                      player.loadout.eyeColor === c.hex
-                        ? 'border-amber-950 scale-110 ring-2 ring-amber-500'
-                        : 'border-amber-900/40'
-                    }`}
-                  />
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <div className="font-display font-bold text-amber-950 mb-1">Eyebrows</div>
-              <div className="flex flex-wrap gap-1">
-                {EYEBROW_STYLES.map((b) => (
-                  <button
-                    key={b.id}
-                    type="button"
-                    onClick={() => onCustomizeLook({ eyebrowStyle: b.id })}
-                    className={`px-2.5 py-1 rounded-xl font-bold border-2 text-[11px] ${
-                      player.loadout.eyebrowStyle === b.id
-                        ? 'bg-amber-800 text-amber-50 border-amber-950'
-                        : 'bg-amber-50 text-amber-950 border-amber-900/35'
-                    }`}
-                  >
-                    {b.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <div className="font-display font-bold text-amber-950 mb-1">Face &amp; Expression</div>
-              <div className="flex flex-wrap gap-1">
-                {ALL_FACE_STYLES.map((f) => {
-                  const unlocked = !f.premiumItemId || isOwned(f.premiumItemId);
-                  return (
-                    <button
-                      key={f.id}
-                      type="button"
-                      disabled={!unlocked}
-                      onClick={() => onCustomizeLook({ faceStyle: f.id })}
-                      className={`px-2.5 py-1 rounded-xl font-bold border-2 text-[11px] disabled:opacity-45 ${
-                        player.loadout.faceStyle === f.id
-                          ? 'bg-amber-800 text-amber-50 border-amber-950'
-                          : 'bg-amber-50 text-amber-950 border-amber-900/35'
-                      }`}
-                    >
-                      {f.premiumItemId ? `★ ${f.label}` : f.label}
-                      {!unlocked ? ' 🔒' : ''}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+        );
+      })()}
       {/* FASHION TAB 3: KHMER STILT HOUSE FURNITURE SHOP */}
       {mode === 'fashion' && tab === 'furniture' && (
         <div className="space-y-2.5 text-xs">

@@ -60,10 +60,11 @@ export class BossController {
   private stageBadge: Phaser.GameObjects.Text;
   private baseScale: number;
 
-  // FloaterRig (Arp Prey Chrov) Dark Cavern Veil + Bioluminescent Spotlight Aura
+  // FloaterRig (Arp Prey Chrov) Dark Cavern Veil + Bioluminescent Spotlight Aura + Orbiting Cyan Fire-Wisps
   private darkVeil?: Phaser.GameObjects.Rectangle;
   private arpSpotlight?: Phaser.GameObjects.Arc;
   private arpOuterGlow?: Phaser.GameObjects.Arc;
+  private arpWisps: Phaser.GameObjects.Arc[] = [];
   private playerLanternGlow?: Phaser.GameObjects.Arc;
   private isFigure8Swooping = false;
   private swoopStartAt = 0;
@@ -230,6 +231,17 @@ export class BossController {
         .circle(280, floorY - 46, 128, 0xfef08a, 0.18)
         .setBlendMode(Phaser.BlendModes.ADD)
         .setDepth(33);
+
+      // 4 Orbiting Cyan Fire-Wisps around Arp Prey Chrov
+      for (let i = 0; i < 4; i++) {
+        const wisp = scene.add
+          .circle(spawnX, this.y, 8, 0x22d3ee, 0.9)
+          .setStrokeStyle(2, 0xe0f2fe)
+          .setBlendMode(Phaser.BlendModes.ADD)
+          .setDepth(45);
+        vfxManager.applyGlow(scene, wisp, 0x22d3ee, 2.5, 0.4);
+        this.arpWisps.push(wisp);
+      }
     }
 
     // Update 1.8 — DuoStormCrystalRig: Ream Eyso (ground storm warrior) + Moni Mekhala (overhead crystal goddess)
@@ -297,6 +309,9 @@ export class BossController {
       this.sovereignVignette = scene.add
         .rectangle(900, 360, 2200, 960, 0x450a0a, 0)
         .setDepth(32);
+
+      // Orbiting Glowing Yaksha Masks visible right from encounter start!
+      this.spawnYakshaOrbitMasks();
     }
 
     this.stageBadge = scene.add
@@ -778,7 +793,7 @@ export class BossController {
           label: 'Lightning Axe Phkak',
         });
 
-        // Trigger vertical blooming thunder-pillar strikes!
+        // Trigger vertical crackling jagged thunderbolts!
         const strikeCount = overdrive ? 3 : 2;
         for (let i = 0; i < strikeCount; i++) {
           const sx = Phaser.Math.Clamp(playerX + (i - (strikeCount - 1) / 2) * 150, this.arenaMinX + 90, this.arenaMaxX - 90);
@@ -786,14 +801,31 @@ export class BossController {
           this.scene.time.delayedCall(520 + i * 160, () => {
             if (!this.alive) return;
             const pillar = this.scene.add
-              .rectangle(sx, this.floorY - 220, 44, 440, 0xfef08a, 0.85)
+              .rectangle(sx, this.floorY - 220, 40, 440, 0xfef08a, 0.72)
               .setBlendMode(Phaser.BlendModes.ADD)
               .setDepth(66);
+            // Jagged crackling lightning bolt line down the pillar
+            const bolt = this.scene.add.graphics().setDepth(67);
+            bolt.lineStyle(4, 0xffffff, 1);
+            bolt.beginPath();
+            bolt.moveTo(sx, 60);
+            for (let by = 110; by <= this.floorY; by += 45) {
+              bolt.lineTo(sx + (Math.random() - 0.5) * 34, by);
+            }
+            bolt.strokePath();
             vfxManager.applyBloom(this.scene, pillar, { color: 0xfacc15, strength: 1.6 });
-            vfxManager.radialShockwave(this.scene, sx, this.floorY - 12, 0xfacc15, 86, 260, 68);
+            vfxManager.radialShockwave(this.scene, sx, this.floorY - 12, 0xfacc15, 92, 260, 68);
             this.telegraphs.playImpactJuice(sx, this.floorY - 10, 'yellow', false);
-            this.checkAreaHit(sx, 54, this.def.baseAttack * 0.95, 'Thunder Pillar', playerX);
-            this.scene.tweens.add({ targets: pillar, scaleX: 0.08, alpha: 0, duration: 300, onComplete: () => pillar.destroy() });
+            this.checkAreaHit(sx, 54, this.def.baseAttack * 0.95, 'Thunderbolt Strike', playerX);
+            this.scene.tweens.add({
+              targets: [pillar, bolt],
+              alpha: 0,
+              duration: 300,
+              onComplete: () => {
+                pillar.destroy();
+                bolt.destroy();
+              },
+            });
           });
         }
 
@@ -830,11 +862,20 @@ export class BossController {
     this.telegraphs.showGroundZone(beamX, this.floorY, 76, 22, 'purple', 480);
     this.scene.time.delayedCall(480, () => {
       if (!this.alive || this.mekhalaHp <= 0) return;
-      const beam = this.scene.add
-        .rectangle(beamX, (this.mekhalaY + this.floorY) / 2, overdrive ? 42 : 30, Math.abs(this.floorY - this.mekhalaY) + 40, 0x38bdf8, 0.86)
-        .setBlendMode(Phaser.BlendModes.ADD)
-        .setDepth(65);
-      vfxManager.applyBloom(this.scene, beam, { color: 0x38bdf8, strength: 1.6 });
+      const beamH = Math.abs(this.floorY - this.mekhalaY) + 40;
+      const beamY = (this.mekhalaY + this.floorY) / 2;
+      const beam = this.scene.add.container(beamX, beamY).setDepth(65);
+      const outer = this.scene.add
+        .rectangle(0, 0, overdrive ? 46 : 34, beamH, 0x38bdf8, 0.72)
+        .setBlendMode(Phaser.BlendModes.ADD);
+      const prism = this.scene.add
+        .rectangle(0, 0, overdrive ? 22 : 16, beamH, 0xe879f9, 0.85)
+        .setBlendMode(Phaser.BlendModes.ADD);
+      const core = this.scene.add
+        .rectangle(0, 0, 8, beamH, 0xffffff, 0.98)
+        .setBlendMode(Phaser.BlendModes.ADD);
+      beam.add([outer, prism, core]);
+      vfxManager.applyBloom(this.scene, outer, { color: 0x38bdf8, strength: 1.6 });
       this.hazards.push({
         kind: 'crystal_beam',
         sprite: beam,
@@ -845,11 +886,12 @@ export class BossController {
         width: overdrive ? 44 : 34,
         height: 110,
         damage: Math.round(this.def.baseAttack * (overdrive ? 1.15 : 0.88)),
-        expiresAt: this.scene.time.now + 260,
+        expiresAt: this.scene.time.now + 280,
         alive: true,
-        label: 'Mekhala Crystal Beam',
+        label: 'Prismatic Crystal Laser',
       });
-      vfxManager.radialShockwave(this.scene, beamX, this.floorY - 10, 0x38bdf8, 80, 260, 67);
+      vfxManager.radialShockwave(this.scene, beamX, this.floorY - 10, 0x38bdf8, 88, 260, 67);
+      vfxManager.additiveSparkBurst(this.scene, beamX, this.floorY - 14, 0xfef08a, 12, 68, 68);
     });
   }
 
@@ -1014,8 +1056,34 @@ export class BossController {
             this.isLeaping = false;
             this.x = targetX;
             this.y = this.floorY;
-            this.telegraphs.playImpactJuice(this.x, this.floorY - 12, 'red', true);
-            this.checkAreaHit(this.x, 105, this.def.baseAttack * 1.15, 'Frog Jump Slam', playerX);
+            // Elastic squash-and-stretch landing + toxic green acid-bubble splashes!
+            this.sprite.setScale(this.baseScale * 1.38, this.baseScale * 0.64);
+            this.scene.tweens.add({
+              targets: this.sprite,
+              scaleX: this.baseScale,
+              scaleY: this.baseScale,
+              duration: 280,
+              ease: 'Elastic.easeOut',
+            });
+            for (let b = 0; b < 9; b++) {
+              const bx = this.x + (Math.random() - 0.5) * 150;
+              const bub = this.scene.add
+                .circle(bx, this.floorY - 8, Phaser.Math.Between(6, 12), 0x4ade80, 0.88)
+                .setStrokeStyle(2, 0xbef264)
+                .setDepth(62);
+              this.scene.tweens.add({
+                targets: bub,
+                y: this.floorY - Phaser.Math.Between(55, 125),
+                x: bx + (Math.random() - 0.5) * 70,
+                scale: 0.2,
+                alpha: 0,
+                duration: 460 + b * 35,
+                ease: 'Quad.easeOut',
+                onComplete: () => bub.destroy(),
+              });
+            }
+            this.telegraphs.playImpactJuice(this.x, this.floorY - 12, 'green', true);
+            this.checkAreaHit(this.x, 105, this.def.baseAttack * 1.15, 'Frog Acid Leap Slam', playerX);
             this.enterRecovery(900);
           };
         });
@@ -1186,9 +1254,24 @@ export class BossController {
       this.y = Phaser.Math.Linear(this.y, targetY, 0.45);
       this.telegraphs.showLineTelegraph(this.x, this.y, dashEndX, 46, 'yellow', windup);
       this.isSpinning = true;
-      this.startWindup('yellow', windup, 'SPINNING DASH!', () => {
+      this.startWindup('yellow', windup, 'SONIC SCREAM DASH!', () => {
         this.stage = 'active';
         this.sprite.clearTint();
+        // Expanding screaming cyan-emerald sonic-ring waves!
+        for (let r = 0; r < 3; r++) {
+          this.scene.time.delayedCall(r * 130, () => {
+            if (!this.alive) return;
+            vfxManager.radialShockwave(
+              this.scene,
+              this.x,
+              this.y,
+              this.phase === 2 ? 0xf43f5e : 0x22d3ee,
+              155 + r * 35,
+              360,
+              64
+            );
+          });
+        }
         const speed = (this.phase === 2 ? 760 : 620) * this.speedMult;
         const dx = dashEndX - this.x;
         const dy = targetY - this.y;
@@ -1241,12 +1324,36 @@ export class BossController {
         const slamX = Phaser.Math.Clamp(this.x + dir * 92, this.arenaMinX + 80, this.arenaMaxX - 80);
         const windup = 720;
         this.telegraphs.showGroundZone(slamX, this.floorY, 190, 32, 'red', windup);
-        this.startWindup('red', windup, 'CLUB SLAM!', () => {
+        this.startWindup('red', windup, 'SEISMIC LATERITE SLAM!', () => {
           this.stage = 'active';
           this.sprite.clearTint();
           this.sprite.setScale(this.baseScale);
+          // Heavy camera shake + glowing magma floor fissure + flying laterite boulders!
+          this.scene.cameras.main.shake(240, 0.011);
+          const fissure = this.scene.add.graphics().setDepth(55);
+          fissure.lineStyle(5, 0xf97316, 0.95);
+          fissure.lineBetween(slamX - 110, this.floorY - 2, slamX + 110, this.floorY - 2);
+          fissure.lineStyle(2, 0xfef08a, 1);
+          fissure.lineBetween(slamX - 85, this.floorY - 4, slamX + 85, this.floorY - 4);
+          this.scene.tweens.add({ targets: fissure, alpha: 0, duration: 900, onComplete: () => fissure.destroy() });
+          for (let shard = 0; shard < 6; shard++) {
+            const rockShard = this.scene.add
+              .rectangle(slamX + (shard - 2.5) * 24, this.floorY - 10, 14, 12, 0x9a3412, 1)
+              .setStrokeStyle(2, 0xf59e0b)
+              .setDepth(63);
+            this.scene.tweens.add({
+              targets: rockShard,
+              x: rockShard.x + (shard - 2.5) * 55,
+              y: this.floorY - Phaser.Math.Between(90, 165),
+              angle: 360,
+              alpha: 0,
+              duration: 540,
+              ease: 'Quad.easeOut',
+              onComplete: () => rockShard.destroy(),
+            });
+          }
           this.telegraphs.playImpactJuice(slamX, this.floorY - 12, 'red', true);
-          this.checkAreaHit(slamX, 115, this.def.baseAttack * 1.1, 'Yaksha Club Slam', playerX);
+          this.checkAreaHit(slamX, 115, this.def.baseAttack * 1.1, 'Yaksha Seismic Slam', playerX);
           this.hazards.push(
             this.telegraphs.createGroundShockwave(
               slamX,
@@ -1401,9 +1508,58 @@ export class BossController {
       const destX = Phaser.Math.Clamp(playerX + dir * 220, this.arenaMinX + 140, this.arenaMaxX - 140);
       const destY = Phaser.Math.Clamp(playerY - 24, 240, this.floorY - 70);
       this.telegraphs.showLineTelegraph(this.x, destY, destX, 48, 'purple', windup);
-      this.startWindup('purple', windup, 'SERPENTINE LUNGE!', () => {
+      this.startWindup('purple', windup, 'NAGA GEYSER & WHIRLPOOL!', () => {
         this.stage = 'active';
         this.sprite.clearTint();
+        // Rising Water-Geyser Columns + Swirling Whirlpool Projectile!
+        const geyserXs = [
+          Phaser.Math.Clamp(playerX - 110, this.arenaMinX + 80, this.arenaMaxX - 80),
+          Phaser.Math.Clamp(playerX + 110, this.arenaMinX + 80, this.arenaMaxX - 80),
+        ];
+        geyserXs.forEach((gx) => {
+          const geyser = this.scene.add
+            .rectangle(gx, this.floorY - 125, 42, 250, 0x0ea5e9, 0.78)
+            .setStrokeStyle(3, 0xbae6fd)
+            .setBlendMode(Phaser.BlendModes.ADD)
+            .setDepth(62);
+          vfxManager.radialShockwave(this.scene, gx, this.floorY - 8, 0x38bdf8, 76, 280, 63);
+          this.hazards.push({
+            kind: 'crystal_beam',
+            sprite: geyser,
+            x: gx,
+            y: this.floorY - 110,
+            vx: 0,
+            vy: 0,
+            width: 40,
+            height: 220,
+            damage: Math.round(this.def.baseAttack * 0.85),
+            expiresAt: this.scene.time.now + 380,
+            alive: true,
+            label: 'Naga Water Geyser',
+          });
+        });
+        // Swirling Whirlpool Vortex Projectile
+        const vortex = this.scene.add
+          .circle(this.x, this.y, 18, 0x0284c7, 0.55)
+          .setStrokeStyle(4, 0x7dd3fc, 0.95)
+          .setBlendMode(Phaser.BlendModes.ADD)
+          .setDepth(64);
+        const vang = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY - 16);
+        this.hazards.push({
+          kind: 'chakram',
+          sprite: vortex,
+          x: this.x,
+          y: this.y,
+          vx: Math.cos(vang) * 320 * this.speedMult,
+          vy: Math.sin(vang) * 320 * this.speedMult,
+          width: 30,
+          height: 30,
+          damage: Math.round(this.def.baseAttack * 0.8),
+          expiresAt: this.scene.time.now + 2400,
+          alive: true,
+          label: 'Mekong Whirlpool Vortex',
+        });
+
         this.wormTargetX = destX;
         this.wormTargetY = destY;
         this.wormLunging = true;
@@ -1476,12 +1632,14 @@ export class BossController {
     const dt = delta / 1000;
 
     if (this.alive) {
-      // 1. QuadrupedHopperRig Leap Arc
+      // 1. QuadrupedHopperRig Elastic Squash-and-Stretch Leap Arc
       if (this.isLeaping) {
         const t = Math.min(1, (time - this.leapStartAt) / Math.max(1, this.leapDurationMs));
         this.x = Phaser.Math.Linear(this.leapStartX, this.leapTargetX, t);
         const arcH = Math.sin(t * Math.PI) * 235;
         this.y = this.floorY - arcH;
+        const stretch = 1 + Math.sin(t * Math.PI) * 0.28;
+        this.sprite.setScale(this.baseScale / stretch, this.baseScale * stretch);
       }
 
       // 2. FloaterRig Figure-8 Swoop & Spinning Dash
@@ -1636,6 +1794,12 @@ export class BossController {
         const pulse = 1 + Math.sin(time * 0.008) * 0.09;
         this.arpSpotlight.setPosition(this.x, this.y + breathe).setScale(pulse);
         this.arpOuterGlow.setPosition(this.x, this.y + breathe).setScale(pulse * 1.05);
+      }
+      if (this.arpWisps.length > 0) {
+        this.arpWisps.forEach((w, idx) => {
+          const ang = time * 0.0038 + (idx * Math.PI * 2) / this.arpWisps.length;
+          w.setPosition(this.x + Math.cos(ang) * 76, this.y + Math.sin(ang) * 46);
+        });
       }
       if (this.playerLanternGlow) {
         this.playerLanternGlow.setPosition(playerX, playerY - 12);
@@ -1821,6 +1985,8 @@ export class BossController {
     this.darkVeil?.destroy();
     this.arpSpotlight?.destroy();
     this.arpOuterGlow?.destroy();
+    this.arpWisps.forEach((w) => w.destroy());
+    this.arpWisps = [];
     this.playerLanternGlow?.destroy();
     this.eysoAura?.destroy();
     this.mekhalaContainer?.destroy();

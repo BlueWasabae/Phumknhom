@@ -66,7 +66,10 @@ export type VillageMapId =
   | 'market_street'
   | 'temple_district'
   | 'green_park'
-  | 'wild_frontier';
+  | 'wild_frontier'
+  | 'mining_quarry'
+  | 'bamboo_forest'
+  | 'sunken_ruins';
 
 export interface VillageMapPortalDef {
   id: string;
@@ -268,7 +271,7 @@ export const VILLAGE_MAPS: Record<VillageMapId, VillageMapDef> = {
     defaultSpawnX: 420,
     defaultSpawnY: 600,
     description:
-      'Untamed Khmer wilds teeming with forageable herbs, mineable laterite ore, a hidden Apsara Shimmer Spring & a wandering Mini-Boss!',
+      'Untamed Khmer wilds with forageable herbs, Laterite ore, Shimmer Spring, Mini-Boss & 3 Adventure Zone Gateways!',
     accentColor: '#ef4444',
     portals: [
       {
@@ -283,6 +286,129 @@ export const VILLAGE_MAPS: Record<VillageMapId, VillageMapDef> = {
         signLabel: '← MARKET STREET',
         khmerLabel: 'វិថីផ្សារភូមិ',
         prompt: 'Walk through West Frontier Gate or [E] → Return to Market Street',
+      },
+      {
+        id: 'wf_north_quarry',
+        edge: 'north',
+        x: 800,
+        y: 132,
+        targetType: 'village_map',
+        targetMapId: 'mining_quarry',
+        targetSpawnX: 800,
+        targetSpawnY: 1010,
+        signLabel: '↑ LATERITE QUARRY',
+        khmerLabel: 'អណ្តូងរ៉ែថ្មបាយក្រៀម',
+        prompt: 'Walk through Quarry Gate or [E] → Laterite Quarry (Copper, Iron, Laterite & Jade Veins)',
+      },
+      {
+        id: 'wf_east_bamboo',
+        edge: 'east',
+        x: 1472,
+        y: 600,
+        targetType: 'village_map',
+        targetMapId: 'bamboo_forest',
+        targetSpawnX: 195,
+        targetSpawnY: 600,
+        signLabel: '→ MISTY BAMBOO FOREST',
+        khmerLabel: 'ព្រៃឫស្សីអ័ព្ទ',
+        prompt: 'Walk through Bamboo Gate or [E] → Misty Bamboo Forest (Rare Herbs, Ancient Wood & Spirits)',
+      },
+      {
+        id: 'wf_south_ruins',
+        edge: 'south',
+        x: 800,
+        y: 1086,
+        targetType: 'village_map',
+        targetMapId: 'sunken_ruins',
+        targetSpawnX: 800,
+        targetSpawnY: 195,
+        signLabel: '↓ SUNKEN ANGKOR RUINS',
+        khmerLabel: 'ប្រាសាទលិចទឹកអង្គរ',
+        prompt: 'Walk through Sunken Gate or [E] → Sunken Angkor Ruins (Mythic Ore, Relic Chests & Guardians)',
+      },
+    ],
+  },
+  mining_quarry: {
+    id: 'mining_quarry',
+    name: 'Laterite Quarry',
+    khmerName: 'អណ្តូងរ៉ែថ្មបាយក្រៀម',
+    icon: '⛏️',
+    width: 1600,
+    height: 1200,
+    defaultSpawnX: 800,
+    defaultSpawnY: 980,
+    description:
+      'Terraced red-laterite excavation rich with Copper, Iron, Laterite & rare Imperial Jade veins.',
+    accentColor: '#ea580c',
+    portals: [
+      {
+        id: 'mq_south_frontier',
+        edge: 'south',
+        x: 800,
+        y: 1086,
+        targetType: 'village_map',
+        targetMapId: 'wild_frontier',
+        targetSpawnX: 800,
+        targetSpawnY: 205,
+        signLabel: '↓ WILD FRONTIER',
+        khmerLabel: 'ព្រៃភ្នំធម្មជាតិ',
+        prompt: 'Walk through South Quarry Gate or [E] → Return to Wild Frontier',
+      },
+    ],
+  },
+  bamboo_forest: {
+    id: 'bamboo_forest',
+    name: 'Misty Bamboo Forest',
+    khmerName: 'ព្រៃឫស្សីអ័ព្ទ',
+    icon: '🎋',
+    width: 1600,
+    height: 1200,
+    defaultSpawnX: 220,
+    defaultSpawnY: 600,
+    description:
+      'Emerald mist-shrouded bamboo grove teeming with Rare Herbs, Ancient Bamboo Wood & wandering forest spirits.',
+    accentColor: '#10b981',
+    portals: [
+      {
+        id: 'bf_west_frontier',
+        edge: 'west',
+        x: 128,
+        y: 600,
+        targetType: 'village_map',
+        targetMapId: 'wild_frontier',
+        targetSpawnX: 1395,
+        targetSpawnY: 600,
+        signLabel: '← WILD FRONTIER',
+        khmerLabel: 'ព្រៃភ្នំធម្មជាតិ',
+        prompt: 'Walk through West Bamboo Gate or [E] → Return to Wild Frontier',
+      },
+    ],
+  },
+  sunken_ruins: {
+    id: 'sunken_ruins',
+    name: 'Sunken Angkor Ruins',
+    khmerName: 'ប្រាសាទលិចទឹកអង្គរ',
+    icon: '🏺',
+    width: 1600,
+    height: 1200,
+    defaultSpawnX: 800,
+    defaultSpawnY: 220,
+    description:
+      'Flooded ancient sandstone sanctum holding Mythic Angkor Gold veins, Relic Chests & elite temple guardians.',
+    accentColor: '#06b6d4',
+    portals: [
+      {
+        id: 'sr_north_frontier',
+        edge: 'north',
+        x: 800,
+        y: 132,
+        targetType: 'village_map',
+        targetMapId: 'wild_frontier',
+        targetSpawnX: 800,
+        targetSpawnY: 1005,
+        signLabel: '↑ WILD FRONTIER',
+        khmerLabel: 'ព្រៃភ្នំធម្មជាតិ',
+        prompt: 'Walk through North Sunken Gate or [E] → Return to Wild Frontier',
       },
     ],
   },
@@ -305,7 +431,10 @@ export type CityDistrictId =
   | 'fishing_pier'
   | 'the_club'
   | 'ancient_pagoda'
-  | 'wild_frontier';
+  | 'wild_frontier'
+  | 'mining_quarry'
+  | 'bamboo_forest'
+  | 'sunken_ruins';
 
 export interface CityDistrictNode {
   id: CityDistrictId;
@@ -385,7 +514,46 @@ export const CITY_DISTRICTS: CityDistrictNode[] = [
     mapId: 'wild_frontier',
     spawnX: 420,
     spawnY: 600,
-    description: 'Forageable Khmer herbs, mineable Laterite rocks, hidden Apsara Shimmer Spring & Wandering Mini-Boss!',
+    description: 'Forageable Khmer herbs, mineable Laterite rocks, hidden Apsara Shimmer Spring & 3 Adventure Zone Gates!',
+  },
+  {
+    id: 'mining_quarry',
+    name: 'Laterite Quarry',
+    khmerName: 'អណ្តូងរ៉ែថ្មបាយក្រៀម',
+    icon: '⛏️',
+    mapX: 74,
+    mapY: 30,
+    targetZone: 'overworld',
+    mapId: 'mining_quarry',
+    spawnX: 800,
+    spawnY: 980,
+    description: 'North of Wild Frontier — rich Copper, Iron, Laterite & rare Imperial Jade veins!',
+  },
+  {
+    id: 'bamboo_forest',
+    name: 'Misty Bamboo Forest',
+    khmerName: 'ព្រៃឫស្សីអ័ព្ទ',
+    icon: '🎋',
+    mapX: 88,
+    mapY: 48,
+    targetZone: 'overworld',
+    mapId: 'bamboo_forest',
+    spawnX: 220,
+    spawnY: 600,
+    description: 'East of Wild Frontier — rare Khmer herbs, Ancient Wood & wandering Forest Spirits!',
+  },
+  {
+    id: 'sunken_ruins',
+    name: 'Sunken Angkor Ruins',
+    khmerName: 'ប្រាសាទលិចទឹកអង្គរ',
+    icon: '🏺',
+    mapX: 74,
+    mapY: 68,
+    targetZone: 'overworld',
+    mapId: 'sunken_ruins',
+    spawnX: 800,
+    spawnY: 220,
+    description: 'South of Wild Frontier — Mythic Angkor Gold ore, Relic Chests & elite temple guardians!',
   },
   {
     id: 'personal_farm',

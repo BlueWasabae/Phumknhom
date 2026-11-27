@@ -75,7 +75,8 @@ export class PagodaTowerScene extends Phaser.Scene {
   private projectiles: TowerProjectile[] = [];
 
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
-  private keys!: Record<'W' | 'A' | 'S' | 'D' | 'E' | 'G' | 'J' | 'Q' | 'SHIFT' | 'SPACE', Phaser.Input.Keyboard.Key>;
+  private keys!: Record<'W' | 'A' | 'S' | 'D' | 'E' | 'G' | 'J' | 'K' | 'Q' | 'SHIFT' | 'SPACE', Phaser.Input.Keyboard.Key>;
+  private dashVelX = 0;
   private joystick: JoystickVector = { x: 0, y: 0 };
   private vfx!: ClassCombatVFX;
   private signatureCooldownUntil = 0;
@@ -129,6 +130,7 @@ export class PagodaTowerScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.input.mouse?.disableContextMenu();
     this.physics.world.resume();
     this.physics.world.gravity.y = 920;
     this.physics.world.setBounds(24, 0, ARENA_W - 48, ARENA_H);
@@ -189,8 +191,8 @@ export class PagodaTowerScene extends Phaser.Scene {
     this.signatureCooldownUntil = 0;
 
     this.cursors = this.input.keyboard!.createCursorKeys();
-    this.keys = this.input.keyboard!.addKeys('W,A,S,D,E,G,J,Q,SHIFT,SPACE', false) as Record<
-      'W' | 'A' | 'S' | 'D' | 'E' | 'G' | 'J' | 'Q' | 'SHIFT' | 'SPACE',
+    this.keys = this.input.keyboard!.addKeys('W,A,S,D,E,G,J,K,Q,SHIFT,SPACE', false) as Record<
+      'W' | 'A' | 'S' | 'D' | 'E' | 'G' | 'J' | 'K' | 'Q' | 'SHIFT' | 'SPACE',
       Phaser.Input.Keyboard.Key
     >;
     this.input.keyboard!.clearCaptures();
@@ -199,7 +201,7 @@ export class PagodaTowerScene extends Phaser.Scene {
       if (this.transitioning || this.defeated) return;
       if (typeof document !== 'undefined' && document.querySelector('dialog[open]')) return;
       if (pointer.rightButtonDown()) {
-        this.fireBambooGrapple(pointer.worldX, pointer.worldY);
+        this.tryDash();
       } else {
         this.performAttack(pointer.worldX, pointer.worldY);
       }
@@ -760,7 +762,15 @@ export class PagodaTowerScene extends Phaser.Scene {
   }
 
   private exitToTempleDistrict(
-    mapId: 'central_plaza' | 'market_street' | 'temple_district' | 'green_park' | 'wild_frontier'
+    mapId:
+      | 'central_plaza'
+      | 'market_street'
+      | 'temple_district'
+      | 'green_park'
+      | 'wild_frontier'
+      | 'mining_quarry'
+      | 'bamboo_forest'
+      | 'sunken_ruins'
   ): void {
     if (this.transitioning) return;
     this.transitioning = true;
@@ -839,13 +849,25 @@ export class PagodaTowerScene extends Phaser.Scene {
   private tryDash(): void {
     const now = this.time.now;
     const bridge = computeVillageToDungeonBridge(this.player.state);
-    const cd = Math.round(950 * bridge.dashCooldownMult);
-    if (now - this.lastDashAt < cd) return;
+    const cd = Math.round(1200 * bridge.dashCooldownMult);
+    if (now - this.lastDashAt < cd || this.defeated || this.transitioning) return;
+    let dir = this.player.facing === 'left' ? -1 : 1;
+    if (this.cursors.left.isDown || this.keys.A.isDown || this.joystick.x < -0.2) dir = -1;
+    else if (this.cursors.right.isDown || this.keys.D.isDown || this.joystick.x > 0.2) dir = 1;
+    this.player.facing = dir > 0 ? 'right' : 'left';
     this.lastDashAt = now;
-    this.dashUntil = now + 180;
-    this.invulnUntil = Math.max(this.invulnUntil, now + 260);
-    const dir = this.player.facing === 'left' ? -1 : 1;
-    this.player.body.setVelocityX(dir * 520);
+    this.dashUntil = now + 220;
+    this.invulnUntil = Math.max(this.invulnUntil, now + 320);
+    this.dashVelX = dir * 640;
+    this.player.body.setDragX(0);
+    this.player.body.setVelocity(this.dashVelX, -35);
+    for (const d of [0, 75, 150]) {
+      this.time.delayedCall(d, () => {
+        if (!this.defeated && this.scene.isActive('PagodaTowerScene')) {
+          vfxManager.spawnAfterimage(this, this.player.x, this.player.y, 0xfacc15, 0.9, 220, 52);
+        }
+      });
+    }
     soundManager.playSfx('swing');
   }
 
@@ -943,7 +965,7 @@ export class PagodaTowerScene extends Phaser.Scene {
         const dir = this.player.facing === 'left' ? -1 : 1;
         this.performAttack(this.player.x + dir * 160, this.player.y - 16);
       }
-      if (Phaser.Input.Keyboard.JustDown(this.keys.SHIFT)) {
+      if (Phaser.Input.Keyboard.JustDown(this.keys.SHIFT) || Phaser.Input.Keyboard.JustDown(this.keys.K)) {
         this.tryDash();
       }
       if (Phaser.Input.Keyboard.JustDown(this.keys.Q)) {
@@ -958,7 +980,10 @@ export class PagodaTowerScene extends Phaser.Scene {
       }
     }
 
-    if (time > this.dashUntil && time > this.grappleActiveUntil) {
+    if (time <= this.dashUntil) {
+      this.player.body.setDragX(0);
+      this.player.body.setVelocityX(this.dashVelX);
+    } else if (time > this.dashUntil && time > this.grappleActiveUntil) {
       const moveSpeed = 240 * (1 + Math.min(0.45, bridge.moveSpeedBonusPct));
       this.player.body.setVelocityX(Phaser.Math.Clamp(moveX, -1, 1) * moveSpeed);
     }

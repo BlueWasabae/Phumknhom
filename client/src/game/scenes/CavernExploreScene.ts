@@ -197,6 +197,7 @@ export class CavernExploreScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.input.mouse?.disableContextMenu();
     this.physics.world.gravity.y = 800;
     this.physics.world.setBounds(0, 0, WORLD_W, WORLD_H);
     soundManager.playBgm('cavern');
