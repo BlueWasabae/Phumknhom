@@ -5,6 +5,7 @@ import {
   type DifficultyMode,
   type EquippedLoadout,
 } from '@shared/types';
+import type { WorldBossLeaderboardRow } from '@shared/worldBossData';
 import { EventBus } from '../EventBus';
 
 export interface RemotePlayerSnapshot {
@@ -218,6 +219,8 @@ class PlazaRoomClient {
   private room: Room<RawPlazaStateSchema> | null = null;
   private dungeonRoom: Room<RawDungeonStateSchema> | null = null;
   private clubRoom: Room | null = null;
+  private worldBossRoom: Room | null = null;
+  private lastWorldBossMoveAt = 0;
   private lastDungeonMoveAt = 0;
   private currentAreaId = 'AREA 0';
   private online = false;
@@ -905,6 +908,181 @@ class PlazaRoomClient {
   public get isConnecting(): boolean {
     return this.connecting;
   }
+
+  public get worldBossSessionId(): string | null {
+    return this.worldBossRoom?.sessionId ?? null;
+  }
+
+  public async joinWorldBoss(
+    initial: {
+      playerId?: string;
+      name: string;
+      hp: number;
+      maxHp: number;
+      loadout: EquippedLoadout;
+      activeClass: string;
+    },
+    handlers: {
+      onStateSync: (snap: {
+        hp: number;
+        maxHp: number;
+        alive: boolean;
+        exposedHeartActive: boolean;
+        exposedHeartEndsAt: number;
+        playerCount: number;
+        topDamagers: WorldBossLeaderboardRow[];
+      }) => void;
+      onRemoteAdd: (p: RemoteWorldBossPlayer) => void;
+      onRemoteChange: (p: RemoteWorldBossPlayer) => void;
+      onRemoteRemove: (sessionId: string) => void;
+      onMechanic: (msg: { mechanic: string; seed: number; direction: number }) => void;
+      onExposedHeart: (msg: { durationMs: number; endsAt: number; thresholdPct: number }) => void;
+      onColossusDefeated: (msg: {
+        raidId: string;
+        bossMaxHp: number;
+        top3: WorldBossLeaderboardRow[];
+        rankings: Array<WorldBossLeaderboardRow & { survivedSec?: number }>;
+      }) => void;
+    }
+  ): Promise<boolean> {
+    await this.leaveWorldBoss();
+    const { wsUrl } = getServerEndpoints();
+    if (!this.client) this.client = new Client(wsUrl);
+    try {
+      const room = await this.client.joinOrCreate<any>('world_boss', {
+        playerId: initial.playerId || '',
+        name: initial.name,
+        hp: initial.hp,
+        maxHp: initial.maxHp,
+        appearanceJson: serializeAppearance(initial.loadout),
+        activeClass: initial.activeClass,
+      });
+      this.worldBossRoom = room;
+
+      const emitSync = () => {
+        const st = room.state;
+        if (!st?.boss) return;
+        const rows: Array<{ sessionId: string; name: string; damage: number }> = [];
+        st.players?.forEach((pl: any, sid: string) => {
+          rows.push({ sessionId: sid, name: pl.name || 'Hero', damage: Number(pl.damageDealt) || 0 });
+        });
+        rows.sort((a, b) => b.damage - a.damage);
+        const maxHp = Math.max(1, Number(st.boss.maxHp) || 1);
+        const topDamagers: WorldBossLeaderboardRow[] = rows.slice(0, 3).map((r, i) => ({
+          ...r,
+          damagePct: Math.round((r.damage / maxHp) * 10000) / 100,
+          rank: i + 1,
+        }));
+        handlers.onStateSync({
+          hp: Number(st.boss.hp) || 0,
+          maxHp,
+          alive: Boolean(st.boss.alive),
+          exposedHeartActive: Boolean(st.boss.exposedHeartActive),
+          exposedHeartEndsAt: Number(st.boss.exposedHeartEndsAt) || 0,
+          playerCount: st.players?.size ?? 1,
+          topDamagers,
+        });
+      };
+
+      const toRemote = (pl: any, sid: string): RemoteWorldBossPlayer => ({
+        sessionId: sid,
+        name: pl.name || 'Hero',
+        x: Number(pl.x) || 320,
+        y: Number(pl.y) || 560,
+        facing: pl.facing === 'left' ? 'left' : 'right',
+        pose: pl.pose || 'idle',
+        hp: Number(pl.hp) || 150,
+        maxHp: Number(pl.maxHp) || 150,
+        loadout: parseAppearance(pl.appearanceJson || '{}'),
+      });
+
+      room.state.boss.onChange?.(() => emitSync());
+      room.state.players.onAdd((pl: any, key: string) => {
+        emitSync();
+        if (key === room.sessionId) return;
+        handlers.onRemoteAdd(toRemote(pl, key));
+        pl.onChange?.(() => {
+          emitSync();
+          if (key === room.sessionId) return;
+          handlers.onRemoteChange(toRemote(pl, key));
+        });
+      });
+      room.state.players.onRemove((_pl: any, key: string) => {
+        emitSync();
+        if (key !== room.sessionId) handlers.onRemoteRemove(key);
+      });
+
+      room.onMessage('bossMechanic', (msg: { mechanic: string; seed: number; direction: number }) => {
+        handlers.onMechanic(msg);
+      });
+      room.onMessage('exposedHeart', (msg: { durationMs: number; endsAt: number; thresholdPct: number }) => {
+        handlers.onExposedHeart(msg);
+      });
+      room.onMessage('colossusDefeated', (msg: any) => {
+        handlers.onColossusDefeated(msg);
+      });
+      room.onLeave(() => {
+        if (this.worldBossRoom === room) this.worldBossRoom = null;
+      });
+      emitSync();
+      return true;
+    } catch {
+      this.worldBossRoom = null;
+      return false;
+    }
+  }
+
+  public sendWorldBossMove(payload: {
+    x: number;
+    y: number;
+    facing: 'left' | 'right';
+    pose: string;
+    hp: number;
+    maxHp: number;
+  }): void {
+    if (!this.worldBossRoom) return;
+    const now = Date.now();
+    if (now - this.lastWorldBossMoveAt < 60) return;
+    this.lastWorldBossMoveAt = now;
+    try {
+      this.worldBossRoom.send('move', payload);
+    } catch {
+      // ignore
+    }
+  }
+
+  public sendWorldBossHit(damage: number, isCrit: boolean): void {
+    if (!this.worldBossRoom) return;
+    try {
+      this.worldBossRoom.send('bossHit', { damage, isCrit });
+    } catch {
+      // ignore
+    }
+  }
+
+  public async leaveWorldBoss(): Promise<void> {
+    const active = this.worldBossRoom;
+    this.worldBossRoom = null;
+    if (active) {
+      try {
+        await active.leave();
+      } catch {
+        // ignore
+      }
+    }
+  }
+}
+
+export interface RemoteWorldBossPlayer {
+  sessionId: string;
+  name: string;
+  x: number;
+  y: number;
+  facing: 'left' | 'right';
+  pose: string;
+  hp: number;
+  maxHp: number;
+  loadout: EquippedLoadout;
 }
 
 export const roomClient = new PlazaRoomClient();

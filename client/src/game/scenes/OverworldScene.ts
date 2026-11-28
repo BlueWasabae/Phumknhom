@@ -26,7 +26,10 @@ import { soundManager } from '../systems/SoundManager';
 import { SeasonAtmosphereOverlay, seasonClock } from '../systems/SeasonClock';
 import { travelManager, type TravelRequestPayload } from '../systems/TravelAndPylons';
 import { worldEventManager } from '../systems/WorldEventManager';
+import { worldBossManager } from '../systems/WorldBossManager';
 import { vfxManager } from '../animations/VFXManager';
+import { ClassCombatVFX } from '../animations/ClassCombatVFX';
+import { getAwakenedWeaponById } from '@shared/weaponAwakening';
 import { FishingSystem } from '../systems/FishingSystem';
 import { MAX_FISHING_DISTANCE, MAX_INTERACT_DISTANCE, enforceInteractRange } from '../systems/CombatAimHelper';
 import type { ActiveWorldEventSnapshot } from '@shared/worldEvents';
@@ -316,6 +319,92 @@ export class OverworldScene extends Phaser.Scene {
     // 8C. Full 4-Stage Animated Mekong River Fishing System (Green Park pier & water edge)
     this.fishingSystem = new FishingSystem(this);
 
+    // Update 2.5 — Fire Awakened Ancient Weapon Prismatic Projectile Trails in Overworld on left-click!
+    const overworldVfx = new ClassCombatVFX(this);
+    let overworldLbokatorCombo = 0;
+    let lastOverworldFireAt = 0;
+    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer, currentlyOver: Phaser.GameObjects.GameObject[]) => {
+      if (pointer.rightButtonDown() || currentlyOver.length > 0) return;
+      if (typeof document !== 'undefined' && document.querySelector('dialog[open]')) return;
+      const awakened = getAwakenedWeaponById(this.player?.state?.weapon?.id);
+      if (!awakened) return;
+      const now = this.time.now;
+      if (now - lastOverworldFireAt < 260) return;
+      lastOverworldFireAt = now;
+
+      const ang = Phaser.Math.Angle.Between(this.player.x, this.player.y, pointer.worldX, pointer.worldY);
+      const dir = Math.cos(ang) >= 0 ? 1 : -1;
+      this.player.facing = dir > 0 ? 'right' : 'left';
+      this.player.setAimAngle(ang);
+      this.player.triggerSquash(1.1, 0.92);
+      soundManager.playSfx('magic');
+
+      const launchTempProjectile = (
+        proj: ReturnType<ClassCombatVFX['spawnAwakenedSunbowArrow']>,
+        c1: number,
+        c2: number,
+        burstLotus = false
+      ) => {
+        const travelMs = 520;
+        const endX = proj.node.x + proj.vx * (travelMs / 1000);
+        const endY = proj.node.y + proj.vy * (travelMs / 1000);
+        const trailEv = this.time.addEvent({
+          delay: 35,
+          repeat: 13,
+          callback: () => {
+            if (proj.node.active) overworldVfx.emitProjectileTrailParticle(proj.node.x, proj.node.y, c1, c2);
+          },
+        });
+        this.tweens.add({
+          targets: proj.node,
+          x: endX,
+          y: endY,
+          duration: travelMs,
+          onComplete: () => {
+            trailEv.remove(false);
+            if (burstLotus) overworldVfx.playAwakenedLotusRingBurst(endX, endY);
+            proj.node.destroy();
+          },
+        });
+      };
+
+      if (awakened.id === 'weapon_awakened_hanuman_vajra') {
+        overworldLbokatorCombo = (overworldLbokatorCombo % 3) + 1;
+        overworldVfx.playLbokatorSlash(this.player.x, this.player.y, dir, overworldLbokatorCombo, ang);
+        if (overworldLbokatorCombo === 3) {
+          overworldVfx.playAwakenedVajraShockwave(this.player.x, this.player.y, ang);
+        }
+      } else if (awakened.id === 'weapon_awakened_angkor_sunbow') {
+        launchTempProjectile(
+          overworldVfx.spawnAwakenedSunbowArrow(this.player.x, this.player.y, dir, 1, ang),
+          0x22d3ee,
+          0xfacc15
+        );
+      } else if (awakened.id === 'weapon_awakened_celestial_yant') {
+        launchTempProjectile(
+          overworldVfx.spawnAwakenedYantLotusOrb(this.player.x, this.player.y, dir, ang),
+          0x38bdf8,
+          0xfef08a,
+          true
+        );
+      } else if (awakened.id === 'weapon_awakened_naga_scepter') {
+        overworldVfx.playKramaWhipSnap(this.player.x, this.player.y, dir, ang);
+        overworldVfx.playAwakenedSpectralNagaLash(
+          this.player.x,
+          this.player.y,
+          this.player.x + Math.cos(ang) * 180,
+          this.player.y + Math.sin(ang) * 180
+        );
+      } else if (awakened.id === 'weapon_awakened_eclipse_blades') {
+        overworldVfx.playShadowTwinSlash(this.player.x, this.player.y, dir, true, ang);
+        launchTempProjectile(
+          overworldVfx.spawnAwakenedEclipseCrescent(this.player.x, this.player.y, dir, ang),
+          0xa855f7,
+          0xfacc15
+        );
+      }
+    });
+
     // 9. Scheduled Animated Green Village Bus in Central Plaza
     if (this.mapId === 'central_plaza') {
       this.time.delayedCall(3500, () => {
@@ -423,6 +512,9 @@ export class OverworldScene extends Phaser.Scene {
       }),
       EventBus.on('bossRush:enterRequest', ({ difficulty }) => {
         this.enterBossRush(difficulty);
+      }),
+      EventBus.on('worldBoss:enterRequest', () => {
+        this.enterWorldBossRaid();
       }),
       EventBus.on('cavern:enterRequest', ({ returnMapId }) => {
         this.enterCavernExplore(returnMapId);
@@ -2313,6 +2405,17 @@ export class OverworldScene extends Phaser.Scene {
           itemId,
           label: `Mined ${vName} (+${xp} Mining XP & +${coins}c)!`,
         });
+        // Update 2.5 — Rare 8% Golden Laterite Core drop from Mining Quarry!
+        if (Math.random() < 0.08) {
+          soundManager.playSfx('level_up');
+          this.spawnFloatingText(vx, vy - 34, '🔶 GOLDEN LATERITE CORE!', '#22d3ee');
+          EventBus.emit('frontier:gather', {
+            skillId: 'mining',
+            xp: 45,
+            itemId: 'mat_golden_laterite_core',
+            label: '🔶 ULTRA-RARE CATALYST! Found 1× Golden Laterite Core (Awakening Forge)!',
+          });
+        }
         this.time.delayedCall(19000, () => {
           if (!sprite.active) return;
           node.ready = true;
@@ -2441,6 +2544,17 @@ export class OverworldScene extends Phaser.Scene {
           itemId,
           label: `Gathered ${hName} (+${xp} Foraging XP & +${coins}c)!`,
         });
+        // Update 2.5 — Rare 8% Spirit Bamboo Heart drop from Bamboo Forest!
+        if (Math.random() < 0.08) {
+          soundManager.playSfx('level_up');
+          this.spawnFloatingText(hx, hy - 32, '🎋 SPIRIT BAMBOO HEART!', '#22d3ee');
+          EventBus.emit('frontier:gather', {
+            skillId: 'foraging',
+            xp: 45,
+            itemId: 'mat_spirit_bamboo_heart',
+            label: '🎋 ULTRA-RARE CATALYST! Found 1× Spirit Bamboo Heart (Awakening Forge)!',
+          });
+        }
         this.time.delayedCall(18000, () => {
           if (!sprite.active) return;
           node.ready = true;
@@ -2626,6 +2740,17 @@ export class OverworldScene extends Phaser.Scene {
           itemId: 'mat_reforge_stone',
           label: `Opened ${cName} (+110 Coins & +1 Reforge Stone)!`,
         });
+        // Update 2.5 — Rare 12% Sunken Angkor Relic drop from Sunken Ruins chests!
+        if (Math.random() < 0.12) {
+          soundManager.playSfx('level_up');
+          this.spawnFloatingText(cx, cy - 36, '🏺 SUNKEN ANGKOR RELIC!', '#22d3ee');
+          EventBus.emit('frontier:gather', {
+            skillId: 'mining',
+            xp: 60,
+            itemId: 'mat_sunken_angkor_relic',
+            label: '🏺 ULTRA-RARE CATALYST! Found 1× Sunken Angkor Relic (Awakening Forge)!',
+          });
+        }
         this.time.delayedCall(45000, () => {
           if (!sprite.active) return;
           node.ready = true;
@@ -2669,6 +2794,55 @@ export class OverworldScene extends Phaser.Scene {
       label: 'Press [E] or Click → Challenge Sunken Elite Guardian (Boss Portal)',
       isDungeonPortal: true,
       onInteract: openGuardian,
+    });
+
+    // Update 2.5 — Massive Glowing Colossus Raid Portal inside Sunken Ruins!
+    const colossusGlow = this.add
+      .image(800, 748, 'portal_vortex')
+      .setTint(0x22d3ee)
+      .setScale(1.35)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(740)
+      .setAlpha(0.75);
+    this.glowLights.push(colossusGlow);
+    this.tweens.add({
+      targets: colossusGlow,
+      angle: 360,
+      duration: 6000,
+      repeat: -1,
+    });
+    vfxManager.applyBloom(this, colossusGlow, { color: 0x22d3ee, strength: 1.65 });
+
+    const colossusPortal = this.addBuildingOrProp({
+      texture: 'angkor_portal',
+      x: 800,
+      y: 760,
+      scale: 0.92,
+      shadowW: 108,
+      shadowH: 22,
+      bodyW: 66,
+      bodyH: 22,
+      label: '🐉 ANCIENT NAGA COLOSSUS RAID PORTAL',
+      joinArrowY: 682,
+    });
+    const enterColossusPortal = () => {
+      if (!worldBossManager.getStatus().active) {
+        EventBus.emit('ui:toast', {
+          text: '🐉 Ancient Naga Colossus sleeps (spawns every 2h, or summon instantly in MENU → Settings)!',
+        });
+        return;
+      }
+      soundManager.playSfx('victory');
+      this.enterWorldBossRaid();
+    };
+    colossusPortal.setInteractive({ useHandCursor: true }).on('pointerdown', enterColossusPortal);
+    this.landmarks.push({
+      x: 800,
+      y: 765,
+      radius: 78,
+      label: 'Press [E] or Click → Enter Ancient Naga Colossus 20-Player World Boss Raid!',
+      isDungeonPortal: true,
+      onInteract: enterColossusPortal,
     });
   }
 
@@ -4184,6 +4358,29 @@ export class OverworldScene extends Phaser.Scene {
           ...this.player.state,
           zone: 'dungeon',
           difficulty,
+          activeMount: null,
+          weapon: { ...this.player.state.weapon },
+          loadout: { ...this.player.state.loadout },
+          currencies: { ...this.player.state.currencies },
+          lifeStats: { ...this.player.state.lifeStats },
+          activeBuffs: [...this.player.state.activeBuffs],
+          quickSnackSlots: [...this.player.state.quickSnackSlots],
+          clearedBosses: [...this.player.state.clearedBosses],
+          bossDefeats: { ...(this.player.state.bossDefeats ?? {}) },
+        },
+      });
+    });
+  }
+
+  private enterWorldBossRaid(): void {
+    if (this.transitioning) return;
+    this.transitioning = true;
+    this.cameras.main.fadeOut(240, 4, 24, 34);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      this.scene.start('WorldBossScene', {
+        playerState: {
+          ...this.player.state,
+          zone: 'world_boss',
           activeMount: null,
           weapon: { ...this.player.state.weapon },
           loadout: { ...this.player.state.loadout },

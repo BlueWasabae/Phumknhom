@@ -42,6 +42,16 @@ import {
   giveGiftToNpc,
   type KhmerNpcId,
 } from '@shared/npcSchedules';
+import {
+  performWeaponAwakening,
+  temperWeaponToMax,
+} from '@shared/weaponAwakening';
+import {
+  COLOSSUS_SLAYER_DURATION_MS,
+  COLOSSUS_SLAYER_TITLE,
+  type ColossusRaidChestReward,
+  type WorldBossLeaderboardRow,
+} from '@shared/worldBossData';
 import { buyHouseFurniture } from '@shared/houseDecor';
 import {
   getScaledReforgeCost,
@@ -171,6 +181,7 @@ import { MarketModal } from './ui/MarketModal';
 import { BestiaryModal } from './ui/BestiaryModal';
 import { DiamondStoreModal } from './ui/DiamondStoreModal';
 import { ReliquaryModal } from './ui/ReliquaryModal';
+import { AwakeningModal } from './ui/AwakeningModal';
 import { WorldMapModal } from './ui/WorldMapModal';
 import { ServerCityModal } from './ui/ServerCityModal';
 import { ServerTickerBanner } from './ui/ServerTickerBanner';
@@ -267,6 +278,7 @@ type ActiveModalType =
   | 'seasonPass'
   | 'achievements'
   | 'reliquary'
+  | 'awakening'
   | 'characterCreator';
 
 interface FloatingXpBanner extends SkillXpToastPayload {
@@ -418,6 +430,11 @@ export const App: React.FC = () => {
   const [lastHit, setLastHit] = useState<CombatHitResult | null>(null);
   const [bossHud, setBossHud] = useState<BossHudPayload | null>(null);
   const [dungeonOutcome, setDungeonOutcome] = useState<DungeonOutcomePayload | null>(null);
+  const [worldBossOutcome, setWorldBossOutcome] = useState<{
+    reward: ColossusRaidChestReward;
+    top3: WorldBossLeaderboardRow[];
+    colossusSlayerTitle: string | null;
+  } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [xpBanners, setXpBanners] = useState<FloatingXpBanner[]>([]);
   const [achievementBanner, setAchievementBanner] = useState<AchievementDef | null>(null);
@@ -1714,7 +1731,7 @@ export const App: React.FC = () => {
         if (nextZone !== 'house') {
           setHouseDecorateMode(false);
         }
-        if (nextZone !== 'dungeon') {
+        if (nextZone !== 'dungeon' && nextZone !== 'world_boss') {
           setBossHud(null);
           setDungeonOutcome(null);
         }
@@ -2530,6 +2547,52 @@ export const App: React.FC = () => {
           });
         }
       ),
+      EventBus.on('worldBoss:completed', ({ reward, top3, colossusSlayerTitle }) => {
+        soundManager.playSfx('victory');
+        setWorldBossOutcome({ reward, top3, colossusSlayerTitle });
+
+        runStateAction((prev) => {
+          const nextCoins = prev.currencies.coins + reward.coins;
+          const nextGold = prev.currencies.gold + reward.gold;
+          const nextInv = prev.inventory.map((i) => ({ ...i }));
+          const addItem = (itemId: string, qty: number) => {
+            if (qty <= 0) return;
+            const ex = nextInv.find((i) => i.itemId === itemId && (i.quality ?? 'normal') === 'normal');
+            if (ex) ex.quantity += qty;
+            else nextInv.push({ itemId, quantity: qty, itemLevel: 1, quality: 'normal' });
+          };
+
+          addItem('mat_reforge_stone', reward.reforgeStones);
+          addItem('essence_naga', reward.bossEssenceQty);
+          if (reward.exclusiveDrop) addItem(reward.exclusiveDrop.itemId, 1);
+          if (reward.rarityRollDrop) addItem(reward.rarityRollDrop.itemId, 1);
+
+          const titles = new Set<string>(prev.unlockedTitles ?? []);
+          if (colossusSlayerTitle) titles.add(colossusSlayerTitle);
+
+          return {
+            state: {
+              ...prev,
+              coins: nextCoins,
+              currencies: { ...prev.currencies, coins: nextCoins, gold: nextGold },
+              inventory: nextInv,
+              unlockedTitles: Array.from(titles),
+              activeTitle: colossusSlayerTitle ? COLOSSUS_SLAYER_TITLE : prev.activeTitle,
+              colossusSlayerUntil: colossusSlayerTitle
+                ? Date.now() + COLOSSUS_SLAYER_DURATION_MS
+                : prev.colossusSlayerUntil ?? null,
+            },
+            ok: true,
+            message: reward.summary,
+          };
+        });
+
+        const topNames = top3.map((r) => `#${r.rank} ${r.name} (${r.damagePct}%)`).join(' · ');
+        EventBus.emit('ticker:push', {
+          text: `🏆 ANCIENT NAGA COLOSSUS SLAIN! Top 3 Damage Dealers: ${topNames || playerRef.current.name}!`,
+          category: 'boss',
+        });
+      }),
       EventBus.on('gm:liveEventTriggered', ({ worldEventId, festivalId }) => {
         if (
           worldEventId === 'crimson_eclipse' ||
@@ -2658,6 +2721,34 @@ export const App: React.FC = () => {
               setActiveModal('reforge');
             }}
             onOpenReliquary={() => setActiveModal('reliquary')}
+            onOpenAwakening={() => setActiveModal('awakening')}
+            onGrantTestAwakeningKit={() => {
+              runStateAction((prev) => {
+                const nextCoins = prev.currencies.coins + 6500;
+                const nextInv = prev.inventory.map((i) => ({ ...i }));
+                const addTest = (itemId: string, qty: number) => {
+                  const ex = nextInv.find((i) => i.itemId === itemId);
+                  if (ex) ex.quantity += qty;
+                  else nextInv.push({ itemId, quantity: qty, itemLevel: 1, quality: 'normal' });
+                };
+                addTest('mat_golden_laterite_core', 1);
+                addTest('mat_spirit_bamboo_heart', 1);
+                addTest('mat_sunken_angkor_relic', 1);
+                addTest('mat_reforge_stone', 5);
+                return {
+                  state: {
+                    ...prev,
+                    coins: nextCoins,
+                    currencies: { ...prev.currencies, coins: nextCoins },
+                    inventory: nextInv,
+                    weapon: { ...prev.weapon, upgradeLevel: 10 },
+                  },
+                  ok: true,
+                  message:
+                    '🌌 [Test Kit] Equipped Weapon tempered to +10 + 6,500c + 5× Reforge Stones + all 3 Zone Catalysts granted!',
+                };
+              });
+            }}
             onOpenHouseDecor={() => setActiveModal('houseDecor')}
             onInviteFriendsHome={() => {
               const hostName = playerRef.current.name;
@@ -2877,6 +2968,41 @@ export const App: React.FC = () => {
         onEquipItem={handleEquipItem}
       />
 
+      <AwakeningModal
+        open={activeModal === 'awakening'}
+        player={player}
+        onClose={() => setActiveModal(null)}
+        onTemperToMax={() =>
+          runStateAction((s) => {
+            const res = temperWeaponToMax(s);
+            if (res.ok) soundManager.playSfx('level_up');
+            return res;
+          })
+        }
+        onAwakenWeapon={(classId) =>
+          runStateAction((s) => {
+            const res = performWeaponAwakening(s, classId);
+            if (res.ok && res.awakenedWeapon) {
+              soundManager.playSfx('victory');
+              const awakened = res.awakenedWeapon;
+              window.setTimeout(() => {
+                EventBus.emit('player:loadoutChanged', {
+                  loadout: res.state.loadout,
+                  activeClass: res.state.activeClass,
+                  playerState: res.state,
+                });
+                EventBus.emit('ticker:push', {
+                  text: `🌌✨ ANCIENT AWAKENING! ${res.state.name} forged ${awakened.icon} ${awakened.name} (${awakened.khmerName}) at Grandpa Chann's Blacksmith!`,
+                  category: 'reforge',
+                });
+              }, 0);
+            }
+            return res;
+          })
+        }
+        onEquipWeapon={handleEquipItem}
+      />
+
       <WorldMapModal
         open={activeModal === 'worldMap'}
         player={player}
@@ -2957,6 +3083,7 @@ export const App: React.FC = () => {
         onEquipAccessory={handleEquipItem}
         onCraftArmorSet={handleCraftArmorSet}
         onEquipArmorSet={handleEquipItem}
+        onOpenAwakeningForge={() => setActiveModal('awakening')}
         onEmpowerEclipseWeapon={() =>
           runStateAction((s) => {
             if (s.weapon.upgradeLevel >= 10) {
@@ -3385,6 +3512,79 @@ export const App: React.FC = () => {
         onCreateListing={handleCreateMarketListing}
         onCancelListing={handleCancelMarketListing}
       />
+
+      {/* Update 2.5: Server-Wide Ancient Naga Colossus Raid Chest & Top 3 Summary Overlay */}
+      {worldBossOutcome && (
+        <div className="fixed inset-0 z-40 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="phum-panel w-[min(94vw,490px)] rounded-2xl p-5 text-center space-y-3 shadow-2xl border-2 border-cyan-400">
+            <div className="font-display font-bold text-2xl text-amber-900">
+              🐉 ANCIENT NAGA COLOSSUS SLAIN!
+            </div>
+            <div className="text-xs font-bold text-cyan-900">
+              {worldBossOutcome.reward.qualified
+                ? `Colossus Raid Chest Unlocked · Your Damage: ${worldBossOutcome.reward.damageDealt.toLocaleString()} (${worldBossOutcome.reward.damagePct}%)`
+                : 'Raid Complete — Consolation Reward'}
+            </div>
+
+            {worldBossOutcome.top3.length > 0 && (
+              <div className="p-2.5 rounded-xl bg-slate-900 text-amber-50 space-y-1 text-left">
+                <div className="font-display font-bold text-[11px] text-amber-300">
+                  🏆 Top 3 Damage Dealers (2× Reforge Stones + Colossus Slayer Title)
+                </div>
+                {worldBossOutcome.top3.map((row) => (
+                  <div
+                    key={row.sessionId}
+                    className="flex items-center justify-between text-[11px] font-semibold"
+                  >
+                    <span>
+                      #{row.rank} <strong>{row.name}</strong>
+                    </span>
+                    <span className="text-cyan-300">
+                      {row.damage.toLocaleString()} dmg ({row.damagePct}%)
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="p-3 rounded-xl bg-amber-50 border border-amber-900/30 text-xs text-amber-950 space-y-1">
+              <div className="font-display font-bold">
+                +{worldBossOutcome.reward.coins.toLocaleString()} Coins
+                {worldBossOutcome.reward.gold > 0 ? ` · +${worldBossOutcome.reward.gold} Gold` : ''}
+                {worldBossOutcome.reward.reforgeStones > 0
+                  ? ` · +${worldBossOutcome.reward.reforgeStones}× Reforge Stones`
+                  : ''}
+                {worldBossOutcome.reward.bossEssenceQty > 0
+                  ? ` · +${worldBossOutcome.reward.bossEssenceQty}× Naga Essence`
+                  : ''}
+              </div>
+              {worldBossOutcome.reward.exclusiveDrop && (
+                <div className="font-display font-bold text-cyan-800 animate-pulse">
+                  🌟 EXCLUSIVE DROP: {worldBossOutcome.reward.exclusiveDrop.icon}{' '}
+                  {worldBossOutcome.reward.exclusiveDrop.name} (
+                  {worldBossOutcome.reward.exclusiveDrop.rarity.toUpperCase()})!
+                </div>
+              )}
+              {worldBossOutcome.colossusSlayerTitle && (
+                <div className="text-[11px] font-bold text-amber-700">
+                  👑 Equipped Temporary Title: {worldBossOutcome.colossusSlayerTitle}
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setWorldBossOutcome(null);
+                EventBus.emit('input:exitDungeon');
+              }}
+              className="px-5 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-emerald-700 hover:from-cyan-500 hover:to-emerald-600 text-white border-2 border-slate-950 font-display font-bold text-xs cursor-pointer"
+            >
+              Claim Colossus Chest &amp; Return to Sunken Ruins
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Dungeon Victory / Defeat Overlay */}
       {dungeonOutcome && zone === 'dungeon' && (

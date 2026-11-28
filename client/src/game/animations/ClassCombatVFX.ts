@@ -66,8 +66,18 @@ export interface SpawnedProjectile {
   vy: number;
   damageScale: number;
   colorHex: number;
-  kind: 'arrow' | 'mystic_orb' | 'riel_coin' | 'evolving_wave';
+  kind:
+    | 'arrow'
+    | 'mystic_orb'
+    | 'riel_coin'
+    | 'evolving_wave'
+    | 'sunbow_arrow'
+    | 'lotus_homing'
+    | 'eclipse_wave';
   ricochetsLeft?: number;
+  piercing?: boolean;
+  homing?: boolean;
+  hitIds?: Set<string>;
   expiresAt: number;
 }
 
@@ -1135,6 +1145,280 @@ export class ClassCombatVFX {
         onComplete: () => web.destroy(),
       });
       onBarrageComplete();
+    });
+  }
+
+  // ============================================================================
+  // UPDATE 2.5: 5 AWAKENED ANCIENT WEAPON PRISMATIC CYAN/GOLD VFX & TRAILS
+  // ============================================================================
+
+  /**
+   * 1. Lbokator Warrior — Awakened Hanuman Vajra Fist:
+   * Golden-cyan lightning shockwave on every 3rd punch with WebGL Bloom!
+   */
+  public playAwakenedVajraShockwave(x: number, y: number, aimAngle: number): void {
+    const cx = x + Math.cos(aimAngle) * 58;
+    const cy = y - 8 + Math.sin(aimAngle) * 44;
+
+    vfxManager.directionalShake(this.scene, Math.cos(aimAngle), Math.sin(aimAngle), 0.009, 130);
+    vfxManager.radialShockwave(this.scene, cx, cy, 0xfacc15, 118, 280, 72);
+    vfxManager.radialShockwave(this.scene, cx, cy, 0x22d3ee, 88, 240, 73);
+    vfxManager.additiveSparkBurst(this.scene, cx, cy, 0x67e8f9, 14, 78, 74);
+
+    // Jagged golden-cyan Vajra lightning bolts radiating outward
+    const g = this.scene.add.graphics().setBlendMode(Phaser.BlendModes.ADD).setDepth(75);
+    vfxManager.applyBloom(this.scene, g, { color: 0xfacc15, strength: 1.7 });
+    for (let b = 0; b < 5; b++) {
+      const a = aimAngle + (b - 2) * 0.42;
+      g.lineStyle(5, 0x22d3ee, 0.85);
+      g.beginPath();
+      g.moveTo(cx, cy);
+      let px = cx;
+      let py = cy;
+      for (let s = 1; s <= 4; s++) {
+        px += Math.cos(a) * 26 + (Math.random() - 0.5) * 14;
+        py += Math.sin(a) * 26 + (Math.random() - 0.5) * 14;
+        g.lineTo(px, py);
+      }
+      g.strokePath();
+      g.lineStyle(2, 0xfef08a, 1);
+      g.strokePath();
+    }
+    this.scene.tweens.add({
+      targets: g,
+      alpha: 0,
+      duration: 270,
+      onComplete: () => g.destroy(),
+    });
+  }
+
+  /**
+   * 2. Divine Archer — Awakened Angkor Sunbow:
+   * Piercing prismatic solar arrow leaving a continuous glowing cyan-gold comet trail!
+   */
+  public spawnAwakenedSunbowArrow(
+    x: number,
+    y: number,
+    dir: number,
+    damageScale = 1.15,
+    aimAngle?: number
+  ): SpawnedProjectile {
+    const ang = aimAngle !== undefined ? aimAngle : dir < 0 ? Math.PI : 0;
+    const container = this.scene.add
+      .container(x + Math.cos(ang) * 26, y - 6 + Math.sin(ang) * 26)
+      .setRotation(ang)
+      .setDepth(66);
+
+    const cometTail = this.scene.add
+      .triangle(-24, 0, -24, 0, 12, -8, 12, 8, 0x22d3ee, 0.65)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    const shaft = this.scene.add.rectangle(0, 0, 34, 4.5, 0xfef08a);
+    const tip = this.scene.add.triangle(18, 0, 0, -6.5, 14, 0, 0, 6.5, 0x67e8f9);
+    const aura = this.scene.add
+      .ellipse(2, 0, 38, 14, 0xfacc15, 0.35)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    container.add([aura, cometTail, shaft, tip]);
+    vfxManager.applyBloom(this.scene, container, { color: 0x22d3ee, strength: 1.55 });
+
+    const speed = 780;
+    return {
+      node: container,
+      vx: Math.cos(ang) * speed,
+      vy: Math.sin(ang) * speed,
+      damageScale,
+      colorHex: 0x22d3ee,
+      kind: 'sunbow_arrow',
+      piercing: true,
+      hitIds: new Set<string>(),
+      expiresAt: this.scene.time.now + 1500,
+    };
+  }
+
+  /**
+   * 3. Achar Mystic — Awakened Celestial Yant Staff:
+   * Homing lotus-rune orb that bursts into blooming geometric rings!
+   */
+  public spawnAwakenedYantLotusOrb(
+    x: number,
+    y: number,
+    dir: number,
+    aimAngle?: number
+  ): SpawnedProjectile {
+    const ang = aimAngle !== undefined ? aimAngle : dir < 0 ? Math.PI : 0;
+    const container = this.scene.add
+      .container(x + Math.cos(ang) * 26, y - 8 + Math.sin(ang) * 26)
+      .setDepth(66);
+
+    const outerRing = this.scene.add
+      .circle(0, 0, 16, 0x22d3ee, 0.32)
+      .setStrokeStyle(2, 0xfacc15, 0.95)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    const runeDiamond = this.scene.add
+      .rectangle(0, 0, 13, 13, 0xfef08a, 0.9)
+      .setAngle(45)
+      .setStrokeStyle(2, 0x0ea5e9);
+    const core = this.scene.add.circle(0, 0, 5.5, 0xffffff, 1);
+    container.add([outerRing, runeDiamond, core]);
+    vfxManager.applyBloom(this.scene, container, { color: 0x38bdf8, strength: 1.65 });
+
+    this.scene.tweens.add({
+      targets: runeDiamond,
+      angle: 405,
+      duration: 600,
+      repeat: -1,
+    });
+
+    const speed = 440;
+    return {
+      node: container,
+      vx: Math.cos(ang) * speed,
+      vy: Math.sin(ang) * speed,
+      damageScale: 1.2,
+      colorHex: 0x38bdf8,
+      kind: 'lotus_homing',
+      homing: true,
+      expiresAt: this.scene.time.now + 1900,
+    };
+  }
+
+  public playAwakenedLotusRingBurst(x: number, y: number): void {
+    const g = this.scene.add
+      .graphics()
+      .setPosition(x, y)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(72);
+    g.lineStyle(3, 0x22d3ee, 0.95);
+    g.strokeCircle(0, 0, 30);
+    g.lineStyle(2.2, 0xfacc15, 0.95);
+    const pts: Phaser.Geom.Point[] = [];
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      const r = i % 2 === 0 ? 34 : 18;
+      pts.push(new Phaser.Geom.Point(Math.cos(a) * r, Math.sin(a) * r));
+    }
+    g.strokePoints(pts, true);
+    vfxManager.applyBloom(this.scene, g, { color: 0xfacc15, strength: 1.6 });
+    vfxManager.additiveSparkBurst(this.scene, x, y, 0x22d3ee, 10, 58, 73);
+    this.scene.tweens.add({
+      targets: g,
+      scale: 2.25,
+      angle: 75,
+      alpha: 0,
+      duration: 340,
+      ease: 'Cubic.easeOut',
+      onComplete: () => g.destroy(),
+    });
+  }
+
+  /**
+   * 4. Barami Spirit Tamer — Awakened Sovereign Naga Scepter:
+   * Summons a mini glowing spectral Naga that coils & lashes enemies alongside attacks!
+   */
+  public playAwakenedSpectralNagaLash(
+    fromX: number,
+    fromY: number,
+    targetX: number,
+    targetY: number,
+    onLashHit?: () => void
+  ): void {
+    const ang = Phaser.Math.Angle.Between(fromX, fromY, targetX, targetY);
+    const naga = this.scene.add.container(fromX, fromY - 12).setRotation(ang).setDepth(68);
+    const segs = 7;
+    for (let i = 0; i < segs; i++) {
+      const r = Math.max(4, 11 - i * 1.1);
+      const col = i === 0 ? 0xfacc15 : i % 2 === 0 ? 0x10b981 : 0x22d3ee;
+      const seg = this.scene.add
+        .circle(-i * 11, Math.sin(i * 0.9) * 5, r, col, 0.88)
+        .setStrokeStyle(1.5, 0xfef08a, 0.9)
+        .setBlendMode(Phaser.BlendModes.ADD);
+      naga.add(seg);
+    }
+    const hood = this.scene.add
+      .triangle(10, 0, -4, -11, 14, 0, -4, 11, 0xfacc15, 0.95)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    naga.add(hood);
+    vfxManager.applyBloom(this.scene, naga, { color: 0x10b981, strength: 1.6 });
+
+    this.scene.tweens.add({
+      targets: naga,
+      x: targetX,
+      y: targetY - 14,
+      duration: 210,
+      ease: 'Cubic.easeInOut',
+      onComplete: () => {
+        onLashHit?.();
+        vfxManager.radialShockwave(this.scene, targetX, targetY - 14, 0x10b981, 68, 220, 71);
+        vfxManager.additiveSparkBurst(this.scene, targetX, targetY - 14, 0xfacc15, 10, 56, 72);
+        this.scene.tweens.add({
+          targets: naga,
+          alpha: 0,
+          scale: 1.3,
+          duration: 180,
+          onComplete: () => naga.destroy(),
+        });
+      },
+    });
+  }
+
+  /**
+   * 5. Shadow Hunter — Awakened Eclipse Twin-Krama Blades:
+   * Violet-gold crescent wave slashes with brief shadow afterimages!
+   */
+  public spawnAwakenedEclipseCrescent(
+    x: number,
+    y: number,
+    dir: number,
+    aimAngle?: number
+  ): SpawnedProjectile {
+    const ang = aimAngle !== undefined ? aimAngle : dir < 0 ? Math.PI : 0;
+    // Brief violet-gold shadow afterimage at caster's position
+    vfxManager.spawnAfterimage(this.scene, x, y, 0xa855f7, 1.02, 260, 58);
+
+    const container = this.scene.add
+      .container(x + Math.cos(ang) * 28, y - 6 + Math.sin(ang) * 28)
+      .setRotation(ang)
+      .setDepth(66);
+
+    const outerArc = this.scene.add
+      .arc(0, 0, 28, -68, 68, false, 0xa855f7, 0.72)
+      .setStrokeStyle(3.5, 0xfacc15, 1)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    const innerArc = this.scene.add
+      .arc(4, 0, 20, -58, 58, false, 0x22d3ee, 0.55)
+      .setStrokeStyle(2, 0xffffff, 0.95)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    container.add([outerArc, innerArc]);
+    vfxManager.applyBloom(this.scene, container, { color: 0xc084fc, strength: 1.65 });
+
+    const speed = 640;
+    return {
+      node: container,
+      vx: Math.cos(ang) * speed,
+      vy: Math.sin(ang) * speed,
+      damageScale: 1.12,
+      colorHex: 0xc084fc,
+      kind: 'eclipse_wave',
+      piercing: true,
+      hitIds: new Set<string>(),
+      expiresAt: this.scene.time.now + 950,
+    };
+  }
+
+  /**
+   * Emits a lightweight fading prismatic particle dot behind flying Awakened projectiles
+   */
+  public emitProjectileTrailParticle(x: number, y: number, primaryHex: number, accentHex: number): void {
+    const col = Math.random() < 0.55 ? primaryHex : accentHex;
+    const dot = this.scene.add
+      .circle(x + (Math.random() - 0.5) * 6, y + (Math.random() - 0.5) * 6, 3.2 + Math.random() * 2, col, 0.9)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(64);
+    this.scene.tweens.add({
+      targets: dot,
+      scale: 0.1,
+      alpha: 0,
+      duration: 210,
+      onComplete: () => dot.destroy(),
     });
   }
 }

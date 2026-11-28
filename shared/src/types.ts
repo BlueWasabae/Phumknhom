@@ -19,6 +19,7 @@ export type {
 export type ZoneType =
   | 'overworld'
   | 'dungeon'
+  | 'world_boss'
   | 'cavern'
   | 'tower'
   | 'festival_race'
@@ -458,6 +459,9 @@ export interface PlayerState {
   welcomeBundleClaimed?: boolean;
   purchasedDiamondPacks?: string[];
   lastDailyReliquaryKeyDate?: string | null;
+  /** Update 2.5 — Ancient Weapon Awakening Forge & World Boss Colossus Slayer */
+  awakenedWeapons?: string[];
+  colossusSlayerUntil?: number | null;
   hasCompletedCreation?: boolean;
   skillDamagePct: number;
   armorDamagePct: number;
@@ -756,6 +760,8 @@ export const INITIAL_PLAYER_STATE: PlayerState = {
   welcomeBundleClaimed: false,
   purchasedDiamondPacks: [],
   lastDailyReliquaryKeyDate: null,
+  awakenedWeapons: [],
+  colossusSlayerUntil: null,
   hasCompletedCreation: false,
   skillDamagePct: 0.025,
   armorDamagePct: 0.04,

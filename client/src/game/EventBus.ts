@@ -16,6 +16,11 @@ import type {
 import type { KhmerNpcId } from '@shared/npcSchedules';
 import type { BountyCategory } from '@shared/bounties';
 import type { ActiveWorldEventSnapshot } from '@shared/worldEvents';
+import type {
+  ColossusRaidChestReward,
+  WorldBossLeaderboardRow,
+  WorldBossStatusSnapshot,
+} from '@shared/worldBossData';
 import type { TravelRequestPayload } from './systems/TravelAndPylons';
 
 export interface JoystickVector {
@@ -274,6 +279,13 @@ export interface EventMap {
     unlockedAura: WeaponAuraId | null;
   };
   'worldEvent:changed': ActiveWorldEventSnapshot | null;
+  'worldBoss:changed': WorldBossStatusSnapshot;
+  'worldBoss:enterRequest': void;
+  'worldBoss:completed': {
+    reward: ColossusRaidChestReward;
+    top3: WorldBossLeaderboardRow[];
+    colossusSlayerTitle: string | null;
+  };
   'worldEvent:reward': {
     skillId?: SkillId;
     xp?: number;
@@ -390,7 +402,8 @@ export interface EventMap {
       | 'dailyLogin'
       | 'seasonPass'
       | 'achievements'
-      | 'reliquary';
+      | 'reliquary'
+      | 'awakening';
     leaderboardCategory?: 'farmer' | 'stylish' | 'slayer' | 'tower' | 'boss_rush';
     farmTab?: 'seeds' | 'livestock' | 'artisan';
     shopTab?: 'primary' | 'secondary';

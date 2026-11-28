@@ -75,6 +75,8 @@ import {
 import { vfxManager, type FpsSnapshot, type VfxQualityMode } from '../game/animations/VFXManager';
 import { KHMER_SIGNATURE_SKILLS } from '../game/animations/ClassCombatVFX';
 import { worldEventManager } from '../game/systems/WorldEventManager';
+import { worldBossManager } from '../game/systems/WorldBossManager';
+import type { WorldBossStatusSnapshot } from '@shared/worldBossData';
 import {
   WORLD_EVENT_LIST,
   type ActiveWorldEventSnapshot,
@@ -150,6 +152,8 @@ interface HUDProps {
   onOpenAchievements?: () => void;
   onOpenPortableBank?: () => void;
   onOpenReliquary?: () => void;
+  onOpenAwakening?: () => void;
+  onGrantTestAwakeningKit?: () => void;
   onTogglePhotoMode?: () => void;
   canInstallPwa?: boolean;
   onInstallPwa?: () => void;
@@ -215,6 +219,8 @@ export const HUD: React.FC<HUDProps> = ({
   onOpenAchievements,
   onOpenPortableBank,
   onOpenReliquary,
+  onOpenAwakening,
+  onGrantTestAwakeningKit,
   onTogglePhotoMode,
   canInstallPwa,
   onInstallPwa,
@@ -231,6 +237,9 @@ export const HUD: React.FC<HUDProps> = ({
   const [seasonSnap, setSeasonSnap] = useState<SeasonClockSnapshot>(() => seasonClock.getSnapshot());
   const [activeWorldEvent, setActiveWorldEvent] = useState<ActiveWorldEventSnapshot | null>(() =>
     worldEventManager.getActiveEvent()
+  );
+  const [worldBossSnap, setWorldBossSnap] = useState<WorldBossStatusSnapshot>(() =>
+    worldBossManager.getStatus()
   );
   const [emoteOpen, setEmoteOpen] = useState(false);
   const [audioPopoverOpen, setAudioPopoverOpen] = useState(false);
@@ -297,6 +306,7 @@ export const HUD: React.FC<HUDProps> = ({
     const unsubSig = EventBus.on('combat:signatureSkillState', setSigSkillState);
     const unsubSeason = seasonClock.subscribe(setSeasonSnap);
     const unsubEvent = worldEventManager.subscribe(setActiveWorldEvent);
+    const unsubWorldBoss = worldBossManager.subscribe(setWorldBossSnap);
     const id = window.setInterval(() => {
       setNow(Date.now());
       setSeasonSnap(seasonClock.getSnapshot());
@@ -308,6 +318,7 @@ export const HUD: React.FC<HUDProps> = ({
       unsubSig();
       unsubSeason();
       unsubEvent();
+      unsubWorldBoss();
       window.clearInterval(id);
     };
   }, []);
@@ -566,6 +577,21 @@ export const HUD: React.FC<HUDProps> = ({
             </button>
           )}
         </div>
+      )}
+
+      {/* Live Server-Wide World Boss Raid Join Pill (Update 2.5 — Ancient Naga Colossus) */}
+      {worldBossSnap.active && zone !== 'world_boss' && (
+        <button
+          type="button"
+          onClick={() => {
+            soundManager.playSfx('victory');
+            EventBus.emit('worldBoss:enterRequest');
+          }}
+          title="Ancient Naga Colossus has awakened in Sunken Ruins! Click to join the 20-player Shared HP World Boss Raid!"
+          className="px-2.5 py-0.5 rounded-lg bg-gradient-to-r from-cyan-500 via-amber-400 to-cyan-500 hover:from-cyan-400 hover:to-amber-300 text-slate-950 border-2 border-slate-950 font-display font-bold text-[10px] whitespace-nowrap shadow-md animate-pulse cursor-pointer transition"
+        >
+          🐉 Join World Boss ({Math.max(0, Math.round((worldBossSnap.hp / Math.max(1, worldBossSnap.maxHp)) * 100))}% HP · {formatCountdown(worldBossSnap.remainingMs)})
+        </button>
       )}
 
       {/* Live Dynamic World Event Pill (Update 1.4) */}
@@ -1196,6 +1222,24 @@ export const HUD: React.FC<HUDProps> = ({
                 >
                   <Hammer className="w-4 h-4 text-orange-700" /> Reforge, Shimmer &amp; ATM
                 </button>
+                {onOpenAwakening && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundManager.playSfx('click');
+                      setMenuDropdownOpen(false);
+                      onOpenAwakening();
+                    }}
+                    className="px-3 py-2 rounded-xl hover:bg-cyan-100 text-left flex items-center justify-between gap-2 text-amber-950"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-cyan-700" /> Awaken Weapon Forge
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded-full bg-cyan-600 text-white text-[9px] font-bold">
+                      {(player.awakenedWeapons ?? []).length}/5
+                    </span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => {
@@ -1562,11 +1606,11 @@ export const HUD: React.FC<HUDProps> = ({
           </div>
         )}
 
-        {/* DUNGEON / PAGODA TOWER BOSS HEALTH BAR, SIGNATURE SKILL [Q] RING & MYTHIC GAUGES */}
-        {(zone === 'dungeon' || zone === 'tower') && (
+        {/* DUNGEON / WORLD BOSS / PAGODA TOWER BOSS HEALTH BAR, SIGNATURE SKILL [Q] RING & MYTHIC GAUGES */}
+        {(zone === 'dungeon' || zone === 'world_boss' || zone === 'tower') && (
           <div className="flex flex-col items-center gap-1.5 w-full">
-            {/* Sleek Top-Center Boss Health Bar (+ Boss Rush Speedrun Timer + Duo & 3-Phase Support) */}
-            {zone === 'dungeon' && bossHud && (bossHud.active || bossHud.bossRush?.active) && (
+            {/* Sleek Top-Center Boss Health Bar (+ Boss Rush Speedrun Timer + World Boss Shared Server HP) */}
+            {(zone === 'dungeon' || zone === 'world_boss') && bossHud && (bossHud.active || bossHud.bossRush?.active) && (
               <div className="pointer-events-auto w-[min(94vw,540px)] bg-slate-950/92 border-2 border-amber-500/80 rounded-2xl px-3 py-1.5 shadow-xl space-y-1">
                 {/* Mythic Boss Rush Live Speedrun Banner */}
                 {bossHud.bossRush?.active && (
@@ -1624,7 +1668,9 @@ export const HUD: React.FC<HUDProps> = ({
                         </span>
                         {(bossHud.partySize ?? 1) > 1 && (
                           <span className="px-1.5 py-0.2 rounded bg-emerald-700 text-white text-[9px] uppercase shrink-0">
-                            CO-OP {bossHud.partySize}/4
+                            {zone === 'world_boss'
+                              ? `RAID ${bossHud.partySize}/20`
+                              : `CO-OP ${bossHud.partySize}/4`}
                           </span>
                         )}
                       </div>
@@ -1664,6 +1710,22 @@ export const HUD: React.FC<HUDProps> = ({
                         <div className="absolute top-0 bottom-0 left-1/2 w-0.5 bg-amber-200/70" />
                       )}
                     </div>
+
+                    {/* World Boss Shared Raid Participation & Top 3 Damage Strip */}
+                    {zone === 'world_boss' && bossHud.stageLabel && (
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5 text-[10px] font-display font-bold text-cyan-200">
+                        <span>{bossHud.stageLabel}</span>
+                        {worldBossSnap.topDamagers.length > 0 && (
+                          <span className="text-amber-300 truncate">
+                            🏆 Top:{' '}
+                            {worldBossSnap.topDamagers
+                              .slice(0, 3)
+                              .map((r) => `#${r.rank} ${r.name} (${r.damagePct}%)`)
+                              .join(' · ')}
+                          </span>
+                        )}
+                      </div>
+                    )}
 
                     {/* Duo Boss Dual Sub-Bars: Ream Eyso & Moni Mekhala */}
                     {bossHud.duoStatus && (
@@ -2356,6 +2418,46 @@ export const HUD: React.FC<HUDProps> = ({
                   </button>
                 );
               })}
+            </div>
+          </div>
+
+          {/* Update 2.5: Server-Wide World Boss Raid & Ancient Awakening Test Controls */}
+          <div className="p-3 rounded-xl bg-gradient-to-br from-cyan-50 to-amber-50 border-2 border-cyan-700/40 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-display font-bold text-slate-950">
+                🐉 Ancient Naga Colossus World Boss &amp; Awakening (Test)
+              </span>
+              {worldBossSnap.active && (
+                <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white font-bold text-[9px]">
+                  LIVE NOW
+                </span>
+              )}
+            </div>
+            <div className="grid sm:grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  soundManager.playSfx('victory');
+                  worldBossManager.spawnNow(true);
+                  setSettingsModalOpen(false);
+                }}
+                className="px-3 py-2 rounded-xl bg-gradient-to-r from-cyan-600 via-teal-600 to-amber-500 hover:from-cyan-500 hover:to-amber-400 text-white border border-slate-950 font-display font-bold text-[11px] shadow cursor-pointer"
+              >
+                🐉 Spawn World Boss Now
+              </button>
+              {onGrantTestAwakeningKit && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    soundManager.playSfx('level_up');
+                    onGrantTestAwakeningKit();
+                    setSettingsModalOpen(false);
+                  }}
+                  className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-cyan-200 border border-cyan-400 font-display font-bold text-[11px] shadow cursor-pointer"
+                >
+                  🌌 Test Awakening Kit (+10 &amp; Catalysts)
+                </button>
+              )}
             </div>
           </div>
 

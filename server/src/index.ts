@@ -30,6 +30,12 @@ import {
 } from './rooms/DungeonRoom';
 import { ClubRoom } from './rooms/ClubRoom';
 import {
+  WorldBossRoom,
+  getWorldBossSnapshot,
+  spawnWorldBossRaid,
+  startWorldBossScheduler,
+} from './rooms/WorldBossRoom';
+import {
   buyFromTukTukCart,
   closeTukTukCart,
   listTukTukCarts,
@@ -877,6 +883,16 @@ app.get('/api/promo/referral-pending', (req, res) => {
   res.json({ bonusCoins });
 });
 
+app.get('/api/world-boss/status', (_req, res) => {
+  res.json({ ok: true, status: getWorldBossSnapshot() });
+});
+
+app.post('/api/world-boss/spawn', (req, res) => {
+  const body = (req.body ?? {}) as { adminSecret?: string; ownerEmail?: string | null; actor?: string };
+  const status = spawnWorldBossRaid(body.actor || 'GM / Raid Summon');
+  res.json({ ok: true, status });
+});
+
 const httpServer = http.createServer(app);
 const gameServer = new Server({
   transport: new WebSocketTransport({
@@ -887,6 +903,9 @@ const gameServer = new Server({
 gameServer.define('plaza', PlazaRoom).filterBy(['areaId']);
 gameServer.define('dungeon', DungeonRoom).filterBy(['partyId']);
 gameServer.define('club', ClubRoom).filterBy(['cityServer']);
+gameServer.define('world_boss', WorldBossRoom);
+
+startWorldBossScheduler();
 
 httpServer.listen(PORT, HOST, () => {
   console.log(`[ភូមិខ្ញុំ Colyseus] Village Plaza + Co-op Dungeon Server listening on ws://${HOST}:${PORT}`);

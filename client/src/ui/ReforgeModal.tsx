@@ -34,6 +34,7 @@ interface ReforgeModalProps {
   onCraftArmorSet: (armorId: string) => void;
   onEquipArmorSet: (armorId: string) => void;
   onEmpowerEclipseWeapon?: () => void;
+  onOpenAwakeningForge?: () => void;
 }
 
 export const ReforgeModal: React.FC<ReforgeModalProps> = ({
@@ -53,6 +54,7 @@ export const ReforgeModal: React.FC<ReforgeModalProps> = ({
   onCraftArmorSet,
   onEquipArmorSet,
   onEmpowerEclipseWeapon,
+  onOpenAwakeningForge,
 }) => {
   const [tab, setTab] = useState<ReforgeTab>(initialTab);
   const [busy, setBusy] = useState(false);
@@ -113,7 +115,7 @@ export const ReforgeModal: React.FC<ReforgeModalProps> = ({
       maxWidthClass="w-[min(96vw,780px)]"
     >
       <div className="space-y-3 text-xs">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
           {(
             [
               ['reforge', 'Reforge & Arsenal', Hammer],
@@ -126,7 +128,7 @@ export const ReforgeModal: React.FC<ReforgeModalProps> = ({
               key={id}
               type="button"
               onClick={() => setTab(id)}
-              className={`py-2 px-2 rounded-xl font-display font-bold text-xs border-2 flex items-center justify-center gap-1.5 transition ${
+              className={`py-2 px-2 rounded-xl font-display font-bold text-xs border-2 flex items-center justify-center gap-1.5 transition cursor-pointer ${
                 tab === id
                   ? 'bg-amber-800 text-amber-50 border-amber-950 shadow'
                   : 'bg-amber-50 text-amber-950 border-amber-900/30 hover:bg-amber-100'
@@ -136,6 +138,16 @@ export const ReforgeModal: React.FC<ReforgeModalProps> = ({
               <span className="truncate">{label}</span>
             </button>
           ))}
+          {onOpenAwakeningForge && (
+            <button
+              type="button"
+              onClick={onOpenAwakeningForge}
+              className="py-2 px-2 rounded-xl font-display font-bold text-xs border-2 flex items-center justify-center gap-1.5 bg-gradient-to-r from-cyan-500 via-amber-400 to-cyan-500 hover:from-cyan-400 hover:to-amber-300 text-slate-950 border-slate-950 shadow transition cursor-pointer"
+            >
+              <Sparkles className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">🌌 Awaken Weapon</span>
+            </button>
+          )}
         </div>
 
         <div className="max-h-[62dvh] overflow-y-auto pr-1 space-y-3">

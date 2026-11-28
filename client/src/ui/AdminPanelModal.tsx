@@ -21,6 +21,7 @@ import {
 import { soundManager } from '../game/systems/SoundManager';
 import { EventBus } from '../game/EventBus';
 import { worldEventManager } from '../game/systems/WorldEventManager';
+import { worldBossManager } from '../game/systems/WorldBossManager';
 import { seasonClock } from '../game/systems/SeasonClock';
 import { NativeDialog } from './NativeDialog';
 
@@ -307,6 +308,27 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     <div className="text-[9px] text-amber-800">{ev.khmerName}</div>
                   </button>
                 ))}
+              </div>
+
+              <div className="font-display font-bold text-amber-950 flex items-center gap-1.5 pt-1 border-t border-amber-900/15">
+                <Zap className="w-4 h-4 text-cyan-700" />
+                Server-Wide World Boss Raid (Ancient Naga Colossus)
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    soundManager.playSfx('victory');
+                    worldBossManager.spawnNow(true);
+                    setStatusMsg(
+                      '🐉 WORLD BOSS SPAWNED! Ancient Naga Colossus portal opened in Sunken Ruins + HUD banner live!'
+                    );
+                  }}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 via-teal-600 to-amber-600 hover:from-cyan-500 hover:to-amber-500 text-white border-2 border-slate-950 font-display font-bold text-xs shadow cursor-pointer"
+                >
+                  🐉 Spawn World Boss (Ancient Naga Colossus)
+                </button>
               </div>
 
               <div className="font-display font-bold text-amber-950 flex items-center gap-1.5 pt-1 border-t border-amber-900/15">

@@ -1829,7 +1829,12 @@ export class DungeonBossScene extends Phaser.Scene {
     }
 
     if (cls === 'archer') {
-      if (weapon.id === 'weapon_golden_riel_shot') {
+      if (weapon.id === 'weapon_awakened_angkor_sunbow') {
+        soundManager.playSfx('magic');
+        this.projectiles.push(
+          this.vfx.spawnAwakenedSunbowArrow(this.player.x, this.player.y, dir, 1.2, aimAngle)
+        );
+      } else if (weapon.id === 'weapon_golden_riel_shot') {
         // If player flicked Gold Coin(s) mid-air, shooting triggers guaranteed 100% Super-Crit lightning chain!
         if (this.triggerGoldenRielCoinChain(dir)) {
           return;
@@ -1845,11 +1850,32 @@ export class DungeonBossScene extends Phaser.Scene {
 
     if (cls === 'mystic') {
       soundManager.playSfx('magic');
-      this.projectiles.push(this.vfx.spawnMysticOrb(this.player.x, this.player.y, dir, aimAngle));
+      if (weapon.id === 'weapon_awakened_celestial_yant') {
+        this.projectiles.push(
+          this.vfx.spawnAwakenedYantLotusOrb(this.player.x, this.player.y, dir, aimAngle)
+        );
+      } else {
+        this.projectiles.push(this.vfx.spawnMysticOrb(this.player.x, this.player.y, dir, aimAngle));
+      }
       return;
     }
 
     if (cls === 'tamer') {
+      if (weapon.id === 'weapon_awakened_naga_scepter') {
+        soundManager.playSfx('magic');
+        this.vfx.playKramaWhipSnap(this.player.x, this.player.y, dir, aimAngle);
+        const tx = this.bossCtrl.alive ? this.bossCtrl.x : this.player.x + Math.cos(aimAngle) * 240;
+        const ty = this.bossCtrl.alive ? this.bossCtrl.y - 72 : this.player.y + Math.sin(aimAngle) * 180;
+        this.vfx.playAwakenedSpectralNagaLash(this.player.x, this.player.y - 10, tx, ty, () => {
+          if (this.bossCtrl.alive) {
+            this.damageBoss(dir, {
+              bonusMult: 1.28 * (1 + bridge.petDamageBonusPct),
+              tag: '🐉 SPECTRAL NAGA LASH!',
+            });
+          }
+        });
+        return;
+      }
       if (weapon.id === 'weapon_hanuman_banner') {
         soundManager.playSfx('magic');
         const targetX = this.bossCtrl.alive ? this.bossCtrl.x : this.player.x + Math.cos(aimAngle) * 240;

@@ -82,6 +82,8 @@ export interface SavedPlayerProfile {
   welcomeBundleClaimed?: boolean;
   purchasedDiamondPacks?: string[];
   lastDailyReliquaryKeyDate?: string | null;
+  awakenedWeapons?: string[];
+  colossusSlayerUntil?: number | null;
   hasCompletedCreation?: boolean;
   activeClass?: string;
   weapon?: Record<string, unknown>;
@@ -564,6 +566,9 @@ function rowToSavedProfile(row: {
       : [],
     lastDailyReliquaryKeyDate:
       typeof meta.lastDailyReliquaryKeyDate === 'string' ? meta.lastDailyReliquaryKeyDate : null,
+    awakenedWeapons: Array.isArray(meta.awakenedWeapons) ? (meta.awakenedWeapons as string[]) : [],
+    colossusSlayerUntil:
+      typeof meta.colossusSlayerUntil === 'number' ? meta.colossusSlayerUntil : null,
     hasCompletedCreation: Boolean(
       meta.hasCompletedCreation ??
         (loadout as { hasCompletedCreation?: boolean }).hasCompletedCreation ??
@@ -920,6 +925,9 @@ export async function savePlayerProfile(
     purchasedDiamondPacks: Array.isArray(profile.purchasedDiamondPacks) ? profile.purchasedDiamondPacks : [],
     lastDailyReliquaryKeyDate:
       typeof profile.lastDailyReliquaryKeyDate === 'string' ? profile.lastDailyReliquaryKeyDate : null,
+    awakenedWeapons: Array.isArray(profile.awakenedWeapons) ? profile.awakenedWeapons : [],
+    colossusSlayerUntil:
+      typeof profile.colossusSlayerUntil === 'number' ? profile.colossusSlayerUntil : null,
     hasCompletedCreation: Boolean(
       profile.hasCompletedCreation ??
         (profile.loadout as { hasCompletedCreation?: boolean } | undefined)?.hasCompletedCreation ??

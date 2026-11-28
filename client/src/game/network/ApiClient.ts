@@ -126,6 +126,8 @@ export interface SavedProfilePayload {
   welcomeBundleClaimed?: boolean;
   purchasedDiamondPacks?: string[];
   lastDailyReliquaryKeyDate?: string | null;
+  awakenedWeapons?: string[];
+  colossusSlayerUntil?: number | null;
   hasCompletedCreation?: boolean;
   activeClass: PlayerState['activeClass'];
   weapon: PlayerState['weapon'];
@@ -496,6 +498,8 @@ export function serializePlayerStateForSave(state: PlayerState): SavedProfilePay
     welcomeBundleClaimed: Boolean(state.welcomeBundleClaimed ?? false),
     purchasedDiamondPacks: [...(state.purchasedDiamondPacks ?? [])],
     lastDailyReliquaryKeyDate: state.lastDailyReliquaryKeyDate ?? null,
+    awakenedWeapons: [...(state.awakenedWeapons ?? [])],
+    colossusSlayerUntil: state.colossusSlayerUntil ?? null,
     hasCompletedCreation: Boolean(state.hasCompletedCreation ?? state.loadout.hasCompletedCreation),
     activeClass: state.activeClass,
     weapon: { ...state.weapon },
@@ -851,6 +855,11 @@ export function hydratePlayerStateFromSave(
       : [],
     lastDailyReliquaryKeyDate:
       typeof saved?.lastDailyReliquaryKeyDate === 'string' ? saved.lastDailyReliquaryKeyDate : null,
+    awakenedWeapons: Array.isArray(saved?.awakenedWeapons) ? [...saved.awakenedWeapons] : [],
+    colossusSlayerUntil:
+      typeof saved?.colossusSlayerUntil === 'number' && saved.colossusSlayerUntil > Date.now()
+        ? saved.colossusSlayerUntil
+        : null,
     hasCompletedCreation: Boolean(
       saved?.hasCompletedCreation ?? saved?.loadout?.hasCompletedCreation ?? false
     ),
