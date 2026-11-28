@@ -10,6 +10,7 @@ import {
 } from '@shared/types';
 import { getPetProgress } from '@shared/petEvolution';
 import { INSTRUMENT_SKINS } from '@shared/khmerInstruments';
+import { KHMER_EMOTES } from '@shared/emotes';
 import { computeVillageToDungeonBridge } from '@shared/skillTrees';
 import {
   getVillageMapOrDefault,
@@ -176,6 +177,18 @@ export class OverworldScene extends Phaser.Scene {
   private territoryBannerObjects: Phaser.GameObjects.GameObject[] = [];
   private lastPetRegenAt = 0;
   private lastFootstepAt = 0;
+  private lastSunsetPulseAt = 0;
+  private fireflies: Array<{
+    id: number;
+    homeX: number;
+    homeY: number;
+    phase: number;
+    caught: boolean;
+    respawnAt: number;
+    orb: Phaser.GameObjects.Arc;
+    halo: Phaser.GameObjects.Arc;
+  }> = [];
+  private firefliesActive = false;
   private unsubs: Array<() => void> = [];
 
   constructor() {
@@ -242,6 +255,9 @@ export class OverworldScene extends Phaser.Scene {
     this.blackMarketLandmark = null;
     this.territoryBannerObjects = [];
     this.lastPetRegenAt = 0;
+    this.lastSunsetPulseAt = 0;
+    this.fireflies = [];
+    this.firefliesActive = false;
     this.joystick = { x: 0, y: 0 };
   }
 
@@ -493,6 +509,12 @@ export class OverworldScene extends Phaser.Scene {
         this.player.showEmote(emoji, 3000);
         roomClient.sendEmote(emoji);
       }),
+      EventBus.on('player:khmerEmote', ({ emoteId }) => {
+        const def = KHMER_EMOTES[emoteId];
+        if (!def) return;
+        this.player.playKhmerEmote(emoteId);
+        roomClient.sendEmote(def.icon, emoteId);
+      }),
       EventBus.on('player:loadoutChanged', ({ loadout, playerState }) => {
         this.player.applyLoadoutUpdate(loadout, { ...playerState, currentMapId: this.mapId });
         roomClient.sendAppearance(loadout, {
@@ -568,6 +590,9 @@ export class OverworldScene extends Phaser.Scene {
       }),
       EventBus.on('petRace:enterRequest', ({ petId }) => {
         this.enterPetRace(petId);
+      }),
+      EventBus.on('arena:enterRequest', ({ mode, duelId, spectate, opponentName }) => {
+        this.enterArenaPvP({ mode, duelId, spectate, opponentName });
       }),
       EventBus.on('blackMarket:changed', () => {
         this.syncBlackMarketPortal();
@@ -753,7 +778,7 @@ export class OverworldScene extends Phaser.Scene {
         onEmote: (msg) => {
           if (!this.scene.isActive('OverworldScene')) return;
           if (msg.sessionId === roomClient.sessionId) return;
-          this.remotePlayers.get(msg.sessionId)?.showEmote(msg.emoji, 3000);
+          this.remotePlayers.get(msg.sessionId)?.showEmote(msg.emoji, 3000, msg.emoteId);
         },
       }
     );
@@ -1969,6 +1994,59 @@ export class OverworldScene extends Phaser.Scene {
       label: 'Press [E] or Click → Temple Scrying Mirror (Send Hot Num Pang Cheer Drops!)',
       isDungeonPortal: false,
       onInteract: () => EventBus.emit('ui:openModal', { modal: 'scryingMirror' }),
+    });
+
+    // 6. UPDATE 3.1 — KUN KHMER 1v1 SPARRING RING (South-East Sandstone Arena Terrace)
+    const ringX = 1045;
+    const ringY = 825;
+    const ringGfx = this.add.graphics().setDepth(14);
+    ringGfx.fillStyle(0x573b26, 0.95);
+    ringGfx.fillRoundedRect(ringX - 92, ringY - 58, 184, 116, 14);
+    ringGfx.fillStyle(0xc2955b, 0.96);
+    ringGfx.fillRoundedRect(ringX - 78, ringY - 46, 156, 92, 10);
+    ringGfx.lineStyle(2.5, 0xdc2626, 0.92);
+    ringGfx.strokeRoundedRect(ringX - 78, ringY - 46, 156, 92, 10);
+    ringGfx.lineStyle(2, 0xfacc15, 0.9);
+    ringGfx.strokeRoundedRect(ringX - 72, ringY - 40, 144, 80, 8);
+    ringGfx.strokeCircle(ringX, ringY, 22);
+    for (const [cx, cy, col] of [
+      [ringX - 78, ringY - 46, 0xdc2626],
+      [ringX + 78, ringY - 46, 0x2563eb],
+      [ringX - 78, ringY + 46, 0xdc2626],
+      [ringX + 78, ringY + 46, 0x2563eb],
+    ] as Array<[number, number, number]>) {
+      this.add.circle(cx, cy, 7, col, 1).setStrokeStyle(2, 0xfef08a).setDepth(ringY + 20);
+    }
+    const ringZone = this.add
+      .rectangle(ringX, ringY, 176, 108, 0xffffff, 0)
+      .setDepth(ringY + 22)
+      .setInteractive({ useHandCursor: true });
+    ringZone.on('pointerdown', () => {
+      if (!this.guardInteractRange(ringX, ringY, 160)) return;
+      EventBus.emit('ui:openModal', { modal: 'arena' });
+    });
+    const ringArrow = this.add.image(ringX, ringY - 62, 'join_arrow').setScale(0.55).setDepth(ringY + 40);
+    this.tweens.add({ targets: ringArrow, y: ringY - 68, duration: 540, yoyo: true, repeat: -1 });
+    this.add
+      .text(ringX, ringY + 60, '🥊 KUN KHMER 1v1 SPARRING RING', {
+        fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
+        fontSize: '12px',
+        fontStyle: 'bold',
+        color: '#fef08a',
+        backgroundColor: 'rgba(127, 29, 29, 0.92)',
+        padding: { x: 8, y: 2 },
+      })
+      .setResolution(2)
+      .setScale(0.46)
+      .setOrigin(0.5, 0)
+      .setDepth(ringY + 45);
+    this.landmarks.push({
+      x: ringX,
+      y: ringY,
+      radius: 96,
+      label: 'Press [E] or Click → Enter Kun Khmer 1v1 Sparring Ring (Normalized / Open Gear / Spectate)',
+      isDungeonPortal: false,
+      onInteract: () => EventBus.emit('ui:openModal', { modal: 'arena' }),
     });
   }
 
@@ -5300,6 +5378,11 @@ export class OverworldScene extends Phaser.Scene {
   }
 
   private tryInteractNearest(): void {
+    // Update 3.1 — Catch nearby glowing Firefly during Firefly Night (Green Park / Bamboo Forest)
+    if (this.tryCatchNearbyFirefly()) {
+      return;
+    }
+
     // Update 1.6 — Strike Shadow Guardians guarding an unearthed Ancient Relic Chest with [E]
     for (const tg of this.treasureGuardians) {
       if (
@@ -5592,7 +5675,8 @@ export class OverworldScene extends Phaser.Scene {
     );
     this.remotePlayers.forEach((remote) => remote.update(time, delta));
     this.npcs.forEach((npc) => npc.update(time, delta, this.player.x, this.player.y));
-    this.atmosphere?.update(time, delta);
+    const clockSnap = this.atmosphere?.update(time, delta) ?? seasonClock.getSnapshot();
+    this.updateFirefliesAndSunset(time, clockSnap);
     if (this.fishingSystem) {
       this.fishingSystem.cancelIfMoved(this.player.x, this.player.y);
       this.fishingSystem.update(time, this.player.x, this.player.y);
@@ -5617,9 +5701,13 @@ export class OverworldScene extends Phaser.Scene {
       this.promptText.setPosition(this.miniBoss.sprite.x, this.miniBoss.sprite.y - 52);
       this.promptText.setText('Press [E] or Click → Strike Laterite Boar Chieftain!').setVisible(true);
     } else {
+      const nearFirefly = this.findNearestFirefly();
       const nearNpc = this.findNearestNpc();
       const nearest = this.findNearestLandmark();
-      if (nearNpc) {
+      if (nearFirefly) {
+        this.promptText.setPosition(nearFirefly.orb.x, nearFirefly.orb.y - 22);
+        this.promptText.setText('Press [E] or Click → ✨ Catch Glowing Firefly (+1 Jarred Firefly)').setVisible(true);
+      } else if (nearNpc) {
         this.promptText.setPosition(nearNpc.x, nearNpc.y - 38);
         this.promptText.setText(`Press [E] or Click → Talk to ${nearNpc.def.name} (${nearNpc.def.khmerName}) ❤️`).setVisible(true);
       } else if (nearest) {
@@ -5637,6 +5725,187 @@ export class OverworldScene extends Phaser.Scene {
           label: nearDungeon ? 'JOIN DUNGEON' : '',
           targetZone: 'dungeon',
         });
+      }
+    }
+  }
+
+  // ==================== UPDATE 3.1: KUN KHMER ARENA & FIREFLY NIGHT SYNERGIES ====================
+
+  private enterArenaPvP(opts: {
+    mode: 'normalized' | 'open';
+    duelId?: string;
+    spectate?: boolean;
+    opponentName?: string;
+  }): void {
+    if (this.transitioning) return;
+    this.transitioning = true;
+    this.cameras.main.fadeOut(220, 18, 12, 8);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      void roomClient.leavePlaza(false);
+      this.scene.start('ArenaPvPScene', {
+        playerState: { ...this.player.state, zone: 'arena', currentMapId: 'temple_district' },
+        mode: opts.mode,
+        duelId: opts.duelId,
+        spectate: Boolean(opts.spectate),
+        opponentName: opts.opponentName,
+      });
+    });
+  }
+
+  private ensureFirefliesSpawned(): void {
+    if (this.fireflies.length > 0) return;
+    const spots: Array<[number, number]> =
+      this.mapId === 'green_park'
+        ? [
+            [740, 480],
+            [860, 520],
+            [620, 620],
+            [980, 610],
+            [510, 740],
+            [1120, 710],
+            [780, 660],
+            [390, 480],
+            [1210, 490],
+          ]
+        : [
+            [310, 540],
+            [450, 620],
+            [620, 480],
+            [780, 610],
+            [940, 510],
+            [1100, 640],
+            [680, 760],
+            [860, 790],
+            [520, 740],
+          ];
+
+    spots.forEach(([fx, fy], idx) => {
+      const halo = this.add
+        .circle(fx, fy, 11, 0xa3e635, 0.28)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(fy + 35);
+      const orb = this.add
+        .circle(fx, fy, 4.2, 0xfef08a, 0.98)
+        .setStrokeStyle(1.4, 0x84cc16, 0.95)
+        .setDepth(fy + 36)
+        .setInteractive({ useHandCursor: true });
+      vfxManager.applyBloom(this, halo, { color: 0xa3e635, strength: 1.5 });
+
+      const node = {
+        id: idx,
+        homeX: fx,
+        homeY: fy,
+        phase: idx * 1.15,
+        caught: false,
+        respawnAt: 0,
+        orb,
+        halo,
+      };
+      orb.on('pointerdown', () => {
+        if (node.caught) return;
+        if (!this.guardInteractRange(node.orb.x, node.orb.y, 115, '✨ Move closer to catch Firefly')) return;
+        this.catchFireflyNode(node);
+      });
+      this.fireflies.push(node);
+    });
+  }
+
+  private findNearestFirefly(): (typeof this.fireflies)[number] | null {
+    if (!this.firefliesActive) return null;
+    let best: (typeof this.fireflies)[number] | null = null;
+    let bestDist = 95;
+    for (const ff of this.fireflies) {
+      if (ff.caught || !ff.orb.visible) continue;
+      const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, ff.orb.x, ff.orb.y);
+      if (d <= bestDist) {
+        bestDist = d;
+        best = ff;
+      }
+    }
+    return best;
+  }
+
+  private catchFireflyNode(ff: (typeof this.fireflies)[number]): void {
+    if (ff.caught) return;
+    ff.caught = true;
+    ff.respawnAt = this.time.now + 14_000;
+    ff.orb.setVisible(false);
+    ff.halo.setVisible(false);
+    soundManager.playSfx('harvest');
+
+    const burst = this.add
+      .circle(ff.orb.x, ff.orb.y, 8, 0xbef264, 0.7)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(2400);
+    this.tweens.add({ targets: burst, scale: 3.1, alpha: 0, duration: 380, onComplete: () => burst.destroy() });
+
+    const txt = this.add
+      .text(ff.orb.x, ff.orb.y - 10, '✨ +1 Jarred Firefly!', {
+        fontFamily: 'Fredoka, sans-serif',
+        fontSize: '12px',
+        fontStyle: 'bold',
+        color: '#bef264',
+        stroke: '#0f172a',
+        strokeThickness: 3,
+      })
+      .setResolution(2)
+      .setScale(0.46)
+      .setOrigin(0.5)
+      .setDepth(2450);
+    this.tweens.add({ targets: txt, y: txt.y - 24, alpha: 0, duration: 900, onComplete: () => txt.destroy() });
+
+    EventBus.emit('firefly:caught', { mapId: this.mapId, foragingXp: 18 });
+  }
+
+  private tryCatchNearbyFirefly(): boolean {
+    const ff = this.findNearestFirefly();
+    if (!ff) return false;
+    this.catchFireflyNode(ff);
+    return true;
+  }
+
+  private updateFirefliesAndSunset(
+    time: number,
+    snap: ReturnType<typeof seasonClock.getSnapshot>
+  ): void {
+    // 1. Firefly Night spawning & gentle drifting animation in Green Park & Bamboo Forest
+    const canHaveFireflies =
+      (this.mapId === 'green_park' || this.mapId === 'bamboo_forest') &&
+      snap.synergy.fireflyNightActive;
+
+    if (canHaveFireflies) {
+      if (!this.firefliesActive) {
+        this.firefliesActive = true;
+        this.ensureFirefliesSpawned();
+      }
+      for (const ff of this.fireflies) {
+        if (ff.caught) {
+          if (time >= ff.respawnAt) {
+            ff.caught = false;
+            ff.orb.setVisible(true);
+            ff.halo.setVisible(true);
+          }
+          continue;
+        }
+        const fx = ff.homeX + Math.sin(time / 900 + ff.phase) * 26;
+        const fy = ff.homeY + Math.cos(time / 720 + ff.phase * 1.4) * 18;
+        const pulse = 0.65 + Math.sin(time / 240 + ff.phase) * 0.35;
+        ff.orb.setPosition(fx, fy).setAlpha(pulse).setVisible(true);
+        ff.halo.setPosition(fx, fy).setScale(0.85 + pulse * 0.4).setAlpha(0.18 + pulse * 0.24).setVisible(true);
+      }
+    } else if (this.firefliesActive) {
+      this.firefliesActive = false;
+      for (const ff of this.fireflies) {
+        ff.orb.setVisible(false);
+        ff.halo.setVisible(false);
+      }
+    }
+
+    // 2. Golden Sunset Synergy in Central Plaza: cozy 2x Friendly XP hangout aura every 20s!
+    if (this.mapId === 'central_plaza' && snap.synergy.goldenSunsetActive) {
+      if (time - this.lastSunsetPulseAt > 20_000) {
+        this.lastSunsetPulseAt = time;
+        EventBus.emit('weather:sunsetPulse', { friendlyXp: 8 });
       }
     }
   }

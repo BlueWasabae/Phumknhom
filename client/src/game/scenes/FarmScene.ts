@@ -1425,6 +1425,17 @@ export class FarmScene extends Phaser.Scene {
         const seat = this.add.rectangle(0, 0, 44, 14, 0x78350f).setStrokeStyle(2, 0xd97706);
         const back = this.add.rectangle(0, -8, 44, 7, 0x92400e).setStrokeStyle(1.5, 0xf59e0b);
         cont.add([back, seat]);
+      } else if (entry.itemId === 'yard_firefly_garden_lantern') {
+        const base = this.add.rectangle(0, 8, 16, 10, 0x4d7c0f).setStrokeStyle(1.5, 0xbef264);
+        const jar = this.add.rectangle(0, -6, 16, 18, 0x1e293b, 0.85).setStrokeStyle(1.5, 0xfef08a);
+        const cap = this.add.triangle(0, -18, -12, 4, 12, 4, 0, -6, 0x3f6212);
+        const glow = this.add.circle(0, -6, 20, 0xa3e635, 0.34).setBlendMode(Phaser.BlendModes.ADD);
+        const mote1 = this.add.circle(-4, -8, 2.4, 0xfef08a, 0.98);
+        const mote2 = this.add.circle(4, -3, 2.1, 0xbef264, 0.95);
+        vfxManager.applyBloom(this, glow, { color: 0xa3e635, strength: 1.6 });
+        this.tweens.add({ targets: mote1, x: 4, y: -2, duration: 950, yoyo: true, repeat: -1 });
+        this.tweens.add({ targets: mote2, x: -3, y: -11, duration: 1150, yoyo: true, repeat: -1 });
+        cont.add([glow, base, jar, mote1, mote2, cap]);
       } else {
         // yard_stone_lantern (and fallback)
         const base = this.add.rectangle(0, 6, 16, 12, 0x78716c).setStrokeStyle(1.5, 0xd6d3d1);

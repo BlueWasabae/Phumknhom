@@ -104,6 +104,11 @@ export interface SavedPlayerProfile {
   championPetRibbon?: boolean;
   yardDecor?: Array<{ uid: string; itemId: string; x: number; y: number }>;
   ownedYardDecor?: Record<string, number>;
+  pvpElo?: number;
+  pvpWins?: number;
+  pvpLosses?: number;
+  kunKhmerChampionSash?: boolean;
+  ownedEmotes?: string[];
   hasCompletedCreation?: boolean;
   activeClass?: string;
   weapon?: Record<string, unknown>;
@@ -800,6 +805,11 @@ function rowToSavedProfile(row: {
       meta.ownedYardDecor && typeof meta.ownedYardDecor === 'object'
         ? (meta.ownedYardDecor as Record<string, number>)
         : undefined,
+    pvpElo: typeof meta.pvpElo === 'number' ? meta.pvpElo : 1200,
+    pvpWins: typeof meta.pvpWins === 'number' ? meta.pvpWins : 0,
+    pvpLosses: typeof meta.pvpLosses === 'number' ? meta.pvpLosses : 0,
+    kunKhmerChampionSash: Boolean(meta.kunKhmerChampionSash ?? false),
+    ownedEmotes: Array.isArray(meta.ownedEmotes) ? (meta.ownedEmotes as string[]) : [],
     hasCompletedCreation: Boolean(
       meta.hasCompletedCreation ??
         (loadout as { hasCompletedCreation?: boolean }).hasCompletedCreation ??
@@ -1183,6 +1193,11 @@ export async function savePlayerProfile(
     yardDecor: Array.isArray(profile.yardDecor) ? profile.yardDecor : undefined,
     ownedYardDecor:
       profile.ownedYardDecor && typeof profile.ownedYardDecor === 'object' ? profile.ownedYardDecor : undefined,
+    pvpElo: typeof profile.pvpElo === 'number' && Number.isFinite(profile.pvpElo) ? Math.max(400, Math.round(profile.pvpElo)) : 1200,
+    pvpWins: typeof profile.pvpWins === 'number' && Number.isFinite(profile.pvpWins) ? Math.max(0, Math.floor(profile.pvpWins)) : 0,
+    pvpLosses: typeof profile.pvpLosses === 'number' && Number.isFinite(profile.pvpLosses) ? Math.max(0, Math.floor(profile.pvpLosses)) : 0,
+    kunKhmerChampionSash: Boolean(profile.kunKhmerChampionSash ?? false),
+    ownedEmotes: Array.isArray(profile.ownedEmotes) ? profile.ownedEmotes : [],
     hasCompletedCreation: Boolean(
       profile.hasCompletedCreation ??
         (profile.loadout as { hasCompletedCreation?: boolean } | undefined)?.hasCompletedCreation ??
@@ -1791,6 +1806,7 @@ export async function getTopTenLeaderboards(): Promise<{
   slayer: ServerLeaderboardEntry[];
   tower: ServerLeaderboardEntry[];
   boss_rush: ServerLeaderboardEntry[];
+  pvp: ServerLeaderboardEntry[];
 }> {
   interface RawRecord {
     username: string;
@@ -1839,7 +1855,7 @@ export async function getTopTenLeaderboards(): Promise<{
         wings: 'wings_garuda',
         weapon: 'weapon_preah_khan',
       },
-      meta_json: { highestTowerFloor: 42, bestBossRushTimeMs: 224800, bankCoins: 4500, clearedBosses: ['sdech_kongkaeb', 'arp_prey_chrov', 'yeak_thmor', 'neak_reach', 'ream_eyso_moni_mekhala', 'krong_reap'], bossDefeats: { sdech_kongkaeb: 8, yeak_thmor: 6, neak_reach: 5 } },
+      meta_json: { highestTowerFloor: 42, bestBossRushTimeMs: 224800, bankCoins: 4500, pvpElo: 1485, pvpWins: 18, pvpLosses: 4, kunKhmerChampionSash: true, clearedBosses: ['sdech_kongkaeb', 'arp_prey_chrov', 'yeak_thmor', 'neak_reach', 'ream_eyso_moni_mekhala', 'krong_reap'], bossDefeats: { sdech_kongkaeb: 8, yeak_thmor: 6, neak_reach: 5 } },
     },
     {
       username: 'Bopha_Lotus',
@@ -1853,7 +1869,7 @@ export async function getTopTenLeaderboards(): Promise<{
         wings: 'wings_yant_halo',
         weapon: 'weapon_sastra',
       },
-      meta_json: { highestTowerFloor: 31, bestBossRushTimeMs: 268400, bankCoins: 2000, clearedBosses: ['sdech_kongkaeb', 'arp_prey_chrov', 'yeak_thmor'], bossDefeats: { sdech_kongkaeb: 5, yeak_thmor: 4 } },
+      meta_json: { highestTowerFloor: 31, bestBossRushTimeMs: 268400, bankCoins: 2000, pvpElo: 1360, pvpWins: 12, pvpLosses: 5, kunKhmerChampionSash: true, clearedBosses: ['sdech_kongkaeb', 'arp_prey_chrov', 'yeak_thmor'], bossDefeats: { sdech_kongkaeb: 5, yeak_thmor: 4 } },
     },
     {
       username: 'Vireak_Lbokator',
@@ -1867,7 +1883,7 @@ export async function getTopTenLeaderboards(): Promise<{
         wings: 'wings_ember',
         weapon: 'weapon_stone_club',
       },
-      meta_json: { highestTowerFloor: 50, bestBossRushTimeMs: 212300, bankCoins: 1500, clearedBosses: ['sdech_kongkaeb', 'arp_prey_chrov', 'yeak_thmor', 'neak_reach', 'ream_eyso_moni_mekhala', 'krong_reap'], bossDefeats: { sdech_kongkaeb: 9, yeak_thmor: 10, neak_reach: 7 } },
+      meta_json: { highestTowerFloor: 50, bestBossRushTimeMs: 212300, bankCoins: 1500, pvpElo: 1620, pvpWins: 27, pvpLosses: 3, kunKhmerChampionSash: true, clearedBosses: ['sdech_kongkaeb', 'arp_prey_chrov', 'yeak_thmor', 'neak_reach', 'ream_eyso_moni_mekhala', 'krong_reap'], bossDefeats: { sdech_kongkaeb: 9, yeak_thmor: 10, neak_reach: 7 } },
     },
   ];
   const existingNames = new Set(rows.map((r) => r.username.toLowerCase()));
@@ -1888,6 +1904,12 @@ export async function getTopTenLeaderboards(): Promise<{
       typeof r.meta_json?.bestBossRushTimeMs === 'number' && r.meta_json.bestBossRushTimeMs > 0
         ? Math.floor(r.meta_json.bestBossRushTimeMs)
         : null;
+    const pvpElo =
+      typeof r.meta_json?.pvpElo === 'number' && Number.isFinite(r.meta_json.pvpElo)
+        ? Math.round(r.meta_json.pvpElo)
+        : 1200;
+    const pvpWins = Math.max(0, Number(r.meta_json?.pvpWins) || 0);
+    const pvpLosses = Math.max(0, Number(r.meta_json?.pvpLosses) || 0);
     return {
       username: r.username,
       farmLevel,
@@ -1897,6 +1919,9 @@ export async function getTopTenLeaderboards(): Promise<{
       totalKills,
       highestTowerFloor,
       bestBossRushTimeMs,
+      pvpElo,
+      pvpWins,
+      pvpLosses,
       loadout: r.appearance ?? {},
     };
   });
@@ -1964,5 +1989,16 @@ export async function getTopTenLeaderboards(): Promise<{
       loadout: p.loadout,
     }));
 
-  return { farmer, stylish, slayer, tower, boss_rush };
+  const pvp = [...parsed]
+    .sort((a, b) => b.pvpElo - a.pvpElo || b.pvpWins - a.pvpWins)
+    .slice(0, 10)
+    .map((p, i) => ({
+      rank: i + 1,
+      username: p.username,
+      score: p.pvpElo,
+      detailLabel: `🥊 ${p.pvpElo} ELO · ${p.pvpWins}W-${p.pvpLosses}L${p.pvpElo >= 1250 ? ' · 🎗️ Champion Sash' : ''}`,
+      loadout: p.loadout,
+    }));
+
+  return { farmer, stylish, slayer, tower, boss_rush, pvp };
 }

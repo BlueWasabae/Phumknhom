@@ -3,6 +3,7 @@ import { soundManager } from './SoundManager';
 import { vfxManager } from '../animations/VFXManager';
 import { EventBus, type FishingBitePayload } from '../EventBus';
 import { MAX_FISHING_DISTANCE } from './CombatAimHelper';
+import { seasonClock } from './SeasonClock';
 
 export type FishingStage = 'idle' | 'casting' | 'waiting' | 'reeling' | 'catching';
 
@@ -207,11 +208,19 @@ const KOH_RONG_FISH_POOL: FishPoolEntry[] = [
 ];
 
 function rollFishFromPool(pool: FishPoolEntry[], fishingLevel: number): FishPoolEntry {
-  const luckBonus = Math.min(2.2, 1 + Math.max(0, fishingLevel - 1) * 0.06);
-  const weighted = pool.map((f) => ({
-    f,
-    w: f.rarity === 'common' ? f.weight : f.weight * luckBonus,
-  }));
+  const baseLuck = Math.min(2.2, 1 + Math.max(0, fishingLevel - 1) * 0.06);
+  // Update 3.1 — Monsoon Rain Synergy: +15% Rare/Mythic/Ancient Fishing Luck at Green Park & Koh Rong!
+  const monsoonBoost = seasonClock.getSnapshot().synergy.monsoonActive ? 1.15 : 1.0;
+  const weighted = pool.map((f) => {
+    const isRarePlus =
+      f.rarity === 'rare' ||
+      f.rarity === 'epic' ||
+      f.rarity === 'legendary' ||
+      f.rarity === 'mythic' ||
+      f.rarity === 'ancient';
+    const mult = f.rarity === 'common' ? 1 : baseLuck * (isRarePlus ? monsoonBoost : 1);
+    return { f, w: f.weight * mult };
+  });
   const total = weighted.reduce((acc, e) => acc + e.w, 0);
   let r = Math.random() * total;
   for (const e of weighted) {

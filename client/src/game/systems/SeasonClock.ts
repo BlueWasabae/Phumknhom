@@ -19,6 +19,18 @@ export interface SeasonDefinition {
   tintAlpha: number;
 }
 
+export interface WeatherSynergyState {
+  monsoonActive: boolean;
+  fishingRareBonusPct: number;
+  goldenSunsetActive: boolean;
+  tipMultiplier: number;
+  friendlyXpMultiplier: number;
+  fireflyNightActive: boolean;
+  bannerIcon: string;
+  bannerLabel: string;
+  bannerShort: string;
+}
+
 export interface SeasonClockSnapshot {
   season: SeasonDefinition;
   dayOfSeason: number; // 1..14
@@ -35,6 +47,8 @@ export interface SeasonClockSnapshot {
   isFullMoon: boolean;
   /** Update 1.5 — Active Khmer Seasonal Festival (auto from season or manual test trigger) */
   activeFestival: FestivalId | null;
+  /** Update 3.1 — Dynamic Weather Gameplay Synergies */
+  synergy: WeatherSynergyState;
 }
 
 export const SEASONS: Record<SeasonId, SeasonDefinition> = {
@@ -171,6 +185,34 @@ class SeasonClockEngine {
           ? 'Waxing Moon (Kaeut)'
           : 'Waning Moon (Roch)';
 
+    // Update 3.1 — Dynamic Weather Gameplay Synergies
+    const monsoonActive = season.id === 'summer';
+    const goldenSunsetActive = period === 'sunset';
+    const fireflyNightActive = period === 'night';
+    const synergy: WeatherSynergyState = {
+      monsoonActive,
+      fishingRareBonusPct: monsoonActive ? 15 : 0,
+      goldenSunsetActive,
+      tipMultiplier: goldenSunsetActive ? 2 : 1,
+      friendlyXpMultiplier: goldenSunsetActive ? 2 : 1,
+      fireflyNightActive,
+      bannerIcon: fireflyNightActive ? '✨' : goldenSunsetActive ? '🌇' : monsoonActive ? '🌧️' : '☀️',
+      bannerLabel: fireflyNightActive
+        ? 'Firefly Night: Glowing Fireflies spawned in Green Park & Bamboo Forest! Catch for Garden Lanterns!'
+        : goldenSunsetActive
+          ? 'Golden Sunset: 2× Tip Jar & 2× Friendly XP when jamming Khmer Instruments or hanging out in Central Plaza!'
+          : monsoonActive
+            ? 'Monsoon Rain: Auto-waters all Farm Crops + grants +15% Rare/Mythic Fishing Luck!'
+            : 'Clear Village Skies · Tip: Cycle Weather/Time in Clock menu to explore synergies!',
+      bannerShort: fireflyNightActive
+        ? '✨ Firefly Night'
+        : goldenSunsetActive
+          ? '🌇 Sunset 2× Tips/XP'
+          : monsoonActive
+            ? '🌧️ Monsoon +15% Fish'
+            : '',
+    };
+
     return {
       season,
       dayOfSeason,
@@ -185,6 +227,7 @@ class SeasonClockEngine {
       lunarLabel,
       isFullMoon,
       activeFestival: this.festivalOverride ?? getAutoFestivalForSeason(season.id),
+      synergy,
     };
   }
 

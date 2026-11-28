@@ -183,23 +183,103 @@ export class PlazaRoom extends Room<PlazaState> {
       });
     });
 
-    this.onMessage('emote', (client, payload: { emoji?: string }) => {
+    this.onMessage('emote', (client, payload: { emoji?: string; emoteId?: string }) => {
       const player = this.state.players.get(client.sessionId);
-      if (!player || typeof payload?.emoji !== 'string') return;
+      if (!player || !payload || typeof payload !== 'object') return;
 
       const now = Date.now();
       const prev = this.lastEmoteAt.get(client.sessionId) ?? 0;
       if (now - prev < EMOTE_COOLDOWN_MS) return;
 
-      const emoji = payload.emoji.trim().slice(0, 8);
-      if (!emoji) return;
+      const allowedEmoteIds = new Set([
+        'sampeah',
+        'romvong',
+        'apsara_pose',
+        'sip_kafe',
+        'sit_relax',
+        'victory_cheer',
+        'naga_spirit_roar',
+        'golden_rain_dance',
+      ]);
+      const emoteId =
+        typeof payload.emoteId === 'string' && allowedEmoteIds.has(payload.emoteId)
+          ? payload.emoteId
+          : undefined;
+      const emoji = typeof payload.emoji === 'string' ? payload.emoji.trim().slice(0, 8) : '';
+      if (!emoji && !emoteId) return;
 
       this.lastEmoteAt.set(client.sessionId, now);
       this.broadcast('emote', {
         sessionId: client.sessionId,
-        emoji,
+        emoji: emoji || '✨',
+        emoteId,
       });
     });
+
+    // Update 3.1 — Kun Khmer 1v1 Sparring Ring Duel Challenges
+    this.onMessage(
+      'duel:challenge',
+      (
+        client,
+        payload: { targetSessionId?: string; targetName?: string; mode?: 'normalized' | 'open' }
+      ) => {
+        const sender = this.state.players.get(client.sessionId);
+        if (!sender) return;
+        const mode = payload?.mode === 'open' ? 'open' : 'normalized';
+        const duelId = `duel_${client.sessionId.slice(0, 6)}_${Date.now().toString(36)}`;
+        const delivered = presenceRegistry.sendToTarget(
+          { sessionId: payload?.targetSessionId, username: payload?.targetName },
+          'duel:incoming',
+          {
+            duelId,
+            mode,
+            fromSessionId: client.sessionId,
+            fromName: sender.name,
+            timestamp: Date.now(),
+          }
+        );
+        client.send('socialNotice', {
+          text: delivered
+            ? `🥊 Sent Kun Khmer ${mode === 'normalized' ? 'Normalized 1v1' : 'Open Gear'} Duel Challenge to ${delivered.username}!`
+            : `${payload?.targetName || 'Player'} is not currently in the Plaza.`,
+        });
+      }
+    );
+
+    this.onMessage(
+      'duel:respond',
+      (
+        client,
+        payload: {
+          fromSessionId?: string;
+          fromName?: string;
+          duelId?: string;
+          mode?: 'normalized' | 'open';
+          accept?: boolean;
+        }
+      ) => {
+        const responder = this.state.players.get(client.sessionId);
+        if (!responder || !payload?.duelId) return;
+        const mode = payload.mode === 'open' ? 'open' : 'normalized';
+        if (!payload.accept) {
+          presenceRegistry.sendToTarget(
+            { sessionId: payload.fromSessionId, username: payload.fromName },
+            'socialNotice',
+            { text: `🥊 ${responder.name} declined the Kun Khmer sparring challenge.` }
+          );
+          return;
+        }
+        presenceRegistry.sendToTarget(
+          { sessionId: payload.fromSessionId, username: payload.fromName },
+          'duel:ready',
+          {
+            duelId: payload.duelId,
+            mode,
+            opponentName: responder.name,
+          }
+        );
+      }
+    );
 
     // Update 2.9 — Live Khmer Musical Instrument Jamming & Street Musician Tip Jar
     this.onMessage(

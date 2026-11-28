@@ -3,6 +3,7 @@ import type { PlayerState } from '@shared/types';
 import {
   DEFAULT_HOUSE_DECOR,
   DEFAULT_YARD_DECOR,
+  FIREFLY_LANTERN_CRAFT_COST,
   HOUSE_FURNITURE_CATALOG,
   HOUSE_FURNITURE_LIST,
   YARD_DECOR_CATALOG,
@@ -25,6 +26,7 @@ interface HouseDecorModalProps {
   onToggleDecorateMode: (active: boolean, itemId?: string | null) => void;
   onBuyFurniture: (itemId: string) => void;
   onBuyYardDecor?: (itemId: string) => void;
+  onCraftFireflyLantern?: () => void;
   onInviteFriendsHome: () => void;
   onClose: () => void;
 }
@@ -37,12 +39,17 @@ export const HouseDecorModal: React.FC<HouseDecorModalProps> = ({
   onToggleDecorateMode,
   onBuyFurniture,
   onBuyYardDecor,
+  onCraftFireflyLantern,
   onInviteFriendsHome,
   onClose,
 }) => {
   const [scope, setScope] = useState<'interior' | 'yard'>(initialScope);
   const [tab, setTab] = useState<'starter' | 'trophies' | 'placed'>('starter');
   const [yardTab, setYardTab] = useState<'catalog' | 'placed'>('catalog');
+
+  const jarredFireflies = player.inventory
+    .filter((i) => i.itemId === 'item_jarred_firefly' && i.quantity > 0)
+    .reduce((sum, i) => sum + i.quantity, 0);
 
   useEffect(() => {
     if (open) {
@@ -94,6 +101,28 @@ export const HouseDecorModal: React.FC<HouseDecorModalProps> = ({
             <Flower2 className="w-4 h-4" /> Outdoor Garden Yard ({placedYard.length})
           </button>
         </div>
+
+        {/* Update 3.1 — Firefly Garden Lantern Crafting Bar */}
+        {onCraftFireflyLantern && (
+          <div className="p-2.5 rounded-xl bg-gradient-to-r from-lime-950 via-emerald-950 to-slate-900 text-lime-50 border-2 border-lime-400/70 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <div className="font-display font-bold text-xs text-lime-300">
+                ✨ Craft Firefly Garden Lantern (Interior + Outdoor Yard Pair!)
+              </div>
+              <div className="text-[10px] text-lime-100/90">
+                Jarred Fireflies Owned: <strong>{jarredFireflies}</strong> / {FIREFLY_LANTERN_CRAFT_COST} needed · Catch glowing Fireflies in Green Park &amp; Bamboo Forest during Firefly Night!
+              </div>
+            </div>
+            <button
+              type="button"
+              disabled={jarredFireflies < FIREFLY_LANTERN_CRAFT_COST}
+              onClick={onCraftFireflyLantern}
+              className="px-3 py-1.5 rounded-xl bg-lime-400 hover:bg-lime-300 text-slate-950 font-display font-extrabold text-xs disabled:opacity-45 cursor-pointer"
+            >
+              ✨ Craft Lantern (-{FIREFLY_LANTERN_CRAFT_COST})
+            </button>
+          </div>
+        )}
 
         {/* ==================== OUTDOOR GARDEN YARD SCOPE (UPDATE 2.9) ==================== */}
         {scope === 'yard' ? (

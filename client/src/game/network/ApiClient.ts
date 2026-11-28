@@ -12,6 +12,7 @@ import {
   type EquippedLoadout,
   type InstrumentSkinId,
   type ItemRarity,
+  type KhmerEmoteId,
   type KhmerInstrumentId,
   type KromGuild,
   type KromTerritoryId,
@@ -157,6 +158,11 @@ export interface SavedProfilePayload {
   championPetRibbon?: boolean;
   yardDecor?: PlacedYardDecor[];
   ownedYardDecor?: Record<string, number>;
+  pvpElo?: number;
+  pvpWins?: number;
+  pvpLosses?: number;
+  kunKhmerChampionSash?: boolean;
+  ownedEmotes?: KhmerEmoteId[];
   hasCompletedCreation?: boolean;
   activeClass: PlayerState['activeClass'];
   weapon: PlayerState['weapon'];
@@ -164,7 +170,7 @@ export interface SavedProfilePayload {
   areaChannel: number;
 }
 
-export type LeaderboardCategory = 'farmer' | 'stylish' | 'slayer' | 'tower' | 'boss_rush';
+export type LeaderboardCategory = 'farmer' | 'stylish' | 'slayer' | 'tower' | 'boss_rush' | 'pvp';
 
 export interface LeaderboardEntry {
   rank: number;
@@ -180,6 +186,7 @@ export interface LeaderboardResponse {
   slayer: LeaderboardEntry[];
   tower: LeaderboardEntry[];
   boss_rush: LeaderboardEntry[];
+  pvp: LeaderboardEntry[];
 }
 
 function formatBossRushSpeedrun(ms: number): string {
@@ -401,7 +408,25 @@ function buildOfflineFallbackLeaderboard(localPlayer?: PlayerState): Leaderboard
       loadout: p.loadout,
     }));
 
-  return { farmer, stylish, slayer, tower, boss_rush };
+  const pvp = [...seeds]
+    .map((p, idx) => {
+      const isSelf = localPlayer && p.username === localPlayer.name;
+      const elo = isSelf ? (localPlayer.pvpElo ?? 1200) : 1620 - idx * 45;
+      const wins = isSelf ? (localPlayer.pvpWins ?? 0) : Math.max(4, 26 - idx * 2);
+      const losses = isSelf ? (localPlayer.pvpLosses ?? 0) : 3 + (idx % 4);
+      return { ...p, elo, wins, losses };
+    })
+    .sort((a, b) => b.elo - a.elo || b.wins - a.wins)
+    .slice(0, 10)
+    .map((p, idx) => ({
+      rank: idx + 1,
+      username: p.username,
+      score: p.elo,
+      detailLabel: `🥊 ${p.elo} ELO · ${p.wins}W-${p.losses}L${p.elo >= 1250 ? ' · 🎗️ Champion Sash' : ''}`,
+      loadout: p.loadout,
+    }));
+
+  return { farmer, stylish, slayer, tower, boss_rush, pvp };
 }
 
 export async function fetchLeaderboard(localPlayer?: PlayerState): Promise<LeaderboardResponse> {
@@ -424,6 +449,7 @@ export async function fetchLeaderboard(localPlayer?: PlayerState): Promise<Leade
             Array.isArray(json.boss_rush) && json.boss_rush.length > 0
               ? json.boss_rush.map(normalizeRow)
               : fallback.boss_rush,
+          pvp: Array.isArray(json.pvp) && json.pvp.length > 0 ? json.pvp.map(normalizeRow) : fallback.pvp,
         };
       }
     }
@@ -546,6 +572,11 @@ export function serializePlayerStateForSave(state: PlayerState): SavedProfilePay
     championPetRibbon: Boolean(state.championPetRibbon ?? false),
     yardDecor: state.yardDecor ? state.yardDecor.map((d) => ({ ...d })) : undefined,
     ownedYardDecor: state.ownedYardDecor ? { ...state.ownedYardDecor } : undefined,
+    pvpElo: state.pvpElo ?? 1200,
+    pvpWins: state.pvpWins ?? 0,
+    pvpLosses: state.pvpLosses ?? 0,
+    kunKhmerChampionSash: Boolean(state.kunKhmerChampionSash ?? false),
+    ownedEmotes: [...(state.ownedEmotes ?? [])],
     hasCompletedCreation: Boolean(state.hasCompletedCreation ?? state.loadout.hasCompletedCreation),
     activeClass: state.activeClass,
     weapon: { ...state.weapon },
@@ -951,6 +982,11 @@ export function hydratePlayerStateFromSave(
       saved?.ownedYardDecor && typeof saved.ownedYardDecor === 'object'
         ? { ...saved.ownedYardDecor }
         : INITIAL_PLAYER_STATE.ownedYardDecor,
+    pvpElo: typeof saved?.pvpElo === 'number' && Number.isFinite(saved.pvpElo) ? Math.round(saved.pvpElo) : 1200,
+    pvpWins: typeof saved?.pvpWins === 'number' ? saved.pvpWins : 0,
+    pvpLosses: typeof saved?.pvpLosses === 'number' ? saved.pvpLosses : 0,
+    kunKhmerChampionSash: Boolean(saved?.kunKhmerChampionSash ?? false),
+    ownedEmotes: Array.isArray(saved?.ownedEmotes) ? [...saved.ownedEmotes] : [],
     hasCompletedCreation: Boolean(
       saved?.hasCompletedCreation ?? saved?.loadout?.hasCompletedCreation ?? false
     ),

@@ -29,7 +29,10 @@ export type ZoneType =
   | 'khmer_world'
   | 'house'
   | 'krom_hall'
-  | 'pet_race';
+  | 'pet_race'
+  | 'arena';
+
+export type { KhmerEmoteId } from './emotes';
 
 export type KhmerInstrumentId =
   | 'roneat_aek'
@@ -665,6 +668,12 @@ export interface PlayerState {
   championPetRibbon?: boolean;
   yardDecor?: PlacedYardDecor[];
   ownedYardDecor?: Record<string, number>;
+  /** Update 3.1 — Kun Khmer 1v1 Sparring Ring ELO, Champion Sash & Live Khmer Emotes */
+  pvpElo?: number;
+  pvpWins?: number;
+  pvpLosses?: number;
+  kunKhmerChampionSash?: boolean;
+  ownedEmotes?: import('./emotes').KhmerEmoteId[];
   hasCompletedCreation?: boolean;
   skillDamagePct: number;
   armorDamagePct: number;
@@ -989,6 +998,11 @@ export const INITIAL_PLAYER_STATE: PlayerState = {
     yard_teak_bench: 1,
     yard_lotus_koi_pond: 1,
   },
+  pvpElo: 1200,
+  pvpWins: 0,
+  pvpLosses: 0,
+  kunKhmerChampionSash: false,
+  ownedEmotes: [],
   hasCompletedCreation: false,
   skillDamagePct: 0.025,
   armorDamagePct: 0.04,

@@ -1,4 +1,4 @@
-import type { PlayerState, WeaponAuraId } from '@shared/types';
+import type { KhmerEmoteId, PlayerState, WeaponAuraId } from '@shared/types';
 import {
   RELIQUARY_OPEN_10_DIAMOND_COST,
   RELIQUARY_OPEN_DIAMOND_COST,
@@ -46,6 +46,7 @@ export interface DiamondShopItemDef {
   bagSlotsBonus?: number;
   instrumentSkinId?: 'golden_angkor' | 'celestial_apsara';
   yardDecorId?: string;
+  emoteId?: KhmerEmoteId;
 }
 
 export const PHUM_WELCOME_BUNDLE = {
@@ -242,6 +243,31 @@ export const DIAMOND_SHOP_ITEMS: DiamondShopItemDef[] = [
     description:
       'Grand gilded Angkor Naga garden fountain shooting animated turquoise water arcs with WebGL Bloom!',
     yardDecorId: 'yard_golden_naga_fountain',
+  },
+  // ---- UPDATE 3.1: PRESTIGE ANIMATED KHMER EMOTES ----
+  {
+    id: 'shop_emote_naga_spirit_roar',
+    name: 'Naga Spirit Roar (Animated Emote)',
+    khmerName: 'សម្រែកនាគទេព (កាយវិការពិសេស)',
+    category: 'cosmetic',
+    diamondCost: 120,
+    icon: '🐉',
+    badge: 'Prestige Animated Emote',
+    description:
+      'Unlocks the Naga Spirit Roar emote on your [Z] Radial Emote Wheel — unleashes an emerald-gold Naga shockwave aura synced across the Plaza! (Also in Royal Season Pass Tier 6)',
+    emoteId: 'naga_spirit_roar',
+  },
+  {
+    id: 'shop_emote_golden_rain_dance',
+    name: 'Golden Rain Dance (Animated Emote)',
+    khmerName: 'របាំភ្លៀងមាសអង្គរ (កាយវិការពិសេស)',
+    category: 'cosmetic',
+    diamondCost: 150,
+    icon: '✨',
+    badge: 'Prestige Looping Dance',
+    description:
+      'Unlocks the looping Golden Rain Dance on your [Z] Radial Emote Wheel — summons shimmering golden Angkor lotus petals while dancing! (Also in Royal Season Pass Tier 14)',
+    emoteId: 'golden_rain_dance',
   },
   // ---- ANIMATED 4-FRAME AUTO-LOOT & COMPANION PETS ----
   {
@@ -617,6 +643,9 @@ export function purchaseDiamondShopItem(
   if (def.instrumentSkinId && (state.ownedInstrumentSkins ?? []).includes(def.instrumentSkinId)) {
     return { state, ok: false, message: `You already own ${def.name}! Select it in the Khmer Instrument bar.` };
   }
+  if (def.emoteId && (state.ownedEmotes ?? []).includes(def.emoteId)) {
+    return { state, ok: false, message: `You already own ${def.name}! Press [Z] to perform it from the Emote Wheel.` };
+  }
 
   const nextDiamonds = state.currencies.diamonds - def.diamondCost;
   const nextInv = state.inventory.map((i) => ({ ...i }));
@@ -626,6 +655,7 @@ export function purchaseDiamondShopItem(
   const nextSkins = [...(state.ownedInstrumentSkins ?? ['classic'])];
   let nextActiveSkin = state.equippedInstrumentSkin ?? 'classic';
   const nextOwnedYard = { ...(state.ownedYardDecor ?? {}) };
+  const nextOwnedEmotes = [...(state.ownedEmotes ?? [])];
 
   const grantIds = def.itemIds && def.itemIds.length > 0 ? def.itemIds : def.itemId ? [def.itemId] : [];
   if (grantIds.length > 0) {
@@ -649,6 +679,9 @@ export function purchaseDiamondShopItem(
   if (def.yardDecorId) {
     nextOwnedYard[def.yardDecorId] = (nextOwnedYard[def.yardDecorId] ?? 0) + 1;
   }
+  if (def.emoteId && !nextOwnedEmotes.includes(def.emoteId)) {
+    nextOwnedEmotes.push(def.emoteId);
+  }
 
   return {
     state: {
@@ -661,6 +694,7 @@ export function purchaseDiamondShopItem(
       ownedInstrumentSkins: nextSkins,
       equippedInstrumentSkin: nextActiveSkin,
       ownedYardDecor: nextOwnedYard,
+      ownedEmotes: nextOwnedEmotes,
     },
     ok: true,
     message: `💎 Purchased ${def.name} (-${def.diamondCost} Diamonds)!`,

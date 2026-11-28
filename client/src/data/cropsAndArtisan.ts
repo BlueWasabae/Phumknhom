@@ -848,6 +848,17 @@ export const FARM_ITEMS: Record<string, FarmItemMeta> = {
     primaryColor: '#38bdf8',
     description: 'Glowing whetstone discovered in hidden Cavern Relic Chests. Valued by Master Somnang at the Blacksmith.',
   },
+  item_jarred_firefly: {
+    id: 'item_jarred_firefly',
+    name: 'Jarred Firefly',
+    khmerName: 'អំពិលអំពែកក្នុងដប',
+    kind: 'artisan',
+    rarity: 'uncommon',
+    sellCoins: 45,
+    primaryColor: '#a3e635',
+    description:
+      'Gently glowing Khmer firefly caught during Firefly Night in Green Park or Bamboo Forest. Combine 3× in House/Yard Decor to craft glowing Firefly Garden Lanterns!',
+  },
   drop_cavern_essence: {
     id: 'drop_cavern_essence',
     name: 'Cavern Spirit Essence',

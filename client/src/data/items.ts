@@ -2297,6 +2297,21 @@ export const ITEM_CATALOG: Record<string, CatalogItem> = {
     faceStyleOverride: 'sacred_third_eye',
     stats: {},
   },
+  // ==================== UPDATE 3.1: KUN KHMER CHAMPION SASH & JARRED FIREFLY ====================
+  acc_kun_khmer_champion_sash: {
+    id: 'acc_kun_khmer_champion_sash',
+    name: 'Kun Khmer Champion Sash',
+    khmerName: 'ខ្សែក្រវាត់ជើងឯកគុនខ្មែរ',
+    slot: 'accessory',
+    rarity: 'mythic',
+    stylishScore: 165,
+    description:
+      'Radiant golden-and-crimson Kun Khmer championship sash awarded to top-ranked 1v1 Sparring Ring fighters (vanity prestige aura, 0 P2W).',
+    primaryColor: '#facc15',
+    accentColor: '#dc2626',
+    styleVariant: 'kun_khmer_sash',
+    stats: {},
+  },
 
   // ==================== UPDATE 1.3A: 5-SLOT ACCESSORIES & FUSED RELICS ====================
   ...Object.fromEntries(

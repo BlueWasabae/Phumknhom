@@ -14,6 +14,7 @@ import { WorldBossScene } from './scenes/WorldBossScene';
 import { PearlDiveScene } from './scenes/PearlDiveScene';
 import { KromHallScene } from './scenes/KromHallScene';
 import { PetRaceScene } from './scenes/PetRaceScene';
+import { ArenaPvPScene } from './scenes/ArenaPvPScene';
 
 export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameConfig {
   return {
@@ -67,6 +68,7 @@ export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameCon
       PearlDiveScene,
       KromHallScene,
       PetRaceScene,
+      ArenaPvPScene,
     ],
   };
 }

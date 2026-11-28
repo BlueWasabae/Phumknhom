@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { DEFAULT_LOADOUT, type EquippedLoadout } from '@shared/types';
+import { DEFAULT_LOADOUT, type EquippedLoadout, type KhmerEmoteId } from '@shared/types';
 import {
   normalizeEyeStyleId,
   normalizeEyebrowStyleId,
@@ -887,6 +887,9 @@ export class PaperDoll extends Phaser.GameObjects.Container {
   private weaponAuraSparks: Phaser.GameObjects.Arc[] = [];
   private auraGlow: Phaser.GameObjects.Image;
   private parryArc: Phaser.GameObjects.Arc;
+  private championSashGfx: Phaser.GameObjects.Graphics;
+  private emoteVfxGfx: Phaser.GameObjects.Graphics;
+  private emoteBadge: Phaser.GameObjects.Text;
 
   private loadout: EquippedLoadout;
   private currentPose: PaperDollPose = 'idle';
@@ -894,6 +897,8 @@ export class PaperDoll extends Phaser.GameObjects.Container {
   private lastTexKey = '';
   private isStealth = false;
   private aimAngle: number | null = null;
+  private activeEmote: KhmerEmoteId | null = null;
+  private activeEmoteStartedAt = 0;
 
   constructor(
     scene: Phaser.Scene,
@@ -946,14 +951,31 @@ export class PaperDoll extends Phaser.GameObjects.Container {
       .setStrokeStyle(3, 0xfef9c3, 1)
       .setVisible(false);
 
+    this.championSashGfx = scene.add.graphics().setVisible(false);
+    this.emoteVfxGfx = scene.add.graphics().setVisible(false);
+    this.emoteBadge = scene.add
+      .text(0, -44, '', {
+        fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
+        fontSize: '12px',
+        fontStyle: 'bold',
+        color: '#fef08a',
+        stroke: '#0f172a',
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5, 1)
+      .setVisible(false);
+
     this.add([
       this.auraGlow,
       this.wingSprite,
       this.bodySprite,
+      this.championSashGfx,
       this.weaponAuraGlow,
       this.weaponSprite,
       ...this.weaponAuraSparks,
       this.parryArc,
+      this.emoteVfxGfx,
+      this.emoteBadge,
     ]);
     this.applyWeaponAndAura();
     scene.add.existing(this);
@@ -1075,6 +1097,20 @@ export class PaperDoll extends Phaser.GameObjects.Container {
     this.aimAngle = angle;
   }
 
+  public setActiveEmote(emoteId: KhmerEmoteId | null, startedAt = Date.now()): void {
+    this.activeEmote = emoteId;
+    this.activeEmoteStartedAt = startedAt;
+    if (!emoteId) {
+      this.emoteVfxGfx.clear().setVisible(false);
+      this.emoteBadge.setVisible(false);
+      this.bodySprite.setRotation(0);
+    }
+  }
+
+  public getActiveEmote(): KhmerEmoteId | null {
+    return this.activeEmote;
+  }
+
   public setPoseAndFacing(pose: PaperDollPose, facing: PaperDollFacing, time: number): void {
     this.currentPose = pose;
     this.currentFacing = facing;
@@ -1090,9 +1126,133 @@ export class PaperDoll extends Phaser.GameObjects.Container {
     const breathPhase = !isWalking && pose === 'idle' ? (Math.floor(time / 480) % 2 === 0 ? 0 : 1) : 0;
     const idleBob = !isWalking && pose === 'idle' ? (breathPhase === 1 ? -1.1 : 0) : 0;
     const walkBob = isWalking ? -Math.abs(Math.sin(time / 115)) * 1.9 : 0;
-    const vertBob = idleBob + walkBob;
+    let vertBob = idleBob + walkBob;
+    let emoteRot = 0;
+    let emoteScaleX = 1.38;
+    let emoteScaleY = !isWalking && pose === 'idle' ? (breathPhase === 1 ? 1.418 : 1.38) : 1.38;
+
+    // Update 3.1 — Live Khmer Emote & Dance Wheel animations + VFX overlays
+    if (this.activeEmote && !isWalking) {
+      const elapsed = Math.max(0, time - this.activeEmoteStartedAt);
+      this.emoteVfxGfx.clear().setVisible(true);
+      if (this.activeEmote === 'sampeah') {
+        const bow = Math.sin(Math.min(1, elapsed / 650) * Math.PI);
+        emoteRot = (facing === 'left' ? -1 : 1) * 0.16 * bow;
+        vertBob += bow * 2.2;
+        this.emoteVfxGfx.lineStyle(1.8, 0xfacc15, 0.85);
+        this.emoteVfxGfx.strokeCircle(0, -18, 12 + Math.sin(time / 150) * 3);
+        for (let i = 0; i < 4; i++) {
+          const a = time / 280 + (i * Math.PI) / 2;
+          this.emoteVfxGfx.fillStyle(0xfef08a, 0.95);
+          this.emoteVfxGfx.fillCircle(Math.cos(a) * 14, -20 + Math.sin(a) * 9, 2.1);
+        }
+        this.emoteBadge.setText('🙏 សំពះ').setPosition(0, -40).setVisible(true);
+      } else if (this.activeEmote === 'romvong') {
+        const sway = Math.sin(time / 220);
+        emoteRot = sway * 0.15;
+        vertBob += -Math.abs(Math.cos(time / 220)) * 3.2;
+        for (let i = 0; i < 4; i++) {
+          const a = time / 320 + (i * Math.PI) / 2;
+          const col = i % 2 === 0 ? 0xf472b6 : 0xfacc15;
+          this.emoteVfxGfx.fillStyle(col, 0.92);
+          this.emoteVfxGfx.fillCircle(Math.cos(a) * 17, -18 + Math.sin(a * 1.5) * 10, 2.4);
+        }
+        this.emoteBadge.setText('💃 រាំវង់ ♪').setPosition(Math.sin(time / 220) * 4, -42).setVisible(true);
+      } else if (this.activeEmote === 'apsara_pose') {
+        vertBob += -2.8 + Math.sin(time / 260) * 1.4;
+        emoteRot = Math.sin(time / 380) * 0.08;
+        this.emoteVfxGfx.lineStyle(2, 0xfb7185, 0.85);
+        this.emoteVfxGfx.strokeCircle(0, -20, 16 + Math.sin(time / 200) * 2.5);
+        for (let i = 0; i < 6; i++) {
+          const a = time / 450 + (i * Math.PI) / 3;
+          this.emoteVfxGfx.fillStyle(i % 2 === 0 ? 0xfbcfe8 : 0xfde047, 0.92);
+          this.emoteVfxGfx.fillEllipse(Math.cos(a) * 18, -20 + Math.sin(a) * 12, 5, 2.5);
+        }
+        this.emoteBadge.setText('🪷 អប្សរា').setPosition(0, -44).setVisible(true);
+      } else if (this.activeEmote === 'sip_kafe') {
+        const sip = Math.max(0, Math.sin(time / 550));
+        emoteRot = sip * 0.07;
+        const cupX = facing === 'left' ? -11 : 11;
+        const cupY = -15 - sip * 3.5;
+        // Iced Khmer Kafé Tek Dos Ko cup + condensed milk layer + green straw
+        this.emoteVfxGfx.fillStyle(0x451a03, 0.98);
+        this.emoteVfxGfx.fillRoundedRect(cupX - 3.5, cupY - 5, 7, 10, 1.5);
+        this.emoteVfxGfx.fillStyle(0xfef3c7, 0.96);
+        this.emoteVfxGfx.fillRect(cupX - 3, cupY + 1, 6, 3.5);
+        this.emoteVfxGfx.lineStyle(1.4, 0x22c55e, 1);
+        this.emoteVfxGfx.lineBetween(cupX + 1, cupY - 5, cupX + 3, cupY - 10);
+        this.emoteBadge.setText('🧋 កាហ្វេ').setPosition(0, -40).setVisible(true);
+      } else if (this.activeEmote === 'sit_relax') {
+        vertBob += 6.2;
+        emoteScaleX = 1.44;
+        emoteScaleY = 1.18;
+        this.emoteVfxGfx.fillStyle(0x34d399, 0.28);
+        this.emoteVfxGfx.fillEllipse(0, 2, 24, 9);
+        this.emoteBadge.setText('🧘 Relaxing').setPosition(0, -34).setVisible(true);
+      } else if (this.activeEmote === 'victory_cheer') {
+        const jump = Math.abs(Math.sin(time / 160));
+        vertBob += -jump * 9.5;
+        emoteScaleY = 1.38 + jump * 0.12;
+        const colors = [0xfacc15, 0x38bdf8, 0xf43f5e, 0x4ade80, 0xc084fc];
+        for (let i = 0; i < 6; i++) {
+          const p = ((time / 320 + i * 0.37) % 1);
+          const cx = Math.cos(i * 1.15) * (8 + p * 18);
+          const cy = -18 - p * 22;
+          this.emoteVfxGfx.fillStyle(colors[i % colors.length], 1 - p * 0.7);
+          this.emoteVfxGfx.fillRect(cx - 1.5, cy - 1.5, 3, 3);
+        }
+        this.emoteBadge.setText('🎉 CHAIYO!').setPosition(0, -46 - jump * 4).setVisible(true);
+      } else if (this.activeEmote === 'naga_spirit_roar') {
+        const pulse = Math.sin(time / 130);
+        vertBob += -2 + pulse * 1.8;
+        this.emoteVfxGfx.lineStyle(2.4, 0x10b981, 0.9);
+        this.emoteVfxGfx.strokeCircle(0, -18, 16 + ((time / 18) % 14));
+        this.emoteVfxGfx.lineStyle(2, 0xfacc15, 0.85);
+        this.emoteVfxGfx.strokeCircle(0, -18, 11 + Math.abs(pulse) * 6);
+        for (let i = 0; i < 5; i++) {
+          const a = time / 180 + (i * Math.PI * 2) / 5;
+          this.emoteVfxGfx.fillStyle(i % 2 === 0 ? 0x34d399 : 0xfde047, 0.95);
+          this.emoteVfxGfx.fillCircle(Math.cos(a) * 19, -18 + Math.sin(a) * 13, 2.8);
+        }
+        this.emoteBadge.setText('🐉 NAGA ROAR!').setPosition(0, -46).setVisible(true);
+      } else if (this.activeEmote === 'golden_rain_dance') {
+        const sway = Math.sin(time / 240);
+        emoteRot = sway * 0.14;
+        vertBob += -2.5 + Math.cos(time / 240) * 2.2;
+        this.emoteVfxGfx.fillStyle(0xfacc15, 0.2);
+        this.emoteVfxGfx.fillCircle(0, -18, 22);
+        for (let i = 0; i < 8; i++) {
+          const drop = ((time / 480 + i * 0.21) % 1);
+          const dx = -18 + (i * 5.2);
+          const dy = -38 + drop * 42;
+          this.emoteVfxGfx.fillStyle(i % 2 === 0 ? 0xfef08a : 0xf59e0b, 1 - drop * 0.5);
+          this.emoteVfxGfx.fillRect(dx, dy, 2.2, 5.5);
+        }
+        this.emoteBadge.setText('✨ របាំភ្លៀងមាស').setPosition(sway * 3, -46).setVisible(true);
+      }
+    } else if (this.emoteVfxGfx.visible) {
+      this.emoteVfxGfx.clear().setVisible(false);
+      this.emoteBadge.setVisible(false);
+    }
+
     this.bodySprite.setY(vertBob);
-    this.bodySprite.setScale(1, !isWalking && pose === 'idle' ? (breathPhase === 1 ? 1.028 : 1.0) : 1.0);
+    this.bodySprite.setRotation(emoteRot);
+    this.bodySprite.setScale(emoteScaleX, emoteScaleY);
+
+    // Update 3.1 — Glowing Kun Khmer Champion Sash vanity waist belt!
+    const hasChampionSash = (this.loadout.accessories ?? []).includes('acc_kun_khmer_champion_sash');
+    if (hasChampionSash) {
+      const shimmer = 0.72 + Math.sin(time / 180) * 0.25;
+      this.championSashGfx.clear().setVisible(true);
+      this.championSashGfx.fillStyle(0xdc2626, 0.95);
+      this.championSashGfx.fillRoundedRect(-8, -12 + vertBob, 16, 4.5, 1.5);
+      this.championSashGfx.fillStyle(0xfacc15, shimmer);
+      this.championSashGfx.fillRect(-3.5, -12.5 + vertBob, 7, 5.5);
+      this.championSashGfx.lineStyle(1.2, 0xfef08a, shimmer);
+      this.championSashGfx.strokeRoundedRect(-8.5, -12.5 + vertBob, 17, 5.5, 2);
+    } else if (this.championSashGfx.visible) {
+      this.championSashGfx.clear().setVisible(false);
+    }
 
     if (this.wingSprite.visible) {
       const wingHover = Math.sin(time / 220) * 1.4;

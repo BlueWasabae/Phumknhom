@@ -44,7 +44,7 @@ export interface PlazaRoomHandlers {
   onRemoteChange: (player: RemotePlayerSnapshot) => void;
   onRemoteRemove: (sessionId: string) => void;
   onChat: (msg: { sessionId: string; name: string; text: string; timestamp: number }) => void;
-  onEmote: (msg: { sessionId: string; emoji: string }) => void;
+  onEmote: (msg: { sessionId: string; emoji: string; emoteId?: string }) => void;
 }
 
 interface RawRemotePlayerSchema {
@@ -396,9 +396,29 @@ class PlazaRoomClient {
         }
       );
 
-      room.onMessage('emote', (msg: { sessionId: string; emoji: string }) => {
+      room.onMessage('emote', (msg: { sessionId: string; emoji: string; emoteId?: string }) => {
         handlers.onEmote(msg);
       });
+
+      room.onMessage(
+        'duel:incoming',
+        (msg: {
+          duelId: string;
+          mode: 'normalized' | 'open';
+          fromSessionId: string;
+          fromName: string;
+          timestamp: number;
+        }) => {
+          EventBus.emit('duel:incoming', msg);
+        }
+      );
+
+      room.onMessage(
+        'duel:ready',
+        (msg: { duelId: string; mode: 'normalized' | 'open'; opponentName: string }) => {
+          EventBus.emit('duel:ready', msg);
+        }
+      );
 
       room.onMessage(
         'whisper',
@@ -706,10 +726,31 @@ class PlazaRoomClient {
     return true;
   }
 
-  public sendEmote(emoji: string): boolean {
+  public sendEmote(emoji: string, emoteId?: string): boolean {
     if (!this.room || !this.online) return false;
-    this.room.send('emote', { emoji });
+    this.room.send('emote', { emoji, emoteId });
     return true;
+  }
+
+  public sendDuelChallenge(target: {
+    targetSessionId?: string;
+    targetName?: string;
+    mode?: 'normalized' | 'open';
+  }): boolean {
+    if (!this.room || !this.online) return false;
+    this.room.send('duel:challenge', target);
+    return true;
+  }
+
+  public sendDuelResponse(payload: {
+    fromSessionId: string;
+    fromName: string;
+    duelId: string;
+    mode: 'normalized' | 'open';
+    accept: boolean;
+  }): void {
+    if (!this.room || !this.online) return;
+    this.room.send('duel:respond', payload);
   }
 
   public sendWhisper(targetName: string, text: string, targetSessionId?: string): boolean {

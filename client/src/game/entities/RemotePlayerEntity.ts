@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import type { EquippedLoadout } from '@shared/types';
+import type { EquippedLoadout, KhmerEmoteId } from '@shared/types';
+import { KHMER_EMOTES, isKhmerEmoteId } from '@shared/emotes';
 import { EventBus } from '../EventBus';
 import { PaperDoll, type PaperDollFacing, type PaperDollPose } from './PaperDoll';
 import { Pet } from './Pet';
@@ -44,6 +45,8 @@ export class RemotePlayerEntity {
 
   private bubbleExpiresAt = 0;
   private emoteExpiresAt = 0;
+  private activeKhmerEmote: KhmerEmoteId | null = null;
+  private activeKhmerEmoteExpiresAt = 0;
   private readonly uiScale = 0.44;
 
   constructor(
@@ -214,7 +217,16 @@ export class RemotePlayerEntity {
     this.bubbleExpiresAt = this.scene.time.now + durationMs;
   }
 
-  public showEmote(emoji: string, durationMs = 3000): void {
+  public showEmote(emoji: string, durationMs = 3000, emoteId?: string): void {
+    if (emoteId && isKhmerEmoteId(emoteId)) {
+      const def = KHMER_EMOTES[emoteId];
+      this.activeKhmerEmote = emoteId;
+      this.activeKhmerEmoteExpiresAt = def.looping ? Number.POSITIVE_INFINITY : this.scene.time.now + def.durationMs;
+      this.paperDoll.setActiveEmote(emoteId, this.scene.time.now);
+      this.emoteText.setText(def.icon).setVisible(true);
+      this.emoteExpiresAt = this.scene.time.now + (def.looping ? 2600 : def.durationMs);
+      return;
+    }
     this.emoteText.setText(emoji).setVisible(true);
     this.emoteExpiresAt = this.scene.time.now + durationMs;
   }
@@ -234,6 +246,11 @@ export class RemotePlayerEntity {
     }
 
     const movingNow = this.isMoving || Math.hypot(dx, dy) > 1.2;
+    if (this.activeKhmerEmote && (movingNow || time >= this.activeKhmerEmoteExpiresAt)) {
+      this.activeKhmerEmote = null;
+      this.activeKhmerEmoteExpiresAt = 0;
+      this.paperDoll.setActiveEmote(null);
+    }
     const pose: PaperDollPose = movingNow
       ? Math.floor(time / 150) % 2 === 0
         ? 'walk1'

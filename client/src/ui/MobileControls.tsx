@@ -81,7 +81,7 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
       </div>
 
       <div className="pointer-events-auto flex items-end gap-2">
-        {zone === 'dungeon' || zone === 'cavern' || zone === 'tower' ? (
+        {zone === 'dungeon' || zone === 'cavern' || zone === 'tower' || zone === 'arena' ? (
           <div className="flex flex-col items-end gap-2">
             {zone === 'dungeon' && bossHud?.difficulty === 'mythic' && (bossHud.focusPct >= 100 || bossHud.furyPct >= 100) && (
               <div className="flex items-center gap-2">
@@ -184,6 +184,13 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
           </div>
         ) : (
           <div className="flex items-end gap-2">
+            <button
+              type="button"
+              onPointerDown={() => EventBus.emit('ui:openModal', { modal: 'emoteWheel' })}
+              className="w-14 h-14 rounded-full bg-gradient-to-b from-amber-300 to-orange-500 border-[3px] border-amber-950 text-amber-950 font-display font-bold text-[10px] leading-tight shadow-lg active:scale-95"
+            >
+              {'🪷\nEMOTE'}
+            </button>
             {zone === 'overworld' && (
               <button
                 type="button"

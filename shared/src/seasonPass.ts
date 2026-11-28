@@ -1,3 +1,4 @@
+import type { KhmerEmoteId } from './emotes';
 import type { PlayerState } from './types';
 
 /**
@@ -25,6 +26,7 @@ export interface SeasonPassReward {
   items?: Array<{ itemId: string; quantity: number }>;
   furniture?: Array<{ itemId: string; quantity: number }>;
   titleUnlock?: string;
+  emoteUnlock?: KhmerEmoteId;
 }
 
 export interface SeasonPassTierDef {
@@ -69,7 +71,12 @@ export const SEASON_PASS_TIERS: SeasonPassTierDef[] = [
     tier: 6,
     xpRequired: 1000,
     free: { label: '300 Coins', icon: '🪙', coins: 300 },
-    royal: { label: '3× Reforge Stones', icon: '🔨', items: [{ itemId: 'mat_reforge_stone', quantity: 3 }] },
+    royal: {
+      label: 'Naga Spirit Roar Emote + 3× Reforge Stones',
+      icon: '🐉',
+      emoteUnlock: 'naga_spirit_roar',
+      items: [{ itemId: 'mat_reforge_stone', quantity: 3 }],
+    },
   },
   {
     tier: 7,
@@ -121,7 +128,12 @@ export const SEASON_PASS_TIERS: SeasonPassTierDef[] = [
     tier: 14,
     xpRequired: 2600,
     free: { label: '600 Coins', icon: '🪙', coins: 600 },
-    royal: { label: '2× Torn Treasure Maps', icon: '🗺️', items: [{ itemId: 'item_torn_treasure_map', quantity: 2 }] },
+    royal: {
+      label: 'Golden Rain Dance Emote + 2× Treasure Maps',
+      icon: '✨',
+      emoteUnlock: 'golden_rain_dance',
+      items: [{ itemId: 'item_torn_treasure_map', quantity: 2 }],
+    },
   },
   {
     tier: 15,
@@ -316,6 +328,11 @@ export function claimSeasonPassTier(
     if (!nextActiveTitle) nextActiveTitle = reward.titleUnlock;
   }
 
+  const nextEmotes = new Set<KhmerEmoteId>(state.ownedEmotes ?? []);
+  if (reward.emoteUnlock) {
+    nextEmotes.add(reward.emoteUnlock);
+  }
+
   claimed.add(key);
 
   return {
@@ -332,6 +349,7 @@ export function claimSeasonPassTier(
       ownedFurniture: nextFurn,
       unlockedTitles: Array.from(nextTitles),
       activeTitle: nextActiveTitle,
+      ownedEmotes: Array.from(nextEmotes),
       claimedPassTiers: Array.from(claimed),
     },
     ok: true,

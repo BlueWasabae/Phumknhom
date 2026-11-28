@@ -147,6 +147,8 @@ interface HUDProps {
   onOpenInstrumentJam?: () => void;
   onOpenPetRace?: () => void;
   onOpenYardDecor?: () => void;
+  onOpenArena?: () => void;
+  onOpenEmoteWheel?: () => void;
   onOpenPatchNotes?: () => void;
   onOpenFeedback?: () => void;
   onOpenScryingMirror?: () => void;
@@ -224,6 +226,8 @@ export const HUD: React.FC<HUDProps> = ({
   onOpenInstrumentJam,
   onOpenPetRace,
   onOpenYardDecor,
+  onOpenArena,
+  onOpenEmoteWheel,
   onOpenPatchNotes,
   onOpenFeedback,
   onOpenScryingMirror,
@@ -765,20 +769,25 @@ export const HUD: React.FC<HUDProps> = ({
         );
       })()}
 
-      {/* 4-Season Weather, Day/Night & Chankitek Lunar Phase Badge */}
+      {/* 4-Season Weather, Day/Night, Chankitek Lunar Phase & Dynamic Weather Synergy Badge */}
       <button
         type="button"
         onClick={() => {
           soundManager.playSfx('click');
           setSettingsModalOpen(true);
         }}
-        title={`${seasonSnap.season.name} · Day ${seasonSnap.dayOfSeason}/14 · ${seasonSnap.lunarLabel} · ${seasonSnap.periodLabel} (${seasonSnap.timeText}). Click for Weather & Audio Settings.`}
+        title={`${seasonSnap.season.name} · Day ${seasonSnap.dayOfSeason}/14 · ${seasonSnap.lunarLabel} · ${seasonSnap.periodLabel} (${seasonSnap.timeText}). ${seasonSnap.synergy.bannerLabel}`}
         className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-950/10 hover:bg-amber-950/20 text-[10px] font-display font-bold text-amber-950 whitespace-nowrap transition cursor-pointer"
       >
         <span>{seasonSnap.season.icon}</span>
         <span className="hidden sm:inline">{seasonSnap.season.shortLabel}</span>
         <span className="opacity-75">D{seasonSnap.dayOfSeason}</span>
         <span>{seasonSnap.period === 'night' ? seasonSnap.lunarIcon : seasonSnap.periodIcon}</span>
+        {seasonSnap.synergy.bannerShort && (
+          <span className="hidden md:inline px-1.5 py-0.2 rounded bg-emerald-700/90 text-emerald-50 text-[9px] font-extrabold">
+            {seasonSnap.synergy.bannerShort}
+          </span>
+        )}
       </button>
 
       <div className="flex items-center gap-2 shrink-0">
@@ -1169,6 +1178,21 @@ export const HUD: React.FC<HUDProps> = ({
                       <Sparkles className="w-4 h-4 text-amber-600" /> Play Khmer Music (Jam)
                     </span>
                     <span className="text-[9px] font-bold text-amber-800">5 Inst</span>
+                  </button>
+                )}
+                {onOpenArena && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuDropdownOpen(false);
+                      onOpenArena();
+                    }}
+                    className="px-3 py-2 rounded-xl hover:bg-red-100 text-left flex items-center justify-between gap-2 text-amber-950"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Swords className="w-4 h-4 text-red-700" /> Kun Khmer 1v1 Ring
+                    </span>
+                    <span className="text-[9px] font-bold text-red-700">{player.pvpElo ?? 1200} ELO</span>
                   </button>
                 )}
                 {onOpenPetRace && (
@@ -1691,12 +1715,22 @@ export const HUD: React.FC<HUDProps> = ({
             )}
 
             <button
+              id="btn-emote-wheel"
               type="button"
-              onClick={() => setEmoteOpen((o) => !o)}
-              aria-label="Emote Picker"
-              className="phum-btn p-2 rounded-xl shrink-0"
+              onClick={() => {
+                soundManager.playSfx('click');
+                if (onOpenEmoteWheel) {
+                  onOpenEmoteWheel();
+                } else {
+                  setEmoteOpen((o) => !o);
+                }
+              }}
+              aria-label="Khmer Emote & Dance Wheel (Z)"
+              title="Open Khmer Emote & Dance Wheel (Z)"
+              className="phum-btn p-2 rounded-xl shrink-0 cursor-pointer flex items-center gap-1"
             >
-              <Smile className="w-4 h-4" />
+              <span className="text-xs leading-none">🪷</span>
+              <Smile className="w-3.5 h-3.5" />
             </button>
 
             {onTogglePhotoMode && (

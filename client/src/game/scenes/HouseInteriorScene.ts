@@ -157,6 +157,7 @@ export class HouseInteriorScene extends Phaser.Scene {
       EventBus.on('input:interact', () => this.tryInteractNearest()),
       EventBus.on('player:chat', ({ text }) => this.player.showSpeechBubble(text, 4500)),
       EventBus.on('player:emote', ({ emoji }) => this.player.showEmote(emoji, 3000)),
+      EventBus.on('player:khmerEmote', ({ emoteId }) => this.player.playKhmerEmote(emoteId)),
       EventBus.on('player:loadoutChanged', ({ loadout, playerState }) => {
         this.player.applyLoadoutUpdate(loadout, playerState);
       }),
@@ -474,6 +475,30 @@ export class HouseInteriorScene extends Phaser.Scene {
       ctx.fillRect(10, 10, 16, 10);
       ctx.fillStyle = '#fef08a';
       ctx.fillRect(14, 12, 8, 8);
+    });
+
+    makeTex('decor_furn_firefly_garden_lantern', 40, 54, (ctx) => {
+      // Bamboo pedestal
+      ctx.fillStyle = O;
+      ctx.fillRect(14, 30, 12, 20);
+      ctx.fillStyle = '#4d7c0f';
+      ctx.fillRect(16, 32, 8, 16);
+      ctx.fillStyle = '#365314';
+      ctx.fillRect(10, 46, 20, 6);
+      // Glass Firefly Jar with glowing golden-lime motes
+      ctx.fillStyle = O;
+      ctx.fillRect(8, 8, 24, 24);
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(10, 10, 20, 20);
+      ctx.fillStyle = '#a3e635';
+      ctx.fillRect(13, 14, 4, 4);
+      ctx.fillRect(23, 20, 4, 4);
+      ctx.fillStyle = '#fef08a';
+      ctx.fillRect(18, 17, 5, 5);
+      ctx.fillRect(14, 23, 3, 3);
+      // Roof cap
+      ctx.fillStyle = '#65a30d';
+      ctx.fillRect(6, 4, 28, 6);
     });
 
     makeTex('decor_furn_hammock', 96, 46, (ctx) => {

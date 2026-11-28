@@ -98,6 +98,19 @@ export const HOUSE_FURNITURE_CATALOG: Record<string, HouseFurnitureDef> = {
     buyCoins: 180,
     description: 'Lush tropical Cambodian banana plant thriving inside a hand-glazed clay pot.',
   },
+  furn_firefly_garden_lantern: {
+    id: 'furn_firefly_garden_lantern',
+    name: 'Firefly Garden Lantern',
+    khmerName: 'ចង្កៀងអំពិលអំពែកពន្លឺយប់',
+    category: 'starter',
+    icon: '✨',
+    primaryColor: '#84cc16',
+    accentColor: '#fef08a',
+    widthPx: 40,
+    heightPx: 54,
+    description:
+      'Handcrafted glass-and-bamboo lantern housing live glowing fireflies caught during Firefly Night! (Craft from 3× Jarred Fireflies)',
+  },
 
   // ==================== 4 BOSS TROPHY PEDESTALS (BESTIARY UNLOCKS) ====================
   trophy_king_frog: {
@@ -354,6 +367,20 @@ export const YARD_DECOR_CATALOG: Record<string, YardDecorDef> = {
     animatedKind: 'naga_fountain',
     description: 'Majestic gilded Naga water fountain shooting animated turquoise water arcs with radiant WebGL Bloom!',
   },
+  yard_firefly_garden_lantern: {
+    id: 'yard_firefly_garden_lantern',
+    name: 'Firefly Garden Lantern',
+    khmerName: 'ចង្កៀងអំពិលអំពែកសួនផ្ទះ',
+    tier: 'coins',
+    icon: '✨',
+    primaryColor: '#65a30d',
+    accentColor: '#fef08a',
+    widthPx: 38,
+    heightPx: 48,
+    animatedKind: 'lanterns',
+    description:
+      'Glowing emerald-gold firefly lantern crafted from 3× Jarred Fireflies — attracts orbiting firefly motes in your Stilt House Yard!',
+  },
 };
 
 export const YARD_DECOR_LIST: YardDecorDef[] = Object.values(YARD_DECOR_CATALOG);
@@ -422,5 +449,57 @@ export function buyYardDecorItem(
     },
     ok: true,
     message: `🌺 Purchased ${def.icon} ${def.name} (-${finalCost}c)! Place it in your Stilt House Yard!`,
+  };
+}
+
+export const FIREFLY_LANTERN_CRAFT_COST = 3;
+
+/**
+ * Update 3.1 — Crafts glowing Firefly Garden Lanterns from Jarred Fireflies caught during Firefly Night.
+ * Unlocks 1× Interior Firefly Garden Lantern + 1× Outdoor Yard Firefly Garden Lantern per craft!
+ */
+export function craftFireflyGardenLantern(
+  state: PlayerState
+): { state: PlayerState; ok: boolean; message: string } {
+  const available = state.inventory
+    .filter((i) => i.itemId === 'item_jarred_firefly' && i.quantity > 0)
+    .reduce((sum, i) => sum + i.quantity, 0);
+
+  if (available < FIREFLY_LANTERN_CRAFT_COST) {
+    return {
+      state,
+      ok: false,
+      message: `Need ${FIREFLY_LANTERN_CRAFT_COST}× Jarred Fireflies (you have ${available}). Catch glowing Fireflies in Green Park or Bamboo Forest during Firefly Night!`,
+    };
+  }
+
+  let rem = FIREFLY_LANTERN_CRAFT_COST;
+  const nextInv = state.inventory
+    .map((slot) => {
+      if (slot.itemId === 'item_jarred_firefly' && rem > 0) {
+        const take = Math.min(slot.quantity, rem);
+        rem -= take;
+        return { ...slot, quantity: slot.quantity - take };
+      }
+      return { ...slot };
+    })
+    .filter((slot) => slot.quantity > 0);
+
+  const curFurn = { ...DEFAULT_OWNED_FURNITURE, ...(state.ownedFurniture ?? {}) };
+  curFurn.furn_firefly_garden_lantern = (curFurn.furn_firefly_garden_lantern ?? 0) + 1;
+
+  const curYard = { ...DEFAULT_OWNED_YARD_DECOR, ...(state.ownedYardDecor ?? {}) };
+  curYard.yard_firefly_garden_lantern = (curYard.yard_firefly_garden_lantern ?? 0) + 1;
+
+  return {
+    state: {
+      ...state,
+      inventory: nextInv,
+      ownedFurniture: curFurn,
+      ownedYardDecor: curYard,
+    },
+    ok: true,
+    message:
+      '✨ Crafted Firefly Garden Lantern (-3 Jarred Fireflies)! Added 1× Interior & 1× Outdoor Yard Lantern!',
   };
 }

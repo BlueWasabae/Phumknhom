@@ -61,7 +61,7 @@ import {
   type ColossusRaidChestReward,
   type WorldBossLeaderboardRow,
 } from '@shared/worldBossData';
-import { buyHouseFurniture, buyYardDecorItem } from '@shared/houseDecor';
+import { buyHouseFurniture, buyYardDecorItem, craftFireflyGardenLantern } from '@shared/houseDecor';
 import { buyKhmerInstrument, KHMER_INSTRUMENTS } from '@shared/khmerInstruments';
 import {
   getScaledReforgeCost,
@@ -235,6 +235,9 @@ import {
   markCurrentPatchNotesSeen,
 } from './ui/PatchNotesModal';
 import { FeedbackModal } from './ui/FeedbackModal';
+import { ArenaModal } from './ui/ArenaModal';
+import { EmoteWheelModal } from './ui/EmoteWheelModal';
+import type { KhmerEmoteId } from '@shared/emotes';
 import { downloadHeroCardPng } from './utils/HeroCardGenerator';
 import { ScryingMirrorModal } from './ui/ScryingMirrorModal';
 import { TukTukCartModal } from './ui/TukTukCartModal';
@@ -328,6 +331,7 @@ type ActiveModalType =
   | 'petRace'
   | 'patchNotes'
   | 'feedback'
+  | 'arena'
   | 'characterCreator';
 
 interface FloatingXpBanner extends SkillXpToastPayload {
@@ -377,6 +381,14 @@ export const App: React.FC = () => {
   const [selectedEvolutionPetId, setSelectedEvolutionPetId] = useState<string | null>(null);
   const [houseDecorScope, setHouseDecorScope] = useState<'interior' | 'yard'>('interior');
   const [instrumentJamOpen, setInstrumentJamOpen] = useState(false);
+  const [emoteWheelOpen, setEmoteWheelOpen] = useState(false);
+  const [activeEmoteId, setActiveEmoteId] = useState<KhmerEmoteId | null>(null);
+  const [incomingDuel, setIncomingDuel] = useState<{
+    duelId: string;
+    mode: 'normalized' | 'open';
+    fromSessionId: string;
+    fromName: string;
+  } | null>(null);
   const [nearbyPerformer, setNearbyPerformer] = useState<{
     sessionId: string;
     name: string;
@@ -1774,6 +1786,12 @@ export const App: React.FC = () => {
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || targetEl?.isContentEditable) return;
       if (document.querySelector('dialog[open]')) return;
       const k = e.key.toLowerCase();
+      if (k === 'z') {
+        e.preventDefault();
+        soundManager.playSfx('click');
+        setEmoteWheelOpen((prev) => !prev);
+        return;
+      }
       if (k === 'i' || k === 'b') {
         setActiveModal((cur) => (cur === 'inventory' ? null : 'inventory'));
       } else if (k === 'r') {
@@ -1975,23 +1993,117 @@ export const App: React.FC = () => {
       }),
       EventBus.on('music:tipReceived', ({ fromName, amount, friendlyXp }) => {
         soundManager.playSfx('coin');
+        const sunset = seasonClock.getSnapshot().synergy.goldenSunsetActive;
+        const mult = sunset ? 2 : 1;
+        const finalCoins = amount * mult;
+        const finalXp = friendlyXp * mult;
         runStateAction((prev) => {
-          const nextCoins = prev.currencies.coins + amount;
+          const nextCoins = prev.currencies.coins + finalCoins;
           return {
             state: {
               ...prev,
               coins: nextCoins,
               currencies: { ...prev.currencies, coins: nextCoins },
-              instrumentTipsReceived: (prev.instrumentTipsReceived ?? 0) + amount,
+              instrumentTipsReceived: (prev.instrumentTipsReceived ?? 0) + finalCoins,
               lifeStats: {
                 ...prev.lifeStats,
-                friendly: Math.min(100, prev.lifeStats.friendly + friendlyXp),
+                friendly: Math.min(100, prev.lifeStats.friendly + finalXp),
               },
             },
             ok: true,
-            message: `🎵 Tip Jar! ${fromName} tipped you +${amount}c & +${friendlyXp} Friendly XP!`,
+            message: sunset
+              ? `🌇 Golden Sunset 2× Tip Jar! ${fromName} tipped +${finalCoins}c & +${finalXp} Friendly XP!`
+              : `🎵 Tip Jar! ${fromName} tipped you +${finalCoins}c & +${finalXp} Friendly XP!`,
           };
         });
+      }),
+      EventBus.on(
+        'arena:matchFinished',
+        ({ won, mode, opponentName, eloDelta, roundsPlayer, roundsOpponent, coinsEarned }) => {
+          soundManager.playSfx(won ? 'victory' : 'hit');
+          runStateAction((prev) => {
+            const nextElo = Math.max(600, (prev.pvpElo ?? 1200) + eloDelta);
+            const nextCoins = prev.currencies.coins + coinsEarned;
+            const unlockedSashNow =
+              !prev.kunKhmerChampionSash && (nextElo >= 1250 || (won && mode === 'normalized'));
+            const nextInv = prev.inventory.map((i) => ({ ...i }));
+            if (
+              (unlockedSashNow || prev.kunKhmerChampionSash) &&
+              !nextInv.some((i) => i.itemId === 'acc_kun_khmer_champion_sash')
+            ) {
+              nextInv.push({
+                itemId: 'acc_kun_khmer_champion_sash',
+                quantity: 1,
+                itemLevel: 1,
+                quality: 'normal',
+              });
+            }
+            return {
+              state: {
+                ...prev,
+                coins: nextCoins,
+                currencies: { ...prev.currencies, coins: nextCoins },
+                inventory: nextInv,
+                pvpElo: nextElo,
+                pvpWins: (prev.pvpWins ?? 0) + (won ? 1 : 0),
+                pvpLosses: (prev.pvpLosses ?? 0) + (won ? 0 : 1),
+                kunKhmerChampionSash: Boolean(prev.kunKhmerChampionSash || unlockedSashNow),
+              },
+              ok: true,
+              message: unlockedSashNow
+                ? `🏆 KUN KHMER CHAMPION! Defeated ${opponentName} (${roundsPlayer}-${roundsOpponent}) · ${nextElo} ELO · Unlocked 🎗️ Kun Khmer Champion Sash!`
+                : won
+                  ? `🥊 Victory vs ${opponentName} (${roundsPlayer}-${roundsOpponent})! +${eloDelta} ELO (${nextElo}) · +${coinsEarned}c`
+                  : `🥊 Spar vs ${opponentName} (${roundsPlayer}-${roundsOpponent}) · ${eloDelta} ELO (${nextElo}) · +${coinsEarned}c`,
+            };
+          });
+        }
+      ),
+      EventBus.on('duel:incoming', (payload) => {
+        soundManager.playSfx('magic');
+        setIncomingDuel({
+          duelId: payload.duelId,
+          mode: payload.mode,
+          fromSessionId: payload.fromSessionId,
+          fromName: payload.fromName,
+        });
+      }),
+      EventBus.on('duel:ready', ({ duelId, mode, opponentName }) => {
+        setActiveModal(null);
+        EventBus.emit('ui:toast', { text: `🥊 ${opponentName} accepted your Kun Khmer Duel! Entering Ring...` });
+        EventBus.emit('arena:enterRequest', { mode, duelId, opponentName });
+      }),
+      EventBus.on('firefly:caught', ({ foragingXp }) => {
+        runStateAction((prev) => {
+          const nextInv = prev.inventory.map((i) => ({ ...i }));
+          const ex = nextInv.find((i) => i.itemId === 'item_jarred_firefly');
+          if (ex) ex.quantity += 1;
+          else nextInv.push({ itemId: 'item_jarred_firefly', quantity: 1, itemLevel: 1, quality: 'normal' });
+          const total = nextInv
+            .filter((i) => i.itemId === 'item_jarred_firefly')
+            .reduce((s, i) => s + i.quantity, 0);
+          return {
+            state: {
+              ...prev,
+              inventory: nextInv,
+              xp: prev.xp + foragingXp,
+            },
+            ok: true,
+            message:
+              total >= 3
+                ? `✨ Caught Jarred Firefly (${total} owned)! Craft a glowing Firefly Garden Lantern in House/Yard Decor!`
+                : `✨ Caught Glowing Firefly! (${total}/3 Jarred Fireflies for a Firefly Garden Lantern)`,
+          };
+        });
+      }),
+      EventBus.on('weather:sunsetPulse', ({ friendlyXp }) => {
+        setPlayer((prev) => ({
+          ...prev,
+          lifeStats: {
+            ...prev.lifeStats,
+            friendly: Math.min(100, prev.lifeStats.friendly + friendlyXp),
+          },
+        }));
       }),
       EventBus.on('petRace:finished', ({ place, timeSec, coins, petXpTreats, unlockedChampionRibbon }) => {
         runStateAction((prev) => {
@@ -2611,6 +2723,10 @@ export const App: React.FC = () => {
           if (modal === 'petEvolution') setSelectedEvolutionPetId(petId ?? null);
           if (modal === 'instrumentJam') {
             setInstrumentJamOpen(true);
+            return;
+          }
+          if (modal === 'emoteWheel') {
+            setEmoteWheelOpen(true);
             return;
           }
           if (modal === 'wardrobe') {
@@ -3348,6 +3464,8 @@ export const App: React.FC = () => {
               setActiveModal('petEvolution');
             }}
             onOpenInstrumentJam={() => setInstrumentJamOpen((v) => !v)}
+            onOpenArena={() => setActiveModal('arena')}
+            onOpenEmoteWheel={() => setEmoteWheelOpen((v) => !v)}
             onOpenPetRace={() => setActiveModal('petRace')}
             onOpenYardDecor={() => {
               setHouseDecorScope('yard');
@@ -4104,6 +4222,19 @@ export const App: React.FC = () => {
             name: target.name,
           })
         }
+        onChallengeDuel={(target, mode) => {
+          const sent = roomClient.sendDuelChallenge({
+            targetSessionId: target.sessionId,
+            targetName: target.name,
+            mode,
+          });
+          if (!sent) {
+            EventBus.emit('ui:toast', {
+              text: `🥊 Starting Kun Khmer 1v1 Spar vs ${target.name} in Temple District Ring!`,
+            });
+            EventBus.emit('arena:enterRequest', { mode, opponentName: target.name });
+          }
+        }}
         onRequestTrade={handleRequestTrade}
         onOfferBondRing={(target) => {
           setBondPrefillPartner(target.name);
@@ -5364,6 +5495,13 @@ export const App: React.FC = () => {
             return res;
           })
         }
+        onCraftFireflyLantern={() =>
+          runStateAction((s) => {
+            const res = craftFireflyGardenLantern(s);
+            if (res.ok) soundManager.playSfx('harvest');
+            return res;
+          })
+        }
         onInviteFriendsHome={() => {
           const hostName = playerRef.current.name;
           roomClient.sendChat(`🏡 [HOME INVITE] Come visit ${hostName}'s decorated Khmer Stilt House & Garden Yard!`);
@@ -5403,6 +5541,89 @@ export const App: React.FC = () => {
         onClose={() => setActiveModal(null)}
         onToast={(msg) => EventBus.emit('ui:toast', { text: msg })}
       />
+
+      <ArenaModal
+        open={activeModal === 'arena'}
+        player={player}
+        onClose={() => setActiveModal(null)}
+        onEnterArena={({ mode, spectate }) => {
+          EventBus.emit('arena:enterRequest', { mode, spectate });
+        }}
+        onOpenPvpLeaderboard={() => {
+          setLeaderboardCategory('pvp');
+          setActiveModal('leaderboard');
+        }}
+      />
+
+      <EmoteWheelModal
+        open={emoteWheelOpen}
+        player={player}
+        activeEmoteId={activeEmoteId}
+        onSelectEmote={(emote) => {
+          setActiveEmoteId(emote.id);
+          soundManager.playSfx('magic');
+          EventBus.emit('player:khmerEmote', { emoteId: emote.id });
+          EventBus.emit('ui:toast', {
+            text: `${emote.icon} Performing ${emote.name} (${emote.khmerName})${emote.looping ? ' — walk to stop' : '!'}`,
+          });
+        }}
+        onOpenDiamondStore={() => setActiveModal('diamondStore')}
+        onOpenSeasonPass={() => setActiveModal('seasonPass')}
+        onClose={() => setEmoteWheelOpen(false)}
+      />
+
+      {incomingDuel && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 w-[min(92vw,390px)] rounded-2xl bg-gradient-to-r from-red-950 via-stone-950 to-amber-950 border-2 border-amber-400 text-amber-50 p-3 shadow-2xl">
+          <div className="font-display font-bold text-sm text-amber-300">
+            🥊 Kun Khmer Duel Challenge!
+          </div>
+          <div className="text-xs text-amber-100/90 mt-0.5">
+            <strong>{incomingDuel.fromName}</strong> challenges you to a{' '}
+            <strong>{incomingDuel.mode === 'normalized' ? 'Normalized 1v1' : 'Open Gear'}</strong> Best-of-3 Spar!
+          </div>
+          <div className="flex gap-2 mt-2.5">
+            <button
+              type="button"
+              onClick={() => {
+                const req = incomingDuel;
+                setIncomingDuel(null);
+                roomClient.sendDuelResponse({
+                  fromSessionId: req.fromSessionId,
+                  fromName: req.fromName,
+                  duelId: req.duelId,
+                  mode: req.mode,
+                  accept: true,
+                });
+                EventBus.emit('arena:enterRequest', {
+                  mode: req.mode,
+                  duelId: req.duelId,
+                  opponentName: req.fromName,
+                });
+              }}
+              className="flex-1 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-display font-bold text-xs cursor-pointer"
+            >
+              🥊 Accept Duel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const req = incomingDuel;
+                setIncomingDuel(null);
+                roomClient.sendDuelResponse({
+                  fromSessionId: req.fromSessionId,
+                  fromName: req.fromName,
+                  duelId: req.duelId,
+                  mode: req.mode,
+                  accept: false,
+                });
+              }}
+              className="px-3 py-1.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-amber-200 font-display font-bold text-xs cursor-pointer"
+            >
+              Decline
+            </button>
+          </div>
+        </div>
+      )}
 
       <InstrumentJamModal
         open={instrumentJamOpen}

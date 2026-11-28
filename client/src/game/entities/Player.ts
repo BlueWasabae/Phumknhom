@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import type { EquippedLoadout, PlayerState, ZoneType } from '@shared/types';
+import type { EquippedLoadout, KhmerEmoteId, PlayerState, ZoneType } from '@shared/types';
+import { KHMER_EMOTES } from '@shared/emotes';
 import { getAchievementBadgeIcon } from '@shared/achievements';
 import { PaperDoll, type PaperDollFacing, type PaperDollPose } from './PaperDoll';
 import { Pet } from './Pet';
@@ -41,6 +42,8 @@ export class Player {
 
   private bubbleExpiresAt = 0;
   private emoteExpiresAt = 0;
+  private activeKhmerEmote: KhmerEmoteId | null = null;
+  private activeKhmerEmoteExpiresAt = 0;
   private currentPose: PaperDollPose = 'idle';
 
   constructor(
@@ -275,6 +278,22 @@ export class Player {
     this.emoteExpiresAt = this.scene.time.now + durationMs;
   }
 
+  public playKhmerEmote(emoteId: KhmerEmoteId): void {
+    const def = KHMER_EMOTES[emoteId];
+    if (!def) return;
+    this.activeKhmerEmote = emoteId;
+    this.activeKhmerEmoteExpiresAt = def.looping ? Number.POSITIVE_INFINITY : this.scene.time.now + def.durationMs;
+    this.paperDoll.setActiveEmote(emoteId, this.scene.time.now);
+    this.showEmote(def.icon, def.looping ? 2600 : def.durationMs);
+  }
+
+  public stopKhmerEmote(): void {
+    if (!this.activeKhmerEmote) return;
+    this.activeKhmerEmote = null;
+    this.activeKhmerEmoteExpiresAt = 0;
+    this.paperDoll.setActiveEmote(null);
+  }
+
   public playStateAnimation(mode: 'idle' | 'walk' | 'jump' | 'attack' | 'parry'): void {
     if (mode === 'walk') {
       const frameIdx = Math.floor(this.scene.time.now / 115) % WALK_FRAMES.length;
@@ -308,6 +327,11 @@ export class Player {
 
     const activeMountSpec = this.zone === 'overworld' ? getMountSpec(this.state.activeMount) : null;
     const isMoving = Math.hypot(this.body.velocity.x, this.body.velocity.y) > 12;
+    if (this.activeKhmerEmote) {
+      if (isMoving || activeMountSpec || time >= this.activeKhmerEmoteExpiresAt) {
+        this.stopKhmerEmote();
+      }
+    }
     this.mount?.update(this.sprite.x, this.sprite.y, this.facing, isMoving, time);
 
     const dollOffsetY =

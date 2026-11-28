@@ -31,6 +31,7 @@ import {
 } from './rooms/DungeonRoom';
 import { ClubRoom } from './rooms/ClubRoom';
 import { PetRaceRoom } from './rooms/PetRaceRoom';
+import { ArenaRoom } from './rooms/ArenaRoom';
 import {
   WorldBossRoom,
   getWorldBossSnapshot,
@@ -216,12 +217,13 @@ app.get('/health', (_req, res) => {
 
 app.get('/api/health', async (_req, res) => {
   try {
-    const [plazaRooms, clubRooms, dungeonRooms, worldBossRooms, petRaceRooms] = await Promise.all([
+    const [plazaRooms, clubRooms, dungeonRooms, worldBossRooms, petRaceRooms, arenaRooms] = await Promise.all([
       matchMaker.query({ name: 'plaza' }).catch(() => []),
       matchMaker.query({ name: 'club' }).catch(() => []),
       matchMaker.query({ name: 'dungeon' }).catch(() => []),
       matchMaker.query({ name: 'world_boss' }).catch(() => []),
       matchMaker.query({ name: 'pet_race' }).catch(() => []),
+      matchMaker.query({ name: 'arena' }).catch(() => []),
     ]);
     const storageMode = getStorageMode();
     const sumClients = (list: Array<{ clients?: number }>) =>
@@ -229,7 +231,7 @@ app.get('/api/health', async (_req, res) => {
 
     res.json({
       ok: true,
-      version: '3.0.0',
+      version: '3.1.0',
       service: 'phum-khnhom-plaza',
       uptimeSec: Math.round(process.uptime()),
       storageMode,
@@ -240,13 +242,15 @@ app.get('/api/health', async (_req, res) => {
         DungeonRoom: { count: dungeonRooms.length, players: sumClients(dungeonRooms) },
         WorldBossRoom: { count: worldBossRooms.length, players: sumClients(worldBossRooms) },
         PetRaceRoom: { count: petRaceRooms.length, players: sumClients(petRaceRooms) },
+        ArenaRoom: { count: arenaRooms.length, players: sumClients(arenaRooms) },
       },
       totalOnlinePlayers:
         sumClients(plazaRooms) +
         sumClients(clubRooms) +
         sumClients(dungeonRooms) +
         sumClients(worldBossRooms) +
-        sumClients(petRaceRooms),
+        sumClients(petRaceRooms) +
+        sumClients(arenaRooms),
       port: PORT,
       timestamp: Date.now(),
     });
@@ -1322,6 +1326,7 @@ gameServer.define('dungeon', DungeonRoom).filterBy(['partyId']);
 gameServer.define('club', ClubRoom).filterBy(['cityServer']);
 gameServer.define('world_boss', WorldBossRoom);
 gameServer.define('pet_race', PetRaceRoom);
+gameServer.define('arena', ArenaRoom).filterBy(['duelId']);
 
 startWorldBossScheduler();
 startAuctionHouseSweeper();

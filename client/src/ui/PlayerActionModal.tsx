@@ -12,6 +12,7 @@ interface PlayerActionModalProps {
   onAddFriend: (target: InspectedRemotePlayer) => void;
   onWhisper: (username: string) => void;
   onInviteDungeon: (target: InspectedRemotePlayer) => void;
+  onChallengeDuel?: (target: InspectedRemotePlayer, mode: 'normalized' | 'open') => void;
   onRequestTrade?: (target: InspectedRemotePlayer) => void;
   onOfferBondRing?: (target: InspectedRemotePlayer) => void;
 }
@@ -33,6 +34,7 @@ export const PlayerActionModal: React.FC<PlayerActionModalProps> = ({
   onAddFriend,
   onWhisper,
   onInviteDungeon,
+  onChallengeDuel,
   onRequestTrade,
   onOfferBondRing,
 }) => {
@@ -119,6 +121,19 @@ export const PlayerActionModal: React.FC<PlayerActionModalProps> = ({
                 >
                   <Swords className="w-4 h-4" /> Invite Dungeon
                 </button>
+
+                {onChallengeDuel && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onChallengeDuel(target, 'normalized');
+                      onClose();
+                    }}
+                    className="col-span-2 py-2.5 px-3 rounded-xl bg-gradient-to-r from-red-700 to-amber-700 hover:from-red-600 hover:to-amber-600 text-amber-50 border-2 border-amber-950 font-display font-bold text-xs flex items-center justify-center gap-1.5"
+                  >
+                    <Swords className="w-4 h-4" /> 🥊 Challenge to Duel (Kun Khmer 1v1)
+                  </button>
+                )}
 
                 {onRequestTrade && (() => {
                   const tooFar = typeof target.distancePx === 'number' && target.distancePx > 150;

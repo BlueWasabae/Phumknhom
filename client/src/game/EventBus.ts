@@ -7,6 +7,7 @@ import type {
   EquippedLoadout,
   InstrumentSkinId,
   KhmerClassId,
+  KhmerEmoteId,
   KhmerInstrumentId,
   KromWarSnapshot,
   PlacedHouseDecor,
@@ -239,6 +240,41 @@ export interface EventMap {
   'skill:xpGained': SkillXpToastPayload;
   'player:chat': { text: string };
   'player:emote': { emoji: EmoteSymbol };
+  'player:khmerEmote': { emoteId: KhmerEmoteId };
+  'arena:enterRequest': {
+    mode: 'normalized' | 'open';
+    duelId?: string;
+    spectate?: boolean;
+    opponentName?: string;
+  };
+  'arena:matchFinished': {
+    won: boolean;
+    mode: 'normalized' | 'open';
+    opponentName: string;
+    eloDelta: number;
+    roundsPlayer: number;
+    roundsOpponent: number;
+    coinsEarned: number;
+  };
+  'duel:incoming': {
+    duelId: string;
+    mode: 'normalized' | 'open';
+    fromSessionId: string;
+    fromName: string;
+    timestamp: number;
+  };
+  'duel:ready': {
+    duelId: string;
+    mode: 'normalized' | 'open';
+    opponentName: string;
+  };
+  'firefly:caught': {
+    mapId: string;
+    foragingXp: number;
+  };
+  'weather:sunsetPulse': {
+    friendlyXp: number;
+  };
   'network:status': NetworkStatusPayload;
   'network:remoteChat': RemoteChatPayload;
   'network:switchArea': { areaId: string };
@@ -499,8 +535,10 @@ export interface EventMap {
       | 'instrumentJam'
       | 'petRace'
       | 'patchNotes'
-      | 'feedback';
-    leaderboardCategory?: 'farmer' | 'stylish' | 'slayer' | 'tower' | 'boss_rush';
+      | 'feedback'
+      | 'arena'
+      | 'emoteWheel';
+    leaderboardCategory?: 'farmer' | 'stylish' | 'slayer' | 'tower' | 'boss_rush' | 'pvp';
     farmTab?: 'seeds' | 'livestock' | 'artisan';
     shopTab?: 'primary' | 'secondary';
     friendsTab?: 'friends' | 'inbox';
