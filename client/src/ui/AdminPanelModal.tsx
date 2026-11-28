@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import {
   fetchAdminServerStatsApi,
+  finalizeKromWarWeekApi,
   sendAdminBroadcastApi,
   triggerAdminLiveEventApi,
   type AdminServerStats,
@@ -345,6 +346,26 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                   className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-900 via-teal-900 to-amber-700 hover:brightness-110 text-amber-100 border-2 border-amber-400 font-display font-bold text-xs shadow cursor-pointer"
                 >
                   🏮 Toggle Black Market (Bamboo Forest)
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={async () => {
+                    setBusy(true);
+                    soundManager.playSfx('victory');
+                    const res = await finalizeKromWarWeekApi(authSession);
+                    setBusy(false);
+                    if (res.ok) {
+                      EventBus.emit('kromWar:updated', res.war);
+                      EventBus.emit('ticker:push', { text: res.bannerText, category: 'boss' });
+                      setStatusMsg(res.bannerText);
+                    } else {
+                      setStatusMsg(res.error);
+                    }
+                  }}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-500 to-orange-500 hover:brightness-110 text-slate-950 border-2 border-amber-950 font-display font-bold text-xs shadow cursor-pointer"
+                >
+                  🏆 Finalize War Week (Krom Territories)
                 </button>
               </div>
 

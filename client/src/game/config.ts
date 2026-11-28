@@ -12,6 +12,7 @@ import { DungeonBossScene } from './scenes/DungeonBossScene';
 import { BossRushScene } from './scenes/BossRushScene';
 import { WorldBossScene } from './scenes/WorldBossScene';
 import { PearlDiveScene } from './scenes/PearlDiveScene';
+import { KromHallScene } from './scenes/KromHallScene';
 
 export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameConfig {
   return {
@@ -63,6 +64,7 @@ export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameCon
       BossRushScene,
       WorldBossScene,
       PearlDiveScene,
+      KromHallScene,
     ],
   };
 }

@@ -12,8 +12,13 @@ import {
   type EquippedLoadout,
   type ItemRarity,
   type KromGuild,
+  type KromTerritoryId,
+  type KromVaultSlot,
+  type KromWarSnapshot,
+  type PetProgressEntry,
   type PlayerMailEntry,
   type PlayerState,
+  type QualityTier,
   type SkillId,
   type TradeAuctionHistoryEntry,
   type TukTukCartItem,
@@ -139,6 +144,7 @@ export interface SavedProfilePayload {
   blackMarketPurchasedKeys?: string[];
   tradeAuctionHistory?: TradeAuctionHistoryEntry[];
   mailbox?: PlayerMailEntry[];
+  petProgress?: Record<string, PetProgressEntry>;
   hasCompletedCreation?: boolean;
   activeClass: PlayerState['activeClass'];
   weapon: PlayerState['weapon'];
@@ -518,6 +524,7 @@ export function serializePlayerStateForSave(state: PlayerState): SavedProfilePay
     blackMarketPurchasedKeys: [...(state.blackMarketPurchasedKeys ?? [])],
     tradeAuctionHistory: [...(state.tradeAuctionHistory ?? [])].slice(0, 50),
     mailbox: [...(state.mailbox ?? [])].slice(0, 50),
+    petProgress: state.petProgress ? { ...state.petProgress } : {},
     hasCompletedCreation: Boolean(state.hasCompletedCreation ?? state.loadout.hasCompletedCreation),
     activeClass: state.activeClass,
     weapon: { ...state.weapon },
@@ -895,6 +902,8 @@ export function hydratePlayerStateFromSave(
       ? [...saved.tradeAuctionHistory]
       : [],
     mailbox: Array.isArray(saved?.mailbox) ? [...saved.mailbox] : [],
+    petProgress:
+      saved?.petProgress && typeof saved.petProgress === 'object' ? { ...saved.petProgress } : {},
     hasCompletedCreation: Boolean(
       saved?.hasCompletedCreation ?? saved?.loadout?.hasCompletedCreation ?? false
     ),
@@ -2292,4 +2301,311 @@ export async function claimAuctionMailApi(
     };
   }
   return { ok: false, error: res.error };
+}
+
+// ==================== UPDATE 2.8 KROM SHARED VAULT, TROPHY WALL & TERRITORY WARS API ====================
+
+const LOCAL_KROM_WAR_KEY = 'phum_khnhom_krom_war_v1';
+
+function createDefaultOfflineKromWar(): KromWarSnapshot {
+  const now = Date.now();
+  const iso = new Date(now).toISOString();
+  return {
+    weekId: '2026-W48',
+    endsAt: now + 7 * 24 * 60 * 60 * 1000,
+    lastFinalizedAt: null,
+    territories: [
+      {
+        id: 'market_street',
+        name: 'Market Street',
+        khmerName: 'វិថីផ្សារភូមិ',
+        perkTitle: '2% Market Volume → Krom Shrine',
+        perkDescription:
+          '2% of all Village Market sales volume is automatically donated to your Krom Shrine + golden [TAG] banners fly on Market Street lamp posts!',
+        owner: {
+          kromId: 'krom_angkor_vanguard',
+          kromTag: 'ANGK',
+          kromName: 'Angkor Vanguard',
+          claimedAt: iso,
+        },
+        standings: [
+          { kromId: 'krom_angkor_vanguard', kromTag: 'ANGK', kromName: 'Angkor Vanguard', points: 420 },
+          { kromId: 'krom_phum_farmers', kromTag: 'PHUM', kromName: 'Golden Rice Growers', points: 310 },
+        ],
+      },
+      {
+        id: 'wild_frontier',
+        name: 'Wild Frontier & Caverns',
+        khmerName: 'ព្រៃធំ និងគុហារ៉ែ',
+        perkTitle: '+10% Mining & Foraging Luck',
+        perkDescription:
+          'All Krom members receive +10% Mining & Foraging Drop Luck across Wild Frontier, Mining Quarry, Bamboo Forest & Caverns + golden [TAG] War Banner!',
+        owner: {
+          kromId: 'krom_phum_farmers',
+          kromTag: 'PHUM',
+          kromName: 'Golden Rice Growers',
+          claimedAt: iso,
+        },
+        standings: [
+          { kromId: 'krom_phum_farmers', kromTag: 'PHUM', kromName: 'Golden Rice Growers', points: 385 },
+          { kromId: 'krom_angkor_vanguard', kromTag: 'ANGK', kromName: 'Angkor Vanguard', points: 270 },
+        ],
+      },
+      {
+        id: 'koh_rong_island',
+        name: 'Koh Rong Island',
+        khmerName: 'កោះរ៉ុងទេវកថា',
+        perkTitle: '+10% Fishing & Pearl Diving Yield',
+        perkDescription:
+          'All Krom members receive +10% Fishing & Deep-Sea Pearl Diving Coin/Pearl yield on Koh Rong Island + golden [TAG] War Banner on the pier!',
+        owner: null,
+        standings: [
+          { kromId: 'krom_angkor_vanguard', kromTag: 'ANGK', kromName: 'Angkor Vanguard', points: 295 },
+          { kromId: 'krom_phum_farmers', kromTag: 'PHUM', kromName: 'Golden Rice Growers', points: 240 },
+        ],
+      },
+    ],
+  };
+}
+
+function loadOfflineKromWar(): KromWarSnapshot {
+  try {
+    const raw = window.localStorage.getItem(LOCAL_KROM_WAR_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as KromWarSnapshot;
+      if (parsed && Array.isArray(parsed.territories) && parsed.territories.length === 3) {
+        return parsed;
+      }
+    }
+  } catch {
+    // ignore
+  }
+  const seeded = createDefaultOfflineKromWar();
+  saveOfflineKromWar(seeded);
+  return seeded;
+}
+
+function saveOfflineKromWar(war: KromWarSnapshot): void {
+  try {
+    window.localStorage.setItem(LOCAL_KROM_WAR_KEY, JSON.stringify(war));
+  } catch {
+    // ignore
+  }
+}
+
+export async function depositKromVaultApi(
+  session: AuthSession | null,
+  payload: {
+    kromId: string;
+    username: string;
+    itemId: string;
+    itemName: string;
+    quantity: number;
+    quality?: QualityTier;
+  }
+): Promise<{ ok: true; krom: KromGuild; slotIndex: number } | { ok: false; error: string }> {
+  const res = await postJson<{ krom: KromGuild; slotIndex: number }>(
+    '/krom/vault/deposit',
+    payload,
+    session?.token
+  );
+  if (res.ok) return { ok: true, krom: res.data.krom, slotIndex: res.data.slotIndex };
+
+  // Offline fallback
+  const kroms = loadLocalKroms();
+  const target = kroms.find((k) => k.id === payload.kromId || k.tag === payload.kromId);
+  if (!target) return { ok: false, error: 'Krom guild not found.' };
+  const vault: Array<KromVaultSlot | null> = Array.from({ length: 12 }, (_, i) => target.vault?.[i] ?? null);
+  const quality: QualityTier = payload.quality === 'gold_star' ? 'gold_star' : 'normal';
+  const stackIdx = vault.findIndex((s) => s && s.itemId === payload.itemId && (s.quality ?? 'normal') === quality);
+  let slotIndex = stackIdx;
+  if (stackIdx >= 0 && vault[stackIdx]) {
+    vault[stackIdx] = {
+      ...vault[stackIdx]!,
+      quantity: vault[stackIdx]!.quantity + payload.quantity,
+      depositedBy: payload.username,
+      depositedAt: new Date().toISOString(),
+    };
+  } else {
+    slotIndex = vault.findIndex((s) => s === null);
+    if (slotIndex < 0) return { ok: false, error: 'Krom Shared Vault is full (12/12 slots)!' };
+    vault[slotIndex] = {
+      itemId: payload.itemId,
+      itemName: payload.itemName,
+      quantity: payload.quantity,
+      quality,
+      depositedBy: payload.username,
+      depositedAt: new Date().toISOString(),
+    };
+  }
+  target.vault = vault;
+  saveLocalKroms(kroms);
+  return { ok: true, krom: target, slotIndex };
+}
+
+export async function withdrawKromVaultApi(
+  session: AuthSession | null,
+  payload: { kromId: string; slotIndex: number; quantity?: number }
+): Promise<{ ok: true; krom: KromGuild; withdrawn: KromVaultSlot } | { ok: false; error: string }> {
+  const res = await postJson<{ krom: KromGuild; withdrawn: KromVaultSlot }>(
+    '/krom/vault/withdraw',
+    payload,
+    session?.token
+  );
+  if (res.ok) return { ok: true, krom: res.data.krom, withdrawn: res.data.withdrawn };
+
+  const kroms = loadLocalKroms();
+  const target = kroms.find((k) => k.id === payload.kromId || k.tag === payload.kromId);
+  if (!target) return { ok: false, error: 'Krom guild not found.' };
+  const vault: Array<KromVaultSlot | null> = Array.from({ length: 12 }, (_, i) => target.vault?.[i] ?? null);
+  const slot = vault[payload.slotIndex];
+  if (!slot) return { ok: false, error: 'Vault slot is empty.' };
+  const take = Math.max(1, Math.min(slot.quantity, payload.quantity ?? slot.quantity));
+  const withdrawn: KromVaultSlot = { ...slot, quantity: take };
+  vault[payload.slotIndex] = slot.quantity - take <= 0 ? null : { ...slot, quantity: slot.quantity - take };
+  target.vault = vault;
+  saveLocalKroms(kroms);
+  return { ok: true, krom: target, withdrawn };
+}
+
+export async function recordKromBossTrophyApi(
+  session: AuthSession | null,
+  payload: { kromId: string; bossId: string }
+): Promise<{ ok: true; krom: KromGuild; isNewTrophy: boolean } | { ok: false; error: string }> {
+  const res = await postJson<{ krom: KromGuild; isNewTrophy: boolean }>(
+    '/krom/trophy',
+    payload,
+    session?.token
+  );
+  if (res.ok) return { ok: true, krom: res.data.krom, isNewTrophy: res.data.isNewTrophy };
+  const kroms = loadLocalKroms();
+  const target = kroms.find((k) => k.id === payload.kromId || k.tag === payload.kromId);
+  if (!target) return { ok: false, error: 'Krom guild not found.' };
+  const list = Array.isArray(target.trophyBosses) ? target.trophyBosses : [];
+  const isNewTrophy = !list.includes(payload.bossId);
+  if (isNewTrophy) {
+    target.trophyBosses = [...list, payload.bossId];
+    saveLocalKroms(kroms);
+  }
+  return { ok: true, krom: target, isNewTrophy };
+}
+
+export async function setKromTargetTerritoryApi(
+  session: AuthSession | null,
+  payload: { kromId: string; territoryId: KromTerritoryId }
+): Promise<{ ok: true; krom: KromGuild } | { ok: false; error: string }> {
+  const res = await postJson<{ krom: KromGuild }>(
+    '/krom/target-territory',
+    payload,
+    session?.token
+  );
+  if (res.ok) return { ok: true, krom: res.data.krom };
+  const kroms = loadLocalKroms();
+  const target = kroms.find((k) => k.id === payload.kromId || k.tag === payload.kromId);
+  if (!target) return { ok: false, error: 'Krom guild not found.' };
+  target.targetTerritoryId = payload.territoryId;
+  saveLocalKroms(kroms);
+  return { ok: true, krom: target };
+}
+
+export async function fetchKromWarStatusApi(): Promise<KromWarSnapshot> {
+  try {
+    const res = await fetch(`${getApiBase()}/krom-war/status`);
+    if (res.ok) {
+      const json = (await res.json()) as { war?: KromWarSnapshot };
+      if (json.war && Array.isArray(json.war.territories)) {
+        saveOfflineKromWar(json.war);
+        return json.war;
+      }
+    }
+  } catch {
+    // offline fallback
+  }
+  return loadOfflineKromWar();
+}
+
+export async function scoreKromWarPointsApi(
+  session: AuthSession | null,
+  payload: {
+    kromId: string;
+    kromTag?: string;
+    kromName?: string;
+    territoryId?: KromTerritoryId;
+    points: number;
+    source?: string;
+  }
+): Promise<{ ok: true; war: KromWarSnapshot; territoryId: KromTerritoryId } | { ok: false; error: string }> {
+  const res = await postJson<{ war: KromWarSnapshot; territoryId: KromTerritoryId }>(
+    '/krom-war/score',
+    payload,
+    session?.token
+  );
+  if (res.ok) {
+    saveOfflineKromWar(res.data.war);
+    return { ok: true, war: res.data.war, territoryId: res.data.territoryId };
+  }
+
+  // Offline fallback
+  const war = loadOfflineKromWar();
+  const tid: KromTerritoryId = payload.territoryId ?? 'market_street';
+  const terr = war.territories.find((t) => t.id === tid) ?? war.territories[0];
+  const tag = (payload.kromTag || 'KROM').toUpperCase().slice(0, 4);
+  const existing = terr.standings.find((s) => s.kromTag === tag);
+  if (existing) {
+    existing.points += Math.max(1, Math.floor(payload.points));
+  } else {
+    terr.standings.push({
+      kromId: payload.kromId,
+      kromTag: tag,
+      kromName: payload.kromName || 'Khmer Krom',
+      points: Math.max(1, Math.floor(payload.points)),
+    });
+  }
+  terr.standings.sort((a, b) => b.points - a.points);
+  saveOfflineKromWar(war);
+  return { ok: true, war, territoryId: terr.id };
+}
+
+export async function finalizeKromWarWeekApi(
+  session: AuthSession | null
+): Promise<{ ok: true; war: KromWarSnapshot; bannerText: string } | { ok: false; error: string }> {
+  const res = await postJson<{ war: KromWarSnapshot; bannerText: string }>(
+    '/krom-war/finalize',
+    {},
+    session?.token
+  );
+  if (res.ok) {
+    saveOfflineKromWar(res.data.war);
+    return { ok: true, war: res.data.war, bannerText: res.data.bannerText };
+  }
+
+  // Offline fallback
+  const war = loadOfflineKromWar();
+  const now = Date.now();
+  const iso = new Date(now).toISOString();
+  const claimedParts: string[] = [];
+  for (const terr of war.territories) {
+    const top = [...terr.standings].sort((a, b) => b.points - a.points)[0];
+    if (top && top.points > 0) {
+      terr.owner = {
+        kromId: top.kromId,
+        kromTag: top.kromTag,
+        kromName: top.kromName,
+        claimedAt: iso,
+      };
+      claimedParts.push(`${terr.name}: [${top.kromTag}]`);
+    }
+    terr.standings = [];
+  }
+  war.lastFinalizedAt = now;
+  war.endsAt = now + 7 * 24 * 60 * 60 * 1000;
+  saveOfflineKromWar(war);
+  return {
+    ok: true,
+    war,
+    bannerText:
+      claimedParts.length > 0
+        ? `🏆 Weekly Krom Territory Wars Finalized! ${claimedParts.join(' · ')}`
+        : '🏆 Weekly Krom Territory Wars Finalized! New War Week started!',
+  };
 }

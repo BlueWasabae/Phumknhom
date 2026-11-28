@@ -9,6 +9,7 @@ import {
   PlazaRoom,
   broadcastGmAnnouncement,
   broadcastGmEventTrigger,
+  broadcastKromWarUpdate,
   broadcastTukTukCartsUpdate,
 } from './rooms/PlazaRoom';
 import {
@@ -51,11 +52,20 @@ import {
 } from './economy/bondService';
 import {
   createKrom,
+  depositToKromVault,
   donateToKrom,
   getKromById,
   joinKrom,
   listKroms,
+  recordKromBossTrophy,
+  setKromTargetTerritory,
+  withdrawFromKromVault,
 } from './economy/kromService';
+import {
+  finalizeKromWarWeek,
+  getKromWarStatus,
+  recordKromWarPoints,
+} from './economy/kromWarService';
 import {
   buyMarketListing,
   cancelMarketListing,
@@ -582,6 +592,143 @@ app.post('/api/krom/donate', (req, res) => {
     return;
   }
   res.json(result);
+});
+
+// ==================== UPDATE 2.8 KROM SHARED VAULT, TROPHY WALL & TERRITORY WARS ====================
+app.post('/api/krom/vault/deposit', (req, res) => {
+  const verified = verifyAuthToken(extractBearerToken(req));
+  const body = (req.body ?? {}) as {
+    kromId?: string;
+    username?: string;
+    itemId?: string;
+    itemName?: string;
+    quantity?: number;
+    quality?: 'normal' | 'gold_star';
+  };
+  if (!body.kromId || !body.itemId) {
+    res.status(400).json({ error: 'Missing kromId or itemId.' });
+    return;
+  }
+  const result = depositToKromVault({
+    kromId: body.kromId,
+    username: verified?.username ?? body.username ?? 'PhumHero',
+    itemId: body.itemId,
+    itemName: body.itemName || body.itemId,
+    quantity: Number(body.quantity ?? 1),
+    quality: body.quality === 'gold_star' ? 'gold_star' : 'normal',
+  });
+  if (!result.ok) {
+    res.status(400).json({ error: result.error });
+    return;
+  }
+  res.json(result);
+});
+
+app.post('/api/krom/vault/withdraw', (req, res) => {
+  const body = (req.body ?? {}) as {
+    kromId?: string;
+    slotIndex?: number;
+    quantity?: number;
+  };
+  if (!body.kromId || typeof body.slotIndex !== 'number') {
+    res.status(400).json({ error: 'Missing kromId or slotIndex.' });
+    return;
+  }
+  const result = withdrawFromKromVault({
+    kromId: body.kromId,
+    slotIndex: body.slotIndex,
+    quantity: typeof body.quantity === 'number' ? body.quantity : undefined,
+  });
+  if (!result.ok) {
+    res.status(400).json({ error: result.error });
+    return;
+  }
+  res.json(result);
+});
+
+app.post('/api/krom/trophy', (req, res) => {
+  const body = (req.body ?? {}) as { kromId?: string; bossId?: string };
+  if (!body.kromId || !body.bossId) {
+    res.status(400).json({ error: 'Missing kromId or bossId.' });
+    return;
+  }
+  const result = recordKromBossTrophy({ kromId: body.kromId, bossId: body.bossId });
+  if (!result.ok) {
+    res.status(400).json({ error: result.error });
+    return;
+  }
+  res.json(result);
+});
+
+app.post('/api/krom/target-territory', (req, res) => {
+  const body = (req.body ?? {}) as {
+    kromId?: string;
+    territoryId?: 'market_street' | 'wild_frontier' | 'koh_rong_island';
+  };
+  if (
+    !body.kromId ||
+    (body.territoryId !== 'market_street' &&
+      body.territoryId !== 'wild_frontier' &&
+      body.territoryId !== 'koh_rong_island')
+  ) {
+    res.status(400).json({ error: 'Invalid kromId or territoryId.' });
+    return;
+  }
+  const result = setKromTargetTerritory({
+    kromId: body.kromId,
+    territoryId: body.territoryId,
+  });
+  if (!result.ok) {
+    res.status(400).json({ error: result.error });
+    return;
+  }
+  res.json(result);
+});
+
+app.get('/api/krom-war/status', (_req, res) => {
+  res.json({ ok: true, war: getKromWarStatus() });
+});
+
+app.post('/api/krom-war/score', (req, res) => {
+  const body = (req.body ?? {}) as {
+    kromId?: string;
+    kromTag?: string;
+    kromName?: string;
+    territoryId?: 'market_street' | 'wild_frontier' | 'koh_rong_island';
+    points?: number;
+    source?: string;
+  };
+  if (!body.kromId && !body.kromTag) {
+    res.status(400).json({ error: 'Missing kromId or kromTag.' });
+    return;
+  }
+  const result = recordKromWarPoints({
+    kromId: body.kromId || body.kromTag || '',
+    kromTag: body.kromTag,
+    kromName: body.kromName,
+    territoryId: body.territoryId,
+    points: Number(body.points ?? 0),
+    source: body.source,
+  });
+  if (!result.ok) {
+    res.status(400).json({ error: result.error });
+    return;
+  }
+  broadcastKromWarUpdate({ snapshot: result.snapshot });
+  res.json({ ok: true, war: result.snapshot, territoryId: result.territoryId, pointsAdded: result.pointsAdded });
+});
+
+app.post('/api/krom-war/finalize', (_req, res) => {
+  const { snapshot, winners } = finalizeKromWarWeek();
+  const summary = winners
+    .filter((w) => w.owner)
+    .map((w) => `${w.territoryName}: [${w.owner!.kromTag}]`)
+    .join(' · ');
+  const bannerText = summary
+    ? `🏆 Weekly Krom Territory Wars Finalized! ${summary}`
+    : '🏆 Weekly Krom Territory Wars Finalized! New War Week started!';
+  broadcastKromWarUpdate({ snapshot, bannerText });
+  res.json({ ok: true, war: snapshot, winners, bannerText });
 });
 
 app.get('/api/dungeon/active', (_req, res) => {

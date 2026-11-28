@@ -4,7 +4,7 @@ import { presenceRegistry } from '../presence';
 import { tradeService, type ServerTradeSlotItem } from '../economy/tradeService';
 
 export const ALLOWED_AREAS = ['AREA 0', 'AREA 1', 'AREA 2'] as const;
-export type AreaId = (typeof ALLOWED_AREAS)[number];
+export type AreaId = (typeof ALLOWED_AREAS)[number] | `KROM_${string}`;
 
 const ALLOWED_FACINGS = new Set(['down', 'up', 'left', 'right']);
 const MAP_MIN_X = 20;
@@ -18,6 +18,9 @@ export function normalizeAreaId(raw: unknown): AreaId {
   if (typeof raw === 'string') {
     const trimmed = raw.trim().toUpperCase();
     if ((ALLOWED_AREAS as readonly string[]).includes(trimmed)) {
+      return trimmed as AreaId;
+    }
+    if (/^KROM_[A-Z0-9]{2,6}$/.test(trimmed)) {
       return trimmed as AreaId;
     }
   }
@@ -564,5 +567,11 @@ export function broadcastGmEventTrigger(payload: {
 }): void {
   PlazaRoom.activeRooms.forEach((room) => {
     room.broadcast('gmEventTrigger', payload);
+  });
+}
+
+export function broadcastKromWarUpdate(payload: { snapshot: unknown; bannerText?: string }): void {
+  PlazaRoom.activeRooms.forEach((room) => {
+    room.broadcast('kromWarUpdated', payload);
   });
 }

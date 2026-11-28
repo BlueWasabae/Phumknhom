@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { creditPlayerCoins, getSupabaseClient, isPlayerVip } from '../db/supabase';
 import { presenceRegistry } from '../presence';
+import { awardMarketVolumeToKromOwner } from './kromWarService';
 
 export const MARKET_TAX_RATE = 0.05; // 5% Village Market Coin Sink (docs/GDD_CONTENT_AND_ECONOMY.md §5)
 
@@ -248,6 +249,9 @@ export async function buyMarketListing(
       }
     );
   }
+
+  // Update 2.8: Market Street Territory War Owner receives 2% of village market sales into their Krom Shrine
+  awardMarketVolumeToKromOwner(listing.priceCoins);
 
   return { ok: true, listing, taxCoins, sellerPayout };
 }

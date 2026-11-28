@@ -4,6 +4,7 @@ import {
   type BossId,
   type DifficultyMode,
   type EquippedLoadout,
+  type KromWarSnapshot,
   type PlayerMailEntry,
   type TradeCompletedReceipt,
   type TradeSessionSnapshot,
@@ -477,6 +478,15 @@ class PlazaRoomClient {
       });
       room.onMessage('mailNotification', (msg: { mail: PlayerMailEntry; text: string }) => {
         EventBus.emit('mail:notification', msg);
+      });
+      room.onMessage('kromWarUpdated', (msg: { snapshot?: KromWarSnapshot; bannerText?: string }) => {
+        if (msg?.snapshot) {
+          EventBus.emit('kromWar:updated', msg.snapshot);
+        }
+        if (typeof msg?.bannerText === 'string' && msg.bannerText.trim()) {
+          EventBus.emit('ticker:push', { text: msg.bannerText.trim(), category: 'boss' });
+          EventBus.emit('ui:toast', { text: msg.bannerText.trim() });
+        }
       });
 
       room.onLeave(() => {

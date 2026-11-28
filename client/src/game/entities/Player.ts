@@ -174,10 +174,11 @@ export class Player {
       this.pet = null;
       return;
     }
+    const stage = this.state.petProgress?.[petId]?.stage ?? 1;
     if (!this.pet) {
-      this.pet = new Pet(this.scene, this.sprite.x - 20, this.sprite.y, petId, this.zone, `pet_${this.zone}`);
+      this.pet = new Pet(this.scene, this.sprite.x - 20, this.sprite.y, petId, this.zone, `pet_${this.zone}`, stage);
     } else {
-      this.pet.setPet(petId);
+      this.pet.setPet(petId, stage);
     }
   }
 
@@ -254,6 +255,9 @@ export class Player {
     if (loadoutChanged) {
       this.paperDoll.setLoadout(this.state.loadout);
       this.syncPetInstance(this.state.loadout.pet);
+    } else if (this.state.loadout.pet && this.pet) {
+      const stage = this.state.petProgress?.[this.state.loadout.pet]?.stage ?? 1;
+      this.pet.setEvolutionStage(stage);
     }
     this.mount?.setMount(this.zone === 'overworld' ? this.state.activeMount : null);
   }

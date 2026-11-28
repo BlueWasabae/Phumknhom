@@ -27,7 +27,58 @@ export type ZoneType =
   | 'farm'
   | 'club'
   | 'khmer_world'
-  | 'house';
+  | 'house'
+  | 'krom_hall';
+
+export type KromTerritoryId = 'market_street' | 'wild_frontier' | 'koh_rong_island';
+
+export interface KromVaultSlot {
+  itemId: string;
+  itemName: string;
+  quantity: number;
+  quality?: QualityTier;
+  depositedBy: string;
+  depositedAt: string;
+}
+
+export interface KromTerritoryStanding {
+  kromId: string;
+  kromTag: string;
+  kromName: string;
+  points: number;
+}
+
+export interface KromTerritoryOwner {
+  kromId: string;
+  kromTag: string;
+  kromName: string;
+  claimedAt: string;
+}
+
+export interface KromTerritoryState {
+  id: KromTerritoryId;
+  name: string;
+  khmerName: string;
+  perkTitle: string;
+  perkDescription: string;
+  owner: KromTerritoryOwner | null;
+  standings: KromTerritoryStanding[];
+}
+
+export interface KromWarSnapshot {
+  weekId: string;
+  endsAt: number;
+  territories: KromTerritoryState[];
+  lastFinalizedAt: number | null;
+}
+
+export type PetEvolutionStage = 1 | 2 | 3;
+
+export interface PetProgressEntry {
+  level: number;
+  xp: number;
+  stage: PetEvolutionStage;
+}
 
 export interface KromMember {
   playerId: string;
@@ -46,6 +97,9 @@ export interface KromGuild {
   xp: number;
   treasuryCoins: number;
   members: KromMember[];
+  vault?: Array<KromVaultSlot | null>;
+  trophyBosses?: string[];
+  targetTerritoryId?: KromTerritoryId;
   createdAt: string;
 }
 
@@ -582,6 +636,8 @@ export interface PlayerState {
   /** Update 2.7 — P2P Trade & Auction History + Offline Mailbox Cache */
   tradeAuctionHistory?: TradeAuctionHistoryEntry[];
   mailbox?: PlayerMailEntry[];
+  /** Update 2.8 — 3-Stage Pet Evolution Progress */
+  petProgress?: Record<string, PetProgressEntry>;
   hasCompletedCreation?: boolean;
   skillDamagePct: number;
   armorDamagePct: number;
@@ -890,6 +946,7 @@ export const INITIAL_PLAYER_STATE: PlayerState = {
   },
   hasBioluminescentWaveAura: false,
   blackMarketPurchasedKeys: [],
+  petProgress: {},
   hasCompletedCreation: false,
   skillDamagePct: 0.025,
   armorDamagePct: 0.04,

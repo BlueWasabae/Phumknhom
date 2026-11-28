@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
-import type { ZoneType } from '@shared/types';
+import type { PetEvolutionStage, ZoneType } from '@shared/types';
+import { PET_STAGE_META } from '@shared/petEvolution';
 import { ITEM_CATALOG } from '../../data/items';
+import { vfxManager } from '../animations/VFXManager';
 
 const NA_BASE = '/assets/packs/ninja-adventure/Ninja Adventure - Asset Pack';
 
@@ -137,19 +139,60 @@ export function drawPetToCanvas(
   cx: number,
   cy: number,
   scale = 1,
-  timeMs = 0
+  timeMs = 0,
+  stage: PetEvolutionStage = 1
 ): void {
   if (!petId || !ITEM_CATALOG[petId]) return;
   const map = resolvePetSprite(petId);
   const img = getCachedPetImg(map.url);
+  const stageMeta = PET_STAGE_META[stage] ?? PET_STAGE_META[1];
   const bob = Math.sin(timeMs / 240) * 2;
   ctx.save();
   ctx.imageSmoothingEnabled = false;
   ctx.translate(cx, cy + bob);
+
+  // Stage 2 subtle sparkle halo / Stage 3 Mythic bloom aura + orbiting runes
+  if (stage === 2) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.45)';
+    ctx.lineWidth = Math.max(1.5, scale * 0.8);
+    ctx.beginPath();
+    ctx.arc(0, 0, 15 * scale, 0, Math.PI * 2);
+    ctx.stroke();
+    const ang = timeMs / 450;
+    ctx.fillStyle = '#fef08a';
+    ctx.beginPath();
+    ctx.arc(Math.cos(ang) * 16 * scale, Math.sin(ang) * 12 * scale, 2.2 * scale, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  } else if (stage === 3) {
+    ctx.save();
+    const grad = ctx.createRadialGradient(0, 0, 3 * scale, 0, 0, 24 * scale);
+    grad.addColorStop(0, 'rgba(250, 204, 21, 0.55)');
+    grad.addColorStop(0.55, 'rgba(34, 211, 238, 0.32)');
+    grad.addColorStop(1, 'rgba(34, 211, 238, 0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(0, 0, 24 * scale, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 3 orbiting Mythic runes/petals
+    for (let i = 0; i < 3; i++) {
+      const a = timeMs / 380 + (i * Math.PI * 2) / 3;
+      const rx = Math.cos(a) * 19 * scale;
+      const ry = Math.sin(a) * 12 * scale;
+      ctx.fillStyle = i % 2 === 0 ? '#fde047' : '#38bdf8';
+      ctx.beginPath();
+      ctx.arc(rx, ry, 2.8 * scale, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
   if (img) {
     const frameCount = map.frames ?? 1;
     const frameIdx = frameCount > 1 ? Math.floor(timeMs / 170) % frameCount : 0;
-    const mult = (map.scaleMult ?? 1) * 1.35;
+    const mult = (map.scaleMult ?? 1) * 1.35 * stageMeta.scaleMult;
     const w = map.frameW * scale * mult;
     const h = map.frameH * scale * mult;
     ctx.drawImage(img, frameIdx * map.frameW, 0, map.frameW, map.frameH, -w / 2, -h / 2, w, h);
@@ -240,6 +283,10 @@ export class Pet {
   private lastOwnerX: number;
   private lastOwnerY: number;
   private lastOwnerFacingRight = true;
+  private evolutionStage: PetEvolutionStage = 1;
+  private mythicAura: Phaser.GameObjects.Arc | null = null;
+  private orbitingRunes: Phaser.GameObjects.Arc[] = [];
+  private lastSparkleAt = 0;
 
   constructor(
     scene: Phaser.Scene,
@@ -247,7 +294,8 @@ export class Pet {
     y: number,
     petId: string | null,
     zone: ZoneType,
-    _texKey = 'active_pet_tex'
+    _texKey = 'active_pet_tex',
+    stage: PetEvolutionStage = 1
   ) {
     this.scene = scene;
     this.zone = zone;
@@ -255,19 +303,116 @@ export class Pet {
     this.curY = y;
     this.lastOwnerX = x;
     this.lastOwnerY = y;
+    this.evolutionStage = stage;
 
     // Only spawn Phaser objects if a real bought/equipped petId is present!
-    this.setPet(petId);
+    this.setPet(petId, stage);
+  }
+
+  private destroyStageVfx(): void {
+    this.mythicAura?.destroy();
+    this.mythicAura = null;
+    for (const r of this.orbitingRunes) r.destroy();
+    this.orbitingRunes = [];
   }
 
   private destroySprites(): void {
+    this.destroyStageVfx();
     this.sprite?.destroy();
     this.sprite = null;
     this.shadow?.destroy();
     this.shadow = null;
   }
 
-  public setPet(petId: string | null): void {
+  private isCompactZone(): boolean {
+    return this.zone === 'overworld' || this.zone === 'house' || this.zone === 'krom_hall' || this.zone === 'club' || this.zone === 'farm';
+  }
+
+  private rebuildStageVisuals(): void {
+    this.destroyStageVfx();
+    if (!this.petId || !this.sprite) return;
+    const map = resolvePetSprite(this.petId);
+    const stageMeta = PET_STAGE_META[this.evolutionStage] ?? PET_STAGE_META[1];
+    const baseScale = (this.isCompactZone() ? 0.82 : 2.05) * (map.scaleMult ?? 1);
+    this.sprite.setScale(baseScale * stageMeta.scaleMult);
+    if (this.shadow) {
+      const shBase = this.isCompactZone() ? 0.2 : 0.48;
+      this.shadow.setScale(shBase * stageMeta.scaleMult);
+    }
+
+    if (this.evolutionStage === 3) {
+      const auraRadius = this.isCompactZone() ? 13 : 30;
+      this.mythicAura = this.scene.add
+        .circle(this.curX, this.curY - (this.isCompactZone() ? 5 : 14), auraRadius, 0xfacc15, 0.22)
+        .setStrokeStyle(this.isCompactZone() ? 1.5 : 2.5, 0x38bdf8, 0.85)
+        .setBlendMode(Phaser.BlendModes.ADD);
+      vfxManager.applyBloom(this.scene, this.mythicAura, { color: 0xfde047, strength: 1.5 });
+
+      const runeRadius = this.isCompactZone() ? 2.4 : 5;
+      const runeColors = [0xfde047, 0x38bdf8, 0xf472b6];
+      for (let i = 0; i < 3; i++) {
+        const rune = this.scene.add
+          .circle(this.curX, this.curY, runeRadius, runeColors[i], 0.95)
+          .setStrokeStyle(1, 0xffffff, 0.85)
+          .setBlendMode(Phaser.BlendModes.ADD);
+        this.orbitingRunes.push(rune);
+      }
+    }
+  }
+
+  public setEvolutionStage(stage: PetEvolutionStage): void {
+    const normalized: PetEvolutionStage = stage === 3 ? 3 : stage === 2 ? 2 : 1;
+    if (this.evolutionStage === normalized && (normalized !== 3 || this.mythicAura)) return;
+    const prev = this.evolutionStage;
+    this.evolutionStage = normalized;
+    this.rebuildStageVisuals();
+    if (normalized > prev && this.sprite) {
+      this.playEvolutionBurst(normalized);
+    }
+  }
+
+  public getEvolutionStage(): PetEvolutionStage {
+    return this.evolutionStage;
+  }
+
+  public playEvolutionBurst(stage: PetEvolutionStage = this.evolutionStage): void {
+    if (!this.sprite) return;
+    const color = stage === 3 ? 0xfacc15 : 0x38bdf8;
+    const ring = this.scene.add
+      .circle(this.curX, this.curY - 6, this.isCompactZone() ? 10 : 22, color, 0.5)
+      .setStrokeStyle(2, 0xffffff, 0.95)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(this.sprite.depth + 5);
+    vfxManager.applyBloom(this.scene, ring, { color, strength: 2.0 });
+    this.scene.tweens.add({
+      targets: ring,
+      scale: 3.4,
+      alpha: 0,
+      duration: 620,
+      ease: 'Cubic.easeOut',
+      onComplete: () => ring.destroy(),
+    });
+    for (let i = 0; i < 10; i++) {
+      const ang = (Math.PI * 2 * i) / 10;
+      const dist = this.isCompactZone() ? 28 : 60;
+      const spark = this.scene.add
+        .circle(this.curX, this.curY - 6, this.isCompactZone() ? 2.5 : 4.5, i % 2 === 0 ? 0xfde047 : 0x38bdf8, 0.95)
+        .setDepth(this.sprite.depth + 6);
+      this.scene.tweens.add({
+        targets: spark,
+        x: this.curX + Math.cos(ang) * dist,
+        y: this.curY - 6 + Math.sin(ang) * dist,
+        alpha: 0,
+        scale: 0.2,
+        duration: 540,
+        ease: 'Quad.easeOut',
+        onComplete: () => spark.destroy(),
+      });
+    }
+  }
+
+  public setPet(petId: string | null, stage?: PetEvolutionStage): void {
+    if (stage) this.evolutionStage = stage;
     this.petId = petId && ITEM_CATALOG[petId] ? petId : null;
     if (!this.petId) {
       this.destroySprites();
@@ -280,11 +425,12 @@ export class Pet {
       return;
     }
 
-    const scale = (this.zone === 'overworld' ? 0.82 : 2.05) * (map.scaleMult ?? 1);
+    const stageMeta = PET_STAGE_META[this.evolutionStage] ?? PET_STAGE_META[1];
+    const scale = (this.isCompactZone() ? 0.82 : 2.05) * (map.scaleMult ?? 1) * stageMeta.scaleMult;
     if (!this.shadow) {
       this.shadow = this.scene.add
-        .image(this.curX, this.curY + (this.zone === 'overworld' ? 6 : 16), 'soft_shadow')
-        .setScale(this.zone === 'overworld' ? 0.2 : 0.48)
+        .image(this.curX, this.curY + (this.isCompactZone() ? 6 : 16), 'soft_shadow')
+        .setScale((this.isCompactZone() ? 0.2 : 0.48) * stageMeta.scaleMult)
         .setAlpha(0.7);
     }
     if (!this.sprite) {
@@ -301,6 +447,7 @@ export class Pet {
     if (this.scene.anims.exists(map.animKey)) {
       this.sprite.play(map.animKey, true);
     }
+    this.rebuildStageVisuals();
   }
 
   public update(
@@ -313,25 +460,72 @@ export class Pet {
     this.lastOwnerY = ownerY;
     this.lastOwnerFacingRight = ownerFacingRight;
 
-    const offsetX = (ownerFacingRight ? -1 : 1) * (this.zone === 'overworld' ? 16 : 40);
-    const offsetY = this.zone === 'overworld' ? 2 : -10;
-    this.curX = Phaser.Math.Linear(this.curX, ownerX + offsetX, 0.11);
-    this.curY = Phaser.Math.Linear(this.curY, ownerY + offsetY, 0.13);
+    const stageMeta = PET_STAGE_META[this.evolutionStage] ?? PET_STAGE_META[1];
+    const compact = this.isCompactZone();
+    const offsetX = (ownerFacingRight ? -1 : 1) * (compact ? 18 : 44);
+    const offsetY = compact ? 2 : -10;
+    this.curX = Phaser.Math.Linear(this.curX, ownerX + offsetX, stageMeta.followLerp);
+    this.curY = Phaser.Math.Linear(this.curY, ownerY + offsetY, Math.min(0.24, stageMeta.followLerp + 0.02));
 
     // No pet equipped -> no sprite to render or follow
     if (!this.petId || !this.sprite || !this.shadow) return;
 
-    const bob = Math.sin(time / 220) * (this.zone === 'overworld' ? 1.8 : 4.5);
+    const bob = Math.sin(time / 220) * (compact ? 1.8 : 4.5);
     this.sprite.setPosition(this.curX, this.curY + bob);
     this.sprite.setFlipX(!ownerFacingRight);
 
-    if (this.zone === 'overworld') {
-      const depth = this.curY + 8;
+    const depth = compact ? this.curY + 8 : 49;
+    if (compact) {
       this.sprite.setDepth(depth);
       this.shadow.setPosition(this.curX, this.curY + 5).setDepth(depth - 1);
     } else {
       this.sprite.setDepth(49);
       this.shadow.setPosition(this.curX, ownerY + 21).setDepth(47);
+    }
+
+    // Stage 2+: subtle sparkle trail while following
+    if (this.evolutionStage >= 2 && time - this.lastSparkleAt > (this.evolutionStage === 3 ? 210 : 380)) {
+      this.lastSparkleAt = time;
+      const sx = this.curX + Phaser.Math.Between(-6, 6);
+      const sy = this.curY - (compact ? 4 : 10) + Phaser.Math.Between(-4, 4);
+      const spark = this.scene.add
+        .circle(
+          sx,
+          sy,
+          compact ? (this.evolutionStage === 3 ? 2.1 : 1.6) : 3.2,
+          this.evolutionStage === 3 ? 0xfde047 : 0x7dd3fc,
+          0.85
+        )
+        .setDepth(depth - 0.5)
+        .setBlendMode(Phaser.BlendModes.ADD);
+      this.scene.tweens.add({
+        targets: spark,
+        y: sy - (compact ? 10 : 18),
+        alpha: 0,
+        scale: 0.25,
+        duration: 420,
+        onComplete: () => spark.destroy(),
+      });
+    }
+
+    // Stage 3: pulsing WebGL Bloom Aura + orbiting floating runes/petals
+    if (this.evolutionStage === 3 && this.mythicAura) {
+      const pulse = 1 + Math.sin(time / 280) * 0.1;
+      this.mythicAura
+        .setPosition(this.curX, this.curY + bob - (compact ? 6 : 16))
+        .setScale(pulse)
+        .setDepth(depth - 0.8);
+
+      const orbitX = compact ? 15 : 34;
+      const orbitY = compact ? 7.5 : 16;
+      for (let i = 0; i < this.orbitingRunes.length; i++) {
+        const ang = time / 460 + (i * Math.PI * 2) / this.orbitingRunes.length;
+        const rx = this.curX + Math.cos(ang) * orbitX;
+        const ry = this.curY + bob - (compact ? 6 : 16) + Math.sin(ang) * orbitY;
+        this.orbitingRunes[i]
+          .setPosition(rx, ry)
+          .setDepth(Math.sin(ang) >= 0 ? depth + 1 : depth - 0.9);
+      }
     }
   }
 

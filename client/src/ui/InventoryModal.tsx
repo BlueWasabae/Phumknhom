@@ -17,6 +17,7 @@ import { COMBAT_ARMOR_SETS } from '../data/armorSets';
 import { ITEM_CATALOG } from '../data/items';
 import { FARM_ITEMS } from '../data/cropsAndArtisan';
 import { STREET_SNACKS } from '../data/recipes';
+import { getPetProgress, PET_STAGE_META } from '@shared/petEvolution';
 import { NativeDialog } from './NativeDialog';
 import { PaperDollPreview } from './PaperDollPreview';
 
@@ -33,6 +34,7 @@ interface InventoryModalProps {
   onEatSnack?: (snackId: string) => void;
   onUseMagicMirror?: () => void;
   onReadTreasureMap?: () => void;
+  onOpenPetEvolution?: (petId?: string) => void;
 }
 
 const COMBAT_CORE_SLOTS: Array<{ slot: 'weapon' | 'armor'; label: string }> = [
@@ -75,6 +77,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
   onEatSnack,
   onUseMagicMirror,
   onReadTreasureMap,
+  onOpenPetEvolution,
 }) => {
   const [tab, setTab] = useState<'wearing' | 'container'>('container');
   const [filterSlot, setFilterSlot] = useState<ContainerFilter>('all');
@@ -329,13 +332,27 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                         </div>
                       </div>
                       {def && (
-                        <button
-                          type="button"
-                          onClick={() => onUnequip(slot)}
-                          className="px-2 py-1 rounded-lg bg-amber-900/15 hover:bg-red-600 hover:text-white text-[10px] font-bold text-amber-950 shrink-0 transition"
-                        >
-                          Remove
-                        </button>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {slot === 'pet' && onOpenPetEvolution && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onClose();
+                                onOpenPetEvolution(def.id);
+                              }}
+                              className="px-2 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-[10px] font-black text-slate-950 transition"
+                            >
+                              🐾 Evolve
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => onUnequip(slot)}
+                            className="px-2 py-1 rounded-lg bg-amber-900/15 hover:bg-red-600 hover:text-white text-[10px] font-bold text-amber-950 transition"
+                          >
+                            Remove
+                          </button>
+                        </div>
                       )}
                     </div>
                   );
@@ -512,6 +529,31 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                       Equip {selectedEquipDef.classId ? `(${KHMER_CLASSES[selectedEquipDef.classId].englishName})` : ''}
                     </button>
                   )}
+
+                  {selectedEquipDef.slot === 'pet' && (() => {
+                    const petProg = getPetProgress(player, selectedEquipDef.id);
+                    const meta = PET_STAGE_META[petProg.stage];
+                    return (
+                      <div className="rounded-xl border border-amber-500/40 bg-amber-100/70 p-2 space-y-1.5">
+                        <div className="flex items-center justify-between text-[10px] font-bold text-amber-950">
+                          <span>🐾 {meta.title}</span>
+                          <span>Lv.{petProg.level}/25</span>
+                        </div>
+                        {onOpenPetEvolution && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onClose();
+                              onOpenPetEvolution(selectedEquipDef.id);
+                            }}
+                            className="w-full py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 hover:brightness-105 text-slate-950 font-display font-black text-xs shadow-sm"
+                          >
+                            ✨ Feed &amp; Evolve Pet
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </>
               ) : selectedFarmDef && selectedEntry ? (
                 <>

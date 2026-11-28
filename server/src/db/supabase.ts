@@ -94,6 +94,7 @@ export interface SavedPlayerProfile {
   blackMarketPurchasedKeys?: string[];
   tradeAuctionHistory?: unknown[];
   mailbox?: unknown[];
+  petProgress?: Record<string, { level: number; xp: number; stage: 1 | 2 | 3 }>;
   hasCompletedCreation?: boolean;
   activeClass?: string;
   weapon?: Record<string, unknown>;
@@ -768,6 +769,10 @@ function rowToSavedProfile(row: {
       : [],
     tradeAuctionHistory: Array.isArray(meta.tradeAuctionHistory) ? meta.tradeAuctionHistory : [],
     mailbox: Array.isArray(meta.mailbox) ? meta.mailbox : [],
+    petProgress:
+      meta.petProgress && typeof meta.petProgress === 'object'
+        ? (meta.petProgress as Record<string, { level: number; xp: number; stage: 1 | 2 | 3 }>)
+        : {},
     hasCompletedCreation: Boolean(
       meta.hasCompletedCreation ??
         (loadout as { hasCompletedCreation?: boolean }).hasCompletedCreation ??
@@ -1137,6 +1142,8 @@ export async function savePlayerProfile(
       : [],
     tradeAuctionHistory: Array.isArray(profile.tradeAuctionHistory) ? profile.tradeAuctionHistory : [],
     mailbox: Array.isArray(profile.mailbox) ? profile.mailbox : [],
+    petProgress:
+      profile.petProgress && typeof profile.petProgress === 'object' ? profile.petProgress : {},
     hasCompletedCreation: Boolean(
       profile.hasCompletedCreation ??
         (profile.loadout as { hasCompletedCreation?: boolean } | undefined)?.hasCompletedCreation ??

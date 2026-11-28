@@ -142,6 +142,8 @@ interface HUDProps {
   onOpenNightMarket?: () => void;
   onOpenFestival?: () => void;
   onOpenKrom?: () => void;
+  onOpenKromWar?: () => void;
+  onOpenPetEvolution?: () => void;
   onOpenScryingMirror?: () => void;
   onOpenTukTukCart?: () => void;
   onOpenTreasureMap?: () => void;
@@ -212,6 +214,8 @@ export const HUD: React.FC<HUDProps> = ({
   onOpenNightMarket,
   onOpenFestival,
   onOpenKrom,
+  onOpenKromWar,
+  onOpenPetEvolution,
   onOpenScryingMirror,
   onOpenTukTukCart,
   onOpenTreasureMap,
@@ -465,8 +469,27 @@ export const HUD: React.FC<HUDProps> = ({
             ? '🛶 Bon Om Touk · Longboat Race'
             : zone === 'pearl_dive'
             ? '🫧 Koh Rong Coral Reef · Pearl Diving'
+            : zone === 'krom_hall'
+            ? `🏛️ [${player.kromTag || 'KROM'}] Krom Guild Hall • Interior`
             : 'Ancient Cavern • Dungeon'}
         </span>
+      )}
+
+      {zone === 'krom_hall' && (
+        <button
+          type="button"
+          onClick={() =>
+            EventBus.emit('travel:execute', {
+              method: 'mirror',
+              destinationLabel: 'Central Plaza',
+              targetZone: 'overworld',
+              mapId: 'central_plaza',
+            })
+          }
+          className="px-2.5 py-0.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white border border-amber-950 font-display font-bold text-[11px] whitespace-nowrap shadow-sm transition cursor-pointer"
+        >
+          ← Exit Guild Hall
+        </button>
       )}
 
       {zone === 'festival_race' && (
@@ -1050,6 +1073,36 @@ export const HUD: React.FC<HUDProps> = ({
                     <span className="text-[9px] font-bold text-amber-800">
                       {player.kromTag ? `[${player.kromTag}]` : 'Join'}
                     </span>
+                  </button>
+                )}
+                {onOpenKromWar && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuDropdownOpen(false);
+                      onOpenKromWar();
+                    }}
+                    className="px-3 py-2 rounded-xl hover:bg-rose-100 text-left flex items-center justify-between gap-2 text-amber-950"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Swords className="w-4 h-4 text-rose-700" /> Krom Territory Wars
+                    </span>
+                    <span className="text-[9px] font-bold text-rose-700">Weekly</span>
+                  </button>
+                )}
+                {onOpenPetEvolution && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuDropdownOpen(false);
+                      onOpenPetEvolution();
+                    }}
+                    className="px-3 py-2 rounded-xl hover:bg-sky-100 text-left flex items-center justify-between gap-2 text-amber-950"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-sky-700" /> Pet Evolution &amp; Feeding
+                    </span>
+                    <span className="text-[9px] font-bold text-sky-700">3-Stage</span>
                   </button>
                 )}
                 {onOpenFestival && (

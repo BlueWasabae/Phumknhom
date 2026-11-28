@@ -142,11 +142,13 @@ import {
   placeAuctionBidApi,
   popPendingReferralCoinsApi,
   reforgeItemApi,
+  recordKromBossTrophyApi,
   sandboxTopUpApi,
   sanitizeLegacyLocalStoragePets,
   saveAccountProfile,
   saveGuestCreationProfile,
   saveGuestProgressSnapshot,
+  scoreKromWarPointsApi,
   sendFriendRequestApi,
   syncGoogleAccount,
   type AuthSession,
@@ -222,6 +224,8 @@ import { MuseumModal } from './ui/MuseumModal';
 import { NightMarketModal } from './ui/NightMarketModal';
 import { FestivalModal } from './ui/FestivalModal';
 import { KromModal } from './ui/KromModal';
+import { KromWarModal } from './ui/KromWarModal';
+import { PetEvolutionModal } from './ui/PetEvolutionModal';
 import { ScryingMirrorModal } from './ui/ScryingMirrorModal';
 import { TukTukCartModal } from './ui/TukTukCartModal';
 import { TreasureMapModal } from './ui/TreasureMapModal';
@@ -308,6 +312,8 @@ type ActiveModalType =
   | 'blackMarket'
   | 'auctionHouse'
   | 'mailbox'
+  | 'kromWar'
+  | 'petEvolution'
   | 'characterCreator';
 
 interface FloatingXpBanner extends SkillXpToastPayload {
@@ -353,6 +359,8 @@ export const App: React.FC = () => {
   const [playerMail, setPlayerMail] = useState<PlayerMailEntry[]>([]);
   const [mailLoading, setMailLoading] = useState(false);
   const [focusedCartId, setFocusedCartId] = useState<string | null>(null);
+  const [kromModalTab, setKromModalTab] = useState<'overview' | 'vault' | 'war'>('overview');
+  const [selectedEvolutionPetId, setSelectedEvolutionPetId] = useState<string | null>(null);
   const [bondPrefillPartner, setBondPrefillPartner] = useState<string | null>(null);
   const [houseDecorateMode, setHouseDecorateMode] = useState(false);
   const [photoMode, setPhotoMode] = useState(false);
@@ -2053,6 +2061,17 @@ export const App: React.FC = () => {
       }),
       EventBus.on('tower:floorCleared', ({ floor, isBossFloor, coins, vitalityXp, reforgeStones, unlockedAura }) => {
         EventBus.emit('bounty:progress', { category: 'clear_tower_floors', amount: 1 });
+        if (playerRef.current.kromId && playerRef.current.kromTag) {
+          void scoreKromWarPointsApi(authSessionRef.current, {
+            kromId: playerRef.current.kromId,
+            kromTag: playerRef.current.kromTag,
+            kromName: playerRef.current.kromName ?? undefined,
+            points: isBossFloor ? 65 : 45,
+            source: `Pagoda Tower Floor ${floor}`,
+          }).then((res) => {
+            if (res.ok) EventBus.emit('kromWar:updated', res.war);
+          });
+        }
         runStateAction((prev) => {
           const nextCoins = prev.currencies.coins + coins;
           const nextInv = prev.inventory.map((i) => ({ ...i }));
@@ -2329,6 +2348,23 @@ export const App: React.FC = () => {
       }),
       EventBus.on('dungeon:outcome', (outcome) => {
         if (outcome && outcome.outcome === 'victory') {
+          if (playerRef.current.kromId && playerRef.current.kromTag) {
+            void recordKromBossTrophyApi(authSessionRef.current, {
+              kromId: playerRef.current.kromId,
+              bossId: outcome.bossId,
+            });
+            const warPts =
+              outcome.difficulty === 'mythic' || outcome.difficulty === 'death' ? 120 : 60;
+            void scoreKromWarPointsApi(authSessionRef.current, {
+              kromId: playerRef.current.kromId,
+              kromTag: playerRef.current.kromTag,
+              kromName: playerRef.current.kromName ?? undefined,
+              points: warPts,
+              source: `${outcome.bossName} (${outcome.difficulty})`,
+            }).then((res) => {
+              if (res.ok) EventBus.emit('kromWar:updated', res.war);
+            });
+          }
           const diffMult =
             outcome.difficulty === 'death'
               ? 2.2
@@ -2462,6 +2498,8 @@ export const App: React.FC = () => {
           leaderboardCategory: reqLbCat,
           cartId,
           bondPartnerName,
+          kromTab,
+          petId,
         }) => {
           if (modal === 'farm' && farmTab) setFarmModalTab(farmTab);
           if (modal === 'friends' && reqFriendsTab) setFriendsTab(reqFriendsTab);
@@ -2471,6 +2509,8 @@ export const App: React.FC = () => {
           if (modal === 'leaderboard' && reqLbCat) setLeaderboardCategory(reqLbCat);
           if (modal === 'tukTukCart') setFocusedCartId(cartId ?? null);
           if (modal === 'bond') setBondPrefillPartner(bondPartnerName ?? null);
+          if (modal === 'krom') setKromModalTab(kromTab ?? 'overview');
+          if (modal === 'petEvolution') setSelectedEvolutionPetId(petId ?? null);
           if (modal === 'wardrobe') {
             setShopTab('secondary');
             setActiveModal('fashionShop');
@@ -2527,6 +2567,17 @@ export const App: React.FC = () => {
           soundManager.playSfx('level_up');
           EventBus.emit('ui:toast', {
             text: `📋 Bounty Complete: ${completedLabels.join(', ')}! Claim reward on the Bounty Board!`,
+          });
+        }
+        if (category === 'harvest_crops' && playerRef.current.kromId && playerRef.current.kromTag) {
+          void scoreKromWarPointsApi(authSessionRef.current, {
+            kromId: playerRef.current.kromId,
+            kromTag: playerRef.current.kromTag,
+            kromName: playerRef.current.kromName ?? undefined,
+            points: 35,
+            source: 'Farm Crop Harvest',
+          }).then((res) => {
+            if (res.ok) EventBus.emit('kromWar:updated', res.war);
           });
         }
       }),
@@ -2594,6 +2645,21 @@ export const App: React.FC = () => {
       EventBus.on('worldBoss:completed', ({ reward, top3, colossusSlayerTitle }) => {
         soundManager.playSfx('victory');
         setWorldBossOutcome({ reward, top3, colossusSlayerTitle });
+        if (playerRef.current.kromId && playerRef.current.kromTag) {
+          void recordKromBossTrophyApi(authSessionRef.current, {
+            kromId: playerRef.current.kromId,
+            bossId: 'ancient_naga_colossus',
+          });
+          void scoreKromWarPointsApi(authSessionRef.current, {
+            kromId: playerRef.current.kromId,
+            kromTag: playerRef.current.kromTag,
+            kromName: playerRef.current.kromName ?? undefined,
+            points: 180,
+            source: 'Ancient Naga Colossus World Boss',
+          }).then((res) => {
+            if (res.ok) EventBus.emit('kromWar:updated', res.war);
+          });
+        }
 
         runStateAction((prev) => {
           const nextCoins = prev.currencies.coins + reward.coins;
@@ -3170,7 +3236,15 @@ export const App: React.FC = () => {
             onOpenMuseum={() => setActiveModal('museum')}
             onOpenNightMarket={() => setActiveModal('nightMarket')}
             onOpenFestival={() => setActiveModal('festival')}
-            onOpenKrom={() => setActiveModal('krom')}
+            onOpenKrom={() => {
+              setKromModalTab('overview');
+              setActiveModal('krom');
+            }}
+            onOpenKromWar={() => setActiveModal('kromWar')}
+            onOpenPetEvolution={() => {
+              setSelectedEvolutionPetId(player.loadout.pet ?? null);
+              setActiveModal('petEvolution');
+            }}
             onOpenScryingMirror={() => setActiveModal('scryingMirror')}
             onOpenTukTukCart={() => {
               setFocusedCartId(null);
@@ -3724,9 +3798,37 @@ export const App: React.FC = () => {
 
       <KromModal
         open={activeModal === 'krom'}
+        initialTab={kromModalTab}
         player={player}
         authSession={authSession}
         onClose={() => setActiveModal(null)}
+        onOpenTerritoryWar={() => setActiveModal('kromWar')}
+        onVaultDepositItem={(itemId, quantity, quality = 'normal') => {
+          runStateAction((s) => {
+            let rem = quantity;
+            const nextInv = s.inventory
+              .map((i) => {
+                if (rem > 0 && i.itemId === itemId && (i.quality ?? 'normal') === quality) {
+                  const take = Math.min(i.quantity, rem);
+                  rem -= take;
+                  return { ...i, quantity: i.quantity - take };
+                }
+                return i;
+              })
+              .filter((i) => i.quantity > 0);
+            return { state: { ...s, inventory: nextInv }, ok: true, message: '' };
+          });
+        }}
+        onVaultWithdrawItem={(slot) => {
+          runStateAction((s) => {
+            const qual = slot.quality ?? 'normal';
+            const nextInv = s.inventory.map((i) => ({ ...i }));
+            const ex = nextInv.find((i) => i.itemId === slot.itemId && (i.quality ?? 'normal') === qual);
+            if (ex) ex.quantity += slot.quantity;
+            else nextInv.push({ itemId: slot.itemId, quantity: slot.quantity, itemLevel: 1, quality: qual });
+            return { state: { ...s, inventory: nextInv }, ok: true, message: '' };
+          });
+        }}
         onKromUpdated={(krom: KromGuild, toastMsg: string, coinCost = 0, consumeCropId?: string) => {
           runStateAction((s) => {
             const nextCoins = Math.max(0, s.currencies.coins - coinCost);
@@ -3752,6 +3854,36 @@ export const App: React.FC = () => {
             return { state: nextState, ok: true, message: toastMsg };
           });
         }}
+      />
+
+      <KromWarModal
+        open={activeModal === 'kromWar'}
+        playerState={player}
+        authSession={authSession}
+        onClose={() => setActiveModal(null)}
+        onToast={(msg) => EventBus.emit('ui:toast', { text: msg })}
+        onWarpToTerritory={(mapId) => {
+          EventBus.emit('travel:execute', {
+            method: 'pylon',
+            destinationLabel: mapId.replace(/_/g, ' ').toUpperCase(),
+            targetZone: 'overworld',
+            mapId,
+          });
+        }}
+      />
+
+      <PetEvolutionModal
+        open={activeModal === 'petEvolution'}
+        playerState={player}
+        initialPetId={selectedEvolutionPetId}
+        onClose={() => setActiveModal(null)}
+        onUpdateState={(nextState) => {
+          setPlayer(nextState);
+          EventBus.emit('player:stateSync', nextState);
+          if (!authSessionRef.current) saveGuestProgressSnapshot(nextState);
+        }}
+        onEquipPet={(petId) => handleEquipItem(petId)}
+        onToast={(msg) => EventBus.emit('ui:toast', { text: msg })}
       />
 
       <ScryingMirrorModal
@@ -3960,6 +4092,25 @@ export const App: React.FC = () => {
                         ? 38
                         : 16,
             });
+            if (
+              playerRef.current.kromId &&
+              playerRef.current.kromTag &&
+              (bite.rarity === 'rare' ||
+                bite.rarity === 'epic' ||
+                bite.rarity === 'legendary' ||
+                bite.rarity === 'mythic' ||
+                bite.rarity === 'ancient')
+            ) {
+              void scoreKromWarPointsApi(authSessionRef.current, {
+                kromId: playerRef.current.kromId,
+                kromTag: playerRef.current.kromTag,
+                kromName: playerRef.current.kromName ?? undefined,
+                points: 30,
+                source: `Rare+ Catch: ${bite.label}`,
+              }).then((res) => {
+                if (res.ok) EventBus.emit('kromWar:updated', res.war);
+              });
+            }
             if (bite.fishId === 'fish_ancient_golden_barb') {
               runStateAction((prev) => {
                 const titles = new Set<string>(prev.unlockedTitles ?? []);
@@ -4206,6 +4357,10 @@ export const App: React.FC = () => {
           })
         }
         onUseMagicMirror={handleUseMagicMirror}
+        onOpenPetEvolution={(petId) => {
+          setSelectedEvolutionPetId(petId ?? player.loadout.pet ?? null);
+          setActiveModal('petEvolution');
+        }}
         onReadTreasureMap={() => {
           runStateAction((s) => {
             if (s.activeTreasureMap) return { state: s, ok: true, message: '' };

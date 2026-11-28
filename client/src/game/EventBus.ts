@@ -6,6 +6,7 @@ import type {
   EmoteSymbol,
   EquippedLoadout,
   KhmerClassId,
+  KromWarSnapshot,
   PlacedHouseDecor,
   PlayerMailEntry,
   PlayerState,
@@ -331,6 +332,9 @@ export interface EventMap {
   'trade:completed': TradeCompletedReceipt;
   'trade:cancelled': { tradeId: string; reason: string };
   'mail:notification': { mail: PlayerMailEntry; text: string };
+  'kromHall:enterRequest': void;
+  'kromWar:updated': KromWarSnapshot;
+  'pet:evolved': { petId: string; newStage: 2 | 3 };
   'worldEvent:reward': {
     skillId?: SkillId;
     xp?: number;
@@ -451,12 +455,16 @@ export interface EventMap {
       | 'awakening'
       | 'blackMarket'
       | 'auctionHouse'
-      | 'mailbox';
+      | 'mailbox'
+      | 'kromWar'
+      | 'petEvolution';
     leaderboardCategory?: 'farmer' | 'stylish' | 'slayer' | 'tower' | 'boss_rush';
     farmTab?: 'seeds' | 'livestock' | 'artisan';
     shopTab?: 'primary' | 'secondary';
     friendsTab?: 'friends' | 'inbox';
     reforgeTab?: 'reforge' | 'fusion' | 'shimmer' | 'bank';
+    kromTab?: 'overview' | 'vault' | 'war';
+    petId?: string;
     clubGame?: 'kla_klok' | 'ouk_chaktrang' | 'tien_len';
     clubTableId?: string;
     cartId?: string;

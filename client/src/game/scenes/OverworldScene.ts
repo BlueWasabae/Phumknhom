@@ -3,9 +3,12 @@ import {
   INITIAL_PLAYER_STATE,
   type BossId,
   type DifficultyMode,
+  type KromTerritoryId,
+  type KromWarSnapshot,
   type PlayerState,
   type TukTukCartListing,
 } from '@shared/types';
+import { getPetProgress } from '@shared/petEvolution';
 import { computeVillageToDungeonBridge } from '@shared/skillTrees';
 import {
   getVillageMapOrDefault,
@@ -20,7 +23,7 @@ import { PaperDoll } from '../entities/PaperDoll';
 import { NpcVillager } from '../entities/NpcVillager';
 import { RemotePlayerEntity } from '../entities/RemotePlayerEntity';
 import { getMountSpec } from '../entities/MountEntity';
-import { fetchLeaderboard, fetchTukTukCartsApi } from '../network/ApiClient';
+import { fetchKromWarStatusApi, fetchLeaderboard, fetchTukTukCartsApi } from '../network/ApiClient';
 import { areaIdToChannel, channelToAreaId, roomClient } from '../network/RoomClient';
 import { soundManager } from '../systems/SoundManager';
 import { SeasonAtmosphereOverlay, seasonClock } from '../systems/SeasonClock';
@@ -169,6 +172,8 @@ export class OverworldScene extends Phaser.Scene {
   private lastWaveRippleAt = 0;
   private blackMarketObjects: Phaser.GameObjects.GameObject[] = [];
   private blackMarketLandmark: LandmarkZone | null = null;
+  private territoryBannerObjects: Phaser.GameObjects.GameObject[] = [];
+  private lastPetRegenAt = 0;
   private unsubs: Array<() => void> = [];
 
   constructor() {
@@ -233,6 +238,8 @@ export class OverworldScene extends Phaser.Scene {
     this.lastWaveRippleAt = 0;
     this.blackMarketObjects = [];
     this.blackMarketLandmark = null;
+    this.territoryBannerObjects = [];
+    this.lastPetRegenAt = 0;
     this.joystick = { x: 0, y: 0 };
   }
 
@@ -533,6 +540,15 @@ export class OverworldScene extends Phaser.Scene {
       EventBus.on('dive:enterRequest', () => {
         this.enterPearlDive();
       }),
+      EventBus.on('kromHall:enterRequest', () => {
+        this.enterKromHall();
+      }),
+      EventBus.on('kromWar:updated', (snap) => {
+        this.syncTerritoryWarBanners(snap);
+      }),
+      EventBus.on('pet:evolved', ({ newStage }) => {
+        this.player.pet?.playEvolutionBurst(newStage);
+      }),
       EventBus.on('blackMarket:changed', () => {
         this.syncBlackMarketPortal();
       }),
@@ -597,6 +613,17 @@ export class OverworldScene extends Phaser.Scene {
       });
     }
     this.syncTreasureMapDigSpot();
+    if (
+      this.mapId === 'market_street' ||
+      this.mapId === 'wild_frontier' ||
+      this.mapId === 'koh_rong_island'
+    ) {
+      void fetchKromWarStatusApi().then((war) => {
+        if (this.scene && this.scene.isActive('OverworldScene')) {
+          this.syncTerritoryWarBanners(war);
+        }
+      });
+    }
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       vfxManager.cleanupScene(this);
@@ -605,6 +632,7 @@ export class OverworldScene extends Phaser.Scene {
       this.clearWorldEventVisuals();
       this.clearFestivalVisuals();
       this.clearBlackMarketPortal();
+      this.clearTerritoryWarBanners();
       this.clearTukTukCarts();
       this.clearTreasureDigVisuals();
       this.scale.off('resize', this.applyResponsiveZoom, this);
@@ -1155,7 +1183,7 @@ export class OverworldScene extends Phaser.Scene {
       onInteract: openWheel,
     });
 
-    // 4B. UPDATE 1.5: KROM GUILD HALL BANNER (West Courtyard) & TEMPLE SCRYING MIRROR (East Courtyard)
+    // 4B. UPDATE 1.5 + 2.8: ENTERABLE KROM GUILD HALL BANNER (West Courtyard) & TEMPLE SCRYING MIRROR (East Courtyard)
     const kromBanner = this.addBuildingOrProp({
       texture: 'sv_sign_wood',
       x: 560,
@@ -1163,20 +1191,24 @@ export class OverworldScene extends Phaser.Scene {
       scale: 1.55,
       shadowW: 44,
       shadowH: 14,
-      label: '🛡️ KROM GUILD HALL',
+      label: '🏛️ KROM GUILD HALL · ENTER',
       joinArrowY: 438,
     });
     kromBanner.setTint(0xfde047);
     const openKrom = () => {
       if (!this.guardInteractRange(560, 485)) return;
-      EventBus.emit('ui:openModal', { modal: 'krom' });
+      if (this.player.state.kromId || this.player.state.kromTag) {
+        this.enterKromHall();
+      } else {
+        EventBus.emit('ui:openModal', { modal: 'krom' });
+      }
     };
     kromBanner.setInteractive({ useHandCursor: true }).on('pointerdown', openKrom);
     this.landmarks.push({
       x: 560,
       y: 492,
-      radius: 52,
-      label: 'Press [E] or Click → Open Krom Guild Hall (Create/Join, Shrine & Buffs)',
+      radius: 56,
+      label: 'Press [E] or Click → Enter Krom Guild Hall (or Create/Join a Krom)',
       isDungeonPortal: false,
       onInteract: openKrom,
     });
@@ -3914,6 +3946,116 @@ export class OverworldScene extends Phaser.Scene {
     });
   }
 
+  private enterKromHall(): void {
+    if (this.transitioning) return;
+    if (!this.player.state.kromId && !this.player.state.kromTag) {
+      EventBus.emit('ui:toast', { text: '🛡️ Join or create a Krom first to enter your Krom Guild Hall!' });
+      EventBus.emit('ui:openModal', { modal: 'krom' });
+      return;
+    }
+    this.transitioning = true;
+    soundManager.playSfx('magic');
+    this.cameras.main.fadeOut(220, 20, 14, 6);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      this.scene.start('KromHallScene', {
+        returnMapId: this.mapId,
+        playerState: {
+          ...this.player.state,
+          zone: 'krom_hall',
+          currentMapId: this.mapId,
+        },
+      });
+    });
+  }
+
+  private clearTerritoryWarBanners(): void {
+    for (const obj of this.territoryBannerObjects) {
+      obj.destroy();
+    }
+    this.territoryBannerObjects = [];
+  }
+
+  private syncTerritoryWarBanners(war: KromWarSnapshot): void {
+    this.clearTerritoryWarBanners();
+    if (
+      this.mapId !== 'market_street' &&
+      this.mapId !== 'wild_frontier' &&
+      this.mapId !== 'koh_rong_island'
+    ) {
+      return;
+    }
+
+    const terr = war.territories.find((t) => t.id === (this.mapId as KromTerritoryId));
+    if (!terr || !terr.owner) return;
+
+    const tag = terr.owner.kromTag;
+    const spots: Array<{ x: number; y: number; scale?: number }> =
+      this.mapId === 'market_street'
+        ? [
+            { x: 800, y: 515, scale: 1.0 },
+            { x: 560, y: 590, scale: 0.8 },
+            { x: 1040, y: 590, scale: 0.8 },
+          ]
+        : this.mapId === 'wild_frontier'
+          ? [
+              { x: 800, y: 540, scale: 1.0 },
+              { x: 650, y: 660, scale: 0.82 },
+            ]
+          : [
+              { x: 800, y: 615, scale: 1.0 },
+              { x: 1095, y: 690, scale: 0.82 },
+            ];
+
+    for (const sp of spots) {
+      const s = sp.scale ?? 1.0;
+      const pole = this.add
+        .rectangle(sp.x, sp.y - 22 * s, 5 * s, 46 * s, 0x78350f)
+        .setStrokeStyle(1, 0xfde047)
+        .setDepth(sp.y + 4);
+      const pennant = this.add
+        .rectangle(sp.x, sp.y - 38 * s, 52 * s, 22 * s, 0xb45309, 0.96)
+        .setStrokeStyle(2, 0xfef08a)
+        .setDepth(sp.y + 5)
+        .setInteractive({ useHandCursor: true });
+      const glow = this.add
+        .circle(sp.x, sp.y - 38 * s, 20 * s, 0xfacc15, 0.24)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(sp.y + 3);
+      vfxManager.applyBloom(this, glow, { color: 0xfde047, strength: 1.45 });
+
+      const tagLabel = this.add
+        .text(sp.x, sp.y - 38 * s, `👑 [${tag}]`, {
+          fontFamily: 'Fredoka, sans-serif',
+          fontSize: `${Math.round(11 * s)}px`,
+          fontStyle: 'bold',
+          color: '#fef08a',
+          stroke: '#451a03',
+          strokeThickness: 3,
+        })
+        .setOrigin(0.5)
+        .setDepth(sp.y + 7);
+
+      const subLabel = this.add
+        .text(sp.x, sp.y - 54 * s, `TERRITORY OWNER · ${terr.owner.kromName}`, {
+          fontFamily: 'Fredoka, sans-serif',
+          fontSize: '9px',
+          fontStyle: 'bold',
+          color: '#fef9c3',
+          backgroundColor: 'rgba(120, 53, 15, 0.9)',
+          padding: { x: 5, y: 1 },
+        })
+        .setScale(0.45 * s)
+        .setOrigin(0.5, 1)
+        .setDepth(sp.y + 8);
+
+      pennant.on('pointerdown', () => {
+        EventBus.emit('ui:openModal', { modal: 'kromWar' });
+      });
+
+      this.territoryBannerObjects.push(pole, pennant, glow, tagLabel, subLabel);
+    }
+  }
+
   private enterCavernExplore(returnMapId: 'wild_frontier' | 'temple_district' = 'wild_frontier'): void {
     if (this.transitioning) return;
     this.transitioning = true;
@@ -5097,6 +5239,34 @@ export class OverworldScene extends Phaser.Scene {
     }
 
     this.player.syncVisuals(time, true);
+
+    // Update 2.8 — Stage 3 Mythic Pet QoL Convenience Perk: +10% passive Overworld HP/vitality regen pulse (zero combat P2W)
+    if (this.player.state.loadout.pet && time - this.lastPetRegenAt > 4500) {
+      const petProg = getPetProgress(this.player.state, this.player.state.loadout.pet);
+      if (petProg.stage === 3 && this.player.state.hp < this.player.state.maxHp) {
+        this.lastPetRegenAt = time;
+        const heal = Math.max(4, Math.round(this.player.state.maxHp * 0.1));
+        this.player.state.hp = Math.min(this.player.state.maxHp, this.player.state.hp + heal);
+        const pop = this.add
+          .text(this.player.x, this.player.y - 24, `+${heal} HP ✨`, {
+            fontFamily: 'Fredoka, sans-serif',
+            fontSize: '10px',
+            fontStyle: 'bold',
+            color: '#6ee7b7',
+            stroke: '#064e3b',
+            strokeThickness: 2,
+          })
+          .setOrigin(0.5)
+          .setDepth(this.player.y + 20);
+        this.tweens.add({
+          targets: pop,
+          y: pop.y - 16,
+          alpha: 0,
+          duration: 850,
+          onComplete: () => pop.destroy(),
+        });
+      }
+    }
 
     // Update 1.7 — Pink Lotus Heart Aura when bonded (intensifies near bonded partner!)
     if (this.bondAuraContainer && this.bondAuraRing) {
