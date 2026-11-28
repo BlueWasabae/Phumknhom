@@ -18,6 +18,8 @@ import {
 } from '@shared/petEvolution';
 import { Award, CheckCircle2, Heart, Sparkles, Star, Utensils } from 'lucide-react';
 import { ITEM_CATALOG } from '../data/items';
+import { FARM_ITEMS } from '../data/cropsAndArtisan';
+import { STREET_SNACKS } from '../data/recipes';
 import { drawPetToCanvas } from '../game/entities/Pet';
 import { EventBus } from '../game/EventBus';
 import { soundManager } from '../game/systems/SoundManager';
@@ -112,7 +114,7 @@ export const PetEvolutionModal: React.FC<PetEvolutionModalProps> = ({
     return playerState.inventory
       .filter((item) => item.quantity > 0 && getPetFoodXp(item.itemId) > 0)
       .map((item) => {
-        const def = ITEM_CATALOG[item.itemId];
+        const def = ITEM_CATALOG[item.itemId] ?? FARM_ITEMS[item.itemId] ?? STREET_SNACKS[item.itemId];
         const baseXp = getPetFoodXp(item.itemId);
         const xp = item.quality === 'gold_star' ? Math.round(baseXp * 1.35) : baseXp;
         return {

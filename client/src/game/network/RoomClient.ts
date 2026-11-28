@@ -4,6 +4,8 @@ import {
   type BossId,
   type DifficultyMode,
   type EquippedLoadout,
+  type InstrumentSkinId,
+  type KhmerInstrumentId,
   type KromWarSnapshot,
   type PlayerMailEntry,
   type TradeCompletedReceipt,
@@ -488,6 +490,28 @@ class PlazaRoomClient {
           EventBus.emit('ui:toast', { text: msg.bannerText.trim() });
         }
       });
+      room.onMessage(
+        'music:note',
+        (msg: {
+          sessionId: string;
+          name: string;
+          instrumentId: KhmerInstrumentId;
+          skin: InstrumentSkinId;
+          noteIndex: number;
+          x: number;
+          y: number;
+        }) => {
+          if (msg.sessionId !== room.sessionId) {
+            EventBus.emit('music:remoteNote', msg);
+          }
+        }
+      );
+      room.onMessage(
+        'music:tipReceived',
+        (msg: { fromSessionId: string; fromName: string; amount: number; friendlyXp: number }) => {
+          EventBus.emit('music:tipReceived', msg);
+        }
+      );
 
       room.onLeave(() => {
         if (this.room === room) {
@@ -567,6 +591,22 @@ class PlazaRoomClient {
   public sendTukTukHop(driverSessionId: string | null): void {
     if (!this.room || !this.online) return;
     this.room.send('tukTukHop', { driverSessionId });
+  }
+
+  public sendMusicNote(
+    instrumentId: KhmerInstrumentId,
+    skin: InstrumentSkinId,
+    noteIndex: number,
+    x: number,
+    y: number
+  ): void {
+    if (!this.room || !this.online) return;
+    this.room.send('music:note', { instrumentId, skin, noteIndex, x: Math.round(x), y: Math.round(y) });
+  }
+
+  public sendMusicTip(targetSessionId: string, amount: 10 | 50): void {
+    if (!this.room || !this.online) return;
+    this.room.send('music:tip', { targetSessionId, amount });
   }
 
   public sendAppearance(

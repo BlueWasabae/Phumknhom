@@ -61,7 +61,8 @@ import {
   type ColossusRaidChestReward,
   type WorldBossLeaderboardRow,
 } from '@shared/worldBossData';
-import { buyHouseFurniture } from '@shared/houseDecor';
+import { buyHouseFurniture, buyYardDecorItem } from '@shared/houseDecor';
+import { buyKhmerInstrument, KHMER_INSTRUMENTS } from '@shared/khmerInstruments';
 import {
   getScaledReforgeCost,
   rollReforgeModifier,
@@ -226,6 +227,8 @@ import { FestivalModal } from './ui/FestivalModal';
 import { KromModal } from './ui/KromModal';
 import { KromWarModal } from './ui/KromWarModal';
 import { PetEvolutionModal } from './ui/PetEvolutionModal';
+import { InstrumentJamModal } from './ui/InstrumentJamModal';
+import { PetRaceModal } from './ui/PetRaceModal';
 import { ScryingMirrorModal } from './ui/ScryingMirrorModal';
 import { TukTukCartModal } from './ui/TukTukCartModal';
 import { TreasureMapModal } from './ui/TreasureMapModal';
@@ -314,6 +317,8 @@ type ActiveModalType =
   | 'mailbox'
   | 'kromWar'
   | 'petEvolution'
+  | 'instrumentJam'
+  | 'petRace'
   | 'characterCreator';
 
 interface FloatingXpBanner extends SkillXpToastPayload {
@@ -361,6 +366,13 @@ export const App: React.FC = () => {
   const [focusedCartId, setFocusedCartId] = useState<string | null>(null);
   const [kromModalTab, setKromModalTab] = useState<'overview' | 'vault' | 'war'>('overview');
   const [selectedEvolutionPetId, setSelectedEvolutionPetId] = useState<string | null>(null);
+  const [houseDecorScope, setHouseDecorScope] = useState<'interior' | 'yard'>('interior');
+  const [instrumentJamOpen, setInstrumentJamOpen] = useState(false);
+  const [nearbyPerformer, setNearbyPerformer] = useState<{
+    sessionId: string;
+    name: string;
+    instrumentName: string;
+  } | null>(null);
   const [bondPrefillPartner, setBondPrefillPartner] = useState<string | null>(null);
   const [houseDecorateMode, setHouseDecorateMode] = useState(false);
   const [photoMode, setPhotoMode] = useState(false);
@@ -1921,6 +1933,72 @@ export const App: React.FC = () => {
           EventBus.emit('ui:toast', { text: toast });
         }
       }),
+      EventBus.on('yard:decorUpdated', ({ yardDecor, toast }) => {
+        setPlayer((prev) => {
+          const nextState: PlayerState = {
+            ...prev,
+            yardDecor: yardDecor.map((d) => ({ ...d })),
+          };
+          if (!authSessionRef.current) {
+            saveGuestProgressSnapshot(nextState);
+          }
+          return nextState;
+        });
+        if (toast) {
+          EventBus.emit('ui:toast', { text: toast });
+        }
+      }),
+      EventBus.on('music:remoteNote', ({ sessionId, name, instrumentId }) => {
+        setNearbyPerformer({
+          sessionId,
+          name,
+          instrumentName: KHMER_INSTRUMENTS[instrumentId]?.name ?? 'Khmer Instrument',
+        });
+      }),
+      EventBus.on('music:tipReceived', ({ fromName, amount, friendlyXp }) => {
+        soundManager.playSfx('coin');
+        runStateAction((prev) => {
+          const nextCoins = prev.currencies.coins + amount;
+          return {
+            state: {
+              ...prev,
+              coins: nextCoins,
+              currencies: { ...prev.currencies, coins: nextCoins },
+              instrumentTipsReceived: (prev.instrumentTipsReceived ?? 0) + amount,
+              lifeStats: {
+                ...prev.lifeStats,
+                friendly: Math.min(100, prev.lifeStats.friendly + friendlyXp),
+              },
+            },
+            ok: true,
+            message: `🎵 Tip Jar! ${fromName} tipped you +${amount}c & +${friendlyXp} Friendly XP!`,
+          };
+        });
+      }),
+      EventBus.on('petRace:finished', ({ place, timeSec, coins, petXpTreats, unlockedChampionRibbon }) => {
+        runStateAction((prev) => {
+          const nextCoins = prev.currencies.coins + coins;
+          const nextInv = prev.inventory.map((i) => ({ ...i }));
+          const ex = nextInv.find((i) => i.itemId === 'item_pet_xp_treat');
+          if (ex) ex.quantity += petXpTreats;
+          else nextInv.push({ itemId: 'item_pet_xp_treat', quantity: petXpTreats, itemLevel: 1, quality: 'normal' });
+          return {
+            state: {
+              ...prev,
+              coins: nextCoins,
+              currencies: { ...prev.currencies, coins: nextCoins },
+              inventory: nextInv,
+              petRaceWins: (prev.petRaceWins ?? 0) + (place === 1 ? 1 : 0),
+              championPetRibbon: Boolean(prev.championPetRibbon || unlockedChampionRibbon),
+            },
+            ok: true,
+            message:
+              place === 1
+                ? `🏆 1ST PLACE PET RACE CHAMPION (${timeSec}s)! +${coins}c · +${petXpTreats}× Pet XP Treats · 🎀 Champion Pet Ribbon!`
+                : `🐾 Pet Race Finished #${place} (${timeSec}s)! +${coins}c · +${petXpTreats}× Pet XP Treats!`,
+          };
+        });
+      }),
       EventBus.on('house:restHeal', () => {
         runStateAction((prev) => {
           const bridge = computeVillageToDungeonBridge(prev);
@@ -2499,6 +2577,7 @@ export const App: React.FC = () => {
           cartId,
           bondPartnerName,
           kromTab,
+          houseDecorTab,
           petId,
         }) => {
           if (modal === 'farm' && farmTab) setFarmModalTab(farmTab);
@@ -2510,7 +2589,12 @@ export const App: React.FC = () => {
           if (modal === 'tukTukCart') setFocusedCartId(cartId ?? null);
           if (modal === 'bond') setBondPrefillPartner(bondPartnerName ?? null);
           if (modal === 'krom') setKromModalTab(kromTab ?? 'overview');
+          if (modal === 'houseDecor') setHouseDecorScope(houseDecorTab ?? 'interior');
           if (modal === 'petEvolution') setSelectedEvolutionPetId(petId ?? null);
+          if (modal === 'instrumentJam') {
+            setInstrumentJamOpen(true);
+            return;
+          }
           if (modal === 'wardrobe') {
             setShopTab('secondary');
             setActiveModal('fashionShop');
@@ -3244,6 +3328,12 @@ export const App: React.FC = () => {
             onOpenPetEvolution={() => {
               setSelectedEvolutionPetId(player.loadout.pet ?? null);
               setActiveModal('petEvolution');
+            }}
+            onOpenInstrumentJam={() => setInstrumentJamOpen((v) => !v)}
+            onOpenPetRace={() => setActiveModal('petRace')}
+            onOpenYardDecor={() => {
+              setHouseDecorScope('yard');
+              setActiveModal('houseDecor');
             }}
             onOpenScryingMirror={() => setActiveModal('scryingMirror')}
             onOpenTukTukCart={() => {
@@ -5231,6 +5321,7 @@ export const App: React.FC = () => {
 
       <HouseDecorModal
         open={activeModal === 'houseDecor'}
+        initialScope={houseDecorScope}
         player={player}
         decorateMode={houseDecorateMode}
         onToggleDecorateMode={(active, itemId) => {
@@ -5245,14 +5336,76 @@ export const App: React.FC = () => {
             return res;
           })
         }
+        onBuyYardDecor={(itemId) =>
+          runStateAction((s) => {
+            const perks = getNpcPerkFlags(s);
+            const res = buyYardDecorItem(s, itemId, perks.boutiqueDiscountPct);
+            if (res.ok) soundManager.playSfx('coin');
+            return res;
+          })
+        }
         onInviteFriendsHome={() => {
           const hostName = playerRef.current.name;
-          roomClient.sendChat(`🏡 [HOME INVITE] Come visit ${hostName}'s decorated Khmer Stilt House!`);
+          roomClient.sendChat(`🏡 [HOME INVITE] Come visit ${hostName}'s decorated Khmer Stilt House & Garden Yard!`);
           EventBus.emit('ui:toast', {
             text: `👥 Sent live Home Invite to online friends in ${networkStatus.areaId}!`,
           });
         }}
         onClose={() => setActiveModal(null)}
+      />
+
+      <PetRaceModal
+        open={activeModal === 'petRace'}
+        player={player}
+        onClose={() => setActiveModal(null)}
+        onStartRace={(petId) => {
+          EventBus.emit('petRace:enterRequest', { petId });
+        }}
+      />
+
+      <InstrumentJamModal
+        open={instrumentJamOpen}
+        player={player}
+        nearbyPerformer={nearbyPerformer}
+        onClose={() => setInstrumentJamOpen(false)}
+        onBuyOrEquipInstrument={(instId) =>
+          runStateAction((s) => {
+            const res = buyKhmerInstrument(s, instId);
+            if (res.ok) soundManager.playSfx('magic');
+            return res;
+          })
+        }
+        onEquipSkin={(skin) =>
+          runStateAction((s) => ({
+            state: { ...s, equippedInstrumentSkin: skin },
+            ok: true,
+            message: `✨ Switched instrument visual skin!`,
+          }))
+        }
+        onTipPerformer={(sessionId, name, amount) => {
+          runStateAction((s) => {
+            if (s.currencies.coins < amount) {
+              return { state: s, ok: false, message: `Need ${amount} Coins to tip ${name}.` };
+            }
+            const nextCoins = s.currencies.coins - amount;
+            const friendlyGain = amount === 50 ? 15 : 6;
+            roomClient.sendMusicTip(sessionId, amount);
+            soundManager.playSfx('coin');
+            return {
+              state: {
+                ...s,
+                coins: nextCoins,
+                currencies: { ...s.currencies, coins: nextCoins },
+                lifeStats: {
+                  ...s.lifeStats,
+                  friendly: Math.min(100, s.lifeStats.friendly + friendlyGain),
+                },
+              },
+              ok: true,
+              message: `🪙 Tipped ${amount}c to ${name}! Both players earned +${friendlyGain} Friendly XP!`,
+            };
+          });
+        }}
       />
 
       <SkillTreeModal

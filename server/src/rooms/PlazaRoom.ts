@@ -201,6 +201,68 @@ export class PlazaRoom extends Room<PlazaState> {
       });
     });
 
+    // Update 2.9 — Live Khmer Musical Instrument Jamming & Street Musician Tip Jar
+    this.onMessage(
+      'music:note',
+      (
+        client,
+        payload: {
+          instrumentId?: string;
+          skin?: string;
+          noteIndex?: number;
+          x?: number;
+          y?: number;
+        }
+      ) => {
+        const player = this.state.players.get(client.sessionId);
+        if (!player || !payload) return;
+        const allowed = new Set(['roneat_aek', 'chapei_dang_veng', 'khim', 'skor_thom', 'chhing']);
+        const instrumentId = typeof payload.instrumentId === 'string' && allowed.has(payload.instrumentId)
+          ? payload.instrumentId
+          : 'roneat_aek';
+        const noteIndex = Math.max(0, Math.min(7, Math.floor(Number(payload.noteIndex ?? 0))));
+        const skin =
+          payload.skin === 'golden_angkor' || payload.skin === 'celestial_apsara'
+            ? payload.skin
+            : 'classic';
+        this.broadcast('music:note', {
+          sessionId: client.sessionId,
+          name: player.name,
+          instrumentId,
+          skin,
+          noteIndex,
+          x: typeof payload.x === 'number' ? payload.x : player.x,
+          y: typeof payload.y === 'number' ? payload.y : player.y,
+          timestamp: Date.now(),
+        });
+      }
+    );
+
+    this.onMessage(
+      'music:tip',
+      (client, payload: { targetSessionId?: string; amount?: number }) => {
+        const tipper = this.state.players.get(client.sessionId);
+        if (!tipper || !payload?.targetSessionId) return;
+        const target = this.state.players.get(payload.targetSessionId);
+        const amount = payload.amount === 50 ? 50 : 10;
+        if (!target || payload.targetSessionId === client.sessionId) return;
+
+        presenceRegistry.sendToTarget({ sessionId: payload.targetSessionId }, 'music:tipReceived', {
+          fromSessionId: client.sessionId,
+          fromName: tipper.name,
+          amount,
+          friendlyXp: amount === 50 ? 15 : 6,
+          timestamp: Date.now(),
+        });
+        this.broadcast('chat', {
+          sessionId: client.sessionId,
+          name: '🎵 Tip Jar',
+          text: `${tipper.name} tipped ${amount}c to ${target.name}'s Khmer performance! (+Friendly XP)`,
+          timestamp: Date.now(),
+        });
+      }
+    );
+
     // ==================== PHASE 7 SOCIAL ROUTING (WHISPER / FRIEND / DUNGEON INVITE) ====================
 
     this.onMessage(

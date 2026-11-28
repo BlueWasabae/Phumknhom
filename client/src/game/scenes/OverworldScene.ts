@@ -9,6 +9,7 @@ import {
   type TukTukCartListing,
 } from '@shared/types';
 import { getPetProgress } from '@shared/petEvolution';
+import { INSTRUMENT_SKINS } from '@shared/khmerInstruments';
 import { computeVillageToDungeonBridge } from '@shared/skillTrees';
 import {
   getVillageMapOrDefault,
@@ -548,6 +549,24 @@ export class OverworldScene extends Phaser.Scene {
       }),
       EventBus.on('pet:evolved', ({ newStage }) => {
         this.player.pet?.playEvolutionBurst(newStage);
+      }),
+      EventBus.on('music:localNote', ({ instrumentId, skin, noteIndex }) => {
+        this.spawnFloatingMusicNote(this.player.x, this.player.y - 18, skin, noteIndex);
+        roomClient.sendMusicNote(instrumentId, skin, noteIndex, this.player.x, this.player.y);
+      }),
+      EventBus.on('music:remoteNote', ({ sessionId, instrumentId, skin, noteIndex, x, y }) => {
+        const remote = this.remotePlayers.get(sessionId);
+        const nx = remote ? remote.x : x;
+        const ny = remote ? remote.y : y;
+        const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, nx, ny);
+        if (dist < 620) {
+          const vol = Math.max(0.2, 1 - dist / 650);
+          soundManager.playInstrumentNote(instrumentId, noteIndex, vol);
+          this.spawnFloatingMusicNote(nx, ny - 18, skin, noteIndex);
+        }
+      }),
+      EventBus.on('petRace:enterRequest', ({ petId }) => {
+        this.enterPetRace(petId);
       }),
       EventBus.on('blackMarket:changed', () => {
         this.syncBlackMarketPortal();
@@ -1274,6 +1293,59 @@ export class OverworldScene extends Phaser.Scene {
 
     // 6. PHYSICAL PLAZA "TOP TEN" HALL OF FAME — 3 LIVE #1 AVATAR STATUES (North Terrace!)
     this.buildPlazaHallOfFameStatues();
+
+    // 7. UPDATE 2.9: PLAZA AMPHITHEATER STAGE (South-Center Courtyard — Live Pinpeat & Chapei Jamming!)
+    const stageX = 800;
+    const stageY = 748;
+    const stageDeck = this.add
+      .rectangle(stageX, stageY, 152, 54, 0x78350f, 0.96)
+      .setStrokeStyle(3, 0xfacc15)
+      .setDepth(700)
+      .setInteractive({ useHandCursor: true });
+    this.add
+      .rectangle(stageX, stageY, 134, 38, 0x991b1b, 0.92)
+      .setStrokeStyle(1.5, 0xfde047)
+      .setDepth(701);
+    const stageGlow = this.add
+      .image(stageX, stageY - 12, 'torch_glow')
+      .setTint(0xfde047)
+      .setScale(0.95)
+      .setAlpha(0.5)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(702);
+    vfxManager.applyBloom(this, stageGlow, { color: 0xfacc15, strength: 1.35 });
+    this.glowLights.push(stageGlow);
+    this.add
+      .text(stageX, stageY - 4, '🎶 🎹 🎸 🥁', { fontSize: '14px' })
+      .setOrigin(0.5)
+      .setDepth(705);
+    this.add
+      .text(stageX, stageY - 34, '🎵 PLAZA AMPHITHEATER STAGE · PLAY MUSIC', {
+        fontFamily: 'Fredoka, sans-serif',
+        fontSize: '11px',
+        fontStyle: 'bold',
+        color: '#fef08a',
+        backgroundColor: 'rgba(120, 53, 15, 0.94)',
+        padding: { x: 8, y: 2 },
+      })
+      .setResolution(2)
+      .setScale(0.45)
+      .setOrigin(0.5, 1)
+      .setDepth(710);
+    const openJamStage = () => {
+      if (!this.guardInteractRange(stageX, stageY, 135)) return;
+      soundManager.playSfx('magic');
+      EventBus.emit('ui:openModal', { modal: 'instrumentJam' });
+    };
+    stageDeck.on('pointerdown', openJamStage);
+    this.landmarks.push({
+      x: stageX,
+      y: stageY,
+      radius: 82,
+      label: 'Press [E] or Click → 🎵 Play Live Khmer Instruments (Roneat Aek, Chapei, Khim, Skor Thom, Chhing)',
+      isDungeonPortal: false,
+      onInteract: openJamStage,
+    });
   }
 
   private buildPlazaHallOfFameStatues(): void {
@@ -2126,6 +2198,66 @@ export class OverworldScene extends Phaser.Scene {
       label: 'Press [E] or Click → ⛵ Sail to Koh Rong Mythic Island (Captain Rithy Ferry)',
       isDungeonPortal: false,
       onInteract: sailToKohRong,
+    });
+
+    // 6. UPDATE 2.9 — VILLAGE PET RACING ARENA ENTRANCE (North-Center Lawn — Track Announcer Sophat!)
+    const trackX = 800;
+    const trackY = 485;
+    const gateArch = this.add
+      .rectangle(trackX, trackY, 118, 42, 0x92400e, 0.96)
+      .setStrokeStyle(3, 0xfacc15)
+      .setDepth(482)
+      .setInteractive({ useHandCursor: true });
+    this.add
+      .rectangle(trackX, trackY + 12, 108, 12, 0xffffff, 0.92)
+      .setStrokeStyle(1, 0x0f172a)
+      .setDepth(483);
+    const trackGlow = this.add
+      .image(trackX, trackY - 14, 'torch_glow')
+      .setTint(0xfacc15)
+      .setScale(0.82)
+      .setAlpha(0.55)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(481);
+    this.glowLights.push(trackGlow);
+    const announcerNpc = this.add
+      .sprite(trackX - 66, trackY + 8, 'char_master', 0)
+      .setOrigin(0.5, 0.92)
+      .setScale(1.18)
+      .setTint(0xfef08a)
+      .setDepth(492)
+      .setInteractive({ useHandCursor: true });
+    this.tweens.add({ targets: announcerNpc, y: trackY + 5, duration: 580, yoyo: true, repeat: -1 });
+    const trackArrow = this.add.image(trackX, trackY - 46, 'join_arrow').setScale(0.56).setDepth(500);
+    this.tweens.add({ targets: trackArrow, y: trackY - 54, duration: 540, yoyo: true, repeat: -1 });
+    this.add
+      .text(trackX, trackY - 26, '🏁 VILLAGE PET RACING TRACK · ANNOUNCER SOPHAT', {
+        fontFamily: 'Fredoka, sans-serif',
+        fontSize: '11px',
+        fontStyle: 'bold',
+        color: '#fef08a',
+        backgroundColor: 'rgba(120, 53, 15, 0.94)',
+        padding: { x: 8, y: 2 },
+      })
+      .setResolution(2)
+      .setScale(0.45)
+      .setOrigin(0.5, 1)
+      .setDepth(498);
+
+    const openPetTrack = () => {
+      if (!this.guardInteractRange(trackX, trackY, 135)) return;
+      soundManager.playSfx('click');
+      EventBus.emit('ui:openModal', { modal: 'petRace' });
+    };
+    gateArch.on('pointerdown', openPetTrack);
+    announcerNpc.on('pointerdown', openPetTrack);
+    this.landmarks.push({
+      x: trackX,
+      y: trackY + 12,
+      radius: 82,
+      label: 'Press [E] or Click → 🏁 Enter Village Pet Racing Arena (Win Coins, Pet XP Treats & Champion Ribbon!)',
+      isDungeonPortal: false,
+      onInteract: openPetTrack,
     });
   }
 
@@ -3965,6 +4097,64 @@ export class OverworldScene extends Phaser.Scene {
           currentMapId: this.mapId,
         },
       });
+    });
+  }
+
+  private enterPetRace(petId?: string): void {
+    if (this.transitioning) return;
+    this.transitioning = true;
+    soundManager.playSfx('victory');
+    this.cameras.main.fadeOut(220, 12, 22, 12);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      this.scene.start('PetRaceScene', {
+        petId,
+        playerState: {
+          ...this.player.state,
+          zone: 'pet_race',
+          currentMapId: 'green_park',
+        },
+      });
+    });
+  }
+
+  private spawnFloatingMusicNote(
+    x: number,
+    y: number,
+    skin: 'classic' | 'golden_angkor' | 'celestial_apsara',
+    noteIndex: number
+  ): void {
+    const skinDef = INSTRUMENT_SKINS[skin] ?? INSTRUMENT_SKINS.classic;
+    const symbols = ['♪', '♫', '♬', '🎵'];
+    const sym = symbols[noteIndex % symbols.length];
+    const halo = this.add
+      .circle(x, y, 8, skinDef.noteColorNum, 0.35)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(2500);
+    vfxManager.applyBloom(this, halo, { color: skinDef.noteColorNum, strength: skinDef.glowStrength });
+    const note = this.add
+      .text(x + Phaser.Math.Between(-8, 8), y, sym, {
+        fontFamily: 'Fredoka, sans-serif',
+        fontSize: '18px',
+        fontStyle: 'bold',
+        color: skinDef.noteColorHex,
+        stroke: '#1c1917',
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5)
+      .setDepth(2505);
+    const driftX = Phaser.Math.Between(-18, 18);
+    this.tweens.add({
+      targets: [note, halo],
+      x: x + driftX,
+      y: y - 42,
+      alpha: 0,
+      scale: 1.35,
+      duration: 950,
+      ease: 'Cubic.easeOut',
+      onComplete: () => {
+        note.destroy();
+        halo.destroy();
+      },
     });
   }
 

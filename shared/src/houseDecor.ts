@@ -1,4 +1,4 @@
-import type { BossId, PlacedHouseDecor, PlayerState } from './types';
+import type { BossId, PlacedHouseDecor, PlacedYardDecor, PlayerState } from './types';
 
 export interface HouseFurnitureDef {
   id: string;
@@ -222,5 +222,205 @@ export function buyHouseFurniture(
     },
     ok: true,
     message: `🛋️ Purchased ${def.icon} ${def.name} (-${finalCost}c)! Place it inside your Khmer Stilt House!`,
+  };
+}
+
+// ==================== UPDATE 2.9: CUSTOM STILT HOUSE OUTDOOR GARDEN YARD ====================
+
+export interface YardDecorDef {
+  id: string;
+  name: string;
+  khmerName: string;
+  tier: 'coins' | 'prestige';
+  icon: string;
+  primaryColor: string;
+  accentColor: string;
+  widthPx: number;
+  heightPx: number;
+  buyCoins?: number;
+  buyDiamonds?: number;
+  animatedKind?: 'koi_pond' | 'campfire' | 'lanterns' | 'spirit_tree' | 'naga_fountain';
+  description: string;
+}
+
+export const YARD_DECOR_CATALOG: Record<string, YardDecorDef> = {
+  yard_stone_lantern: {
+    id: 'yard_stone_lantern',
+    name: 'Stone Lantern',
+    khmerName: 'ចង្កៀងថ្មភក់អង្គរ',
+    tier: 'coins',
+    icon: '🏮',
+    primaryColor: '#78716c',
+    accentColor: '#fde047',
+    widthPx: 34,
+    heightPx: 44,
+    buyCoins: 140,
+    animatedKind: 'lanterns',
+    description: 'Carved Angkor sandstone garden lantern glowing warmly along your front path.',
+  },
+  yard_teak_bench: {
+    id: 'yard_teak_bench',
+    name: 'Carved Teak Bench',
+    khmerName: 'កៅអីឈើបេងឆ្លាក់',
+    tier: 'coins',
+    icon: '🪑',
+    primaryColor: '#78350f',
+    accentColor: '#d97706',
+    widthPx: 54,
+    heightPx: 28,
+    buyCoins: 180,
+    description: 'Hand-carved Cambodian teak garden bench for resting beneath the sugar palms.',
+  },
+  yard_lotus_koi_pond: {
+    id: 'yard_lotus_koi_pond',
+    name: 'Lotus Koi Pond',
+    khmerName: 'ស្រះផ្កាឈូកត្រីខយ',
+    tier: 'coins',
+    icon: '🪷',
+    primaryColor: '#0284c7',
+    accentColor: '#f472b6',
+    widthPx: 74,
+    heightPx: 50,
+    buyCoins: 280,
+    animatedKind: 'koi_pond',
+    description: 'Tranquil sandstone-rimmed lotus pond with animated swimming golden koi and rippling water.',
+  },
+  yard_bamboo_archway: {
+    id: 'yard_bamboo_archway',
+    name: 'Bamboo Archway',
+    khmerName: 'ខ្លោងទ្វារឫស្សី',
+    tier: 'coins',
+    icon: '🎍',
+    primaryColor: '#15803d',
+    accentColor: '#86efac',
+    widthPx: 66,
+    heightPx: 56,
+    buyCoins: 240,
+    description: 'Festive arched Khmer village bamboo gate draped with fresh green leaves.',
+  },
+  yard_paper_lanterns: {
+    id: 'yard_paper_lanterns',
+    name: 'Hanging Paper Lanterns',
+    khmerName: 'គោមក្រដាសព្យួរសួន',
+    tier: 'coins',
+    icon: '🎐',
+    primaryColor: '#ea580c',
+    accentColor: '#fef08a',
+    widthPx: 62,
+    heightPx: 42,
+    buyCoins: 210,
+    animatedKind: 'lanterns',
+    description: 'Swaying string of warm crimson-and-gold Khmer festival paper lanterns.',
+  },
+  yard_campfire_pit: {
+    id: 'yard_campfire_pit',
+    name: 'Campfire Pit',
+    khmerName: 'ភ្លើងជំរុំសួនផ្ទះ',
+    tier: 'coins',
+    icon: '🔥',
+    primaryColor: '#dc2626',
+    accentColor: '#fbbf24',
+    widthPx: 46,
+    heightPx: 38,
+    buyCoins: 220,
+    animatedKind: 'campfire',
+    description: 'Stone-ringed outdoor campfire pit crackling with cozy amber sparks at night.',
+  },
+  yard_blooming_spirit_tree: {
+    id: 'yard_blooming_spirit_tree',
+    name: 'Blooming Spirit Tree',
+    khmerName: 'ដើមផ្កាព្រលឹងភ្លឺចែងចាំង',
+    tier: 'prestige',
+    icon: '🌸',
+    primaryColor: '#ec4899',
+    accentColor: '#fbcfe8',
+    widthPx: 72,
+    heightPx: 84,
+    buyDiamonds: 140,
+    animatedKind: 'spirit_tree',
+    description: 'Enchanted luminous Khmer sakura-lotus spirit tree that continuously drops glowing pink petals!',
+  },
+  yard_golden_naga_fountain: {
+    id: 'yard_golden_naga_fountain',
+    name: 'Golden Naga Fountain',
+    khmerName: 'ប្រភពទឹកនាគមាសអង្គរ',
+    tier: 'prestige',
+    icon: '🐉',
+    primaryColor: '#f59e0b',
+    accentColor: '#38bdf8',
+    widthPx: 74,
+    heightPx: 64,
+    buyDiamonds: 180,
+    animatedKind: 'naga_fountain',
+    description: 'Majestic gilded Naga water fountain shooting animated turquoise water arcs with radiant WebGL Bloom!',
+  },
+};
+
+export const YARD_DECOR_LIST: YardDecorDef[] = Object.values(YARD_DECOR_CATALOG);
+
+export const DEFAULT_OWNED_YARD_DECOR: Record<string, number> = {
+  yard_stone_lantern: 2,
+  yard_teak_bench: 1,
+  yard_lotus_koi_pond: 1,
+};
+
+export const DEFAULT_YARD_DECOR: PlacedYardDecor[] = [
+  { uid: 'starter_yard_lantern', itemId: 'yard_stone_lantern', x: 256, y: 176 },
+];
+
+export function getOwnedYardDecorCount(state: PlayerState, itemId: string): number {
+  const map = state.ownedYardDecor ?? DEFAULT_OWNED_YARD_DECOR;
+  return map[itemId] ?? DEFAULT_OWNED_YARD_DECOR[itemId] ?? 0;
+}
+
+export function getPlacedYardDecorCount(state: PlayerState, itemId: string): number {
+  const list = state.yardDecor ?? DEFAULT_YARD_DECOR;
+  return list.filter((d) => d.itemId === itemId).length;
+}
+
+export function buyYardDecorItem(
+  state: PlayerState,
+  itemId: string,
+  discountPct = 0
+): { state: PlayerState; ok: boolean; message: string } {
+  const def = YARD_DECOR_CATALOG[itemId];
+  if (!def) return { state, ok: false, message: 'Unknown garden yard item.' };
+  const curOwned = { ...DEFAULT_OWNED_YARD_DECOR, ...(state.ownedYardDecor ?? {}) };
+
+  if (def.tier === 'prestige' && def.buyDiamonds) {
+    if (state.currencies.diamonds < def.buyDiamonds) {
+      return {
+        state,
+        ok: false,
+        message: `Need 💎 ${def.buyDiamonds} Diamonds for ${def.name}.`,
+      };
+    }
+    curOwned[itemId] = (curOwned[itemId] ?? 0) + 1;
+    return {
+      state: {
+        ...state,
+        currencies: { ...state.currencies, diamonds: state.currencies.diamonds - def.buyDiamonds },
+        ownedYardDecor: curOwned,
+      },
+      ok: true,
+      message: `✨ Unlocked Prestige Yard Piece: ${def.icon} ${def.name} (-${def.buyDiamonds} 💎)!`,
+    };
+  }
+
+  const finalCost = Math.max(1, Math.round((def.buyCoins ?? 150) * (1 - discountPct)));
+  if (state.currencies.coins < finalCost) {
+    return { state, ok: false, message: `Need ${finalCost.toLocaleString()} Coins for ${def.name}.` };
+  }
+  curOwned[itemId] = (curOwned[itemId] ?? 0) + 1;
+  const nextCoins = state.currencies.coins - finalCost;
+  return {
+    state: {
+      ...state,
+      coins: nextCoins,
+      currencies: { ...state.currencies, coins: nextCoins },
+      ownedYardDecor: curOwned,
+    },
+    ok: true,
+    message: `🌺 Purchased ${def.icon} ${def.name} (-${finalCost}c)! Place it in your Stilt House Yard!`,
   };
 }

@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
-import { INITIAL_PLAYER_STATE, type PlayerState } from '@shared/types';
+import { INITIAL_PLAYER_STATE, type PlacedYardDecor, type PlayerState } from '@shared/types';
+import { DEFAULT_YARD_DECOR, YARD_DECOR_CATALOG } from '@shared/houseDecor';
+import { vfxManager } from '../animations/VFXManager';
 import {
   ARTISAN_MACHINES,
   FRUIT_TREES,
@@ -84,6 +86,12 @@ export class FarmScene extends Phaser.Scene {
   private transitioning = false;
   private lastVisualRefresh = 0;
   private atmosphere?: SeasonAtmosphereOverlay;
+  private yardDecor: PlacedYardDecor[] = [];
+  private yardNodes: Phaser.GameObjects.Container[] = [];
+  private yardDecorateMode = false;
+  private yardPlaceItemId: string | null = null;
+  private yardGridGfx!: Phaser.GameObjects.Graphics;
+  private lastYardParticleAt = 0;
   private unsubs: Array<() => void> = [];
 
   constructor() {
@@ -107,6 +115,11 @@ export class FarmScene extends Phaser.Scene {
     this.nearExitSent = false;
     this.transitioning = false;
     this.joystick = { x: 0, y: 0 };
+    this.yardDecor = (this.initialState.yardDecor ?? DEFAULT_YARD_DECOR).map((d) => ({ ...d }));
+    this.yardNodes = [];
+    this.yardDecorateMode = false;
+    this.yardPlaceItemId = null;
+    this.lastYardParticleAt = 0;
   }
 
   create(): void {
@@ -140,6 +153,18 @@ export class FarmScene extends Phaser.Scene {
 
     // Dynamic layer for Fruit Trees, Livestock, and Artisan Machines
     this.dynamicLayer = this.add.container(0, 0).setDepth(320);
+
+    // Update 2.9 — Outdoor Garden Yard Tile Grid & Placed Custom Yard Decor
+    this.yardGridGfx = this.add.graphics().setDepth(28).setVisible(false);
+    this.drawYardGridOverlay();
+    this.rebuildYardDecor();
+
+    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer, currentlyOver: Phaser.GameObjects.GameObject[]) => {
+      if (!this.yardDecorateMode || !this.yardPlaceItemId || currentlyOver.length > 0) return;
+      const wx = Phaser.Math.Clamp(Math.round(pointer.worldX / 32) * 32, 112, 736);
+      const wy = Phaser.Math.Clamp(Math.round(pointer.worldY / 32) * 32, 128, 512);
+      this.placeYardDecorAt(this.yardPlaceItemId, wx, wy);
+    });
 
     // Player entity (8-layer PaperDoll + Pet follower!)
     this.player = new Player(this, EXIT_X, 495, this.initialState, 'overworld');
@@ -205,8 +230,42 @@ export class FarmScene extends Phaser.Scene {
       }),
       EventBus.on('player:stateSync', (nextState) => {
         this.player.syncPlayerState(nextState);
+        if (nextState.yardDecor) {
+          this.yardDecor = nextState.yardDecor.map((d) => ({ ...d }));
+          this.rebuildYardDecor();
+        }
         this.redrawAllPlots();
         this.redrawDynamicZones();
+      }),
+      EventBus.on('yard:setDecorateMode', ({ active, itemId }) => {
+        this.yardDecorateMode = active;
+        this.yardPlaceItemId = itemId ?? null;
+        this.yardGridGfx.setVisible(active);
+        if (active && itemId) {
+          const def = YARD_DECOR_CATALOG[itemId];
+          EventBus.emit('ui:toast', {
+            text: `📐 Yard Grid ON — Click anywhere in your Front Yard to place ${def?.name ?? itemId}!`,
+          });
+        }
+      }),
+      EventBus.on('yard:placeQuick', ({ itemId }) => {
+        const spots = [
+          { x: 208, y: 176 },
+          { x: 256, y: 176 },
+          { x: 144, y: 176 },
+          { x: 384, y: 464 },
+          { x: 480, y: 464 },
+          { x: 544, y: 176 },
+          { x: 144, y: 208 },
+          { x: 448, y: 512 },
+        ];
+        const slot =
+          spots.find((sp) => !this.yardDecor.some((d) => Math.hypot(d.x - sp.x, d.y - sp.y) < 28)) ??
+          spots[this.yardDecor.length % spots.length];
+        this.placeYardDecorAt(itemId, slot.x, slot.y);
+      }),
+      EventBus.on('yard:removeDecor', ({ uid }) => {
+        this.removeYardDecorByUid(uid);
       }),
       EventBus.on('farm:stateUpdated', (nextState) => {
         this.player.syncPlayerState(nextState);
@@ -353,6 +412,32 @@ export class FarmScene extends Phaser.Scene {
       })
       .setResolution(2)
       .setScale(0.45)
+      .setOrigin(0.5, 0)
+      .setDepth(210);
+
+    // 1B. UPDATE 2.9 — FRONT YARD GARDEN DECOR SIGNPOST (West of Stilt House)
+    const yardSign = this.add
+      .image(258, 198, 'sv_sign_wood')
+      .setOrigin(0.5, 0.92)
+      .setScale(1.15)
+      .setTint(0x86efac)
+      .setDepth(198)
+      .setInteractive({ useHandCursor: true });
+    yardSign.on('pointerdown', () => {
+      soundManager.playSfx('click');
+      EventBus.emit('ui:openModal', { modal: 'houseDecor', houseDecorTab: 'yard' });
+    });
+    this.add
+      .text(258, 204, '🌺 YARD DECOR', {
+        fontFamily: 'Fredoka, sans-serif',
+        fontSize: '10px',
+        fontStyle: 'bold',
+        color: '#a7f3d0',
+        backgroundColor: 'rgba(6, 78, 59, 0.9)',
+        padding: { x: 5, y: 2 },
+      })
+      .setResolution(2)
+      .setScale(0.42)
       .setOrigin(0.5, 0)
       .setDepth(210);
 
@@ -1144,6 +1229,43 @@ export class FarmScene extends Phaser.Scene {
     this.player.syncVisuals(time, true);
     const weatherSnap = this.atmosphere?.update(time, delta);
 
+    // Update 2.9 — Continuous Prestige Garden Yard Animations (Blooming Spirit Tree Petals & Golden Naga Fountain Arcs)
+    if (time - this.lastYardParticleAt > 420 && this.yardDecor.length > 0) {
+      this.lastYardParticleAt = time;
+      for (const item of this.yardDecor) {
+        if (item.itemId === 'yard_blooming_spirit_tree') {
+          const petal = this.add
+            .circle(item.x + Phaser.Math.Between(-24, 24), item.y - 34, 2.6, 0xf9a8d4, 0.92)
+            .setBlendMode(Phaser.BlendModes.ADD)
+            .setDepth(item.y + 18);
+          this.tweens.add({
+            targets: petal,
+            x: petal.x + Phaser.Math.Between(-16, 16),
+            y: item.y + 8,
+            alpha: 0,
+            duration: 1400,
+            onComplete: () => petal.destroy(),
+          });
+        } else if (item.itemId === 'yard_golden_naga_fountain') {
+          for (const dir of [-1, 1]) {
+            const drop = this.add
+              .circle(item.x + dir * 4, item.y - 22, 2.4, 0x38bdf8, 0.92)
+              .setBlendMode(Phaser.BlendModes.ADD)
+              .setDepth(item.y + 16);
+            this.tweens.add({
+              targets: drop,
+              x: item.x + dir * 20,
+              y: item.y + 4,
+              alpha: 0,
+              duration: 560,
+              ease: 'Quad.easeIn',
+              onComplete: () => drop.destroy(),
+            });
+          }
+        }
+      }
+    }
+
     // Refresh plot/tree/livestock/machine countdown badges every 1s + Monsoon Auto-Watering!
     if (time - this.lastVisualRefresh > 1000) {
       this.lastVisualRefresh = time;
@@ -1203,6 +1325,141 @@ export class FarmScene extends Phaser.Scene {
         label: nearExit ? 'EXIT VILLAGE' : '',
         targetZone: 'overworld',
       });
+    }
+  }
+
+  private drawYardGridOverlay(): void {
+    this.yardGridGfx.clear();
+    this.yardGridGfx.lineStyle(1, 0x86efac, 0.32);
+    for (let x = 96; x <= 768; x += 32) {
+      this.yardGridGfx.lineBetween(x, 112, x, 528);
+    }
+    for (let y = 112; y <= 528; y += 32) {
+      this.yardGridGfx.lineBetween(96, y, 768, y);
+    }
+  }
+
+  private placeYardDecorAt(itemId: string, x: number, y: number): void {
+    const def = YARD_DECOR_CATALOG[itemId];
+    if (!def) return;
+    const entry: PlacedYardDecor = {
+      uid: `yard_${Date.now().toString(36)}_${Math.floor(Math.random() * 999)}`,
+      itemId,
+      x,
+      y,
+    };
+    this.yardDecor = [...this.yardDecor, entry];
+    this.yardDecorateMode = false;
+    this.yardPlaceItemId = null;
+    this.yardGridGfx.setVisible(false);
+    this.rebuildYardDecor();
+    soundManager.playSfx('harvest');
+    EventBus.emit('yard:decorUpdated', {
+      yardDecor: this.yardDecor,
+      toast: `🌺 Placed ${def.icon} ${def.name} in your Stilt House Front Yard!`,
+    });
+  }
+
+  private removeYardDecorByUid(uid: string): void {
+    const removed = this.yardDecor.find((d) => d.uid === uid);
+    if (!removed) return;
+    this.yardDecor = this.yardDecor.filter((d) => d.uid !== uid);
+    this.rebuildYardDecor();
+    soundManager.playSfx('click');
+    const def = YARD_DECOR_CATALOG[removed.itemId];
+    EventBus.emit('yard:decorUpdated', {
+      yardDecor: this.yardDecor,
+      toast: `🎒 Picked up ${def?.name ?? removed.itemId} back to Yard Storage.`,
+    });
+  }
+
+  private rebuildYardDecor(): void {
+    for (const node of this.yardNodes) node.destroy();
+    this.yardNodes = [];
+
+    for (const entry of this.yardDecor) {
+      const def = YARD_DECOR_CATALOG[entry.itemId];
+      if (!def) continue;
+      const cont = this.add.container(entry.x, entry.y).setDepth(entry.y);
+
+      if (entry.itemId === 'yard_lotus_koi_pond') {
+        const rim = this.add.ellipse(0, 0, 62, 38, 0x78716c).setStrokeStyle(2, 0xd6d3d1);
+        const water = this.add.ellipse(0, 0, 52, 30, 0x0284c7, 0.92);
+        const pad1 = this.add.circle(-12, -4, 6, 0x16a34a);
+        const lotus = this.add.circle(-12, -5, 3.5, 0xf472b6);
+        const koi = this.add.ellipse(8, 3, 9, 4, 0xf97316, 1).setStrokeStyle(1, 0xfef08a);
+        this.tweens.add({ targets: koi, x: -6, y: 6, duration: 2400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        cont.add([rim, water, pad1, lotus, koi]);
+      } else if (entry.itemId === 'yard_blooming_spirit_tree') {
+        const trunk = this.add.rectangle(0, 4, 12, 28, 0x5c3a21).setStrokeStyle(1, 0x3b2314);
+        const canopy = this.add.circle(0, -18, 24, 0xec4899, 0.92).setStrokeStyle(2, 0xfbcfe8);
+        const canopyL = this.add.circle(-16, -12, 15, 0xf472b6, 0.9);
+        const canopyR = this.add.circle(16, -12, 15, 0xf472b6, 0.9);
+        vfxManager.applyBloom(this, canopy, { color: 0xf472b6, strength: 1.5 });
+        cont.add([trunk, canopyL, canopyR, canopy]);
+      } else if (entry.itemId === 'yard_golden_naga_fountain') {
+        const basin = this.add.ellipse(0, 4, 58, 30, 0x78350f).setStrokeStyle(2, 0xfacc15);
+        const pool = this.add.ellipse(0, 4, 48, 22, 0x0ea5e9, 0.9);
+        const pillar = this.add.rectangle(0, -12, 14, 24, 0xd97706).setStrokeStyle(1.5, 0xfef08a);
+        const crest = this.add.circle(0, -24, 7, 0xfde047, 0.95);
+        vfxManager.applyBloom(this, crest, { color: 0xfacc15, strength: 1.7 });
+        cont.add([basin, pool, pillar, crest]);
+      } else if (entry.itemId === 'yard_campfire_pit') {
+        const stones = this.add.ellipse(0, 4, 34, 20, 0x57534e).setStrokeStyle(2, 0xa8a29e);
+        const flame = this.add.triangle(0, -4, -9, 8, 9, 8, 0, -10, 0xf97316, 0.95);
+        const glow = this.add.circle(0, -2, 16, 0xfacc15, 0.28).setBlendMode(Phaser.BlendModes.ADD);
+        this.tweens.add({ targets: [flame, glow], scale: 1.15, alpha: 0.72, duration: 480, yoyo: true, repeat: -1 });
+        cont.add([stones, glow, flame]);
+      } else if (entry.itemId === 'yard_bamboo_archway') {
+        const leftPost = this.add.rectangle(-24, -10, 6, 36, 0x15803d).setStrokeStyle(1, 0x86efac);
+        const rightPost = this.add.rectangle(24, -10, 6, 36, 0x15803d).setStrokeStyle(1, 0x86efac);
+        const topBeam = this.add.rectangle(0, -28, 58, 7, 0x16a34a).setStrokeStyle(1.5, 0xfef08a);
+        cont.add([leftPost, rightPost, topBeam]);
+      } else if (entry.itemId === 'yard_paper_lanterns') {
+        const wire = this.add.rectangle(0, -16, 52, 2, 0x78350f);
+        const l1 = this.add.circle(-16, -9, 6, 0xea580c).setStrokeStyle(1.5, 0xfef08a);
+        const l2 = this.add.circle(0, -7, 7, 0xdc2626).setStrokeStyle(1.5, 0xfef08a);
+        const l3 = this.add.circle(16, -9, 6, 0xea580c).setStrokeStyle(1.5, 0xfef08a);
+        cont.add([wire, l1, l2, l3]);
+      } else if (entry.itemId === 'yard_teak_bench') {
+        const seat = this.add.rectangle(0, 0, 44, 14, 0x78350f).setStrokeStyle(2, 0xd97706);
+        const back = this.add.rectangle(0, -8, 44, 7, 0x92400e).setStrokeStyle(1.5, 0xf59e0b);
+        cont.add([back, seat]);
+      } else {
+        // yard_stone_lantern (and fallback)
+        const base = this.add.rectangle(0, 6, 16, 12, 0x78716c).setStrokeStyle(1.5, 0xd6d3d1);
+        const lamp = this.add.rectangle(0, -6, 14, 14, 0xfef08a, 0.92).setStrokeStyle(1.5, 0x57534e);
+        const roof = this.add.triangle(0, -16, -12, 4, 12, 4, 0, -6, 0x57534e);
+        const glow = this.add.circle(0, -6, 15, 0xfde047, 0.25).setBlendMode(Phaser.BlendModes.ADD);
+        cont.add([glow, base, lamp, roof]);
+      }
+
+      const tag = this.add
+        .text(0, 18, `${def.icon} ${def.name}`, {
+          fontFamily: 'Fredoka, sans-serif',
+          fontSize: '9px',
+          fontStyle: 'bold',
+          color: '#fef9c3',
+          backgroundColor: 'rgba(15, 23, 42, 0.78)',
+          padding: { x: 4, y: 1 },
+        })
+        .setResolution(2)
+        .setScale(0.4)
+        .setOrigin(0.5, 0);
+      cont.add(tag);
+
+      cont.setSize(48, 42).setInteractive({ useHandCursor: true });
+      cont.on('pointerdown', () => {
+        if (this.yardDecorateMode) {
+          this.removeYardDecorByUid(entry.uid);
+        } else {
+          EventBus.emit('ui:toast', {
+            text: `${def.icon} ${def.name} (${def.khmerName}) — Open Decorate Yard to rearrange!`,
+          });
+        }
+      });
+
+      this.yardNodes.push(cont);
     }
   }
 }

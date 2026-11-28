@@ -44,6 +44,8 @@ export interface DiamondShopItemDef {
   itemIds?: string[];
   mountId?: string;
   bagSlotsBonus?: number;
+  instrumentSkinId?: 'golden_angkor' | 'celestial_apsara';
+  yardDecorId?: string;
 }
 
 export const PHUM_WELCOME_BUNDLE = {
@@ -191,6 +193,55 @@ export const DIAMOND_SHOP_ITEMS: DiamondShopItemDef[] = [
     badge: 'Mythic Cosmetic',
     description: 'Radiant celestial & shadow dual wings (+145 Stylish, 0 combat stats).',
     itemId: 'wings_angel_demon',
+  },
+  // ---- UPDATE 2.9: ORNATE INSTRUMENT SKINS & PRESTIGE YARD DECOR ----
+  {
+    id: 'shop_skin_golden_angkor_inst',
+    name: 'Ornate Golden Angkor Instrument Skin',
+    khmerName: 'ស្បែកឧបករណ៍ភ្លេងមាសអង្គរ',
+    category: 'cosmetic',
+    diamondCost: 120,
+    icon: '🎹',
+    badge: 'Golden Bloom Notes',
+    description:
+      'Gilds all 5 playable Khmer instruments with Angkor gold trim and radiant blooming golden musical notes (0 combat stats).',
+    instrumentSkinId: 'golden_angkor',
+  },
+  {
+    id: 'shop_skin_celestial_apsara_inst',
+    name: 'Celestial Apsara Instrument Skin',
+    khmerName: 'ស្បែកឧបករណ៍ភ្លេងអប្សរាទេវតា',
+    category: 'cosmetic',
+    diamondCost: 160,
+    icon: '🎶',
+    badge: 'Celestial Bloom Notes',
+    description:
+      'Enchants all 5 playable Khmer instruments with cyan-gold Celestial Apsara WebGL Bloom musical note trails.',
+    instrumentSkinId: 'celestial_apsara',
+  },
+  {
+    id: 'shop_yard_blooming_spirit_tree',
+    name: 'Blooming Spirit Tree (Yard Decor)',
+    khmerName: 'ដើមផ្កាព្រលឹងសួនផ្ទះ',
+    category: 'cosmetic',
+    diamondCost: 140,
+    icon: '🌸',
+    badge: 'Animated Yard Piece',
+    description:
+      'Luxury Stilt House Front Yard tree that continuously drops glowing pink spirit petals visible to visiting friends!',
+    yardDecorId: 'yard_blooming_spirit_tree',
+  },
+  {
+    id: 'shop_yard_golden_naga_fountain',
+    name: 'Golden Naga Fountain (Yard Decor)',
+    khmerName: 'ប្រភពទឹកនាគមាសសួនផ្ទះ',
+    category: 'cosmetic',
+    diamondCost: 180,
+    icon: '🐉',
+    badge: 'WebGL Bloom Fountain',
+    description:
+      'Grand gilded Angkor Naga garden fountain shooting animated turquoise water arcs with WebGL Bloom!',
+    yardDecorId: 'yard_golden_naga_fountain',
   },
   // ---- ANIMATED 4-FRAME AUTO-LOOT & COMPANION PETS ----
   {
@@ -563,12 +614,18 @@ export function purchaseDiamondShopItem(
   if (def.mountId && (state.ownedMounts ?? []).includes(def.mountId)) {
     return { state, ok: false, message: `You already own ${def.name}! Toggle it anytime in the store.` };
   }
+  if (def.instrumentSkinId && (state.ownedInstrumentSkins ?? []).includes(def.instrumentSkinId)) {
+    return { state, ok: false, message: `You already own ${def.name}! Select it in the Khmer Instrument bar.` };
+  }
 
   const nextDiamonds = state.currencies.diamonds - def.diamondCost;
   const nextInv = state.inventory.map((i) => ({ ...i }));
   const nextMounts = [...(state.ownedMounts ?? [])];
   let nextActiveMount = state.activeMount ?? null;
   let nextBagSlots = state.extraBagSlots ?? 0;
+  const nextSkins = [...(state.ownedInstrumentSkins ?? ['classic'])];
+  let nextActiveSkin = state.equippedInstrumentSkin ?? 'classic';
+  const nextOwnedYard = { ...(state.ownedYardDecor ?? {}) };
 
   const grantIds = def.itemIds && def.itemIds.length > 0 ? def.itemIds : def.itemId ? [def.itemId] : [];
   if (grantIds.length > 0) {
@@ -585,6 +642,13 @@ export function purchaseDiamondShopItem(
   if (def.bagSlotsBonus) {
     nextBagSlots += def.bagSlotsBonus;
   }
+  if (def.instrumentSkinId) {
+    if (!nextSkins.includes(def.instrumentSkinId)) nextSkins.push(def.instrumentSkinId);
+    nextActiveSkin = def.instrumentSkinId;
+  }
+  if (def.yardDecorId) {
+    nextOwnedYard[def.yardDecorId] = (nextOwnedYard[def.yardDecorId] ?? 0) + 1;
+  }
 
   return {
     state: {
@@ -594,6 +658,9 @@ export function purchaseDiamondShopItem(
       ownedMounts: nextMounts,
       activeMount: nextActiveMount,
       extraBagSlots: nextBagSlots,
+      ownedInstrumentSkins: nextSkins,
+      equippedInstrumentSkin: nextActiveSkin,
+      ownedYardDecor: nextOwnedYard,
     },
     ok: true,
     message: `💎 Purchased ${def.name} (-${def.diamondCost} Diamonds)!`,

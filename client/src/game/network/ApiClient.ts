@@ -10,12 +10,15 @@ import {
   type AuctionListingRecord,
   type BondPartnerRecord,
   type EquippedLoadout,
+  type InstrumentSkinId,
   type ItemRarity,
+  type KhmerInstrumentId,
   type KromGuild,
   type KromTerritoryId,
   type KromVaultSlot,
   type KromWarSnapshot,
   type PetProgressEntry,
+  type PlacedYardDecor,
   type PlayerMailEntry,
   type PlayerState,
   type QualityTier,
@@ -145,6 +148,15 @@ export interface SavedProfilePayload {
   tradeAuctionHistory?: TradeAuctionHistoryEntry[];
   mailbox?: PlayerMailEntry[];
   petProgress?: Record<string, PetProgressEntry>;
+  ownedInstruments?: KhmerInstrumentId[];
+  equippedInstrument?: KhmerInstrumentId | null;
+  ownedInstrumentSkins?: InstrumentSkinId[];
+  equippedInstrumentSkin?: InstrumentSkinId;
+  instrumentTipsReceived?: number;
+  petRaceWins?: number;
+  championPetRibbon?: boolean;
+  yardDecor?: PlacedYardDecor[];
+  ownedYardDecor?: Record<string, number>;
   hasCompletedCreation?: boolean;
   activeClass: PlayerState['activeClass'];
   weapon: PlayerState['weapon'];
@@ -525,6 +537,15 @@ export function serializePlayerStateForSave(state: PlayerState): SavedProfilePay
     tradeAuctionHistory: [...(state.tradeAuctionHistory ?? [])].slice(0, 50),
     mailbox: [...(state.mailbox ?? [])].slice(0, 50),
     petProgress: state.petProgress ? { ...state.petProgress } : {},
+    ownedInstruments: state.ownedInstruments ? [...state.ownedInstruments] : undefined,
+    equippedInstrument: state.equippedInstrument ?? 'roneat_aek',
+    ownedInstrumentSkins: state.ownedInstrumentSkins ? [...state.ownedInstrumentSkins] : ['classic'],
+    equippedInstrumentSkin: state.equippedInstrumentSkin ?? 'classic',
+    instrumentTipsReceived: state.instrumentTipsReceived ?? 0,
+    petRaceWins: state.petRaceWins ?? 0,
+    championPetRibbon: Boolean(state.championPetRibbon ?? false),
+    yardDecor: state.yardDecor ? state.yardDecor.map((d) => ({ ...d })) : undefined,
+    ownedYardDecor: state.ownedYardDecor ? { ...state.ownedYardDecor } : undefined,
     hasCompletedCreation: Boolean(state.hasCompletedCreation ?? state.loadout.hasCompletedCreation),
     activeClass: state.activeClass,
     weapon: { ...state.weapon },
@@ -904,6 +925,32 @@ export function hydratePlayerStateFromSave(
     mailbox: Array.isArray(saved?.mailbox) ? [...saved.mailbox] : [],
     petProgress:
       saved?.petProgress && typeof saved.petProgress === 'object' ? { ...saved.petProgress } : {},
+    ownedInstruments: Array.isArray(saved?.ownedInstruments)
+      ? [...saved.ownedInstruments]
+      : INITIAL_PLAYER_STATE.ownedInstruments,
+    equippedInstrument:
+      typeof saved?.equippedInstrument === 'string'
+        ? saved.equippedInstrument
+        : INITIAL_PLAYER_STATE.equippedInstrument,
+    ownedInstrumentSkins: Array.isArray(saved?.ownedInstrumentSkins)
+      ? [...saved.ownedInstrumentSkins]
+      : ['classic'],
+    equippedInstrumentSkin:
+      saved?.equippedInstrumentSkin === 'golden_angkor' ||
+      saved?.equippedInstrumentSkin === 'celestial_apsara'
+        ? saved.equippedInstrumentSkin
+        : 'classic',
+    instrumentTipsReceived:
+      typeof saved?.instrumentTipsReceived === 'number' ? saved.instrumentTipsReceived : 0,
+    petRaceWins: typeof saved?.petRaceWins === 'number' ? saved.petRaceWins : 0,
+    championPetRibbon: Boolean(saved?.championPetRibbon ?? false),
+    yardDecor: Array.isArray(saved?.yardDecor)
+      ? saved.yardDecor.map((d) => ({ ...d }))
+      : INITIAL_PLAYER_STATE.yardDecor,
+    ownedYardDecor:
+      saved?.ownedYardDecor && typeof saved.ownedYardDecor === 'object'
+        ? { ...saved.ownedYardDecor }
+        : INITIAL_PLAYER_STATE.ownedYardDecor,
     hasCompletedCreation: Boolean(
       saved?.hasCompletedCreation ?? saved?.loadout?.hasCompletedCreation ?? false
     ),

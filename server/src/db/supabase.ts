@@ -95,6 +95,15 @@ export interface SavedPlayerProfile {
   tradeAuctionHistory?: unknown[];
   mailbox?: unknown[];
   petProgress?: Record<string, { level: number; xp: number; stage: 1 | 2 | 3 }>;
+  ownedInstruments?: string[];
+  equippedInstrument?: string | null;
+  ownedInstrumentSkins?: string[];
+  equippedInstrumentSkin?: string;
+  instrumentTipsReceived?: number;
+  petRaceWins?: number;
+  championPetRibbon?: boolean;
+  yardDecor?: Array<{ uid: string; itemId: string; x: number; y: number }>;
+  ownedYardDecor?: Record<string, number>;
   hasCompletedCreation?: boolean;
   activeClass?: string;
   weapon?: Record<string, unknown>;
@@ -773,6 +782,24 @@ function rowToSavedProfile(row: {
       meta.petProgress && typeof meta.petProgress === 'object'
         ? (meta.petProgress as Record<string, { level: number; xp: number; stage: 1 | 2 | 3 }>)
         : {},
+    ownedInstruments: Array.isArray(meta.ownedInstruments) ? (meta.ownedInstruments as string[]) : undefined,
+    equippedInstrument: typeof meta.equippedInstrument === 'string' ? meta.equippedInstrument : null,
+    ownedInstrumentSkins: Array.isArray(meta.ownedInstrumentSkins)
+      ? (meta.ownedInstrumentSkins as string[])
+      : undefined,
+    equippedInstrumentSkin:
+      typeof meta.equippedInstrumentSkin === 'string' ? meta.equippedInstrumentSkin : 'classic',
+    instrumentTipsReceived:
+      typeof meta.instrumentTipsReceived === 'number' ? meta.instrumentTipsReceived : 0,
+    petRaceWins: typeof meta.petRaceWins === 'number' ? meta.petRaceWins : 0,
+    championPetRibbon: Boolean(meta.championPetRibbon ?? false),
+    yardDecor: Array.isArray(meta.yardDecor)
+      ? (meta.yardDecor as Array<{ uid: string; itemId: string; x: number; y: number }>)
+      : undefined,
+    ownedYardDecor:
+      meta.ownedYardDecor && typeof meta.ownedYardDecor === 'object'
+        ? (meta.ownedYardDecor as Record<string, number>)
+        : undefined,
     hasCompletedCreation: Boolean(
       meta.hasCompletedCreation ??
         (loadout as { hasCompletedCreation?: boolean }).hasCompletedCreation ??
@@ -1144,6 +1171,18 @@ export async function savePlayerProfile(
     mailbox: Array.isArray(profile.mailbox) ? profile.mailbox : [],
     petProgress:
       profile.petProgress && typeof profile.petProgress === 'object' ? profile.petProgress : {},
+    ownedInstruments: Array.isArray(profile.ownedInstruments) ? profile.ownedInstruments : undefined,
+    equippedInstrument: typeof profile.equippedInstrument === 'string' ? profile.equippedInstrument : null,
+    ownedInstrumentSkins: Array.isArray(profile.ownedInstrumentSkins) ? profile.ownedInstrumentSkins : undefined,
+    equippedInstrumentSkin:
+      typeof profile.equippedInstrumentSkin === 'string' ? profile.equippedInstrumentSkin : 'classic',
+    instrumentTipsReceived:
+      typeof profile.instrumentTipsReceived === 'number' ? profile.instrumentTipsReceived : 0,
+    petRaceWins: typeof profile.petRaceWins === 'number' ? profile.petRaceWins : 0,
+    championPetRibbon: Boolean(profile.championPetRibbon ?? false),
+    yardDecor: Array.isArray(profile.yardDecor) ? profile.yardDecor : undefined,
+    ownedYardDecor:
+      profile.ownedYardDecor && typeof profile.ownedYardDecor === 'object' ? profile.ownedYardDecor : undefined,
     hasCompletedCreation: Boolean(
       profile.hasCompletedCreation ??
         (profile.loadout as { hasCompletedCreation?: boolean } | undefined)?.hasCompletedCreation ??

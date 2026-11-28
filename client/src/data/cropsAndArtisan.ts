@@ -510,6 +510,16 @@ export const FARM_ITEMS: Record<string, FarmItemMeta> = {
     primaryColor: '#22c55e',
     description: 'Crisp water morning glory. Sell or ferment into Artisan Pickles.',
   },
+  item_pet_xp_treat: {
+    id: 'item_pet_xp_treat',
+    name: 'Champion Pet XP Treat',
+    khmerName: 'នំសត្វចិញ្ចឹមពិសេស',
+    kind: 'artisan',
+    rarity: 'rare',
+    sellCoins: 90,
+    primaryColor: '#f59e0b',
+    description: 'Village Pet Track reward treat — feed to any pet in Pet Evolution for +450 Pet XP!',
+  },
   crop_slek_krey: {
     id: 'crop_slek_krey',
     name: 'Slek Krey Stalk',

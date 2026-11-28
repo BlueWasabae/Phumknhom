@@ -28,7 +28,24 @@ export type ZoneType =
   | 'club'
   | 'khmer_world'
   | 'house'
-  | 'krom_hall';
+  | 'krom_hall'
+  | 'pet_race';
+
+export type KhmerInstrumentId =
+  | 'roneat_aek'
+  | 'chapei_dang_veng'
+  | 'khim'
+  | 'skor_thom'
+  | 'chhing';
+
+export type InstrumentSkinId = 'classic' | 'golden_angkor' | 'celestial_apsara';
+
+export interface PlacedYardDecor {
+  uid: string;
+  itemId: string;
+  x: number;
+  y: number;
+}
 
 export type KromTerritoryId = 'market_street' | 'wild_frontier' | 'koh_rong_island';
 
@@ -638,6 +655,16 @@ export interface PlayerState {
   mailbox?: PlayerMailEntry[];
   /** Update 2.8 — 3-Stage Pet Evolution Progress */
   petProgress?: Record<string, PetProgressEntry>;
+  /** Update 2.9 — Khmer Instruments, Pet Racing & Custom Stilt House Outdoor Yard */
+  ownedInstruments?: KhmerInstrumentId[];
+  equippedInstrument?: KhmerInstrumentId | null;
+  ownedInstrumentSkins?: InstrumentSkinId[];
+  equippedInstrumentSkin?: InstrumentSkinId;
+  instrumentTipsReceived?: number;
+  petRaceWins?: number;
+  championPetRibbon?: boolean;
+  yardDecor?: PlacedYardDecor[];
+  ownedYardDecor?: Record<string, number>;
   hasCompletedCreation?: boolean;
   skillDamagePct: number;
   armorDamagePct: number;
@@ -947,6 +974,21 @@ export const INITIAL_PLAYER_STATE: PlayerState = {
   hasBioluminescentWaveAura: false,
   blackMarketPurchasedKeys: [],
   petProgress: {},
+  ownedInstruments: ['roneat_aek', 'chapei_dang_veng'],
+  equippedInstrument: 'roneat_aek',
+  ownedInstrumentSkins: ['classic'],
+  equippedInstrumentSkin: 'classic',
+  instrumentTipsReceived: 0,
+  petRaceWins: 0,
+  championPetRibbon: false,
+  yardDecor: [
+    { uid: 'starter_yard_lantern', itemId: 'yard_stone_lantern', x: 256, y: 176 },
+  ],
+  ownedYardDecor: {
+    yard_stone_lantern: 2,
+    yard_teak_bench: 1,
+    yard_lotus_koi_pond: 1,
+  },
   hasCompletedCreation: false,
   skillDamagePct: 0.025,
   armorDamagePct: 0.04,

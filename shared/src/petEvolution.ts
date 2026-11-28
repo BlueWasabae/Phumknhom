@@ -105,6 +105,8 @@ export function xpForNextPetLevel(level: number): number {
  */
 export function getPetFoodXp(itemId: string): number {
   if (!itemId) return 0;
+  // Update 2.9 — Pet Racing Arena Reward Treat!
+  if (itemId === 'item_pet_xp_treat') return 450;
   // Spirit / Exotic high-tier crops
   if (itemId === 'crop_inferno_kampot_pepper') return 360;
   if (itemId === 'crop_celestial_pink_lotus') return 320;

@@ -30,6 +30,7 @@ import {
   sendVillageCheerToDungeon,
 } from './rooms/DungeonRoom';
 import { ClubRoom } from './rooms/ClubRoom';
+import { PetRaceRoom } from './rooms/PetRaceRoom';
 import {
   WorldBossRoom,
   getWorldBossSnapshot,
@@ -1196,6 +1197,7 @@ gameServer.define('plaza', PlazaRoom).filterBy(['areaId']);
 gameServer.define('dungeon', DungeonRoom).filterBy(['partyId']);
 gameServer.define('club', ClubRoom).filterBy(['cityServer']);
 gameServer.define('world_boss', WorldBossRoom);
+gameServer.define('pet_race', PetRaceRoom);
 
 startWorldBossScheduler();
 startAuctionHouseSweeper();

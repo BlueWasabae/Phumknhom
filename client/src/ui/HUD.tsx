@@ -144,6 +144,9 @@ interface HUDProps {
   onOpenKrom?: () => void;
   onOpenKromWar?: () => void;
   onOpenPetEvolution?: () => void;
+  onOpenInstrumentJam?: () => void;
+  onOpenPetRace?: () => void;
+  onOpenYardDecor?: () => void;
   onOpenScryingMirror?: () => void;
   onOpenTukTukCart?: () => void;
   onOpenTreasureMap?: () => void;
@@ -216,6 +219,9 @@ export const HUD: React.FC<HUDProps> = ({
   onOpenKrom,
   onOpenKromWar,
   onOpenPetEvolution,
+  onOpenInstrumentJam,
+  onOpenPetRace,
+  onOpenYardDecor,
   onOpenScryingMirror,
   onOpenTukTukCart,
   onOpenTreasureMap,
@@ -471,8 +477,37 @@ export const HUD: React.FC<HUDProps> = ({
             ? '🫧 Koh Rong Coral Reef · Pearl Diving'
             : zone === 'krom_hall'
             ? `🏛️ [${player.kromTag || 'KROM'}] Krom Guild Hall • Interior`
+            : zone === 'pet_race'
+            ? '🏁 Village Pet Racing Arena'
             : 'Ancient Cavern • Dungeon'}
         </span>
+      )}
+
+      {zone === 'farm' && onOpenYardDecor && (
+        <button
+          type="button"
+          onClick={onOpenYardDecor}
+          className="px-2.5 py-0.5 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white border border-emerald-950 font-display font-bold text-[11px] whitespace-nowrap shadow-sm transition cursor-pointer"
+        >
+          🌺 Decorate Yard
+        </button>
+      )}
+
+      {zone === 'pet_race' && (
+        <button
+          type="button"
+          onClick={() =>
+            EventBus.emit('travel:execute', {
+              method: 'mirror',
+              destinationLabel: 'Green Park',
+              targetZone: 'overworld',
+              mapId: 'green_park',
+            })
+          }
+          className="px-2.5 py-0.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white border border-amber-950 font-display font-bold text-[11px] whitespace-nowrap shadow-sm transition cursor-pointer"
+        >
+          ← Exit Race
+        </button>
       )}
 
       {zone === 'krom_hall' && (
@@ -1103,6 +1138,36 @@ export const HUD: React.FC<HUDProps> = ({
                       <Sparkles className="w-4 h-4 text-sky-700" /> Pet Evolution &amp; Feeding
                     </span>
                     <span className="text-[9px] font-bold text-sky-700">3-Stage</span>
+                  </button>
+                )}
+                {onOpenInstrumentJam && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuDropdownOpen(false);
+                      onOpenInstrumentJam();
+                    }}
+                    className="px-3 py-2 rounded-xl hover:bg-amber-100 text-left flex items-center justify-between gap-2 text-amber-950"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-amber-600" /> Play Khmer Music (Jam)
+                    </span>
+                    <span className="text-[9px] font-bold text-amber-800">5 Inst</span>
+                  </button>
+                )}
+                {onOpenPetRace && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuDropdownOpen(false);
+                      onOpenPetRace();
+                    }}
+                    className="px-3 py-2 rounded-xl hover:bg-emerald-100 text-left flex items-center justify-between gap-2 text-amber-950"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Crown className="w-4 h-4 text-emerald-700" /> Pet Racing Arena
+                    </span>
+                    <span className="text-[9px] font-bold text-emerald-700">6-Lane</span>
                   </button>
                 )}
                 {onOpenFestival && (

@@ -1,3 +1,6 @@
+import { KHMER_INSTRUMENTS } from '@shared/khmerInstruments';
+import type { KhmerInstrumentId } from '@shared/types';
+
 export type BgmTrack = 'village' | 'cavern' | 'boss' | 'festival';
 
 export type SfxName =
@@ -737,6 +740,136 @@ class SoundManagerEngine {
         this.playBusTone(ctx, dest, 'triangle', 680, 420, 0.038, 0.18, t0);
         break;
     }
+  }
+
+  /**
+   * Update 2.9 — Authentic Web Audio Synthesizer for 5 Playable Khmer Instruments
+   * (Roneat Aek, Chapei Dang Veng, Khim, Skor Thom, and Chhing) tuned to the Khmer pentatonic scale.
+   */
+  public playInstrumentNote(
+    instrumentId: KhmerInstrumentId,
+    noteIndex: number,
+    volumeScale = 1
+  ): void {
+    if (this.settings.muted || this.settings.sfxVolume <= 0.005) return;
+    const ctx = this.ensureContext();
+    if (!ctx || !this.sfxMasterGain) return;
+    if (ctx.state === 'suspended') {
+      void ctx.resume().catch(() => {});
+    }
+
+    const def = KHMER_INSTRUMENTS[instrumentId] ?? KHMER_INSTRUMENTS.roneat_aek;
+    const idx = Math.max(0, Math.min(7, Math.floor(noteIndex)));
+    const freq = def.frequencies[idx] ?? 523.25;
+    const vol = Math.max(0.15, Math.min(1.0, volumeScale));
+    const t0 = ctx.currentTime;
+    const dest = this.sfxMasterGain;
+
+    if (instrumentId === 'roneat_aek') {
+      // Crisp bamboo mallet attack + marimba-like wooden harmonic overtone (2.76x)
+      this.playBusTone(ctx, dest, 'triangle', freq, freq * 0.996, 0.28, 0.34 * vol, t0);
+      this.playBusTone(ctx, dest, 'sine', freq * 2.76, freq * 2.74, 0.11, 0.15 * vol, t0);
+      this.playNoiseBurst(ctx, dest, 0.018, 2800, 0.11 * vol, t0);
+      return;
+    }
+
+    if (instrumentId === 'chapei_dang_veng') {
+      // Warm plucked long-necked lute: filtered sawtooth + resonant acoustic triangle body
+      const osc = ctx.createOscillator();
+      const body = ctx.createOscillator();
+      const filter = ctx.createBiquadFilter();
+      const gain = ctx.createGain();
+
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(freq, t0);
+      body.type = 'triangle';
+      body.frequency.setValueAtTime(freq * 2, t0);
+
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(Math.min(3400, freq * 8), t0);
+      filter.frequency.exponentialRampToValueAtTime(Math.max(320, freq * 2.1), t0 + 0.55);
+
+      gain.gain.setValueAtTime(0.001, t0);
+      gain.gain.linearRampToValueAtTime(0.32 * vol, t0 + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.68);
+
+      osc.connect(filter);
+      body.connect(filter);
+      filter.connect(gain);
+      gain.connect(dest);
+      osc.start(t0);
+      body.start(t0);
+      osc.stop(t0 + 0.7);
+      body.stop(t0 + 0.7);
+      return;
+    }
+
+    if (instrumentId === 'khim') {
+      // Hammered dulcimer: dual slightly detuned shimmering metallic strings
+      const oscA = ctx.createOscillator();
+      const oscB = ctx.createOscillator();
+      const overtone = ctx.createOscillator();
+      const gain = ctx.createGain();
+      oscA.type = 'triangle';
+      oscB.type = 'sine';
+      overtone.type = 'sine';
+      oscA.frequency.setValueAtTime(freq * 1.003, t0);
+      oscB.frequency.setValueAtTime(freq * 0.997, t0);
+      overtone.frequency.setValueAtTime(freq * 3.0, t0);
+
+      gain.gain.setValueAtTime(0.001, t0);
+      gain.gain.linearRampToValueAtTime(0.26 * vol, t0 + 0.006);
+      gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.78);
+
+      oscA.connect(gain);
+      oscB.connect(gain);
+      overtone.connect(gain);
+      gain.connect(dest);
+      oscA.start(t0);
+      oscB.start(t0);
+      overtone.start(t0);
+      oscA.stop(t0 + 0.8);
+      oscB.stop(t0 + 0.8);
+      overtone.stop(t0 + 0.42);
+      return;
+    }
+
+    if (instrumentId === 'skor_thom') {
+      // Large Pinpeat barrel drum: deep bass booms (pads 0,1,2,7) & woody rim/slap hits (pads 3,4,5,6)
+      if (idx === 4 || idx === 5) {
+        // Sharp wooden rim / high slap
+        this.playDrumHit(ctx, dest, freq * 1.4, freq * 0.65, 0.14, 0.34 * vol, t0);
+        this.playNoiseBurst(ctx, dest, 0.06, 2100, 0.22 * vol, t0);
+      } else if (idx === 6) {
+        // Double Pinpeat roll
+        this.playDrumHit(ctx, dest, 155, 62, 0.16, 0.32 * vol, t0);
+        this.playDrumHit(ctx, dest, 175, 68, 0.18, 0.34 * vol, t0 + 0.075);
+      } else {
+        // Deep resonant barrel bass boom
+        this.playDrumHit(ctx, dest, freq * 1.75, Math.max(42, freq * 0.52), 0.34, 0.46 * vol, t0);
+        this.playNoiseBurst(ctx, dest, 0.04, 620, 0.14 * vol, t0);
+      }
+      return;
+    }
+
+    // Chhing (Bronze finger cymbals): even pads = open shimmering "Chhing", odd pads = damped "Chhepp"
+    const isOpen = idx % 2 === 0;
+    const dur = isOpen ? 0.56 : 0.095;
+    const partials = [1, 1.48, 2.09];
+    for (let i = 0; i < partials.length; i++) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = i === 0 ? 'sine' : 'triangle';
+      osc.frequency.setValueAtTime(freq * partials[i], t0);
+      gain.gain.setValueAtTime(0.001, t0);
+      gain.gain.linearRampToValueAtTime((isOpen ? 0.16 : 0.22) * vol / (i + 1), t0 + 0.004);
+      gain.gain.exponentialRampToValueAtTime(0.0008, t0 + dur / (i * 0.35 + 1));
+      osc.connect(gain);
+      gain.connect(dest);
+      osc.start(t0);
+      osc.stop(t0 + dur + 0.02);
+    }
+    this.playNoiseBurst(ctx, dest, isOpen ? 0.045 : 0.055, 4800, 0.15 * vol, t0);
   }
 }
 

@@ -5,9 +5,12 @@ import type {
   DifficultyMode,
   EmoteSymbol,
   EquippedLoadout,
+  InstrumentSkinId,
   KhmerClassId,
+  KhmerInstrumentId,
   KromWarSnapshot,
   PlacedHouseDecor,
+  PlacedYardDecor,
   PlayerMailEntry,
   PlayerState,
   SkillId,
@@ -335,6 +338,39 @@ export interface EventMap {
   'kromHall:enterRequest': void;
   'kromWar:updated': KromWarSnapshot;
   'pet:evolved': { petId: string; newStage: 2 | 3 };
+  'music:localNote': {
+    instrumentId: KhmerInstrumentId;
+    skin: InstrumentSkinId;
+    noteIndex: number;
+  };
+  'music:remoteNote': {
+    sessionId: string;
+    name: string;
+    instrumentId: KhmerInstrumentId;
+    skin: InstrumentSkinId;
+    noteIndex: number;
+    x: number;
+    y: number;
+  };
+  'music:tipReceived': {
+    fromSessionId: string;
+    fromName: string;
+    amount: number;
+    friendlyXp: number;
+  };
+  'petRace:enterRequest': { petId?: string };
+  'petRace:finished': {
+    place: number;
+    timeSec: number;
+    coins: number;
+    petXpTreats: number;
+    unlockedChampionRibbon: boolean;
+    petId: string;
+  };
+  'yard:setDecorateMode': { active: boolean; itemId?: string | null };
+  'yard:placeQuick': { itemId: string };
+  'yard:removeDecor': { uid: string };
+  'yard:decorUpdated': { yardDecor: PlacedYardDecor[]; toast?: string };
   'worldEvent:reward': {
     skillId?: SkillId;
     xp?: number;
@@ -457,13 +493,16 @@ export interface EventMap {
       | 'auctionHouse'
       | 'mailbox'
       | 'kromWar'
-      | 'petEvolution';
+      | 'petEvolution'
+      | 'instrumentJam'
+      | 'petRace';
     leaderboardCategory?: 'farmer' | 'stylish' | 'slayer' | 'tower' | 'boss_rush';
     farmTab?: 'seeds' | 'livestock' | 'artisan';
     shopTab?: 'primary' | 'secondary';
     friendsTab?: 'friends' | 'inbox';
     reforgeTab?: 'reforge' | 'fusion' | 'shimmer' | 'bank';
     kromTab?: 'overview' | 'vault' | 'war';
+    houseDecorTab?: 'interior' | 'yard';
     petId?: string;
     clubGame?: 'kla_klok' | 'ouk_chaktrang' | 'tien_len';
     clubTableId?: string;
