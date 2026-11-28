@@ -363,6 +363,15 @@ export class BootScene extends Phaser.Scene {
       ['fx_sp_spell_defense_up', `${VFX}/super-pixel/spell_defense_up.png`, 64, 64],
       ['fx_sp_spell_haste', `${VFX}/super-pixel/spell_haste.png`, 64, 64],
       ['fx_sp_spell_absorb_violet', `${VFX}/super-pixel/spell_absorb_violet.png`, 64, 64],
+      // Custom 16-bit Multi-Frame Swinging & Moving Boss Combat VFX Spritesheets
+      ['boss_fx_heavy_cleave', '/assets/khmer/boss_vfx/boss_fx_heavy_cleave.png', 96, 72],
+      ['boss_fx_crimson_whirl', '/assets/khmer/boss_vfx/boss_fx_crimson_whirl.png', 96, 96],
+      ['boss_fx_lightning_axe_spin', '/assets/khmer/boss_vfx/boss_fx_lightning_axe_spin.png', 64, 64],
+      ['boss_fx_venom_whip', '/assets/khmer/boss_vfx/boss_fx_venom_whip.png', 128, 48],
+      ['boss_fx_crystal_beam', '/assets/khmer/boss_vfx/boss_fx_crystal_beam.png', 64, 128],
+      ['boss_fx_ground_fissure', '/assets/khmer/boss_vfx/boss_fx_ground_fissure.png', 96, 64],
+      ['boss_fx_windup_charge', '/assets/khmer/boss_vfx/boss_fx_windup_charge.png', 64, 64],
+      ['boss_fx_dash_trail', '/assets/khmer/boss_vfx/boss_fx_dash_trail.png', 96, 48],
       ['fx_sp_spell_poison_green', `${VFX}/super-pixel/spell_poison_green.png`, 64, 64],
       ['fx_sp_round_light_burst', `${VFX}/super-pixel/round_light_burst.png`, 72, 72],
       ['fx_sp_sparkle_blue', `${VFX}/super-pixel/sparkle_blue.png`, 32, 32],
@@ -1103,10 +1112,20 @@ export class BootScene extends Phaser.Scene {
       ['vfx_coin_burst', 'fx_sp_coin_burst', 31, 28],
       ['vfx_music_burst', 'fx_sp_music_burst', 17, 22],
       ['vfx_heart_burst', 'fx_sp_heart_burst', 23, 24],
+      // Custom 16-bit Multi-Frame Swinging & Moving Boss Combat VFX Animations
+      ['boss_fx_heavy_cleave_anim', 'boss_fx_heavy_cleave', 8, 22],
+      ['boss_fx_crimson_whirl_anim', 'boss_fx_crimson_whirl', 8, 22],
+      ['boss_fx_lightning_axe_spin_anim', 'boss_fx_lightning_axe_spin', 6, 20],
+      ['boss_fx_venom_whip_anim', 'boss_fx_venom_whip', 7, 24],
+      ['boss_fx_crystal_beam_anim', 'boss_fx_crystal_beam', 6, 18],
+      ['boss_fx_ground_fissure_anim', 'boss_fx_ground_fissure', 7, 20],
+      ['boss_fx_windup_charge_anim', 'boss_fx_windup_charge', 6, 16],
+      ['boss_fx_dash_trail_anim', 'boss_fx_dash_trail', 6, 20],
     ];
     for (const [animKey, texKey, count, fps] of vfxAnims) {
       const frames = Array.from({ length: count }, (_, i) => i);
-      this.safeCreateAnim(animKey, texKey, frames, fps, 0);
+      const isLoop = animKey === 'boss_fx_lightning_axe_spin_anim';
+      this.safeCreateAnim(animKey, texKey, frames, fps, isLoop ? -1 : 0);
     }
   }
 }

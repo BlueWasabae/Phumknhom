@@ -114,6 +114,7 @@ export class BossController {
   private leapStartAt = 0;
   private leapDurationMs = 520;
   private isLeaping = false;
+  private lastAfterimageAt = 0;
 
   constructor(
     scene: Phaser.Scene,
@@ -785,14 +786,114 @@ export class BossController {
     this.sprite.setTint(tintHex);
     this.stageBadge.setText(badgeText).setVisible(true);
 
-    // Subtle telegraph squash
+    // Animated inward-converging Khmer rune charge burst during boss anticipation coil!
+    if (this.scene.textures.exists('boss_fx_windup_charge') && this.scene.anims.exists('boss_fx_windup_charge_anim')) {
+      const chargeFx = this.scene.add
+        .sprite(this.x, this.y - 68, 'boss_fx_windup_charge', 0)
+        .setScale(1.85)
+        .setTint(tintHex)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(67);
+      chargeFx.play('boss_fx_windup_charge_anim');
+      chargeFx.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => chargeFx.destroy());
+    }
+
+    // Kinetic coil-back windup anticipation squash & recoil
+    const faceDir = this.sprite.flipX ? 1 : -1;
     this.scene.tweens.add({
       targets: this.sprite,
-      scaleY: this.baseScale * 0.86,
-      scaleX: this.baseScale * 1.12,
-      duration: Math.min(260, adjustedWindup * 0.5),
-      ease: 'Quad.easeOut',
+      scaleY: this.baseScale * 0.84,
+      scaleX: this.baseScale * 1.15,
+      angle: -faceDir * 12,
+      duration: Math.min(260, adjustedWindup * 0.52),
+      ease: 'Back.easeOut',
     });
+  }
+
+  /**
+   * Plays a crisp animated multi-frame swinging / slashing / erupting boss attack animation
+   * plus elastic forward swing recoil on the boss body so every strike feels kinetic and alive!
+   */
+  private playBossSwingVfx(
+    kind: 'heavy_cleave' | 'crimson_whirl' | 'ground_fissure',
+    x: number,
+    y: number,
+    dir: number,
+    tint?: number,
+    scale = 1.9
+  ): void {
+    // Boss body forward swing follow-through snap
+    this.scene.tweens.add({
+      targets: this.sprite,
+      angle: dir * 16,
+      scaleX: this.baseScale * 1.14,
+      scaleY: this.baseScale * 0.9,
+      duration: 110,
+      ease: 'Cubic.easeOut',
+      yoyo: true,
+    });
+
+    const key =
+      kind === 'heavy_cleave'
+        ? 'boss_fx_heavy_cleave'
+        : kind === 'crimson_whirl'
+          ? 'boss_fx_crimson_whirl'
+          : 'boss_fx_ground_fissure';
+    const animKey = `${key}_anim`;
+    if (this.scene.textures.exists(key) && this.scene.anims.exists(animKey)) {
+      const fx = this.scene.add
+        .sprite(x, y, key, 0)
+        .setScale(scale)
+        .setFlipX(dir < 0)
+        .setBlendMode(kind === 'ground_fissure' ? Phaser.BlendModes.NORMAL : Phaser.BlendModes.ADD)
+        .setDepth(68);
+      if (tint) fx.setTint(tint);
+      fx.play(animKey);
+      fx.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => fx.destroy());
+    }
+  }
+
+  /**
+   * Emits a fading translucent ghost afterimage + kinetic wind-cut speed-streak behind a moving/dashing boss.
+   */
+  private spawnBossMotionTrail(now: number, moveDir: number): void {
+    if (now - this.lastAfterimageAt < 75) return;
+    this.lastAfterimageAt = now;
+
+    // Translucent boss silhouette afterimage
+    if (this.sprite.texture?.key) {
+      const ghost = this.scene.add
+        .image(this.sprite.x, this.sprite.y, this.sprite.texture.key, this.sprite.frame?.name)
+        .setOrigin(this.sprite.originX, this.sprite.originY)
+        .setScale(this.sprite.scaleX, this.sprite.scaleY)
+        .setFlipX(this.sprite.flipX)
+        .setRotation(this.sprite.rotation)
+        .setTint(Number(this.def.accentColor.replace('#', '0x')) || 0xfacc15)
+        .setAlpha(0.46)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(this.sprite.depth - 2);
+      this.scene.tweens.add({
+        targets: ghost,
+        alpha: 0,
+        scaleX: ghost.scaleX * 0.92,
+        duration: 240,
+        ease: 'Quad.easeOut',
+        onComplete: () => ghost.destroy(),
+      });
+    }
+
+    // Animated kinetic speed-streak trail behind the boss
+    if (this.scene.textures.exists('boss_fx_dash_trail') && this.scene.anims.exists('boss_fx_dash_trail_anim')) {
+      const trail = this.scene.add
+        .sprite(this.x - moveDir * 32, this.y - 52, 'boss_fx_dash_trail', 0)
+        .setScale(1.35)
+        .setFlipX(moveDir < 0)
+        .setTint(Number(this.def.accentColor.replace('#', '0x')) || 0xfef08a)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(62);
+      trail.play('boss_fx_dash_trail_anim');
+      trail.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => trail.destroy());
+    }
   }
 
   private enterRecovery(recoveryMs: number): void {
@@ -854,33 +955,25 @@ export class BossController {
     }
 
     if (this.attackCounter % 2 === 1) {
-      // Ream Eyso throws his blooming golden lightning axe (Phkak) that boomerangs back + thunder pillars!
+      // Ream Eyso swings & hurls his 6-frame spinning golden lightning Phkak axe + animated thunder columns!
       const windup = overdrive ? 520 : 660;
       const tipX = Phaser.Math.Clamp(this.x + dir * 560, this.arenaMinX + 60, this.arenaMaxX - 60);
       this.telegraphs.showLineTelegraph(this.x, this.floorY - 62, tipX, 28, 'yellow', windup);
       this.startWindup('yellow', windup, overdrive ? '⚡ STORM OVERDRIVE PHKAK!' : '⚡ LIGHTNING AXE THROW!', () => {
         this.stage = 'active';
+        this.playBossSwingVfx('heavy_cleave', this.x + dir * 48, this.floorY - 68, dir, 0xfef08a, 1.75);
         const axe = this.scene.add.container(this.x + dir * 24, this.floorY - 62).setDepth(64);
         const glow = this.scene.add.circle(0, 0, 28, 0xfacc15, 0.34).setBlendMode(Phaser.BlendModes.ADD);
         axe.add(glow);
-        if (this.scene.textures.exists('vfx_lightning_burst') && this.scene.anims.exists('vfx_lightning_burst_anim')) {
-          const spark = this.scene.add
-            .sprite(0, 0, 'vfx_lightning_burst', 0)
-            .setScale(1.4)
-            .setBlendMode(Phaser.BlendModes.ADD)
-            .play({ key: 'vfx_lightning_burst_anim', repeat: -1 });
-          axe.add(spark);
-        }
-        if (this.scene.textures.exists('wp_axe')) {
-          const axeSpr = this.scene.add.image(0, 0, 'wp_axe').setScale(2.7).setTint(0xfde047);
-          axe.add(axeSpr);
-        } else {
-          const axeGfx = this.scene.add.graphics();
-          axeGfx.fillStyle(0xfef08a, 1);
-          axeGfx.fillRoundedRect(-18, -4, 34, 8, 3);
-          axeGfx.fillStyle(0xfacc15, 1);
-          axeGfx.fillCircle(14, 0, 12);
-          axe.add(axeGfx);
+        if (this.scene.textures.exists('boss_fx_lightning_axe_spin') && this.scene.anims.exists('boss_fx_lightning_axe_spin_anim')) {
+          const spinAxe = this.scene.add
+            .sprite(0, 0, 'boss_fx_lightning_axe_spin', 0)
+            .setScale(1.15)
+            .setFlipX(dir < 0)
+            .play('boss_fx_lightning_axe_spin_anim');
+          axe.add(spinAxe);
+        } else if (this.scene.textures.exists('wp_axe')) {
+          axe.add(this.scene.add.image(0, 0, 'wp_axe').setScale(2.7).setTint(0xfde047));
         }
         vfxManager.applyGlow(this.scene, axe, 0xfacc15, 3.2, 0.45);
 
@@ -892,8 +985,8 @@ export class BossController {
           y: this.floorY - 62,
           vx: dir * (510 * this.speedMult),
           vy: 0,
-          width: 44,
-          height: 36,
+          width: 48,
+          height: 40,
           damage: Math.round(this.def.baseAttack * (overdrive ? 1.25 : 1.05)),
           expiresAt: nowMs + 2200,
           boomerangReturnAt: nowMs + 720,
@@ -902,39 +995,27 @@ export class BossController {
           label: 'Lightning Axe Phkak',
         });
 
-        // Trigger vertical crackling jagged thunderbolts!
+        // Trigger animated crackling thunder pillars!
         const strikeCount = overdrive ? 3 : 2;
         for (let i = 0; i < strikeCount; i++) {
           const sx = Phaser.Math.Clamp(playerX + (i - (strikeCount - 1) / 2) * 150, this.arenaMinX + 90, this.arenaMaxX - 90);
           this.telegraphs.showGroundZone(sx, this.floorY, 72, 24, 'yellow', 520 + i * 160);
           this.scene.time.delayedCall(520 + i * 160, () => {
             if (!this.alive) return;
-            const pillar = this.scene.add
-              .rectangle(sx, this.floorY - 220, 40, 440, 0xfef08a, 0.72)
-              .setBlendMode(Phaser.BlendModes.ADD)
-              .setDepth(66);
-            // Jagged crackling lightning bolt line down the pillar
-            const bolt = this.scene.add.graphics().setDepth(67);
-            bolt.lineStyle(4, 0xffffff, 1);
-            bolt.beginPath();
-            bolt.moveTo(sx, 60);
-            for (let by = 110; by <= this.floorY; by += 45) {
-              bolt.lineTo(sx + (Math.random() - 0.5) * 34, by);
+            if (this.scene.textures.exists('boss_fx_crystal_beam') && this.scene.anims.exists('boss_fx_crystal_beam_anim')) {
+              const beamSpr = this.scene.add
+                .sprite(sx, this.floorY - 220, 'boss_fx_crystal_beam', 0)
+                .setDisplaySize(86, 450)
+                .setTint(0xfef08a)
+                .setBlendMode(Phaser.BlendModes.ADD)
+                .setDepth(66);
+              beamSpr.play('boss_fx_crystal_beam_anim');
+              beamSpr.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => beamSpr.destroy());
             }
-            bolt.strokePath();
-            vfxManager.applyBloom(this.scene, pillar, { color: 0xfacc15, strength: 1.6 });
+            this.playBossSwingVfx('ground_fissure', sx, this.floorY - 30, 1, 0xfacc15, 1.3);
             vfxManager.radialShockwave(this.scene, sx, this.floorY - 12, 0xfacc15, 92, 260, 68);
             this.telegraphs.playImpactJuice(sx, this.floorY - 10, 'yellow', false);
             this.checkAreaHit(sx, 54, this.def.baseAttack * 0.95, 'Thunderbolt Strike', playerX);
-            this.scene.tweens.add({
-              targets: [pillar, bolt],
-              alpha: 0,
-              duration: 300,
-              onComplete: () => {
-                pillar.destroy();
-                bolt.destroy();
-              },
-            });
           });
         }
 
@@ -942,7 +1023,7 @@ export class BossController {
         this.pendingAction = () => this.enterRecovery(overdrive ? 660 : 880);
       });
     } else {
-      // Ream Eyso storm dash charge across arena!
+      // Ream Eyso storm dash charge across arena with sweeping cleave!
       const windup = overdrive ? 480 : 620;
       const targetX = Phaser.Math.Clamp(this.x + dir * 480, this.arenaMinX + 90, this.arenaMaxX - 90);
       this.telegraphs.showLineTelegraph(this.x, this.floorY - 64, targetX, 34, 'red', windup);
@@ -952,11 +1033,13 @@ export class BossController {
         this.dashVelY = 0;
         this.dashHitboxActive = true;
         this.dashLabel = 'Ream Eyso Storm Charge';
+        this.playBossSwingVfx('heavy_cleave', this.x + dir * 44, this.floorY - 64, dir, 0xfacc15, 1.85);
         vfxManager.additiveSparkBurst(this.scene, this.x, this.floorY - 56, 0xfacc15, 14, 72, 68);
         this.nextStateAt = this.scene.time.now + Math.round(620 / this.speedMult);
         this.pendingAction = () => {
           this.dashVelX = 0;
           this.dashHitboxActive = false;
+          this.playBossSwingVfx('ground_fissure', this.x, this.floorY - 34, dir, 0xfacc15, 1.5);
           this.telegraphs.playImpactJuice(this.x, this.floorY - 12, 'yellow', true);
           this.enterRecovery(overdrive ? 650 : 860);
         };
@@ -974,17 +1057,18 @@ export class BossController {
       const beamH = Math.abs(this.floorY - this.mekhalaY) + 40;
       const beamY = (this.mekhalaY + this.floorY) / 2;
       const beam = this.scene.add.container(beamX, beamY).setDepth(65);
-      const outer = this.scene.add
-        .rectangle(0, 0, overdrive ? 46 : 34, beamH, 0x38bdf8, 0.72)
-        .setBlendMode(Phaser.BlendModes.ADD);
-      const prism = this.scene.add
-        .rectangle(0, 0, overdrive ? 22 : 16, beamH, 0xe879f9, 0.85)
-        .setBlendMode(Phaser.BlendModes.ADD);
-      const core = this.scene.add
-        .rectangle(0, 0, 8, beamH, 0xffffff, 0.98)
-        .setBlendMode(Phaser.BlendModes.ADD);
-      beam.add([outer, prism, core]);
-      vfxManager.applyBloom(this.scene, outer, { color: 0x38bdf8, strength: 1.6 });
+      if (this.scene.textures.exists('boss_fx_crystal_beam') && this.scene.anims.exists('boss_fx_crystal_beam_anim')) {
+        const beamSpr = this.scene.add
+          .sprite(0, 0, 'boss_fx_crystal_beam', 0)
+          .setDisplaySize(overdrive ? 86 : 68, beamH)
+          .setBlendMode(Phaser.BlendModes.ADD)
+          .play('boss_fx_crystal_beam_anim');
+        beam.add(beamSpr);
+      } else {
+        beam.add(
+          this.scene.add.rectangle(0, 0, overdrive ? 34 : 24, beamH, 0x38bdf8, 0.8).setBlendMode(Phaser.BlendModes.ADD)
+        );
+      }
       this.hazards.push({
         kind: 'crystal_beam',
         sprite: beam,
@@ -995,7 +1079,7 @@ export class BossController {
         width: overdrive ? 44 : 34,
         height: 110,
         damage: Math.round(this.def.baseAttack * (overdrive ? 1.15 : 0.88)),
-        expiresAt: this.scene.time.now + 280,
+        expiresAt: this.scene.time.now + 330,
         alive: true,
         label: 'Prismatic Crystal Laser',
       });
@@ -1011,6 +1095,7 @@ export class BossController {
       const windup = 600;
       this.startWindup('red', windup, '🪷 SOVEREIGN LOTUS WRATH!', () => {
         this.stage = 'active';
+        this.playBossSwingVfx('crimson_whirl', this.x, this.floorY - 110, dir, 0xf43f5e, 2.25);
         const fireRing = (ringIdx: number) => {
           if (!this.alive) return;
           const petals = 10;
@@ -1130,6 +1215,8 @@ export class BossController {
       this.telegraphs.showGroundZone(slamX, this.floorY, 240, 30, 'red', windup);
       this.startWindup('red', windup, '⚔️ GIANT SOVEREIGN SWORD SLAM!', () => {
         this.stage = 'active';
+        this.playBossSwingVfx('heavy_cleave', this.x + dir * 82, this.floorY - 78, dir, 0xf43f5e, 2.35);
+        this.playBossSwingVfx('ground_fissure', slamX, this.floorY - 36, dir, 0xf97316, 1.85);
         this.telegraphs.playImpactJuice(slamX, this.floorY - 14, 'red', true);
         vfxManager.radialShockwave(this.scene, slamX, this.floorY - 14, 0xe11d48, 160, 340, 68);
         this.checkAreaHit(slamX, 130, this.def.baseAttack * 1.25, 'Giant Sovereign Sword Slam', playerX);
@@ -1165,7 +1252,7 @@ export class BossController {
             this.isLeaping = false;
             this.x = targetX;
             this.y = this.floorY;
-            // Elastic squash-and-stretch landing + toxic green acid-bubble splashes!
+            // Elastic squash-and-stretch landing + animated erupting fissure + acid-bubble splashes!
             this.sprite.setScale(this.baseScale * 1.38, this.baseScale * 0.64);
             this.scene.tweens.add({
               targets: this.sprite,
@@ -1174,6 +1261,7 @@ export class BossController {
               duration: 280,
               ease: 'Elastic.easeOut',
             });
+            this.playBossSwingVfx('ground_fissure', this.x, this.floorY - 30, dir, 0x4ade80, 1.6);
             for (let b = 0; b < 9; b++) {
               const bx = this.x + (Math.random() - 0.5) * 150;
               const bub = this.scene.add
@@ -1204,29 +1292,40 @@ export class BossController {
         this.startWindup('yellow', windup, 'TONGUE LASH!', () => {
           this.stage = 'active';
           this.sprite.clearTint();
-          const len = Math.abs(tipX - this.x);
+          const len = Math.max(96, Math.abs(tipX - this.x));
           const midX = (this.x + tipX) / 2;
-          const tongueRect = this.scene.add
-            .rectangle(midX, this.floorY - 56, len, 18, 0xf472b6, 0.95)
-            .setStrokeStyle(2, 0xbe185d)
-            .setDepth(60);
+          // Animated 7-frame snapping whip lash (replaces flat static pink rectangle!)
+          let tongueNode: Phaser.GameObjects.Sprite | Phaser.GameObjects.Rectangle;
+          if (this.scene.textures.exists('boss_fx_venom_whip') && this.scene.anims.exists('boss_fx_venom_whip_anim')) {
+            tongueNode = this.scene.add
+              .sprite(midX, this.floorY - 56, 'boss_fx_venom_whip', 0)
+              .setDisplaySize(len, 52)
+              .setFlipX(dir < 0)
+              .setDepth(62)
+              .play('boss_fx_venom_whip_anim');
+          } else {
+            tongueNode = this.scene.add
+              .rectangle(midX, this.floorY - 56, len, 18, 0xf472b6, 0.95)
+              .setStrokeStyle(2, 0xbe185d)
+              .setDepth(60);
+          }
 
           this.hazards.push({
             kind: 'tongue',
-            sprite: tongueRect,
+            sprite: tongueNode,
             x: midX,
             y: this.floorY - 56,
             vx: 0,
             vy: 0,
             width: len,
-            height: 24,
+            height: 28,
             damage: Math.round(this.def.baseAttack * 0.9),
-            expiresAt: this.scene.time.now + 240,
+            expiresAt: this.scene.time.now + 290,
             alive: true,
             label: 'Sticky Tongue Lash',
           });
 
-          this.nextStateAt = this.scene.time.now + 280;
+          this.nextStateAt = this.scene.time.now + 310;
           this.pendingAction = () => this.enterRecovery(820);
         });
       }
@@ -1469,8 +1568,10 @@ export class BossController {
           this.stage = 'active';
           this.sprite.clearTint();
           this.sprite.setScale(this.baseScale);
-          // Heavy camera shake + glowing magma floor fissure + flying laterite boulders!
+          // Heavy camera shake + sweeping club cleave + animated erupting fissure + flying boulders!
           this.scene.cameras.main.shake(240, 0.011);
+          this.playBossSwingVfx('heavy_cleave', this.x + dir * 64, this.floorY - 72, dir, 0xf97316, 2.05);
+          this.playBossSwingVfx('ground_fissure', slamX, this.floorY - 34, dir, 0xfb923c, 1.75);
           const fissure = this.scene.add.graphics().setDepth(55);
           fissure.lineStyle(5, 0xf97316, 0.95);
           fissure.lineBetween(slamX - 110, this.floorY - 2, slamX + 110, this.floorY - 2);
@@ -1918,15 +2019,19 @@ export class BossController {
         if (this.dashVelY !== 0) {
           this.y = Phaser.Math.Clamp(this.y + this.dashVelY * dt, 200, this.floorY - 64);
         }
+        this.spawnBossMotionTrail(time, this.dashVelX >= 0 ? 1 : -1);
         if (this.dashHitboxActive && !this.activeAttackHitApplied) {
           if (Phaser.Geom.Intersects.RectangleToRectangle(this.getBounds(), playerBounds)) {
             this.activeAttackHitApplied = true;
             this.callbacks.onHitPlayer(this.def.baseAttack, this.dashLabel);
           }
         }
+      } else if (this.isLeaping || this.isFigure8Swooping || this.wormLunging) {
+        this.spawnBossMotionTrail(time, this.sprite.flipX ? 1 : -1);
       }
 
-      // 5. Idle subtle stalking toward player
+      // 5. Idle subtle stalking toward player (with lively stride bob & forward lean)
+      let isStalking = false;
       if (this.stage === 'idle' && !this.isLeaping && this.def.rig !== 'MultiSegmentWormRig') {
         const dist = playerX - this.x;
         this.sprite.setFlipX(dist > 0);
@@ -1935,6 +2040,7 @@ export class BossController {
           const desiredY = Phaser.Math.Clamp(playerY - 125 + Math.sin(time * 0.004) * 32, 230, this.floorY - 110);
           this.x = Phaser.Math.Linear(this.x, desiredX, Math.min(1, 1.8 * dt));
           this.y = Phaser.Math.Linear(this.y, desiredY, Math.min(1, 2.2 * dt));
+          isStalking = Math.abs(desiredX - this.x) > 12;
         } else if (Math.abs(dist) > 220) {
           const stepSpeed = (this.def.id === 'sdech_kongkaeb' ? 56 : 44) * this.speedMult;
           this.x = Phaser.Math.Clamp(
@@ -1942,6 +2048,7 @@ export class BossController {
             this.arenaMinX + 95,
             this.arenaMaxX - 95
           );
+          isStalking = true;
         }
       }
 
@@ -1962,36 +2069,38 @@ export class BossController {
 
       // Sync Boss Visual Position, Living Stage Animations & Aura Lights
       const isAirborne = this.def.rig === 'FloaterRig' || this.def.rig === 'MultiSegmentWormRig';
+      const strideBob = isStalking && !isAirborne ? -Math.abs(Math.sin(time * 0.014)) * 7.5 : 0;
       const breathe = this.stage === 'idle' || this.stage === 'recovery' ? Math.sin(time / 270) * (isAirborne ? 8 : 3.2) : 0;
       const windupShakeX = this.stage === 'windup' ? Math.sin(time * 0.065) * 4.5 : 0;
-      this.sprite.setPosition(this.x + windupShakeX, this.y + breathe);
+      this.sprite.setPosition(this.x + windupShakeX, this.y + breathe + strideBob);
 
-      // Living boss squash-and-stretch / anticipation crouch / attack lunge / recovery stagger animations!
+      // Living boss squash-and-stretch / anticipation crouch / attack swing lunge / recovery stagger animations!
       if (!this.isLeaping && !this.isSpinning) {
         if (this.stage === 'windup') {
           const pulse = Math.sin(time * 0.03) * 0.06;
-          this.sprite.setScale(this.baseScale * (1.1 + pulse), this.baseScale * (0.88 - pulse));
-          this.sprite.setRotation((this.sprite.flipX ? -1 : 1) * 0.07);
+          this.sprite.setScale(this.baseScale * (1.12 + pulse), this.baseScale * (0.86 - pulse));
+          this.sprite.setRotation((this.sprite.flipX ? -1 : 1) * 0.14);
         } else if (this.stage === 'active') {
-          const lunge = Math.sin(time * 0.025) * 0.05;
-          this.sprite.setScale(this.baseScale * (0.94 + lunge), this.baseScale * (1.1 + Math.abs(lunge)));
-          this.sprite.setRotation((this.sprite.flipX ? 1 : -1) * 0.09);
+          const lunge = Math.sin(time * 0.032) * 0.07;
+          this.sprite.setScale(this.baseScale * (0.94 + lunge), this.baseScale * (1.12 + Math.abs(lunge)));
+          this.sprite.setRotation((this.sprite.flipX ? 1 : -1) * 0.16);
         } else if (this.stage === 'recovery') {
-          const sway = Math.sin(time * 0.012) * 0.08;
-          this.sprite.setScale(this.baseScale * 1.05, this.baseScale * 0.94);
+          const sway = Math.sin(time * 0.014) * 0.09;
+          this.sprite.setScale(this.baseScale * 1.06, this.baseScale * 0.93);
           this.sprite.setRotation(sway);
         } else if (this.stage === 'phase_roar') {
-          const roar = Math.sin(time * 0.04) * 0.1;
-          this.sprite.setScale(this.baseScale * (1.14 + roar), this.baseScale * (1.14 - roar * 0.5));
-          this.sprite.setRotation(0);
+          const roar = Math.sin(time * 0.04) * 0.12;
+          this.sprite.setScale(this.baseScale * (1.15 + roar), this.baseScale * (1.15 - roar * 0.5));
+          this.sprite.setRotation(Math.sin(time * 0.045) * 0.08);
         } else {
-          // Idle living breath cycle
-          const breathWave = Math.sin(time / 320);
+          // Idle living breath & walking stride tilt
+          const breathWave = Math.sin(time / 300);
           this.sprite.setScale(
-            this.baseScale * (1 + breathWave * 0.035),
-            this.baseScale * (1 - breathWave * 0.035)
+            this.baseScale * (1 + breathWave * 0.04),
+            this.baseScale * (1 - breathWave * 0.04)
           );
-          this.sprite.setRotation(isAirborne ? Math.sin(time * 0.004) * 0.06 : Math.sin(time / 440) * 0.025);
+          const walkTilt = isStalking ? Math.sin(time * 0.014) * 0.09 : Math.sin(time / 440) * 0.03;
+          this.sprite.setRotation(isAirborne ? Math.sin(time * 0.004) * 0.08 : walkTilt);
         }
       }
 
