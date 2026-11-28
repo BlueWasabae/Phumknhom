@@ -141,41 +141,46 @@ export class BossController {
     this.x = spawnX;
     this.y = isAirborne ? floorY - 210 : floorY;
 
-    // Resolve REAL pixel-art boss texture & scale (preferring custom Khmer PNG if on disk, else Ninja Adventure Boss sheets!)
-    const manifest = scene.cache.json.get('khmer_manifest') as Record<string, string> | undefined;
-    const hasCustomFrog = Boolean(manifest?.boss_sdech_kongkaeb);
-    const hasCustomArp = Boolean(manifest?.boss_arp_prey_chrov);
-    const hasCustomNeak = Boolean(manifest?.boss_neak_reach_head);
-
+    // Resolve REAL unique custom Khmer 16-bit pixel-art boss textures (6 distinct bosses — zero duplicates!)
     let resolvedTexKey = this.def.textureKey;
     let idleAnimKey: string | null = null;
     if (bossId === 'sdech_kongkaeb') {
-      if (hasCustomFrog) {
-        this.baseScale = 1.45;
+      if (scene.textures.exists('boss_sdech_kongkaeb_hq')) {
+        resolvedTexKey = 'boss_sdech_kongkaeb_hq';
+        this.baseScale = 1.25;
       } else {
         resolvedTexKey = 'boss_giant_frog_idle';
         idleAnimKey = 'boss_frog_idle';
         this.baseScale = 3.4;
       }
     } else if (bossId === 'arp_prey_chrov') {
-      if (hasCustomArp) {
-        this.baseScale = 1.35;
+      if (scene.textures.exists('boss_arp_prey_chrov_hq')) {
+        resolvedTexKey = 'boss_arp_prey_chrov_hq';
+        this.baseScale = 1.18;
       } else {
         resolvedTexKey = 'boss_giant_spirit_idle';
         idleAnimKey = 'boss_spirit_idle';
         this.baseScale = 2.5;
       }
     } else if (bossId === 'neak_reach') {
-      resolvedTexKey = hasCustomNeak ? 'boss_neak_reach_head' : 'boss_dragon_head';
-      this.baseScale = hasCustomNeak ? 1.35 : 2.15;
+      if (scene.textures.exists('boss_neak_reach_king')) {
+        resolvedTexKey = 'boss_neak_reach_king';
+        this.baseScale = 1.24;
+      } else {
+        resolvedTexKey = 'boss_dragon_head';
+        this.baseScale = 2.15;
+      }
     } else if (bossId === 'ream_eyso_moni_mekhala') {
-      resolvedTexKey = 'boss_yeak_thmor';
-      this.baseScale = 1.42;
+      resolvedTexKey = scene.textures.exists('boss_ream_eyso_moni_mekhala')
+        ? 'boss_ream_eyso_moni_mekhala'
+        : 'boss_yeak_thmor';
+      this.baseScale = 1.32;
     } else if (bossId === 'krong_reap') {
-      resolvedTexKey = 'boss_yeak_thmor';
-      this.baseScale = 1.92;
+      resolvedTexKey = scene.textures.exists('boss_krong_reap') ? 'boss_krong_reap' : 'boss_yeak_thmor';
+      this.baseScale = 1.38;
     } else {
       // Boss #5: Yeak Thmor -> REAL cleaned transparent Khmer sprite (/assets/khmer/bosses/boss_yeak_thmor.png)
+      resolvedTexKey = 'boss_yeak_thmor';
       this.baseScale = 1.45;
     }
 
@@ -189,9 +194,9 @@ export class BossController {
     if (this.def.rig === 'MultiSegmentWormRig') {
       this.wormEntity = new WormBossEntity(scene, spawnX, this.y, {
         segmentCount: 9,
-        baseScale: hasCustomNeak ? this.baseScale : 2.0,
-        bodyTextureKey: hasCustomNeak ? 'boss_neak_reach_seg' : 'boss_dragon_body',
-        tailTextureKey: hasCustomNeak ? 'boss_neak_reach_tail' : 'boss_dragon_tail',
+        baseScale: 1.85,
+        bodyTextureKey: 'boss_dragon_body',
+        tailTextureKey: 'boss_dragon_tail',
       });
     }
 
@@ -1898,8 +1903,9 @@ export class BossController {
     // Update Active Boss Hazards (Shockwaves, Boulders, Mini Tadpoles, Tongue, Orbs, Venom, Poison Pools)
     for (let i = this.hazards.length - 1; i >= 0; i--) {
       const h = this.hazards[i];
+      if (!h) continue;
       if (!h.alive || time >= h.expiresAt) {
-        if (h.sprite.active) h.sprite.destroy();
+        if (h.sprite?.active) h.sprite.destroy();
         this.hazards.splice(i, 1);
         continue;
       }
@@ -1925,7 +1931,7 @@ export class BossController {
           this.telegraphs.playImpactJuice(splashX, this.floorY - 8, 'green', false);
           this.spawnPoisonPool(splashX);
           h.alive = false;
-          h.sprite.destroy();
+          if (h.sprite?.active) h.sprite.destroy();
           this.hazards.splice(i, 1);
           continue;
         }
@@ -1952,7 +1958,7 @@ export class BossController {
       if (h.kind === 'boulder' && h.y >= this.floorY - 18) {
         this.telegraphs.playImpactJuice(h.x, this.floorY - 10, 'red', false);
         h.alive = false;
-        h.sprite.destroy();
+        if (h.sprite?.active) h.sprite.destroy();
         this.hazards.splice(i, 1);
         continue;
       }
@@ -1968,9 +1974,11 @@ export class BossController {
         this.callbacks.onHitPlayer(h.damage, h.label, pullDir, h.isPoison);
         if (h.kind !== 'tadpole' && h.kind !== 'poison_pool') {
           h.alive = false;
-          h.sprite.destroy();
-          this.hazards.splice(i, 1);
+          if (h.sprite?.active) h.sprite.destroy();
+          const curIdx = this.hazards.indexOf(h);
+          if (curIdx !== -1) this.hazards.splice(curIdx, 1);
         }
+        if (this.hazards.length === 0) break;
       }
     }
   }

@@ -246,11 +246,33 @@ export class BootScene extends Phaser.Scene {
       frameHeight: 32,
     });
 
-    // ---- 8. CUSTOM KHMER PIXEL-ART SPRITES (Verified on Disk + Optional Manifest) ----
+    // ---- 8. CUSTOM KHMER PIXEL-ART SPRITES (Verified on Disk + All 6 Unique Mythic Bosses & Farm Livestock!) ----
     this.load.image('khmer_stilt_house', '/assets/khmer/buildings/khmer_stilt_house.png');
     this.load.image('num_pang_cart', '/assets/khmer/buildings/num_pang_cart.png');
     this.load.image('angkor_portal', '/assets/khmer/buildings/angkor_portal.png');
     this.load.image('boss_yeak_thmor', '/assets/khmer/bosses/boss_yeak_thmor.png');
+    this.load.image('boss_sdech_kongkaeb_hq', '/assets/khmer/bosses/boss_sdech_kongkaeb.png');
+    this.load.image('boss_arp_prey_chrov_hq', '/assets/khmer/bosses/boss_arp_prey_chrov.png');
+    this.load.image('boss_neak_reach_king', '/assets/khmer/bosses/boss_neak_reach_king.png');
+    this.load.image('boss_ream_eyso_moni_mekhala', '/assets/khmer/bosses/boss_ream_eyso_moni_mekhala.png');
+    this.load.image('boss_krong_reap', '/assets/khmer/bosses/boss_krong_reap.png');
+    this.load.image('livestock_khmer_cow', '/assets/khmer/livestock/livestock_khmer_cow.png');
+    this.load.spritesheet('livestock_chicken_brown', `${NA}/Actor/Animal/Chicken/SpriteSheetBrown.png`, {
+      frameWidth: 16,
+      frameHeight: 16,
+    });
+    this.load.spritesheet('livestock_chicken_white', `${NA}/Actor/Animal/Chicken/SpriteSheetWhite.png`, {
+      frameWidth: 16,
+      frameHeight: 16,
+    });
+    this.load.spritesheet('livestock_chicken_cute', `${NA}/Actor/Animal/Chicken/SpriteSheetCute.png`, {
+      frameWidth: 16,
+      frameHeight: 16,
+    });
+    this.load.spritesheet('livestock_cow_na', `${NA}/Actor/Animal/Cow/SpriteSheetWhite.png`, {
+      frameWidth: 16,
+      frameHeight: 16,
+    });
     this.load.json('khmer_manifest', '/assets/khmer/manifest.json');
 
     // ---- 9. UPDATE 2.3: HIGH-DETAIL 4-FRAME ANIMATED PNG WINGS (48x48) & PETS (32x32) ----
@@ -995,6 +1017,11 @@ export class BootScene extends Phaser.Scene {
     this.safeCreateAnim('flag_yellow_wave', 'na_flag_yellow', [0, 1, 2, 3], 6, -1);
     this.safeCreateAnim('boar_idle_anim', 'boar_idle', [0, 1, 2, 3], 6, -1);
     this.safeCreateAnim('boar_hit_anim', 'boar_hit', [0, 1, 2, 3], 14, 0);
+    // Farm Livestock animations (Village Hens & Dairy Cows)
+    this.safeCreateAnim('livestock_chicken_brown_anim', 'livestock_chicken_brown', [0, 1], 4, -1);
+    this.safeCreateAnim('livestock_chicken_white_anim', 'livestock_chicken_white', [0, 1], 4, -1);
+    this.safeCreateAnim('livestock_chicken_cute_anim', 'livestock_chicken_cute', [0, 1], 5, -1);
+    this.safeCreateAnim('livestock_cow_na_anim', 'livestock_cow_na', [0, 1], 3, -1);
 
     // Curated 16-Bit Pixel-Art VFX Animations (Ninja Adventure + Pixel-Boy FreeMix + unTied Games Super Pixel)
     const vfxAnims: Array<[string, string, number, number]> = [

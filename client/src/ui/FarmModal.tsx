@@ -279,8 +279,13 @@ export const FarmModal: React.FC<FarmModalProps> = ({
 
             <div className="p-3 rounded-xl bg-amber-50/95 border-2 border-amber-900/35 space-y-2">
               <div className="font-display font-bold text-sm text-amber-950">
-                Your Livestock Pen ({player.farm.livestock.length}/4)
+                🐄🐓 Cows &amp; Chickens Pasture ({player.farm.livestock.length}/6)
               </div>
+              {player.farm.livestock.length === 0 && (
+                <p className="text-[11px] text-amber-800/85">
+                  Adopt Village Hens &amp; Khmer Dairy Cows below to collect Fresh Eggs, Golden Eggs, and Royal Milk!
+                </p>
+              )}
               {player.farm.livestock.map((pen, idx) => {
                 const def = LIVESTOCK[pen.animalId];
                 const prog = getLivestockProgress(pen, now);
@@ -288,7 +293,10 @@ export const FarmModal: React.FC<FarmModalProps> = ({
                 return (
                   <div key={idx} className="p-2 rounded-lg bg-amber-100/80 border border-amber-900/25 space-y-1">
                     <div className="flex justify-between font-bold text-amber-950">
-                      <span>{def.name}</span>
+                      <span>
+                        {pen.animalId.includes('chicken') || pen.animalId.includes('hen') ? '🐓 ' : pen.animalId.includes('cow') ? '🐄 ' : pen.animalId.includes('buffalo') ? '🐃 ' : '🦋 '}
+                        {def.name}
+                      </span>
                       <span>{prog.ready ? '★ READY!' : formatRemainingTime(prog.remainingMs)}</span>
                     </div>
                     <div className="h-2 rounded-full bg-amber-950/20 overflow-hidden">
@@ -304,7 +312,7 @@ export const FarmModal: React.FC<FarmModalProps> = ({
                         className="w-full phum-btn py-1 rounded-lg font-bold text-[11px]"
                       >
                         Collect {FARM_ITEMS[def.outputItemId]?.name}
-                        {def.bonusItemId ? ' + Fertilizer' : ''}
+                        {def.bonusItemId ? ` + ${FARM_ITEMS[def.bonusItemId]?.name ?? 'Bonus'}` : ''}
                       </button>
                     )}
                   </div>

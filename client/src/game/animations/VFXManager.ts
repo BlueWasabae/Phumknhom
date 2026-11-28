@@ -745,6 +745,56 @@ class GlobalVFXManager {
   }
 
   /**
+   * Update 3.3 — Synchronized Village Party Firework Show!
+   * Launches blooming golden, emerald & crimson firework shells rising & bursting overhead!
+   */
+  public playSynchronizedFireworkShow(
+    scene: Phaser.Scene,
+    cx: number,
+    cy: number,
+    palette: number[] = [0xfacc15, 0x10b981, 0xf43f5e],
+    shellCount = 12,
+    depth = 2350
+  ): void {
+    if (!scene?.add || !scene.tweens || !scene.time) return;
+    const count = Math.max(4, Math.min(24, shellCount));
+    for (let i = 0; i < count; i++) {
+      const delay = i * 320 + Phaser.Math.Between(0, 140);
+      scene.time.delayedCall(delay, () => {
+        if (!scene?.sys?.isActive()) return;
+        const col = palette[i % palette.length];
+        const bx = cx + Phaser.Math.Between(-210, 210);
+        const by = cy - Phaser.Math.Between(75, 195);
+
+        // Ascending glowing rocket trail
+        const rocket = scene.add
+          .circle(bx, cy + 16, 3.2, col, 0.95)
+          .setBlendMode(Phaser.BlendModes.ADD)
+          .setDepth(depth);
+        scene.tweens.add({
+          targets: rocket,
+          y: by,
+          duration: 360,
+          ease: 'Cubic.easeOut',
+          onComplete: () => {
+            rocket.destroy();
+            if (!scene?.sys?.isActive()) return;
+            this.radialShockwave(scene, bx, by, col, 86, 460, depth);
+            this.additiveSparkBurst(scene, bx, by, col, 16, 82, depth + 1);
+            this.playSpriteVfx(scene, i % 2 === 0 ? 'vfx_round_light_burst' : 'vfx_sparkle_blue', bx, by, {
+              scale: i % 2 === 0 ? 1.5 : 2.1,
+              tint: col,
+              additive: true,
+              depth: depth + 2,
+              glowColor: col,
+            });
+          },
+        });
+      });
+    }
+  }
+
+  /**
    * Golden vertical Level-Up Light Pillar with rising glowing motes & hand-pixeled Magic Burst.
    */
   public playLevelUpLightPillar(scene: Phaser.Scene, x: number, y: number, depth = 2200): void {

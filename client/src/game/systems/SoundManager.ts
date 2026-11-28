@@ -871,6 +871,54 @@ class SoundManagerEngine {
     }
     this.playNoiseBurst(ctx, dest, isOpen ? 0.045 : 0.055, 4800, 0.15 * vol, t0);
   }
+
+  /**
+   * Update 3.3 — Authentic Khleng Ek (Cambodian Bamboo Wind-Reed Singing Kite) harmonic hum!
+   * Higher altitude raises the resonant pitch & harmonic overtone shimmer.
+   */
+  public playKhlengEkHum(altitude01 = 0.7): void {
+    if (this.settings.muted || this.settings.sfxVolume <= 0.005) return;
+    const ctx = this.ensureContext();
+    const dest = this.sfxMasterGain;
+    if (!ctx || !dest) return;
+    const t0 = ctx.currentTime + 0.01;
+    const baseFreq = 165 + Math.max(0, Math.min(1, altitude01)) * 135;
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const filt = ctx.createBiquadFilter();
+    const gain = ctx.createGain();
+    osc1.type = 'sawtooth';
+    osc2.type = 'triangle';
+    osc1.frequency.setValueAtTime(baseFreq, t0);
+    osc1.frequency.linearRampToValueAtTime(baseFreq * 1.04, t0 + 0.55);
+    osc1.frequency.linearRampToValueAtTime(baseFreq * 0.99, t0 + 1.05);
+    osc2.frequency.setValueAtTime(baseFreq * 1.5, t0);
+    filt.type = 'bandpass';
+    filt.frequency.setValueAtTime(baseFreq * 2.2, t0);
+    filt.Q.setValueAtTime(3.2, t0);
+    gain.gain.setValueAtTime(0.001, t0);
+    gain.gain.linearRampToValueAtTime(0.11, t0 + 0.22);
+    gain.gain.exponentialRampToValueAtTime(0.0008, t0 + 1.15);
+    osc1.connect(filt);
+    osc2.connect(filt);
+    filt.connect(gain);
+    gain.connect(dest);
+    osc1.start(t0);
+    osc2.start(t0);
+    osc1.stop(t0 + 1.2);
+    osc2.stop(t0 + 1.2);
+  }
+
+  /** Update 3.3 — Festive Village Firework pop & crackle */
+  public playFireworkBurst(): void {
+    if (this.settings.muted || this.settings.sfxVolume <= 0.005) return;
+    const ctx = this.ensureContext();
+    const dest = this.sfxMasterGain;
+    if (!ctx || !dest) return;
+    const t0 = ctx.currentTime + 0.01;
+    this.playDrumHit(ctx, dest, 220, 58, 0.24, 0.32, t0);
+    this.playNoiseBurst(ctx, dest, 0.26, 2600, 0.18, t0 + 0.04);
+  }
 }
 
 export const soundManager = new SoundManagerEngine();

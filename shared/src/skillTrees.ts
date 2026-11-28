@@ -580,11 +580,14 @@ export function computeVillageToDungeonBridge(
     if (hasTalent(player.skills, 'magic', 'magic_channeling')) classSkillDamagePct += 0.1;
   }
 
-  // Cross-world defensive & utility talents
+  // Cross-world defensive & utility talents + Update 3.3 Kulen Sacred Blessing (+10% Boss Defense)
   if (hasTalent(player.skills, 'farming', 'farm_thorny_skin')) rawDRBonus += 0.04;
   if (hasTalent(player.skills, 'fishing', 'fish_studied_patterns')) rawDRBonus += 0.08;
   if (hasTalent(player.skills, 'magic', 'magic_barrier')) rawDRBonus += 0.1;
   if (hasTalent(player.skills, 'vitality', 'vit_ancients')) rawDRBonus += 0.12;
+  const kulenBlessingActive = Boolean(player.kulenBlessingUntil && player.kulenBlessingUntil > now);
+  if (kulenBlessingActive) rawDRBonus += 0.1;
+  const partyFeastActive = Boolean(player.partyFeastBuffUntil && player.partyFeastBuffUntil > now);
 
   const reforge = computeReforgeDeltas(player.weaponPrefix, player.armorPrefix);
   const acc = aggregateAccessoryBonuses(player.loadout.accessories);
@@ -597,7 +600,8 @@ export function computeVillageToDungeonBridge(
     (shimmer.includes('blessing_vital_crystal') ? 25 : 0);
   const shimmerLuckCrit =
     (shimmer.includes('blessing_pink_lotus_luck') ? 0.05 : 0) +
-    (shimmer.includes('blessing_lotus_luck') ? 0.05 : 0);
+    (shimmer.includes('blessing_lotus_luck') ? 0.05 : 0) +
+    (partyFeastActive ? 0.04 : 0);
   const shimmerDefBonus = shimmer.includes('blessing_sandstone_ward') ? 5 : 0;
 
   const foragingLv = skills.foraging?.level ?? 1;
@@ -609,7 +613,8 @@ export function computeVillageToDungeonBridge(
     (rogueLv - 1) * 0.001 +
     reforge.moveSpeedPct +
     acc.moveSpeedPct +
-    museumPerks.moveSpeedBonusPct;
+    museumPerks.moveSpeedBonusPct +
+    (partyFeastActive ? 0.15 : 0);
   let jumpPowerBonusPct = snackJumpPowerPct;
   if (hasTalent(player.skills, 'foraging', 'forage_stride')) moveSpeedBonusPct += 0.1;
   if (hasTalent(player.skills, 'rogue', 'rogue_toes')) {
@@ -693,8 +698,10 @@ export function computeVillageToDungeonBridge(
     hasGroundSlamShockwave: Boolean(armorSet?.groundSlamShockwave),
     hasWaterShield: Boolean(armorSet?.waterShieldEvery20s),
     activeArmorSetId: armorSet?.armorId ?? null,
-    museumRareDropLuckPct: museumPerks.rareDropLuckBonusPct + (pchumBenActive ? 0.15 : 0),
-    museumSkillXpBonusPct: museumPerks.skillXpBonusPct + (pchumBenActive ? 0.2 : 0),
+    museumRareDropLuckPct:
+      museumPerks.rareDropLuckBonusPct + (pchumBenActive ? 0.15 : 0) + (partyFeastActive ? 0.15 : 0),
+    museumSkillXpBonusPct:
+      museumPerks.skillXpBonusPct + (pchumBenActive ? 0.2 : 0) + (kulenBlessingActive ? 0.1 : 0),
     kromFarmSpeedPct: kromBuffs.farmSpeedPct,
     kromBossDamagePct: kromBuffs.bossDamagePct,
     kromCoinDropPct: kromBuffs.coinDropPct,

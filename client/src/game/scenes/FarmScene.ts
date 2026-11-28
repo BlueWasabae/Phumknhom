@@ -22,6 +22,7 @@ import {
   harvestFruitTree,
   harvestPlot,
   infusePlotWithSpirit,
+  petAndFeedLivestock,
   plantSeedOnPlot,
   tillPlot,
   unlockPlot,
@@ -470,12 +471,12 @@ export class FarmScene extends Phaser.Scene {
       .setOrigin(0.5, 0)
       .setDepth(210);
 
-    // 3. Zone Signposts (Orchard, Livestock Pen, Artisan Yard)
+    // 3. Zone Signposts (Orchard, Cows & Chickens Pasture, Artisan Yard)
     const zoneHeaders: Array<[number, number, string]> = [
-      [270, 218, '6×4 CROP GARDEN'],
-      [650, 178, 'FRUIT TREE ORCHARD'],
-      [225, 428, 'LIVESTOCK PEN'],
-      [645, 428, 'ARTISAN MACHINES'],
+      [270, 214, '🌿 6×4 KHMER CROP GARDEN'],
+      [650, 178, '🌴 FRUIT TREE ORCHARD'],
+      [225, 424, '🐄🐓 COWS & CHICKENS PASTURE'],
+      [645, 428, '🏺 ARTISAN MACHINES'],
     ];
     for (const [zx, zy, title] of zoneHeaders) {
       this.add
@@ -484,7 +485,7 @@ export class FarmScene extends Phaser.Scene {
           fontSize: '11px',
           fontStyle: 'bold',
           color: '#fde68a',
-          backgroundColor: 'rgba(69, 26, 3, 0.82)',
+          backgroundColor: 'rgba(69, 26, 3, 0.88)',
           padding: { x: 6, y: 2 },
         })
         .setResolution(2)
@@ -493,8 +494,55 @@ export class FarmScene extends Phaser.Scene {
         .setDepth(50);
     }
 
-    // 4. Livestock Wooden Fence Backdrop (Bottom-Left)
-    this.add.image(225, 488, 'sv_fence_pen').setScale(1.75, 1.35).setDepth(18);
+    // 3B. Carved Stone Village Water Well + Blooming Flower Boxes bordering the Crop Garden!
+    if (this.textures.exists('na_stone_well')) {
+      this.add.image(118, 250, 'soft_shadow').setDisplaySize(34, 12).setDepth(244);
+      this.add.image(118, 252, 'na_stone_well').setOrigin(0.5, 0.85).setScale(1.05).setDepth(250);
+    }
+    if (this.textures.exists('sv_flower_box')) {
+      this.add.image(198, 214, 'sv_flower_box').setScale(0.95).setDepth(24);
+      this.add.image(342, 214, 'sv_flower_box').setScale(0.95).setDepth(24);
+    }
+
+    // 4. Expanded Cozy Wooden Livestock Pasture + Red-Roofed Chicken Coop + Hay Bale + Water Trough (Bottom-Left)
+    const penGfx = this.add.graphics().setDepth(14);
+    // Lush sunlit pasture meadow pad inside wooden fence
+    penGfx.fillStyle(0x4d7c0f, 0.35);
+    penGfx.fillRoundedRect(118, 438, 214, 96, 8);
+    // Warm cedar wooden split-rail fence framing all 6 livestock slots
+    penGfx.lineStyle(3.2, 0x78350f, 1);
+    penGfx.strokeRoundedRect(118, 438, 214, 96, 8);
+    penGfx.lineStyle(1.4, 0xd97706, 0.85);
+    penGfx.strokeRoundedRect(120, 440, 210, 92, 7);
+    // Fence corner posts
+    for (const [px, py] of [[118, 438], [225, 438], [332, 438], [118, 534], [225, 534], [332, 534]]) {
+      penGfx.fillStyle(0x451a03, 1);
+      penGfx.fillRect(px - 3, py - 5, 6, 9);
+      penGfx.fillStyle(0xb45309, 1);
+      penGfx.fillRect(px - 2, py - 4, 4, 6);
+    }
+    // Cozy Red-Roofed Wooden Chicken Coop (top-left inside pasture)
+    penGfx.fillStyle(0x92400e, 1);
+    penGfx.fillRect(128, 448, 28, 18);
+    penGfx.fillStyle(0xb91c1c, 1);
+    penGfx.fillTriangle(124, 450, 142, 438, 160, 450);
+    penGfx.fillStyle(0x1e293b, 1);
+    penGfx.fillRoundedRect(138, 456, 8, 10, 3);
+    // Golden Hay Bale & Fresh Water Trough for Cows
+    penGfx.fillStyle(0xeab308, 1);
+    penGfx.fillRoundedRect(298, 446, 22, 13, 3);
+    penGfx.lineStyle(1, 0x854d0e, 1);
+    penGfx.strokeRoundedRect(298, 446, 22, 13, 3);
+    penGfx.fillStyle(0x78350f, 1);
+    penGfx.fillRoundedRect(296, 514, 26, 10, 2);
+    penGfx.fillStyle(0x38bdf8, 0.9);
+    penGfx.fillRect(298, 516, 22, 6);
+
+    const coopHit = this.add.rectangle(142, 454, 34, 26, 0x000000, 0).setDepth(30).setInteractive({ useHandCursor: true });
+    coopHit.on('pointerdown', () => {
+      soundManager.playSfx('click');
+      EventBus.emit('ui:openModal', { modal: 'farm', farmTab: 'livestock' });
+    });
 
     // 5. Artisan Stone Courtyard Pad (Bottom-Right)
     const artPad = this.add.graphics().setDepth(5);
@@ -553,30 +601,42 @@ export class FarmScene extends Phaser.Scene {
   }
 
   private buildPlotGrid(): void {
-    // Cozy timber garden border around the 6x4 standard grid + Row 5 VIP Bonus (+6 plots)
+    // Lush 16-bit framed cedar-wood garden enclosure + warm lantern corner posts
     const border = this.add.graphics().setDepth(4);
-    border.fillStyle(0x6b4226, 0.55);
-    border.fillRoundedRect(
-      GRID_X - PLOT_W / 2 - 8,
-      GRID_Y - PLOT_H / 2 - 8,
-      COLS * PLOT_W + 16,
-      STANDARD_ROWS * PLOT_H + 14,
-      8
-    );
+    const bx = GRID_X - PLOT_W / 2 - 10;
+    const by = GRID_Y - PLOT_H / 2 - 10;
+    const bw = COLS * PLOT_W + 20;
+    const bh = STANDARD_ROWS * PLOT_H + 18;
+    // Outer soft mossy mulch bed & carved cedar timber frame
+    border.fillStyle(0x3f2e1d, 0.72);
+    border.fillRoundedRect(bx - 2, by - 2, bw + 4, bh + 4, 10);
+    border.fillStyle(0x5c3c20, 0.65);
+    border.fillRoundedRect(bx, by, bw, bh, 8);
+    border.lineStyle(2.4, 0x92400e, 0.95);
+    border.strokeRoundedRect(bx, by, bw, bh, 8);
+    border.lineStyle(1, 0xf59e0b, 0.45);
+    border.strokeRoundedRect(bx + 2, by + 2, bw - 4, bh - 4, 7);
+    // Corner wooden fence posts with warm amber lantern caps
+    for (const [cx, cy] of [[bx, by], [bx + bw, by], [bx, by + bh], [bx + bw, by + bh]]) {
+      border.fillStyle(0x451a03, 1);
+      border.fillRect(cx - 4, cy - 5, 8, 10);
+      border.fillStyle(0xfacc15, 0.92);
+      border.fillCircle(cx, cy - 4, 2.5);
+    }
     // Golden VIP Row 5 tray beneath standard 6x4 plots
-    border.fillStyle(0x78350f, 0.45);
-    border.lineStyle(1.4, 0xfacc15, 0.8);
+    border.fillStyle(0x78350f, 0.52);
+    border.lineStyle(1.6, 0xfacc15, 0.88);
     border.fillRoundedRect(
-      GRID_X - PLOT_W / 2 - 8,
+      GRID_X - PLOT_W / 2 - 10,
       GRID_Y + STANDARD_ROWS * PLOT_H - PLOT_H / 2 - 2,
-      COLS * PLOT_W + 16,
+      COLS * PLOT_W + 20,
       PLOT_H + 10,
       7
     );
     border.strokeRoundedRect(
-      GRID_X - PLOT_W / 2 - 8,
+      GRID_X - PLOT_W / 2 - 10,
       GRID_Y + STANDARD_ROWS * PLOT_H - PLOT_H / 2 - 2,
-      COLS * PLOT_W + 16,
+      COLS * PLOT_W + 20,
       PLOT_H + 10,
       7
     );
@@ -841,22 +901,30 @@ export class FarmScene extends Phaser.Scene {
         continue;
       }
 
-      // Tilled soil (darker rich earth when watered)
-      pv.gfx.fillStyle(plot.watered ? 0x5c3409 : 0x925418, 1);
-      pv.gfx.lineStyle(1.2, 0x451a03, 1);
-      pv.gfx.fillRoundedRect(x0, y0, w, h, 4);
-      pv.gfx.strokeRoundedRect(x0, y0, w, h, 4);
-
-      // Soil furrow lines
-      pv.gfx.lineStyle(1, plot.watered ? 0x451a03 : 0x78350f, 0.7);
-      pv.gfx.lineBetween(x0 + 4, pv.cy - 4, x0 + w - 4, pv.cy - 4);
-      pv.gfx.lineBetween(x0 + 4, pv.cy + 4, x0 + w - 4, pv.cy + 4);
+      // Tilled soil: framed raised wooden garden bed with rich wet/dry soil furrows!
+      pv.gfx.fillStyle(plot.watered ? 0x4a290b : 0x854d1b, 1);
+      pv.gfx.lineStyle(1.4, 0x3b1d08, 1);
+      pv.gfx.fillRoundedRect(x0, y0, w, h, 3);
+      pv.gfx.strokeRoundedRect(x0, y0, w, h, 3);
+      // Warm inner soil highlight along top edge & textured plowed ridges
+      pv.gfx.fillStyle(plot.watered ? 0x623710 : 0xa16227, 0.72);
+      pv.gfx.fillRect(x0 + 2, y0 + 2, w - 4, 3);
+      pv.gfx.lineStyle(1.2, plot.watered ? 0x2d1706 : 0x623710, 0.85);
+      for (const fy of [-6, 0, 6]) {
+        pv.gfx.lineBetween(x0 + 3, pv.cy + fy, x0 + w - 3, pv.cy + fy);
+      }
+      // Wet soil sparkle droplets when watered
+      if (plot.watered) {
+        pv.gfx.fillStyle(0x7dd3fc, 0.75);
+        pv.gfx.fillRect(x0 + 5, y0 + 5, 2, 1.5);
+        pv.gfx.fillRect(x0 + w - 8, y0 + h - 7, 2, 1.5);
+      }
 
       if (plot.fertilized) {
         // Golden nutrient sparkles on fertilized soil
-        pv.gfx.fillStyle(0xfacc15, 0.9);
-        pv.gfx.fillRect(x0 + 4, y0 + 3, 2, 2);
-        pv.gfx.fillRect(x0 + w - 6, y0 + h - 5, 2, 2);
+        pv.gfx.fillStyle(0xfacc15, 0.95);
+        pv.gfx.fillRect(x0 + 4, y0 + 3, 2.5, 2.5);
+        pv.gfx.fillRect(x0 + w - 7, y0 + h - 6, 2.5, 2.5);
       }
 
       if (!plot.cropId) {
@@ -867,13 +935,42 @@ export class FarmScene extends Phaser.Scene {
       const crop = ROW_CROPS[plot.cropId];
       const prog = getPlotProgress(plot, now);
       const colHex = Number((crop?.stageColors[prog.stage] || '#22c55e').replace('#', '0x'));
-      const r = 3 + prog.stage * 2.5;
+      const stage = prog.stage;
 
-      // Pixel-crisp multi-tuft crop visual
-      pv.gfx.fillStyle(colHex, 1);
-      pv.gfx.fillCircle(pv.cx - 6, pv.cy - 1, r * 0.75);
-      pv.gfx.fillCircle(pv.cx + 6, pv.cy - 1, r * 0.75);
-      pv.gfx.fillCircle(pv.cx, pv.cy - 4, r);
+      // Hand-pixelled multi-stage crop illustrations (sprouts -> leafy stalks -> lush flowers/harvests!)
+      const stemH = 4 + stage * 3;
+      for (const ox of [-9, 0, 9]) {
+        const bx = pv.cx + ox;
+        const by = pv.cy + 4 - (ox === 0 ? 2 : 0);
+        // Dark-green stalk stem
+        pv.gfx.fillStyle(0x14532d, 1);
+        pv.gfx.fillRect(bx - 1, by - stemH, 2, stemH);
+        // Side leaves (expanding per stage)
+        pv.gfx.fillStyle(stage >= 2 ? 0x22c55e : 0x4ade80, 1);
+        pv.gfx.fillEllipse(bx - 3, by - stemH + 2, 4 + stage, 2.6 + stage * 0.4);
+        pv.gfx.fillEllipse(bx + 3, by - stemH + 2, 4 + stage, 2.6 + stage * 0.4);
+        // Stage 2+ Crop-Specific Blossom / Grain / Fruit!
+        if (stage >= 2) {
+          if (plot.cropId === 'pink_lotus') {
+            pv.gfx.fillStyle(0xf472b6, 1);
+            pv.gfx.fillCircle(bx, by - stemH - 1, 2.5 + (stage === 3 ? 1.5 : 0));
+            pv.gfx.fillStyle(0xfef08a, 1);
+            pv.gfx.fillCircle(bx, by - stemH - 1, 1.2);
+          } else if (plot.cropId === 'phka_rumduol') {
+            pv.gfx.fillStyle(0xfacc15, 1);
+            pv.gfx.fillEllipse(bx + 1.5, by - stemH - 1, 4.5, 2.5);
+            pv.gfx.fillStyle(0xfef08a, 1);
+            pv.gfx.fillRect(bx, by - stemH - 2, 3, 1.5);
+          } else if (plot.cropId === 'mtes' || plot.cropId === 'kampot_pepper') {
+            pv.gfx.fillStyle(colHex, 1);
+            pv.gfx.fillCircle(bx - 2, by - stemH, 2.1);
+            pv.gfx.fillCircle(bx + 2, by - stemH + 1, 2.1);
+          } else {
+            pv.gfx.fillStyle(colHex, 1);
+            pv.gfx.fillCircle(bx, by - stemH - 1, 2.6 + (stage === 3 ? 1.2 : 0));
+          }
+        }
+      }
 
       // Update 1.6 — Shimmering cyan/gold spirit aura & sparkles on Spirit-Infused plots!
       if (plot.spiritInfused) {
@@ -881,7 +978,7 @@ export class FarmScene extends Phaser.Scene {
         pv.gfx.lineStyle(2, 0x22d3ee, pulse);
         pv.gfx.strokeRoundedRect(x0 - 1.5, y0 - 1.5, w + 3, h + 3, 5);
         pv.gfx.fillStyle(0x38bdf8, 0.24);
-        pv.gfx.fillCircle(pv.cx, pv.cy - 3, r + 5);
+        pv.gfx.fillCircle(pv.cx, pv.cy - 3, 10);
         pv.gfx.fillStyle(0xfef08a, 0.95);
         const orbit = (now / 450 + pv.index) % (Math.PI * 2);
         pv.gfx.fillCircle(pv.cx + Math.cos(orbit) * 10, pv.cy - 4 + Math.sin(orbit) * 6, 1.8);
@@ -975,12 +1072,14 @@ export class FarmScene extends Phaser.Scene {
       this.dynamicLayer.add([shadow, img, g, lbl]);
     });
 
-    // ---- 2. LIVESTOCK PEN (Bottom-Left, up to 4 animals) ----
+    // ---- 2. ANIMATED COWS & CHICKENS LIVESTOCK PASTURE (Bottom-Left, up to 6 animals!) ----
     const penCoords: Array<[number, number]> = [
-      [195, 475],
-      [255, 475],
-      [195, 505],
-      [255, 505],
+      [182, 466],
+      [234, 466],
+      [278, 470],
+      [164, 506],
+      [216, 508],
+      [268, 506],
     ];
     this.player.state.farm.livestock.forEach((pen, idx) => {
       const [lx, ly] = penCoords[idx] ?? [225, 488];
@@ -988,30 +1087,84 @@ export class FarmScene extends Phaser.Scene {
       if (!def) return;
       const prog = getLivestockProgress(pen, now);
 
-      const g = this.add.graphics();
-      g.fillStyle(Number(def.bodyColor.replace('#', '0x')), 1);
-      g.lineStyle(1.4, 0x26140c, 1);
-      g.fillRoundedRect(lx - 8, ly - 8, 16, 12, 4);
-      g.strokeRoundedRect(lx - 8, ly - 8, 16, 12, 4);
-      g.fillStyle(Number(def.accentColor.replace('#', '0x')), 1);
-      g.fillRect(lx - 4, ly - 10, 6, 3);
+      const isChicken = pen.animalId === 'village_chicken' || pen.animalId === 'golden_bantam_hen';
+      const isCow = pen.animalId === 'khmer_white_cow' || pen.animalId === 'royal_preah_ko_cow';
+
+      const shadow = this.add.image(lx, ly + 4, 'soft_shadow').setDisplaySize(isCow ? 28 : 18, 9).setAlpha(0.55);
+      let animalVisual: Phaser.GameObjects.GameObject;
+      if (isCow && this.textures.exists('livestock_khmer_cow')) {
+        const cowImg = this.add
+          .image(lx, ly + 3, 'livestock_khmer_cow')
+          .setOrigin(0.5, 0.85)
+          .setScale(pen.animalId === 'royal_preah_ko_cow' ? 0.56 : 0.48)
+          .setFlipX(idx % 2 === 1);
+        if (pen.animalId === 'royal_preah_ko_cow') cowImg.setTint(0xfef08a);
+        this.tweens.add({
+          targets: cowImg,
+          y: ly + 1,
+          duration: 950 + idx * 140,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
+        animalVisual = cowImg;
+      } else if (isChicken && this.textures.exists('livestock_chicken_brown')) {
+        const texKey = pen.animalId === 'golden_bantam_hen' ? 'livestock_chicken_cute' : idx % 2 === 0 ? 'livestock_chicken_brown' : 'livestock_chicken_white';
+        const animKey = `${texKey}_anim`;
+        const henSpr = this.add
+          .sprite(lx, ly + 3, texKey, 0)
+          .setOrigin(0.5, 0.85)
+          .setScale(1.38)
+          .setFlipX(idx % 2 === 1);
+        if (pen.animalId === 'golden_bantam_hen') henSpr.setTint(0xfde047);
+        if (this.anims.exists(animKey)) henSpr.play(animKey);
+        this.tweens.add({
+          targets: henSpr,
+          y: ly + 0.5,
+          duration: 520 + idx * 90,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
+        animalVisual = henSpr;
+      } else {
+        const g = this.add.graphics();
+        g.fillStyle(Number(def.bodyColor.replace('#', '0x')), 1);
+        g.lineStyle(1.4, 0x26140c, 1);
+        g.fillRoundedRect(lx - 9, ly - 9, 18, 13, 4);
+        g.strokeRoundedRect(lx - 9, ly - 9, 18, 13, 4);
+        g.fillStyle(Number(def.accentColor.replace('#', '0x')), 1);
+        g.fillRect(lx - 4, ly - 11, 7, 3);
+        animalVisual = g;
+      }
 
       const hit = this.add
-        .rectangle(lx, ly, 26, 22, 0x000000, 0)
+        .rectangle(lx, ly - 2, 30, 26, 0x000000, 0)
         .setInteractive({ useHandCursor: true });
       hit.on('pointerdown', () => {
         if (!enforceInteractRange(this, this.player.x, this.player.y, lx, ly, MAX_INTERACT_DISTANCE)) return;
         if (prog.ready) {
           const res = collectLivestock(this.player.state, idx, Date.now());
-          if (res.ok) this.spawnPopSparkle(lx, ly - 8, 0xfacc15, 'Collected!');
+          if (res.ok) {
+            soundManager.playSfx('coin');
+            vfxManager.playCoinJackpotVfx(this, lx, ly - 6, 2500);
+            this.spawnPopSparkle(lx, ly - 10, 0xfacc15, isChicken ? '🥚 Collected!' : '🥛 Collected!');
+          }
           this.commitFarmState(res.state, res.message, res.ok);
         } else {
-          EventBus.emit('ui:openModal', { modal: 'farm', farmTab: 'livestock' });
+          // Clicking while growing pets & feeds the Cow/Chicken (-30% cooldown + Heart VFX!)
+          const res = petAndFeedLivestock(this.player.state, idx, Date.now());
+          if (res.ok) {
+            soundManager.playSfx('click');
+            vfxManager.playHeartBurstVfx(this, lx, ly - 10, 2500);
+            this.spawnPopSparkle(lx, ly - 12, 0xf472b6, isChicken ? '💖 Cluck!' : '💖 Moo!');
+          }
+          this.commitFarmState(res.state, res.message, res.ok);
         }
       });
 
       const lbl = this.add
-        .text(lx, ly + 8, prog.ready ? '★ COLLECT' : formatRemainingTime(prog.remainingMs), {
+        .text(lx, ly + 7, prog.ready ? (isChicken ? '🥚 COLLECT' : '🥛 COLLECT') : `♥ ${formatRemainingTime(prog.remainingMs)}`, {
           fontFamily: 'Fredoka, sans-serif',
           fontSize: '10px',
           fontStyle: 'bold',
@@ -1023,7 +1176,7 @@ export class FarmScene extends Phaser.Scene {
         .setScale(0.38)
         .setOrigin(0.5, 0);
 
-      this.dynamicLayer.add([g, hit, lbl]);
+      this.dynamicLayer.add([shadow, animalVisual, hit, lbl]);
     });
 
     // ---- 3. ARTISAN PROCESSING MACHINES (Bottom-Right, up to 6 slots) ----
@@ -1167,7 +1320,8 @@ export class FarmScene extends Phaser.Scene {
       | 'mining_quarry'
       | 'bamboo_forest'
       | 'sunken_ruins'
-      | 'koh_rong_island' = 'central_plaza'
+      | 'koh_rong_island'
+      | 'phnom_kulen' = 'central_plaza'
   ): void {
     if (this.transitioning) return;
     this.transitioning = true;

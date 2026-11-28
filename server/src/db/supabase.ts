@@ -114,6 +114,11 @@ export interface SavedPlayerProfile {
   reamkerQuestStep?: number;
   reamkerStepProgress?: number;
   deliveryJobsCompleted?: number;
+  kulenBlessingUntil?: number;
+  ownedKites?: string[];
+  activeKiteId?: string;
+  partyHostCount?: number;
+  partyFeastBuffUntil?: number;
   hasCompletedCreation?: boolean;
   activeClass?: string;
   weapon?: Record<string, unknown>;
@@ -823,6 +828,11 @@ function rowToSavedProfile(row: {
     reamkerQuestStep: typeof meta.reamkerQuestStep === 'number' ? meta.reamkerQuestStep : 0,
     reamkerStepProgress: typeof meta.reamkerStepProgress === 'number' ? meta.reamkerStepProgress : 0,
     deliveryJobsCompleted: typeof meta.deliveryJobsCompleted === 'number' ? meta.deliveryJobsCompleted : 0,
+    kulenBlessingUntil: typeof meta.kulenBlessingUntil === 'number' ? meta.kulenBlessingUntil : 0,
+    ownedKites: Array.isArray(meta.ownedKites) ? (meta.ownedKites as string[]) : [],
+    activeKiteId: typeof meta.activeKiteId === 'string' ? meta.activeKiteId : 'kite_classic_bamboo',
+    partyHostCount: typeof meta.partyHostCount === 'number' ? meta.partyHostCount : 0,
+    partyFeastBuffUntil: typeof meta.partyFeastBuffUntil === 'number' ? meta.partyFeastBuffUntil : 0,
     hasCompletedCreation: Boolean(
       meta.hasCompletedCreation ??
         (loadout as { hasCompletedCreation?: boolean }).hasCompletedCreation ??
@@ -1217,6 +1227,11 @@ export async function savePlayerProfile(
     reamkerQuestStep: typeof profile.reamkerQuestStep === 'number' && Number.isFinite(profile.reamkerQuestStep) ? Math.max(0, Math.min(6, Math.floor(profile.reamkerQuestStep))) : 0,
     reamkerStepProgress: typeof profile.reamkerStepProgress === 'number' && Number.isFinite(profile.reamkerStepProgress) ? Math.max(0, Math.floor(profile.reamkerStepProgress)) : 0,
     deliveryJobsCompleted: typeof profile.deliveryJobsCompleted === 'number' && Number.isFinite(profile.deliveryJobsCompleted) ? Math.max(0, Math.floor(profile.deliveryJobsCompleted)) : 0,
+    kulenBlessingUntil: typeof profile.kulenBlessingUntil === 'number' && Number.isFinite(profile.kulenBlessingUntil) ? Math.max(0, Math.floor(profile.kulenBlessingUntil)) : 0,
+    ownedKites: Array.isArray(profile.ownedKites) ? profile.ownedKites : [],
+    activeKiteId: typeof profile.activeKiteId === 'string' ? profile.activeKiteId : 'kite_classic_bamboo',
+    partyHostCount: typeof profile.partyHostCount === 'number' && Number.isFinite(profile.partyHostCount) ? Math.max(0, Math.floor(profile.partyHostCount)) : 0,
+    partyFeastBuffUntil: typeof profile.partyFeastBuffUntil === 'number' && Number.isFinite(profile.partyFeastBuffUntil) ? Math.max(0, Math.floor(profile.partyFeastBuffUntil)) : 0,
     hasCompletedCreation: Boolean(
       profile.hasCompletedCreation ??
         (profile.loadout as { hasCompletedCreation?: boolean } | undefined)?.hasCompletedCreation ??

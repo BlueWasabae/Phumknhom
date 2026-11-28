@@ -1267,9 +1267,27 @@ export class PaperDoll extends Phaser.GameObjects.Container {
     const hasChampionSash = accListNow.includes('acc_kun_khmer_champion_sash');
     const hasGoldenAbacus = accListNow.includes('acc_golden_abacus');
     const hasSbekThomAura = this.loadout.wings === 'wings_sbek_thom_aura';
-    if (hasChampionSash || hasGoldenAbacus || hasSbekThomAura) {
+    const hasFloatingKite = this.loadout.wings === 'wings_floating_khleng_ek';
+    if (hasChampionSash || hasGoldenAbacus || hasSbekThomAura || hasFloatingKite) {
       const shimmer = 0.72 + Math.sin(time / 180) * 0.25;
       this.championSashGfx.clear().setVisible(true);
+      if (hasFloatingKite) {
+        // Update 3.3 — Floating Khleng Ek Singing Kite bobbing on a string above the hero!
+        const kx = (facing === 'left' ? 14 : -14) + Math.sin(time / 480) * 4;
+        const ky = -52 + vertBob + Math.cos(time / 340) * 3.5;
+        this.championSashGfx.lineStyle(1.1, 0xfef3c7, 0.75);
+        this.championSashGfx.lineBetween(0, -18 + vertBob, kx, ky + 4);
+        // Crescent Khleng Ek kite body + bamboo hummer bow + red/gold streamer tails
+        this.championSashGfx.fillStyle(0xf59e0b, 0.98);
+        this.championSashGfx.fillTriangle(kx, ky - 7, kx - 10, ky + 3, kx + 10, ky + 3);
+        this.championSashGfx.lineStyle(1.2, 0x291308, 1);
+        this.championSashGfx.strokeTriangle(kx, ky - 7, kx - 10, ky + 3, kx + 10, ky + 3);
+        this.championSashGfx.fillStyle(0xdc2626, 1);
+        this.championSashGfx.fillCircle(kx, ky - 1, 2.2);
+        this.championSashGfx.lineStyle(1.3, 0xfef08a, 0.92);
+        this.championSashGfx.lineBetween(kx - 4, ky + 3, kx - 7 + Math.sin(time / 180) * 2, ky + 12);
+        this.championSashGfx.lineBetween(kx + 4, ky + 3, kx + 7 + Math.cos(time / 180) * 2, ky + 12);
+      }
       if (hasSbekThomAura) {
         // Animated backlit Sbek Thom shadow-puppet firelight ring + drifting embers!
         this.championSashGfx.lineStyle(2.2, 0xf97316, 0.55 + Math.sin(time / 160) * 0.25);

@@ -173,6 +173,14 @@ export class OverworldScene extends Phaser.Scene {
   private fishingSystem?: FishingSystem;
   private isSittingOnChair = false;
   private lastWaveRippleAt = 0;
+  /** Update 3.3 — Phnom Kulen Spirit Meditation Pool, Golden Blessing Halo & Village Party Feast Table */
+  private kulenMeditationMs = 0;
+  private kulenMeditationGfx?: Phaser.GameObjects.Graphics;
+  private kulenMeditationText?: Phaser.GameObjects.Text;
+  private kulenBlessingHalo?: Phaser.GameObjects.Arc;
+  private lastKulenMistAt = 0;
+  private activePartyObjects: Phaser.GameObjects.GameObject[] = [];
+  private activePartyLandmark: LandmarkZone | null = null;
   private blackMarketObjects: Phaser.GameObjects.GameObject[] = [];
   private blackMarketLandmark: LandmarkZone | null = null;
   private territoryBannerObjects: Phaser.GameObjects.GameObject[] = [];
@@ -294,13 +302,15 @@ export class OverworldScene extends Phaser.Scene {
   private createSceneContent(): void {
     this.input.mouse?.disableContextMenu();
     this.physics.world.gravity.y = 0;
-    this.physics.world.setBounds(24, HORIZON_H, MAP_W - 48, MAP_H - HORIZON_H - 18);
+    const activeMapW = this.mapId === 'phnom_kulen' ? 1400 : MAP_W;
+    const activeMapH = this.mapId === 'phnom_kulen' ? 1000 : MAP_H;
+    this.physics.world.setBounds(24, HORIZON_H, activeMapW - 48, activeMapH - HORIZON_H - 18);
     this.glowLights = [];
     this.areaSignText = undefined;
     this.syncDynamicBgm();
 
     // 1. Map-Specific Rich Ground Theme & Environmental Design (distinct palette & architectural character per place!)
-    if (this.mapId !== 'koh_rong_island') {
+    if (this.mapId !== 'koh_rong_island' && this.mapId !== 'phnom_kulen') {
       const groundTintMap: Partial<Record<VillageMapId, number>> = {
         central_plaza: 0xffffff,
         market_street: 0xe6d4a8, // Warm sandstone-amber bazaar district
@@ -346,23 +356,33 @@ export class OverworldScene extends Phaser.Scene {
       this.buildSunkenRuinsMap();
     } else if (this.mapId === 'koh_rong_island') {
       this.buildKohRongIslandMap();
+    } else if (this.mapId === 'phnom_kulen') {
+      this.buildPhnomKulenSanctuaryMap();
     }
 
     // 5. Walk-Through Glowing Road Portals & Wooden Signposts at Map Edges
     this.buildWalkThroughRoadPortals();
 
     // 6. Perimeter Trees & Natural Framing
-    if (this.mapId !== 'koh_rong_island') {
+    if (this.mapId !== 'koh_rong_island' && this.mapId !== 'phnom_kulen') {
       this.buildPerimeterTrees();
     }
 
     // 7. 4-Season Weather Particles & Day/Night Atmosphere Overlay
-    this.atmosphere = new SeasonAtmosphereOverlay(this, MAP_W, MAP_H);
+    this.atmosphere = new SeasonAtmosphereOverlay(this, activeMapW, activeMapH);
     this.glowLights.forEach((g) => this.atmosphere?.registerGlowLight(g));
 
     // 8. 10-Layer Human Chibi Player + Soft Ground Shadow
     this.player = new Player(this, this.spawnX, this.spawnY, this.initialState, 'overworld');
     this.physics.add.collider(this.player.sprite, this.colliders);
+
+    // Update 3.3 — Subtle Golden Lotus Halo while Kulen Sacred Blessing is active!
+    this.kulenBlessingHalo = this.add
+      .circle(this.spawnX, this.spawnY + 6, 22, 0xfacc15, 0.14)
+      .setStrokeStyle(1.8, 0xfef08a, 0.85)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(this.spawnY - 4)
+      .setVisible(false);
     this.gateLockUntil = this.time.now + 850;
 
     // 8B. Living Khmer Villager NPCs patrolling this map!
@@ -625,6 +645,25 @@ export class OverworldScene extends Phaser.Scene {
         EventBus.emit('ui:toast', {
           text: `📦 Express Delivery Run Started! Deliver 3 hot orders in 90s (${run.orders.map((o) => o.mapLabel).join(' → ')})!`,
         });
+      }),
+      EventBus.on('kite:launchRequest', ({ kiteId, returnMapId, returnX, returnY }) => {
+        if (this.transitioning) return;
+        this.transitioning = true;
+        soundManager.playSfx('magic');
+        this.cameras.main.fadeOut(220, 40, 20, 10);
+        this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+          this.scene.start('KiteFlyScene', {
+            playerState: { ...this.player.state, zone: 'overworld', currentMapId: this.mapId },
+            kiteId,
+            returnMapId: returnMapId ?? this.mapId,
+            returnX: returnX ?? this.player.x,
+            returnY: returnY ?? this.player.y,
+          });
+        });
+      }),
+      EventBus.on('party:hostBroadcast', (evt) => {
+        if (evt.mapId !== this.mapId) return;
+        this.spawnSharedPartyFeastTable(evt);
       }),
       EventBus.on('blackMarket:changed', () => {
         this.syncBlackMarketPortal();
@@ -2683,6 +2722,395 @@ export class OverworldScene extends Phaser.Scene {
       label: 'Press [E] or Click → 🛶 Floating Mekong River Market (Buy Low / Sell High Regional Trade!)',
       isDungeonPortal: false,
       onInteract: openFloatingMarket,
+    });
+
+    // Update 3.3 — Kite Master Stall in Green Park (Craft & Launch Khleng Ek Singing Kites!)
+    this.buildKiteMasterStall(1140, 445);
+  }
+
+  private buildKiteMasterStall(kx: number, ky: number): void {
+    const stallGfx = this.add.graphics().setDepth(ky - 4);
+    stallGfx.fillStyle(0x78350f, 1);
+    stallGfx.fillRoundedRect(kx - 28, ky - 22, 56, 32, 5);
+    stallGfx.fillStyle(0xf59e0b, 1);
+    stallGfx.fillRoundedRect(kx - 32, ky - 32, 64, 14, 4);
+    stallGfx.lineStyle(1.8, 0x451a03, 1);
+    stallGfx.strokeRoundedRect(kx - 32, ky - 32, 64, 14, 4);
+    // Display colorful miniature Khleng Ek kite hanging above stall
+    stallGfx.fillStyle(0xdc2626, 1);
+    stallGfx.fillTriangle(kx, ky - 46, kx - 12, ky - 36, kx + 12, ky - 36);
+    stallGfx.lineStyle(1.4, 0xfef08a, 1);
+    stallGfx.lineBetween(kx - 4, ky - 36, kx - 8, ky - 24);
+    stallGfx.lineBetween(kx + 4, ky - 36, kx + 8, ky - 24);
+
+    this.add
+      .text(kx, ky + 14, '🪁 KHLENG EK KITE MASTER', {
+        fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
+        fontSize: '10px',
+        fontStyle: 'bold',
+        color: '#fef08a',
+        backgroundColor: 'rgba(120, 53, 15, 0.92)',
+        padding: { x: 6, y: 2 },
+      })
+      .setResolution(2)
+      .setScale(0.42)
+      .setOrigin(0.5, 0)
+      .setDepth(ky + 16);
+
+    const kHit = this.add.rectangle(kx, ky - 8, 74, 56, 0x000000, 0).setDepth(ky + 20).setInteractive({ useHandCursor: true });
+    const openKiteWorkshop = () => {
+      if (!this.guardInteractRange(kx, ky, 140)) return;
+      soundManager.playSfx('click');
+      EventBus.emit('ui:openModal', { modal: 'kiteWorkshop' });
+    };
+    kHit.on('pointerdown', openKiteWorkshop);
+    this.landmarks.push({
+      x: kx,
+      y: ky,
+      radius: 82,
+      label: 'Press [E] or Click → 🪁 Khleng Ek Singing Kite Workshop (Craft & Fly Sunset Kites!)',
+      isDungeonPortal: false,
+      onInteract: openKiteWorkshop,
+    });
+  }
+
+  // ==================== MAP 10 (UPDATE 3.3): PHNOM KULEN SACRED WATERFALL SANCTUARY ====================
+  private buildPhnomKulenSanctuaryMap(): void {
+    const W = 1400;
+    const H = 1000;
+    this.cameras.main.setBounds(0, 0, W, H);
+
+    // 1. Serene Mountain Plateau Emerald-Jade Ground + Elevated Northern Sandstone Cliff Ledge
+    this.add
+      .tileSprite(W / 2, H / 2, W, H, 'sv_grass')
+      .setTint(0x6ee7b7)
+      .setDepth(0);
+
+    const g = this.add.graphics().setDepth(2);
+    // Northern mountain sandstone cliff wall behind the Sacred Waterfall
+    g.fillStyle(0x57534e, 1);
+    g.fillRoundedRect(24, 40, W - 48, 175, 16);
+    g.fillStyle(0x78716c, 0.92);
+    g.fillRoundedRect(38, 52, W - 76, 132, 12);
+    // Mossy stone ledge trim
+    g.fillStyle(0x15803d, 0.82);
+    g.fillRoundedRect(38, 48, W - 76, 26, 10);
+
+    // 2. Shallow Turquoise "River of a Thousand Lingas" + Submerged Carved Angkor Linga Stone Reliefs!
+    g.fillStyle(0x0891b2, 0.72);
+    g.fillRoundedRect(540, 195, 320, 340, 68);
+    g.fillStyle(0x22d3ee, 0.48);
+    g.fillRoundedRect(570, 220, 260, 290, 56);
+    // Submerged carved sandstone Linga reliefs visible beneath the turquoise water!
+    for (let ly = 248; ly <= 395; ly += 28) {
+      for (let lx = 602; lx <= 798; lx += 32) {
+        g.fillStyle(0x92400e, 0.34);
+        g.fillRoundedRect(lx - 8, ly - 8, 16, 16, 3);
+        g.lineStyle(1, 0xfef3c7, 0.25);
+        g.strokeCircle(lx, ly, 4.5);
+      }
+    }
+
+    // 3. Peaceful Spirit Meditation Pool (x: 700, y: 470) with Golden Lotus Glow!
+    g.fillStyle(0x67e8f9, 0.45);
+    g.fillCircle(700, 470, 74);
+    g.lineStyle(2.5, 0xfef08a, 0.72);
+    g.strokeCircle(700, 470, 76);
+
+    // Stepping-stone footpath from South Stairway -> Meditation Pool -> Cliff Overlook
+    this.add.tileSprite(700, 710, 64, 340, 'sv_path').setTint(0xd6d3d1).setDepth(3);
+    this.add.tileSprite(900, 520, 380, 44, 'sv_path').setTint(0xd6d3d1).setDepth(3);
+
+    // 4. Multi-Tier Animated Cascading Sacred Waterfall (x: 640..760, y: 80..225)
+    for (let wx = 644; wx <= 756; wx += 28) {
+      if (this.textures.exists('na_wf_top') && this.anims.exists('wf_top')) {
+        this.add.sprite(wx, 108, 'na_wf_top').setScale(2.0).setDepth(12).play('wf_top');
+      }
+      if (this.textures.exists('na_wf_mid') && this.anims.exists('wf_mid')) {
+        this.add.sprite(wx, 148, 'na_wf_mid').setScale(2.0).setDepth(12).play('wf_mid');
+        this.add.sprite(wx, 184, 'na_wf_mid').setScale(2.0).setDepth(12).play('wf_mid');
+      }
+      if (this.textures.exists('na_wf_bot') && this.anims.exists('wf_bot')) {
+        this.add.sprite(wx, 218, 'na_wf_bot').setScale(2.1).setDepth(13).play('wf_bot');
+      }
+    }
+    // Soft Animated Water Shimmer Ripples across River of a Thousand Lingas (smooth translucent rings, zero boxy sprite seams)
+    const kulenRipples: Array<[number, number, number]> = [
+      [630, 290, 0],
+      [770, 305, 450],
+      [660, 365, 900],
+      [745, 385, 1350],
+      [700, 445, 300],
+      [645, 480, 750],
+      [755, 480, 1150],
+    ];
+    for (const [rx, ry, delayMs] of kulenRipples) {
+      const ring = this.add
+        .ellipse(rx, ry, 34, 12, 0x99f6e4, 0.14)
+        .setStrokeStyle(1.6, 0xe0f2fe, 0.58)
+        .setDepth(8);
+      this.tweens.add({
+        targets: ring,
+        scaleX: 1.85,
+        scaleY: 1.65,
+        alpha: 0,
+        duration: 2100,
+        delay: delayMs,
+        repeat: -1,
+        ease: 'Sine.easeOut',
+      });
+    }
+    // Blooming Waterfall Mist & Rainbow Halo
+    const waterfallGlow = this.add
+      .image(700, 224, 'torch_glow')
+      .setTint(0x67e8f9)
+      .setScale(2.2, 1.1)
+      .setAlpha(0.55)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(15);
+    this.glowLights.push(waterfallGlow);
+
+    // Sanctuary Landmarks Titles
+    this.add
+      .text(700, 232, '⛰️ PHNOM KULEN SACRED WATERFALL · RIVER OF A THOUSAND LINGAS', {
+        fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
+        fontSize: '12px',
+        fontStyle: 'bold',
+        color: '#cffafe',
+        backgroundColor: 'rgba(15, 23, 42, 0.85)',
+        padding: { x: 8, y: 2 },
+      })
+      .setResolution(2)
+      .setScale(0.45)
+      .setOrigin(0.5)
+      .setDepth(260);
+
+    this.add
+      .text(700, 554, '🪷 SPIRIT MEDITATION POOL — Wade here 5s for Kulen Sacred Blessing (+10% XP & Boss DEF)', {
+        fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
+        fontSize: '11px',
+        fontStyle: 'bold',
+        color: '#fef08a',
+        backgroundColor: 'rgba(6, 78, 59, 0.9)',
+        padding: { x: 8, y: 2 },
+      })
+      .setResolution(2)
+      .setScale(0.44)
+      .setOrigin(0.5)
+      .setDepth(260);
+
+    // Meditation Pool live 5s ring UI
+    this.kulenMeditationGfx = this.add.graphics().setDepth(2400);
+    this.kulenMeditationText = this.add
+      .text(700, 404, '', {
+        fontFamily: 'Fredoka, sans-serif',
+        fontSize: '12px',
+        fontStyle: 'bold',
+        color: '#fef08a',
+        stroke: '#0f172a',
+        strokeThickness: 4,
+      })
+      .setResolution(2)
+      .setScale(0.48)
+      .setOrigin(0.5)
+      .setDepth(2405)
+      .setVisible(false);
+
+    // 5. Windy Cliff Overlook Kite Master Stall (East cliff overlook)
+    this.buildKiteMasterStall(1110, 445);
+
+    // 6. Mountain Foraging Nodes: Rare Kulen Wild Orchids & Sacred Sandstone Shards!
+    const kulenNodes: Array<{ x: number; y: number; kind: 'orchid' | 'sandstone' }> = [
+      { x: 255, y: 340, kind: 'orchid' },
+      { x: 365, y: 540, kind: 'orchid' },
+      { x: 1030, y: 690, kind: 'orchid' },
+      { x: 295, y: 710, kind: 'sandstone' },
+      { x: 465, y: 315, kind: 'sandstone' },
+      { x: 965, y: 315, kind: 'sandstone' },
+    ];
+    kulenNodes.forEach((n, idx) => {
+      const isOrchid = n.kind === 'orchid';
+      const nodeGfx = this.add.graphics().setDepth(n.y);
+      if (isOrchid) {
+        nodeGfx.fillStyle(0x16a34a, 1);
+        nodeGfx.fillEllipse(n.x, n.y + 4, 18, 9);
+        nodeGfx.fillStyle(0xe879f9, 1);
+        nodeGfx.fillCircle(n.x - 4, n.y - 3, 4.5);
+        nodeGfx.fillCircle(n.x + 4, n.y - 3, 4.5);
+        nodeGfx.fillCircle(n.x, n.y - 7, 5);
+        nodeGfx.fillStyle(0xfef08a, 1);
+        nodeGfx.fillCircle(n.x, n.y - 5, 2);
+      } else {
+        nodeGfx.fillStyle(0xb45309, 1);
+        nodeGfx.fillRoundedRect(n.x - 10, n.y - 8, 20, 14, 4);
+        nodeGfx.lineStyle(1.4, 0xfef08a, 0.9);
+        nodeGfx.strokeRoundedRect(n.x - 10, n.y - 8, 20, 14, 4);
+      }
+      const lbl = this.add
+        .text(n.x, n.y + 12, isOrchid ? '🌺 Kulen Wild Orchid' : '🪨 Sacred Sandstone', {
+          fontFamily: 'Fredoka, sans-serif',
+          fontSize: '10px',
+          fontStyle: 'bold',
+          color: isOrchid ? '#f5d0fe' : '#fde68a',
+          backgroundColor: 'rgba(15, 23, 42, 0.8)',
+          padding: { x: 4, y: 1 },
+        })
+        .setResolution(2)
+        .setScale(0.38)
+        .setOrigin(0.5, 0)
+        .setDepth(n.y + 4);
+      let cooldownUntil = 0;
+      const hit = this.add.rectangle(n.x, n.y, 34, 34, 0x000000, 0).setDepth(n.y + 8).setInteractive({ useHandCursor: true });
+      const harvest = () => {
+        if (!this.guardInteractRange(n.x, n.y, 125)) return;
+        const now = Date.now();
+        if (now < cooldownUntil) {
+          EventBus.emit('ui:toast', { text: `⏳ Respawning in ${Math.ceil((cooldownUntil - now) / 1000)}s...` });
+          return;
+        }
+        cooldownUntil = now + 22_000;
+        nodeGfx.setAlpha(0.35);
+        this.time.delayedCall(22_000, () => {
+          if (nodeGfx.active) nodeGfx.setAlpha(1);
+        });
+        soundManager.playSfx('harvest');
+        vfxManager.playSpriteVfx(this, isOrchid ? 'vfx_sparkle_blue' : 'vfx_sparkle_green', n.x, n.y - 6, {
+          scale: 1.4,
+          tint: isOrchid ? 0xe879f9 : 0xfacc15,
+          additive: true,
+          depth: n.y + 20,
+        });
+        EventBus.emit('frontier:gather', {
+          skillId: isOrchid ? 'foraging' : 'mining',
+          xp: 48,
+          coins: 35,
+          itemId: isOrchid ? 'item_kulen_wild_orchid' : 'item_sacred_sandstone_shard',
+          label: isOrchid
+            ? `🌺 Foraged Kulen Wild Orchid (+48 Foraging XP, +35c)!`
+            : `🪨 Gathered Sacred Sandstone Shard (+48 Mining XP, +35c)!`,
+        });
+      };
+      hit.on('pointerdown', harvest);
+      this.landmarks.push({
+        x: n.x,
+        y: n.y,
+        radius: 64,
+        label: `Press [E] or Click → ${isOrchid ? '🌺 Forage Kulen Wild Orchid' : '🪨 Gather Sacred Sandstone Shard'}`,
+        isDungeonPortal: false,
+        onInteract: harvest,
+      });
+      void idx;
+      void lbl;
+    });
+
+    // Framing Mountain Pines & Ancient Angkor Ruins along borders
+    for (const [tx, ty] of [[120, 260], [160, 480], [130, 740], [1260, 260], [1240, 560], [1250, 780], [420, 220], [990, 220]]) {
+      this.add.image(tx, ty, 'sv_tree_teal').setOrigin(0.5, 0.92).setScale(1.45).setDepth(ty);
+    }
+    if (this.textures.exists('na_ruin_statue')) {
+      this.add.image(520, 455, 'na_ruin_statue').setOrigin(0.5, 0.9).setScale(1.4).setDepth(455);
+      this.add.image(880, 455, 'na_ruin_statue').setOrigin(0.5, 0.9).setScale(1.4).setDepth(455);
+    }
+  }
+
+  private spawnSharedPartyFeastTable(evt: {
+    partyId: string;
+    hostName: string;
+    kitId: string;
+    mapId: string;
+    mapLabel: string;
+    x: number;
+    y: number;
+    fireworkShells: number;
+    palette: number[];
+    expiresAt: number;
+  }): void {
+    // Clean previous party table if any
+    this.activePartyObjects.forEach((o) => {
+      if (o?.scene) o.destroy();
+    });
+    this.activePartyObjects = [];
+    if (this.activePartyLandmark) {
+      this.landmarks = this.landmarks.filter((l) => l !== this.activePartyLandmark);
+      this.activePartyLandmark = null;
+    }
+
+    const px = Phaser.Math.Clamp(evt.x, 180, 1220);
+    const py = Phaser.Math.Clamp(evt.y + 42, 240, 880);
+
+    // Launch Synchronized Blooming Fireworks Overhead!
+    soundManager.playFireworkBurst();
+    vfxManager.playSynchronizedFireworkShow(this, px, py - 40, evt.palette, evt.fireworkShells, 2380);
+
+    // Spawn 5-minute Shared Party Feast Table!
+    const tblGfx = this.add.graphics().setDepth(py);
+    tblGfx.fillStyle(0x78350f, 1);
+    tblGfx.fillRoundedRect(px - 42, py - 16, 84, 30, 6);
+    tblGfx.fillStyle(0xdc2626, 0.95);
+    tblGfx.fillRoundedRect(px - 38, py - 14, 76, 20, 4);
+    tblGfx.lineStyle(1.8, 0xfacc15, 1);
+    tblGfx.strokeRoundedRect(px - 38, py - 14, 76, 20, 4);
+    // Khmer Feast dishes & glowing golden lanterns on the table
+    for (const dx of [-24, -8, 8, 24]) {
+      tblGfx.fillStyle(0xfef9c3, 1);
+      tblGfx.fillCircle(px + dx, py - 5, 5);
+      tblGfx.fillStyle(dx % 16 === 0 ? 0xf97316 : 0x22c55e, 1);
+      tblGfx.fillCircle(px + dx, py - 6, 3);
+    }
+    const glow = this.add
+      .image(px, py - 8, 'torch_glow')
+      .setTint(0xfacc15)
+      .setScale(1.1)
+      .setAlpha(0.55)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(py - 2);
+    const banner = this.add
+      .text(px, py - 26, `🎉 ${evt.hostName.toUpperCase()}'S PARTY FEAST TABLE! [E] Free Buff Snack`, {
+        fontFamily: 'Fredoka, sans-serif',
+        fontSize: '11px',
+        fontStyle: 'bold',
+        color: '#fef08a',
+        backgroundColor: 'rgba(131, 24, 67, 0.92)',
+        padding: { x: 7, y: 2 },
+      })
+      .setResolution(2)
+      .setScale(0.42)
+      .setOrigin(0.5, 1)
+      .setDepth(py + 16);
+
+    const hit = this.add.rectangle(px, py, 94, 46, 0x000000, 0).setDepth(py + 18).setInteractive({ useHandCursor: true });
+    const grabSnack = () => {
+      if (!this.guardInteractRange(px, py, 145)) return;
+      soundManager.playSfx('coin');
+      vfxManager.playHealSpellVfx(this, this.player.x, this.player.y, 2400);
+      vfxManager.playHeartBurstVfx(this, px, py - 14, 2405);
+      EventBus.emit('party:feastSnack', { hostName: evt.hostName });
+    };
+    hit.on('pointerdown', grabSnack);
+
+    const lm: LandmarkZone = {
+      x: px,
+      y: py,
+      radius: 86,
+      label: `Press [E] or Click → 🎉 Grab Free Party Feast Snack (+15% Speed & +15% Luck!)`,
+      isDungeonPortal: false,
+      onInteract: grabSnack,
+    };
+    this.landmarks.push(lm);
+    this.activePartyLandmark = lm;
+    this.activePartyObjects = [tblGfx, glow, banner, hit];
+
+    // Despawn feast table cleanly after 5 minutes
+    const ttl = Math.max(15_000, evt.expiresAt - Date.now());
+    this.time.delayedCall(ttl, () => {
+      if (this.activePartyLandmark === lm) {
+        this.activePartyObjects.forEach((o) => {
+          if (o?.scene) o.destroy();
+        });
+        this.activePartyObjects = [];
+        this.landmarks = this.landmarks.filter((l) => l !== lm);
+        this.activePartyLandmark = null;
+      }
     });
   }
 
@@ -5902,6 +6330,77 @@ export class OverworldScene extends Phaser.Scene {
     }
 
     this.player.syncVisuals(time, true);
+
+    // Update 3.3 — Phnom Kulen Spirit Meditation Pool (5s wade -> 100% HP & 15-min Kulen Sacred Blessing!) + Golden Halo
+    const nowMs = Date.now();
+    const blessingActive = (this.player.state.kulenBlessingUntil ?? 0) > nowMs;
+    if (this.kulenBlessingHalo) {
+      this.kulenBlessingHalo.setVisible(blessingActive);
+      if (blessingActive) {
+        const pulse = 0.94 + Math.sin(time / 320) * 0.1;
+        this.kulenBlessingHalo
+          .setPosition(this.player.x, this.player.y + 4)
+          .setScale(pulse)
+          .setDepth(this.player.y - 4);
+      }
+    }
+    if (this.mapId === 'phnom_kulen') {
+      // Gentle waterfall mist particles rising from the Sacred Waterfall basin
+      if (time - this.lastKulenMistAt > 240) {
+        this.lastKulenMistAt = time;
+        const mist = this.add
+          .circle(700 + Phaser.Math.Between(-56, 56), 224 + Phaser.Math.Between(-8, 12), Phaser.Math.FloatBetween(3.5, 7), 0xe0f2fe, 0.42)
+          .setBlendMode(Phaser.BlendModes.ADD)
+          .setDepth(16);
+        this.tweens.add({
+          targets: mist,
+          y: mist.y - 24,
+          scale: 1.9,
+          alpha: 0,
+          duration: 780,
+          onComplete: () => mist.destroy(),
+        });
+      }
+      const inMeditationPool = Phaser.Math.Distance.Between(this.player.x, this.player.y, 700, 470) <= 78;
+      if (inMeditationPool) {
+        this.kulenMeditationMs += Math.min(80, delta);
+        const isPostBlessingCooldown = this.kulenMeditationMs < 0;
+        const pct = isPostBlessingCooldown ? 1 : Math.min(1, this.kulenMeditationMs / 5000);
+        if (this.kulenMeditationGfx) {
+          this.kulenMeditationGfx.clear();
+          this.kulenMeditationGfx.lineStyle(3.5, isPostBlessingCooldown ? 0xfacc15 : 0xfef08a, isPostBlessingCooldown ? 0.9 : 0.95);
+          this.kulenMeditationGfx.beginPath();
+          this.kulenMeditationGfx.arc(this.player.x, this.player.y + 4, 24, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * pct);
+          this.kulenMeditationGfx.strokePath();
+        }
+        if (this.kulenMeditationText) {
+          if (isPostBlessingCooldown) {
+            this.kulenMeditationText
+              .setPosition(this.player.x, this.player.y - 38)
+              .setText('🪷 SACRED BLESSING ACTIVE!')
+              .setVisible(true);
+          } else {
+            const secLeft = Math.max(0, Math.ceil((5000 - this.kulenMeditationMs) / 1000));
+            this.kulenMeditationText
+              .setPosition(this.player.x, this.player.y - 38)
+              .setText(secLeft > 0 ? `🪷 Meditating... ${secLeft}s` : '🪷 SACRED BLESSING GRANTED!')
+              .setVisible(true);
+          }
+        }
+        if (this.kulenMeditationMs >= 5000) {
+          this.kulenMeditationMs = -8000; // 8s quiet grace period while remaining in pool
+          soundManager.playSfx('level_up');
+          vfxManager.playHealSpellVfx(this, this.player.x, this.player.y, 2410);
+          vfxManager.playLevelUpLightPillar(this, this.player.x, this.player.y, 2405);
+          EventBus.emit('kulen:blessingGranted', { durationMs: 15 * 60_000 });
+        }
+      } else {
+        if (this.kulenMeditationMs > 0) this.kulenMeditationMs = Math.max(0, this.kulenMeditationMs - delta * 2);
+        else if (this.kulenMeditationMs < 0) this.kulenMeditationMs = 0;
+        this.kulenMeditationGfx?.clear();
+        this.kulenMeditationText?.setVisible(false);
+      }
+    }
 
     // Update 2.8 — Stage 3 Mythic Pet QoL Convenience Perk: +10% passive Overworld HP/vitality regen pulse (zero combat P2W)
     if (this.player.state.loadout.pet && time - this.lastPetRegenAt > 4500) {

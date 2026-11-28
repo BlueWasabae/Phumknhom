@@ -70,7 +70,8 @@ export type VillageMapId =
   | 'mining_quarry'
   | 'bamboo_forest'
   | 'sunken_ruins'
-  | 'koh_rong_island';
+  | 'koh_rong_island'
+  | 'phnom_kulen';
 
 export interface VillageMapPortalDef {
   id: string;
@@ -497,6 +498,19 @@ export const VILLAGE_MAPS: Record<VillageMapId, VillageMapDef> = {
         khmerLabel: 'ប្រាសាទលិចទឹកអង្គរ',
         prompt: 'Walk through Mossy South Arch or [E] → Sunken Angkor Ruins',
       },
+      {
+        id: 'bf_north_kulen',
+        edge: 'north',
+        x: 800,
+        y: 132,
+        targetType: 'village_map',
+        targetMapId: 'phnom_kulen',
+        targetSpawnX: 700,
+        targetSpawnY: 860,
+        signLabel: '↑ PHNOM KULEN',
+        khmerLabel: 'ជណ្តើរភ្នំគូលែនសក្តិសិទ្ធិ',
+        prompt: 'Ascend Ancient Mountain Stairway or [E] → Phnom Kulen Sacred Waterfall Sanctuary!',
+      },
     ],
   },
   sunken_ruins: {
@@ -566,6 +580,34 @@ export const VILLAGE_MAPS: Record<VillageMapId, VillageMapDef> = {
       'Turquoise tropical island paradise with white sand beach, lounge chairs, Beach Coconut Bar, Deep-Sea Fishing Pier & Coral Reef Pearl Diving!',
     accentColor: '#06b6d4',
     portals: [],
+  },
+  phnom_kulen: {
+    id: 'phnom_kulen',
+    name: 'Phnom Kulen Sanctuary',
+    khmerName: 'ភ្នំគូលែន ទឹកធ្លាក់សក្តិសិទ្ធិ',
+    icon: '⛰️',
+    width: 1400,
+    height: 1000,
+    defaultSpawnX: 700,
+    defaultSpawnY: 840,
+    description:
+      'Sacred Khmer mountain sanctuary with cascading Waterfall, River of a Thousand Lingas, Spirit Meditation Pool (+10% Skill XP & +10% Boss DEF), Wild Orchids & Khleng Ek Kite Overlook!',
+    accentColor: '#22d3ee',
+    portals: [
+      {
+        id: 'pk_south_bamboo',
+        edge: 'south',
+        x: 700,
+        y: 912,
+        targetType: 'village_map',
+        targetMapId: 'bamboo_forest',
+        targetSpawnX: 800,
+        targetSpawnY: 215,
+        signLabel: '↓ MISTY BAMBOO FOREST',
+        khmerLabel: 'ចុះទៅព្រៃឫស្សីអ័ព្ទ',
+        prompt: 'Descend Mountain Stairway or [E] → Return to Misty Bamboo Forest',
+      },
+    ],
   },
 };
 

@@ -792,6 +792,7 @@ export class PagodaTowerScene extends Phaser.Scene {
       | 'bamboo_forest'
       | 'sunken_ruins'
       | 'koh_rong_island'
+      | 'phnom_kulen'
   ): void {
     if (this.transitioning) return;
     this.transitioning = true;

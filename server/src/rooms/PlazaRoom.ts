@@ -625,6 +625,52 @@ export class PlazaRoom extends Room<PlazaState> {
         pushTradeStateToBoth(res.session);
       }
     });
+
+    // Update 3.3 — Player-Hosted Village Parties & Synchronized Firework Shows!
+    this.onMessage(
+      'party:host',
+      (
+        client,
+        payload: {
+          kitId?: string;
+          mapId?: string;
+          mapLabel?: string;
+          x?: number;
+          y?: number;
+          fireworkShells?: number;
+          palette?: number[];
+        }
+      ) => {
+        const host = this.state.players.get(client.sessionId);
+        if (!host) return;
+        const kitId = typeof payload?.kitId === 'string' ? payload.kitId.slice(0, 48) : 'party_lantern_kit';
+        const mapId = typeof payload?.mapId === 'string' ? payload.mapId.slice(0, 32) : 'central_plaza';
+        const mapLabel = typeof payload?.mapLabel === 'string' ? payload.mapLabel.slice(0, 48) : 'Central Plaza';
+        const px = typeof payload?.x === 'number' && Number.isFinite(payload.x) ? clamp(payload.x, 80, 1520) : host.x;
+        const py = typeof payload?.y === 'number' && Number.isFinite(payload.y) ? clamp(payload.y, 80, 1120) : host.y;
+        const fireworkShells =
+          typeof payload?.fireworkShells === 'number' && Number.isFinite(payload.fireworkShells)
+            ? Math.max(4, Math.min(24, Math.floor(payload.fireworkShells)))
+            : 10;
+        const palette =
+          Array.isArray(payload?.palette) && payload.palette.length > 0
+            ? payload.palette.slice(0, 6).map((c) => Number(c) || 0xfacc15)
+            : [0xfacc15, 0x10b981, 0xf43f5e];
+
+        this.broadcast('party:event', {
+          partyId: `pty_${Date.now().toString(36)}_${client.sessionId.slice(0, 4)}`,
+          hostName: host.name,
+          kitId,
+          mapId,
+          mapLabel,
+          x: px,
+          y: py,
+          fireworkShells,
+          palette,
+          expiresAt: Date.now() + 5 * 60_000,
+        });
+      }
+    );
   }
 
   onJoin(

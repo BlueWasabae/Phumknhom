@@ -587,6 +587,23 @@ class PlazaRoomClient {
           EventBus.emit('music:tipReceived', msg);
         }
       );
+      room.onMessage(
+        'party:event',
+        (msg: {
+          partyId: string;
+          hostName: string;
+          kitId: string;
+          mapId: string;
+          mapLabel: string;
+          x: number;
+          y: number;
+          fireworkShells: number;
+          palette: number[];
+          expiresAt: number;
+        }) => {
+          EventBus.emit('party:hostBroadcast', msg);
+        }
+      );
 
       room.onLeave((code?: number) => {
         if (this.room === room) {
@@ -691,6 +708,19 @@ class PlazaRoomClient {
   public sendMusicTip(targetSessionId: string, amount: 10 | 50): void {
     if (!this.room || !this.online) return;
     this.room.send('music:tip', { targetSessionId, amount });
+  }
+
+  public sendHostParty(payload: {
+    kitId: string;
+    mapId: string;
+    mapLabel: string;
+    x: number;
+    y: number;
+    fireworkShells: number;
+    palette: number[];
+  }): void {
+    if (!this.room || !this.online) return;
+    this.room.send('party:host', payload);
   }
 
   public sendAppearance(

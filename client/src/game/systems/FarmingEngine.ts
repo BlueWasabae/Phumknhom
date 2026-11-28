@@ -601,7 +601,7 @@ export function harvestFruitTree(state: PlayerState, slotIndex: number, now = Da
 export function buyLivestock(state: PlayerState, animalId: string, now = Date.now()): ActionResult {
   const def = LIVESTOCK[animalId];
   if (!def) return { state, ok: false, message: 'Unknown livestock.' };
-  if (state.farm.livestock.length >= 4) return { state, ok: false, message: 'Livestock pen full (4 animals max).' };
+  if (state.farm.livestock.length >= 6) return { state, ok: false, message: 'Livestock pasture full (6 animals max).' };
   const paid = spendCoins(state, def.costCoins);
   if (!paid) return { state, ok: false, message: `Need ${def.costCoins.toLocaleString()} Coins.` };
 
@@ -615,7 +615,38 @@ export function buyLivestock(state: PlayerState, animalId: string, now = Date.no
   return {
     state: { ...paid, farm: { ...paid.farm, livestock: [...paid.farm.livestock, nextPen] } },
     ok: true,
-    message: `Adopted ${def.name}!`,
+    message: `Adopted ${def.name} (${def.khmerName}) into your pasture!`,
+  };
+}
+
+/** Pet & feed a Cow or Chicken to speed up egg/milk production by 30% and earn Friendly + Farm XP! */
+export function petAndFeedLivestock(state: PlayerState, slotIndex: number, now = Date.now()): ActionResult {
+  const pen = state.farm.livestock[slotIndex];
+  if (!pen) return { state, ok: false, message: 'Empty pen slot.' };
+  const def = LIVESTOCK[pen.animalId];
+  if (!def) return { state, ok: false, message: 'Unknown animal.' };
+  const prog = getLivestockProgress(pen, now);
+  if (prog.ready) {
+    return collectLivestock(state, slotIndex, now);
+  }
+  const boostMs = Math.max(60_000, Math.round(def.cooldownSeconds * 1000 * 0.3));
+  const livestock = state.farm.livestock.map((l, idx) =>
+    idx === slotIndex ? { ...l, lastCollectedAt: l.lastCollectedAt - boostMs, fed: true } : l
+  );
+  const nextState = addFarmXpAndPlayerXp(
+    {
+      ...state,
+      lifeStats: { ...state.lifeStats, friendly: state.lifeStats.friendly + 6 },
+      farm: { ...state.farm, livestock },
+    },
+    10,
+    8
+  );
+  const soundWord = pen.animalId.includes('chicken') || pen.animalId.includes('hen') ? 'Cluck!' : 'Moo!';
+  return {
+    state: nextState,
+    ok: true,
+    message: `💖 Pet & fed ${def.name} ("${soundWord}")! Production sped up -30% (+10 Farm XP, +6 Friendly)`,
   };
 }
 
@@ -635,6 +666,7 @@ export function collectLivestock(state: PlayerState, slotIndex: number, now = Da
   if (def.bonusItemId) {
     nextInv = addInventory(nextInv, def.bonusItemId, 1, 'normal');
   }
+  const bonusName = def.bonusItemId ? ` + ${FARM_ITEMS[def.bonusItemId]?.name ?? def.bonusItemId}` : '';
   return {
     state: addFarmXpAndPlayerXp(
       { ...state, inventory: nextInv, farm: { ...state.farm, livestock } },
@@ -642,7 +674,7 @@ export function collectLivestock(state: PlayerState, slotIndex: number, now = Da
       15
     ),
     ok: true,
-    message: `Collected ${FARM_ITEMS[def.outputItemId]?.name}${def.bonusItemId ? ' + Rich Fertilizer' : ''}!`,
+    message: `Collected ${FARM_ITEMS[def.outputItemId]?.name ?? def.outputItemId}${bonusName}!`,
   };
 }
 

@@ -18,7 +18,8 @@ export type AchievementId =
   | 'pagoda_climber'
   | 'khmer_chef'
   | 'bounty_hunter'
-  | 'lotus_bonded';
+  | 'lotus_bonded'
+  | 'party_host';
 
 export interface AchievementDef {
   id: AchievementId;
@@ -138,6 +139,15 @@ export const ACHIEVEMENT_LIST: AchievementDef[] = [
     category: 'Combat',
     description: 'Conquer the 6-Boss Mythic Boss Rush Gauntlet or defeat Krong Reap.',
     rewardDiamonds: 50,
+  },
+  {
+    id: 'party_host',
+    name: 'Party Host',
+    khmerName: 'ម្ចាស់ពិធីជប់លៀងភូមិ',
+    icon: '🎆',
+    category: 'Social',
+    description: 'Host a Village Lantern or Angkor Grand Firework Party with Shared Feast snacks!',
+    rewardDiamonds: 25,
   },
 ];
 

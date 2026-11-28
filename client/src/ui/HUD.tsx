@@ -152,6 +152,8 @@ interface HUDProps {
   onOpenFloatingMarket?: () => void;
   onOpenSbekThom?: () => void;
   onStartDeliveryRun?: () => void;
+  onOpenKiteWorkshop?: () => void;
+  onOpenPartyHost?: () => void;
   onOpenPatchNotes?: () => void;
   onOpenFeedback?: () => void;
   onOpenScryingMirror?: () => void;
@@ -234,6 +236,8 @@ export const HUD: React.FC<HUDProps> = ({
   onOpenFloatingMarket,
   onOpenSbekThom,
   onStartDeliveryRun,
+  onOpenKiteWorkshop,
+  onOpenPartyHost,
   onOpenPatchNotes,
   onOpenFeedback,
   onOpenScryingMirror,
@@ -1242,6 +1246,36 @@ export const HUD: React.FC<HUDProps> = ({
                       <Zap className="w-4 h-4 text-amber-700" /> Express Delivery Job
                     </span>
                     <span className="text-[9px] font-bold text-amber-700">90s</span>
+                  </button>
+                )}
+                {onOpenKiteWorkshop && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuDropdownOpen(false);
+                      onOpenKiteWorkshop();
+                    }}
+                    className="px-3 py-2 rounded-xl hover:bg-amber-100 text-left flex items-center justify-between gap-2 text-amber-950"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-orange-600" /> Khleng Ek Kites
+                    </span>
+                    <span className="text-[9px] font-bold text-orange-700">🪁 Fly</span>
+                  </button>
+                )}
+                {onOpenPartyHost && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuDropdownOpen(false);
+                      onOpenPartyHost();
+                    }}
+                    className="px-3 py-2 rounded-xl hover:bg-rose-100 text-left flex items-center justify-between gap-2 text-amber-950"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Gift className="w-4 h-4 text-rose-600" /> Host Party
+                    </span>
+                    <span className="text-[9px] font-bold text-rose-700">🎆 Show</span>
                   </button>
                 )}
                 {onOpenArena && (

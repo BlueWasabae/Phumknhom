@@ -1787,6 +1787,19 @@ export const ITEM_CATALOG: Record<string, CatalogItem> = {
     styleVariant: 'lotus_aura',
     stats: {},
   },
+  wings_floating_khleng_ek: {
+    id: 'wings_floating_khleng_ek',
+    name: 'Floating Khleng Ek',
+    khmerName: 'ខ្លែងឯកហោះលើស្មា',
+    slot: 'wings',
+    rarity: 'epic',
+    stylishScore: 135,
+    description: 'Traditional Cambodian Khleng Ek singing kite that glides & bobs on a visible string above your hero in the Overworld!',
+    primaryColor: '#f59e0b',
+    accentColor: '#dc2626',
+    styleVariant: 'lotus_aura',
+    stats: {},
+  },
 
   // ==================== UPDATE 1.4: WORLD EVENT & MUSEUM EXCLUSIVE VANITY ====================
   wings_rain_caller_umbrella: {

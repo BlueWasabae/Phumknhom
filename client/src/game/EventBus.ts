@@ -23,6 +23,7 @@ import type {
 } from '@shared/types';
 import type { KhmerNpcId } from '@shared/npcSchedules';
 import type { BountyCategory } from '@shared/bounties';
+import type { VillageMapId } from '@shared/worldMapData';
 import type { ActiveWorldEventSnapshot } from '@shared/worldEvents';
 import type {
   ColossusRaidChestReward,
@@ -227,7 +228,31 @@ export interface MarketSalePayload {
 }
 
 export interface EventMap {
-  'scene:ready': { zone: ZoneType };
+  'scene:ready': { zone: ZoneType; mapId?: VillageMapId };
+  'kulen:blessingGranted': { durationMs: number };
+  'kite:launchRequest': { kiteId: string; returnMapId?: VillageMapId; returnX?: number; returnY?: number };
+  'kite:completed': {
+    kiteId: string;
+    score: number;
+    ringsCollected: number;
+    maxAltitudeM: number;
+    coinsEarned: number;
+    foragingXp: number;
+    unlockedFloatingKite: boolean;
+  };
+  'party:hostBroadcast': {
+    partyId: string;
+    hostName: string;
+    kitId: string;
+    mapId: string;
+    mapLabel: string;
+    x: number;
+    y: number;
+    fireworkShells: number;
+    palette: number[];
+    expiresAt: number;
+  };
+  'party:feastSnack': { hostName: string };
   'player:state': PlayerState;
   'player:stateSync': PlayerState;
   'player:loadoutChanged': {
@@ -548,7 +573,9 @@ export interface EventMap {
       | 'arena'
       | 'emoteWheel'
       | 'floatingMarket'
-      | 'sbekThom';
+      | 'sbekThom'
+      | 'kiteWorkshop'
+      | 'partyHost';
     leaderboardCategory?: 'farmer' | 'stylish' | 'slayer' | 'tower' | 'boss_rush' | 'pvp';
     farmTab?: 'seeds' | 'livestock' | 'artisan';
     shopTab?: 'primary' | 'secondary';

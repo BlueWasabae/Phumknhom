@@ -453,7 +453,8 @@ export class ClubScene extends Phaser.Scene {
       | 'mining_quarry'
       | 'bamboo_forest'
       | 'sunken_ruins'
-      | 'koh_rong_island' = 'market_street'
+      | 'koh_rong_island'
+      | 'phnom_kulen' = 'market_street'
   ): void {
     if (this.transitioning) return;
     this.transitioning = true;

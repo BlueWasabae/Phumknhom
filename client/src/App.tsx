@@ -240,6 +240,16 @@ import { EmoteWheelModal } from './ui/EmoteWheelModal';
 import { FloatingMarketModal } from './ui/FloatingMarketModal';
 import { SbekThomModal } from './ui/SbekThomModal';
 import { DeliveryHudWidget } from './ui/DeliveryHudWidget';
+import { KiteWorkshopModal } from './ui/KiteWorkshopModal';
+import { PartyHostModal } from './ui/PartyHostModal';
+import {
+  PARTY_ALLOWED_MAPS,
+  VILLAGE_PARTY_KITS,
+  craftOrUnlockKite,
+  type KhlengEkKiteId,
+  type PartyKitId,
+} from '@shared/kitesAndParties';
+import { getVillageMapOrDefault } from '@shared/worldMapData';
 import {
   buyRegionalTradeGood,
   sellRegionalTradeGood,
@@ -347,6 +357,8 @@ type ActiveModalType =
   | 'arena'
   | 'floatingMarket'
   | 'sbekThom'
+  | 'kiteWorkshop'
+  | 'partyHost'
   | 'characterCreator';
 
 interface FloatingXpBanner extends SkillXpToastPayload {
@@ -2149,6 +2161,72 @@ export const App: React.FC = () => {
           };
         });
       }),
+      EventBus.on('kulen:blessingGranted', ({ durationMs }) => {
+        runStateAction((prev) => {
+          const nextUntil = Date.now() + durationMs;
+          return {
+            state: {
+              ...prev,
+              hp: prev.maxHp,
+              kulenBlessingUntil: nextUntil,
+            },
+            ok: true,
+            message:
+              '🪷 KULEN SACRED BLESSING! 100% HP & Energy restored · +10% All Skill XP & +10% Boss Defense for 15 minutes!',
+          };
+        });
+      }),
+      EventBus.on(
+        'kite:completed',
+        ({ score, ringsCollected, maxAltitudeM, coinsEarned, foragingXp, unlockedFloatingKite }) => {
+          runStateAction((prev) => {
+            const nextCoins = prev.currencies.coins + coinsEarned;
+            const nextInv = prev.inventory.map((i) => ({ ...i }));
+            let grantedVanity = false;
+            if (
+              unlockedFloatingKite &&
+              !nextInv.some((i) => i.itemId === 'wings_floating_khleng_ek' && i.quantity > 0)
+            ) {
+              grantedVanity = true;
+              nextInv.push({ itemId: 'wings_floating_khleng_ek', quantity: 1, itemLevel: 1, quality: 'normal' });
+            }
+            const withXp = awardSkillXp(
+              {
+                ...prev,
+                coins: nextCoins,
+                currencies: { ...prev.currencies, coins: nextCoins },
+                inventory: nextInv,
+              },
+              'foraging',
+              foragingXp
+            ).state;
+            return {
+              state: withXp,
+              ok: true,
+              message: `🪁 Khleng Ek Flight Complete! ${ringsCollected} Rings · ${maxAltitudeM}m Alt · ${score} pts · +${coinsEarned}c · +${foragingXp} Foraging XP${
+                grantedVanity ? ' · ✨ UNLOCKED Floating Khleng Ek Back-Slot Vanity!' : ''
+              }`,
+            };
+          });
+        }
+      ),
+      EventBus.on('party:feastSnack', ({ hostName }) => {
+        runStateAction((prev) => ({
+          state: {
+            ...prev,
+            hp: prev.maxHp,
+            partyFeastBuffUntil: Date.now() + 5 * 60_000,
+          },
+          ok: true,
+          message: `🎉 Enjoyed ${hostName}'s Party Feast Snack! +15% Move Speed & +15% Luck for 5 minutes!`,
+        }));
+      }),
+      EventBus.on('party:hostBroadcast', (evt) => {
+        EventBus.emit('ticker:push', {
+          text: `🎉 ${evt.hostName} is hosting a Village Party in ${evt.mapLabel}! Join for free Feast Buffs & Fireworks!`,
+          category: 'club',
+        });
+      }),
       EventBus.on('petRace:finished', ({ place, timeSec, coins, petXpTreats, unlockedChampionRibbon }) => {
         runStateAction((prev) => {
           const nextCoins = prev.currencies.coins + coins;
@@ -3534,6 +3612,8 @@ export const App: React.FC = () => {
             onStartDeliveryRun={() => {
               EventBus.emit('delivery:startRequest', {});
             }}
+            onOpenKiteWorkshop={() => setActiveModal('kiteWorkshop')}
+            onOpenPartyHost={() => setActiveModal('partyHost')}
             onOpenPetRace={() => setActiveModal('petRace')}
             onOpenYardDecor={() => {
               setHouseDecorScope('yard');
@@ -5695,6 +5775,106 @@ export const App: React.FC = () => {
             return res;
           })
         }
+        onClose={() => setActiveModal(null)}
+      />
+
+      <KiteWorkshopModal
+        open={activeModal === 'kiteWorkshop'}
+        player={player}
+        onCraftOrSelectKite={(kiteId: KhlengEkKiteId) =>
+          runStateAction((s) => {
+            const res = craftOrUnlockKite(s, kiteId);
+            if (res.ok) soundManager.playSfx('coin');
+            return res;
+          })
+        }
+        onLaunchFlight={(kiteId: KhlengEkKiteId) => {
+          EventBus.emit('kite:launchRequest', {
+            kiteId,
+            returnMapId: player.currentMapId ?? 'green_park',
+          });
+        }}
+        onClose={() => setActiveModal(null)}
+      />
+
+      <PartyHostModal
+        open={activeModal === 'partyHost'}
+        player={player}
+        currentLocationId={zone === 'farm' ? 'farm' : (player.currentMapId ?? 'central_plaza')}
+        currentLocationLabel={
+          zone === 'farm'
+            ? 'Stilt House Farm Yard'
+            : getVillageMapOrDefault(player.currentMapId).name
+        }
+        onHostParty={(kitId: PartyKitId) => {
+          const kit = VILLAGE_PARTY_KITS[kitId];
+          if (!kit) return;
+          const locId = zone === 'farm' ? 'farm' : (player.currentMapId ?? 'central_plaza');
+          if (!PARTY_ALLOWED_MAPS.has(locId)) {
+            EventBus.emit('ui:toast', {
+              text: '🎆 Travel to Central Plaza, Koh Rong Island, Phnom Kulen, or your Farm Yard to host a Party!',
+            });
+            return;
+          }
+          const locLabel =
+            zone === 'farm'
+              ? 'Stilt House Farm Yard'
+              : getVillageMapOrDefault(player.currentMapId).name;
+          let hostedOk = false;
+          runStateAction((prev) => {
+            if (kit.costCoins && prev.currencies.coins < kit.costCoins) {
+              return { state: prev, ok: false, message: `Need ${kit.costCoins} Coins for ${kit.name}.` };
+            }
+            if (kit.costDiamonds && prev.currencies.diamonds < kit.costDiamonds) {
+              return { state: prev, ok: false, message: `Need ${kit.costDiamonds} 💎 Diamonds for ${kit.name}.` };
+            }
+            hostedOk = true;
+            const nextCoins = prev.currencies.coins - (kit.costCoins ?? 0);
+            const nextDiamonds = prev.currencies.diamonds - (kit.costDiamonds ?? 0);
+            const nextPartyCount = (prev.partyHostCount ?? 0) + 1;
+            const nextState: PlayerState = {
+              ...prev,
+              coins: nextCoins,
+              currencies: { ...prev.currencies, coins: nextCoins, diamonds: nextDiamonds },
+              partyHostCount: nextPartyCount,
+              lifeStats: {
+                ...prev.lifeStats,
+                friendly: Math.min(100, prev.lifeStats.friendly + 50),
+              },
+            };
+            const ach = evaluateAchievements(nextState, ['party_host']);
+            return {
+              state: ach.state,
+              ok: true,
+              message: `🎆 HOSTING ${kit.name.toUpperCase()} in ${locLabel}! +50 Friendly XP · Feast Table & ${kit.fireworkShells} Fireworks launched!`,
+            };
+          });
+          if (hostedOk) {
+            const evtPayload = {
+              partyId: `pty_${Date.now().toString(36)}`,
+              hostName: player.name,
+              kitId: kit.id,
+              mapId: locId,
+              mapLabel: locLabel,
+              x: 800,
+              y: 620,
+              fireworkShells: kit.fireworkShells,
+              palette: kit.palette,
+              expiresAt: Date.now() + kit.feastDurationMs,
+            };
+            // Trigger immediately locally AND sync to all online guests in PlazaRoom!
+            EventBus.emit('party:hostBroadcast', evtPayload);
+            roomClient.sendHostParty({
+              kitId: kit.id,
+              mapId: locId,
+              mapLabel: locLabel,
+              x: 800,
+              y: 620,
+              fireworkShells: kit.fireworkShells,
+              palette: kit.palette,
+            });
+          }
+        }}
         onClose={() => setActiveModal(null)}
       />
 

@@ -147,7 +147,8 @@ export interface ActiveTreasureMap {
     | 'mining_quarry'
     | 'bamboo_forest'
     | 'sunken_ruins'
-    | 'koh_rong_island';
+    | 'koh_rong_island'
+    | 'phnom_kulen';
   clueTitle: string;
   clueDescription: string;
   x: number;
@@ -580,7 +581,8 @@ export interface PlayerState {
     | 'mining_quarry'
     | 'bamboo_forest'
     | 'sunken_ruins'
-    | 'koh_rong_island';
+    | 'koh_rong_island'
+    | 'phnom_kulen';
   currentWorldId?: string;
   activeBiome?: string;
   discoveredBiomes?: string[];
@@ -680,6 +682,12 @@ export interface PlayerState {
   reamkerQuestStep?: number; // 0 = not started, 1..5 = active step, 6 = completed
   reamkerStepProgress?: number;
   deliveryJobsCompleted?: number;
+  /** Update 3.3 — Phnom Kulen Blessing, Khleng Ek Singing Kites & Village Firework Parties */
+  kulenBlessingUntil?: number;
+  ownedKites?: string[];
+  activeKiteId?: string;
+  partyHostCount?: number;
+  partyFeastBuffUntil?: number;
   hasCompletedCreation?: boolean;
   skillDamagePct: number;
   armorDamagePct: number;
@@ -777,6 +785,13 @@ export function createInitialFarmState(now = Date.now()): FarmState {
       {
         slotIndex: 0,
         animalId: 'village_chicken',
+        acquiredAt: now - 1_200_000,
+        lastCollectedAt: now - 540_000, // Ready in 60s
+        fed: true,
+      },
+      {
+        slotIndex: 1,
+        animalId: 'khmer_white_cow',
         acquiredAt: now - 1_200_000,
         lastCollectedAt: now - 1_140_000, // Ready in 60s
         fed: true,
@@ -1014,6 +1029,11 @@ export const INITIAL_PLAYER_STATE: PlayerState = {
   reamkerQuestStep: 0,
   reamkerStepProgress: 0,
   deliveryJobsCompleted: 0,
+  kulenBlessingUntil: 0,
+  ownedKites: [],
+  activeKiteId: 'kite_classic_bamboo',
+  partyHostCount: 0,
+  partyFeastBuffUntil: 0,
   hasCompletedCreation: false,
   skillDamagePct: 0.025,
   armorDamagePct: 0.04,
