@@ -62,6 +62,15 @@ import {
   createMarketListing,
   listMarketListings,
 } from './economy/marketService';
+import {
+  buyoutAuctionListing,
+  claimPlayerMail,
+  createAuctionListing,
+  listAuctionListings,
+  listPlayerMail,
+  placeAuctionBid,
+  startAuctionHouseSweeper,
+} from './economy/auctionService';
 import { createReforgeAndBankRouter } from './economy/reforgeService';
 import { createBankRouter } from './economy/bankService';
 import {
@@ -114,8 +123,12 @@ app.use(
         callback(null, true);
         return;
       }
-      // Allow local LAN mobile testing during non-production development
-      if (!IS_PROD && /^http:\/\/(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)[\d.]+:5173$/.test(normalized)) {
+      // Allow local dev & preview testing ports during non-production development
+      if (
+        !IS_PROD &&
+        (/^http:\/\/(localhost|127\.0\.0\.1):(41\d\d|517\d)$/.test(normalized) ||
+          /^http:\/\/(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)[\d.]+:5173$/.test(normalized))
+      ) {
         callback(null, true);
         return;
       }
@@ -893,6 +906,138 @@ app.post('/api/world-boss/spawn', (req, res) => {
   res.json({ ok: true, status });
 });
 
+// ==================== UPDATE 2.7: TIMED SERVER AUCTION HOUSE & MAILBOX ====================
+
+app.get('/api/auction/list', (req, res) => {
+  const rarity = typeof req.query.rarity === 'string' ? req.query.rarity : 'all';
+  const category = typeof req.query.category === 'string' ? req.query.category : 'all';
+  const search = typeof req.query.search === 'string' ? req.query.search : '';
+  const includeEnded = req.query.includeEnded === '1' || req.query.includeEnded === 'true';
+  const listings = listAuctionListings({ rarity, category, search, includeEnded });
+  res.json({ ok: true, listings, taxRate: 0.05 });
+});
+
+app.post('/api/auction/create', async (req, res) => {
+  try {
+    const verified = verifyAuthToken(extractBearerToken(req));
+    const body = (req.body ?? {}) as {
+      sellerName?: string;
+      sellerIsVip?: boolean;
+      itemId?: string;
+      itemName?: string;
+      quantity?: number;
+      quality?: 'normal' | 'gold_star';
+      itemLevel?: number;
+      rarity?: string;
+      category?: string;
+      currency?: 'coins' | 'gold';
+      startingBid?: number;
+      buyoutPrice?: number | null;
+      durationHours?: number;
+    };
+    const result = await createAuctionListing({
+      sellerId: verified?.playerId ?? 'guest',
+      sellerName: verified?.username ?? (body.sellerName || 'PhumHero'),
+      sellerIsVipOverride: Boolean(body.sellerIsVip),
+      itemId: body.itemId || '',
+      itemName: body.itemName || '',
+      quantity: Number(body.quantity ?? 1),
+      quality: body.quality === 'gold_star' ? 'gold_star' : 'normal',
+      itemLevel: Number(body.itemLevel ?? 1),
+      rarity: body.rarity || 'rare',
+      category: body.category || 'relic',
+      currency: body.currency === 'gold' ? 'gold' : 'coins',
+      startingBid: Number(body.startingBid ?? 100),
+      buyoutPrice: body.buyoutPrice ?? null,
+      durationHours: Number(body.durationHours ?? 6),
+    });
+    if (!result.ok) {
+      res.status(400).json({ error: result.error });
+      return;
+    }
+    res.status(201).json(result);
+  } catch (err) {
+    console.error('[Phum Server] POST /api/auction/create error:', err);
+    res.status(500).json({ error: 'Failed to create auction listing.' });
+  }
+});
+
+app.post('/api/auction/bid', async (req, res) => {
+  try {
+    const verified = verifyAuthToken(extractBearerToken(req));
+    const body = (req.body ?? {}) as {
+      auctionId?: string;
+      bidderName?: string;
+      bidAmount?: number;
+    };
+    if (!body.auctionId) {
+      res.status(400).json({ error: 'Missing auctionId.' });
+      return;
+    }
+    const result = await placeAuctionBid({
+      auctionId: body.auctionId,
+      bidderId: verified?.playerId ?? 'guest',
+      bidderName: verified?.username ?? (body.bidderName || 'PhumHero'),
+      bidAmount: Number(body.bidAmount ?? 0),
+    });
+    if (!result.ok) {
+      res.status(400).json({ error: result.error });
+      return;
+    }
+    res.json(result);
+  } catch (err) {
+    console.error('[Phum Server] POST /api/auction/bid error:', err);
+    res.status(500).json({ error: 'Failed to place bid.' });
+  }
+});
+
+app.post('/api/auction/buyout', async (req, res) => {
+  try {
+    const verified = verifyAuthToken(extractBearerToken(req));
+    const body = (req.body ?? {}) as { auctionId?: string; buyerName?: string };
+    if (!body.auctionId) {
+      res.status(400).json({ error: 'Missing auctionId.' });
+      return;
+    }
+    const result = await buyoutAuctionListing({
+      auctionId: body.auctionId,
+      buyerId: verified?.playerId ?? 'guest',
+      buyerName: verified?.username ?? (body.buyerName || 'PhumHero'),
+    });
+    if (!result.ok) {
+      res.status(400).json({ error: result.error });
+      return;
+    }
+    res.json(result);
+  } catch (err) {
+    console.error('[Phum Server] POST /api/auction/buyout error:', err);
+    res.status(500).json({ error: 'Failed to buyout auction.' });
+  }
+});
+
+app.get('/api/mail/list', (req, res) => {
+  const verified = verifyAuthToken(extractBearerToken(req));
+  const playerId = verified?.playerId || (typeof req.query.playerId === 'string' ? req.query.playerId : '');
+  const username = verified?.username || (typeof req.query.username === 'string' ? req.query.username : '');
+  const mail = listPlayerMail([playerId, username].filter((x) => x && x !== 'guest'));
+  res.json({ ok: true, mail });
+});
+
+app.post('/api/auction/claim', (req, res) => {
+  const verified = verifyAuthToken(extractBearerToken(req));
+  const body = (req.body ?? {}) as { mailId?: string; playerId?: string; username?: string };
+  const keys = [
+    verified?.playerId || body.playerId || '',
+    verified?.username || body.username || '',
+  ].filter((x) => x && x !== 'guest');
+  if (keys.length === 0) {
+    res.status(400).json({ error: 'Missing player identity to claim mail.' });
+    return;
+  }
+  const result = claimPlayerMail(keys, body.mailId);
+  res.json(result);
+});
+
 const httpServer = http.createServer(app);
 const gameServer = new Server({
   transport: new WebSocketTransport({
@@ -906,6 +1051,7 @@ gameServer.define('club', ClubRoom).filterBy(['cityServer']);
 gameServer.define('world_boss', WorldBossRoom);
 
 startWorldBossScheduler();
+startAuctionHouseSweeper();
 
 httpServer.listen(PORT, HOST, () => {
   console.log(`[ភូមិខ្ញុំ Colyseus] Village Plaza + Co-op Dungeon Server listening on ws://${HOST}:${PORT}`);

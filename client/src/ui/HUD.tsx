@@ -125,6 +125,9 @@ interface HUDProps {
   onOpenInbox: () => void;
   onOpenAuth: () => void;
   onOpenMarket: () => void;
+  onOpenAuctionHouse?: () => void;
+  onOpenMailbox?: () => void;
+  unclaimedMailCount?: number;
   onOpenBestiary: () => void;
   onOpenDiamondStore: () => void;
   onOpenWorldMap: () => void;
@@ -192,6 +195,9 @@ export const HUD: React.FC<HUDProps> = ({
   onOpenInbox,
   onOpenAuth,
   onOpenMarket,
+  onOpenAuctionHouse,
+  onOpenMailbox,
+  unclaimedMailCount = 0,
   onOpenBestiary,
   onOpenDiamondStore,
   onOpenWorldMap,
@@ -621,6 +627,21 @@ export const HUD: React.FC<HUDProps> = ({
         </button>
       )}
 
+      {/* Unclaimed Auction/Trade Mailbox Pill (Update 2.7) */}
+      {unclaimedMailCount > 0 && onOpenMailbox && (
+        <button
+          type="button"
+          onClick={() => {
+            soundManager.playSfx('click');
+            onOpenMailbox();
+          }}
+          title="You have unclaimed Auction payouts or won items in your Mailbox!"
+          className="px-2.5 py-0.5 rounded-lg bg-gradient-to-r from-sky-600 to-emerald-600 hover:brightness-110 text-white border border-sky-950 font-display font-bold text-[10px] whitespace-nowrap shadow-md animate-pulse cursor-pointer transition"
+        >
+          📬 Claim Mail ({unclaimedMailCount})
+        </button>
+      )}
+
       {/* Live Dynamic World Event Pill (Update 1.4) */}
       {activeWorldEvent && (
         <button
@@ -924,6 +945,44 @@ export const HUD: React.FC<HUDProps> = ({
                     ? 'Village Market (👑 0% VIP Tax)'
                     : 'Village Market (5% Tax)'}
                 </button>
+                {onOpenAuctionHouse && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundManager.playSfx('click');
+                      setMenuDropdownOpen(false);
+                      onOpenAuctionHouse();
+                    }}
+                    className="px-3 py-2 rounded-xl hover:bg-amber-200/80 text-left flex items-center justify-between gap-2 text-amber-950"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-amber-600" /> Auction House (Rare+)
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded-full bg-amber-700 text-amber-50 text-[9px] font-bold">
+                      BID
+                    </span>
+                  </button>
+                )}
+                {onOpenMailbox && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundManager.playSfx('click');
+                      setMenuDropdownOpen(false);
+                      onOpenMailbox();
+                    }}
+                    className="px-3 py-2 rounded-xl hover:bg-sky-100 text-left flex items-center justify-between gap-2 text-amber-950"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Mail className="w-4 h-4 text-sky-700" /> Mailbox &amp; Trade Log
+                    </span>
+                    {unclaimedMailCount > 0 && (
+                      <span className="px-1.5 py-0.5 rounded-full bg-rose-600 text-white text-[9px] font-bold animate-pulse">
+                        {unclaimedMailCount}
+                      </span>
+                    )}
+                  </button>
+                )}
                 {onOpenReliquary && (
                   <button
                     type="button"

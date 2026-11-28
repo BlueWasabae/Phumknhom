@@ -1,6 +1,7 @@
 import { Client, Room } from 'colyseus';
 import { PlazaState, RemotePlayer } from '../schema/PlazaState';
 import { presenceRegistry } from '../presence';
+import { tradeService, type ServerTradeSlotItem } from '../economy/tradeService';
 
 export const ALLOWED_AREAS = ['AREA 0', 'AREA 1', 'AREA 2'] as const;
 export type AreaId = (typeof ALLOWED_AREAS)[number];
@@ -330,6 +331,149 @@ export class PlazaRoom extends Room<PlazaState> {
         );
       }
     );
+
+    // ==================== UPDATE 2.7: SECURE 2-STEP LIVE P2P TRADE WINDOW ====================
+
+    const pushTradeStateToBoth = (sess: NonNullable<ReturnType<typeof tradeService.getSession>>) => {
+      const snap = tradeService.toPublicSnapshot(sess);
+      presenceRegistry.sendToTarget({ sessionId: sess.sideA.sessionId }, 'trade:state', snap);
+      presenceRegistry.sendToTarget({ sessionId: sess.sideB.sessionId }, 'trade:state', snap);
+    };
+
+    this.onMessage('trade:request', (client, payload: { targetSessionId?: string; enforceDistance?: boolean }) => {
+      const sender = this.state.players.get(client.sessionId);
+      const targetSid = typeof payload?.targetSessionId === 'string' ? payload.targetSessionId : '';
+      const target = targetSid ? this.state.players.get(targetSid) : undefined;
+      if (!sender || !target) {
+        client.send('socialNotice', { text: 'Target player is no longer in this Area.' });
+        return;
+      }
+
+      const res = tradeService.createRequest(
+        {
+          sessionId: client.sessionId,
+          playerId: sender.playerId,
+          name: sender.name,
+          x: sender.x,
+          y: sender.y,
+        },
+        {
+          sessionId: target.sessionId,
+          playerId: target.playerId,
+          name: target.name,
+          x: target.x,
+          y: target.y,
+        },
+        payload?.enforceDistance !== false
+      );
+      if (!res.ok) {
+        client.send('socialNotice', { text: `⚠️ ${res.error}` });
+        return;
+      }
+
+      const snap = tradeService.toPublicSnapshot(res.session);
+      client.send('trade:state', snap);
+      presenceRegistry.sendToTarget({ sessionId: target.sessionId }, 'trade:incoming', {
+        tradeId: res.session.tradeId,
+        fromSessionId: client.sessionId,
+        fromName: sender.name,
+        snapshot: snap,
+      });
+    });
+
+    this.onMessage('trade:accept', (client, payload: { tradeId?: string }) => {
+      if (!payload?.tradeId) return;
+      const res = tradeService.acceptRequest(payload.tradeId, client.sessionId);
+      if (!res.ok) {
+        client.send('socialNotice', { text: `⚠️ ${res.error}` });
+        return;
+      }
+      pushTradeStateToBoth(res.session);
+    });
+
+    this.onMessage('trade:cancel', (client, payload: { tradeId?: string; reason?: string }) => {
+      const active = payload?.tradeId
+        ? tradeService.getSession(payload.tradeId)
+        : tradeService.getSessionForClient(client.sessionId);
+      if (!active) return;
+      const actor = this.state.players.get(client.sessionId);
+      const res = tradeService.cancelTrade(active.tradeId, client.sessionId);
+      if (!res.ok) return;
+      const reason = payload?.reason || `${actor?.name || 'Trader'} cancelled the trade.`;
+      presenceRegistry.sendToTarget({ sessionId: res.session.sideA.sessionId }, 'trade:cancelled', {
+        tradeId: res.session.tradeId,
+        reason,
+      });
+      presenceRegistry.sendToTarget({ sessionId: res.session.sideB.sessionId }, 'trade:cancelled', {
+        tradeId: res.session.tradeId,
+        reason,
+      });
+    });
+
+    this.onMessage(
+      'trade:updateOffer',
+      (
+        client,
+        payload: {
+          tradeId?: string;
+          items?: ServerTradeSlotItem[];
+          coins?: number;
+          walletCoins?: number;
+          inventorySnapshot?: Array<{ itemId: string; quantity: number; quality?: string }>;
+        }
+      ) => {
+        if (!payload?.tradeId) return;
+        const res = tradeService.updateOffer(payload.tradeId, client.sessionId, payload);
+        if (!res.ok) {
+          client.send('socialNotice', { text: `⚠️ ${res.error}` });
+          return;
+        }
+        pushTradeStateToBoth(res.session);
+      }
+    );
+
+    this.onMessage(
+      'trade:toggleLock',
+      (
+        client,
+        payload: {
+          tradeId?: string;
+          walletCoins?: number;
+          inventorySnapshot?: Array<{ itemId: string; quantity: number; quality?: string }>;
+        }
+      ) => {
+        if (!payload?.tradeId) return;
+        const res = tradeService.toggleLock(payload.tradeId, client.sessionId, payload);
+        if (!res.ok) {
+          client.send('socialNotice', { text: `⚠️ ${res.error}` });
+          return;
+        }
+        pushTradeStateToBoth(res.session);
+      }
+    );
+
+    this.onMessage('trade:confirm', async (client, payload: { tradeId?: string }) => {
+      if (!payload?.tradeId) return;
+      const res = await tradeService.confirmTrade(payload.tradeId, client.sessionId);
+      if (!res.ok) {
+        client.send('socialNotice', { text: `⚠️ ${res.error}` });
+        return;
+      }
+      if (res.completed && res.receipts) {
+        presenceRegistry.sendToTarget(
+          { sessionId: res.session.sideA.sessionId },
+          'trade:completed',
+          res.receipts.forA
+        );
+        presenceRegistry.sendToTarget(
+          { sessionId: res.session.sideB.sessionId },
+          'trade:completed',
+          res.receipts.forB
+        );
+      } else {
+        pushTradeStateToBoth(res.session);
+      }
+    });
   }
 
   onJoin(
@@ -378,6 +522,17 @@ export class PlazaRoom extends Room<PlazaState> {
   }
 
   onLeave(client: Client): void {
+    const cancelledTrade = tradeService.handleDisconnect(client.sessionId);
+    if (cancelledTrade) {
+      const partnerSid =
+        cancelledTrade.sideA.sessionId === client.sessionId
+          ? cancelledTrade.sideB.sessionId
+          : cancelledTrade.sideA.sessionId;
+      presenceRegistry.sendToTarget({ sessionId: partnerSid }, 'trade:cancelled', {
+        tradeId: cancelledTrade.tradeId,
+        reason: 'Your trading partner disconnected.',
+      });
+    }
     this.state.players.delete(client.sessionId);
     presenceRegistry.unregister(client.sessionId);
     this.lastChatAt.delete(client.sessionId);

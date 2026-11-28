@@ -46,7 +46,11 @@ export class RemotePlayerEntity {
   private emoteExpiresAt = 0;
   private readonly uiScale = 0.44;
 
-  constructor(scene: Phaser.Scene, snapshot: RemotePlayerSnapshot) {
+  constructor(
+    scene: Phaser.Scene,
+    snapshot: RemotePlayerSnapshot,
+    getLocalPos?: () => { x: number; y: number }
+  ) {
     this.scene = scene;
     this.sessionId = snapshot.sessionId;
     this.playerId = snapshot.playerId || '';
@@ -79,6 +83,8 @@ export class RemotePlayerEntity {
       .setDepth(this.y + 14)
       .setInteractive({ useHandCursor: true });
     this.hitZone.on('pointerdown', () => {
+      const local = getLocalPos ? getLocalPos() : null;
+      const distancePx = local ? Math.hypot(this.x - local.x, this.y - local.y) : undefined;
       EventBus.emit('social:inspectPlayer', {
         sessionId: this.sessionId,
         playerId: this.playerId,
@@ -86,6 +92,9 @@ export class RemotePlayerEntity {
         level: this.level,
         stylish: this.stylish,
         areaId: this.areaId,
+        x: this.x,
+        y: this.y,
+        distancePx,
         loadout: { ...this.loadout },
       });
     });

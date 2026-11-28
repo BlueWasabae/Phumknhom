@@ -4,6 +4,10 @@ import {
   type BossId,
   type DifficultyMode,
   type EquippedLoadout,
+  type PlayerMailEntry,
+  type TradeCompletedReceipt,
+  type TradeSessionSnapshot,
+  type TradeSlotItem,
 } from '@shared/types';
 import type { WorldBossLeaderboardRow } from '@shared/worldBossData';
 import { EventBus } from '../EventBus';
@@ -270,9 +274,8 @@ class PlazaRoomClient {
     handlers: PlazaRoomHandlers
   ): Promise<boolean> {
     this.currentAreaId = areaId;
-    const myToken = ++this.connectToken;
-
     await this.leavePlaza(false);
+    const myToken = ++this.connectToken;
 
     this.connecting = true;
     const { wsUrl } = getServerEndpoints();
@@ -451,6 +454,31 @@ class PlazaRoomClient {
         }
       );
 
+      // Update 2.7 — Live 2-Step P2P Trade Window, Auction Ticker & Mailbox Notifications
+      room.onMessage(
+        'trade:incoming',
+        (msg: { tradeId: string; fromSessionId: string; fromName: string; snapshot: TradeSessionSnapshot }) => {
+          EventBus.emit('trade:incoming', msg);
+        }
+      );
+      room.onMessage('trade:state', (snap: TradeSessionSnapshot) => {
+        EventBus.emit('trade:state', snap);
+      });
+      room.onMessage('trade:completed', (receipt: TradeCompletedReceipt) => {
+        EventBus.emit('trade:completed', receipt);
+      });
+      room.onMessage('trade:cancelled', (msg: { tradeId: string; reason: string }) => {
+        EventBus.emit('trade:cancelled', msg);
+      });
+      room.onMessage('auctionTicker', (msg: { text?: string }) => {
+        if (typeof msg?.text === 'string' && msg.text.trim()) {
+          EventBus.emit('ticker:push', { text: msg.text.trim(), category: 'market' });
+        }
+      });
+      room.onMessage('mailNotification', (msg: { mail: PlayerMailEntry; text: string }) => {
+        EventBus.emit('mail:notification', msg);
+      });
+
       room.onLeave(() => {
         if (this.room === room) {
           this.room = null;
@@ -608,6 +636,47 @@ class PlazaRoomClient {
   }): void {
     if (!this.room || !this.online) return;
     this.room.send('acceptDungeonInvite', payload);
+  }
+
+  public sendTradeRequest(targetSessionId: string, enforceDistance = true): boolean {
+    if (!this.room || !this.online) return false;
+    this.room.send('trade:request', { targetSessionId, enforceDistance });
+    return true;
+  }
+
+  public sendTradeAccept(tradeId: string): void {
+    if (!this.room || !this.online) return;
+    this.room.send('trade:accept', { tradeId });
+  }
+
+  public sendTradeCancel(tradeId?: string, reason?: string): void {
+    if (!this.room || !this.online) return;
+    this.room.send('trade:cancel', { tradeId, reason });
+  }
+
+  public sendTradeUpdateOffer(payload: {
+    tradeId: string;
+    items: TradeSlotItem[];
+    coins: number;
+    walletCoins: number;
+    inventorySnapshot: Array<{ itemId: string; quantity: number; quality?: string }>;
+  }): void {
+    if (!this.room || !this.online) return;
+    this.room.send('trade:updateOffer', payload);
+  }
+
+  public sendTradeToggleLock(payload: {
+    tradeId: string;
+    walletCoins: number;
+    inventorySnapshot: Array<{ itemId: string; quantity: number; quality?: string }>;
+  }): void {
+    if (!this.room || !this.online) return;
+    this.room.send('trade:toggleLock', payload);
+  }
+
+  public sendTradeConfirm(tradeId: string): void {
+    if (!this.room || !this.online) return;
+    this.room.send('trade:confirm', { tradeId });
   }
 
   // ==================== PHASE 8 CO-OP DUNGEON ROOM ====================

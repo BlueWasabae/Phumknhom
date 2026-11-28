@@ -679,7 +679,10 @@ export class OverworldScene extends Phaser.Scene {
             this.remotePlayers.get(snap.sessionId)?.applySnapshot(snap);
             return;
           }
-          const ent = new RemotePlayerEntity(this, snap);
+          const ent = new RemotePlayerEntity(this, snap, () => ({
+            x: this.player.x,
+            y: this.player.y,
+          }));
           this.remotePlayers.set(snap.sessionId, ent);
         },
         onRemoteChange: (snap) => {
@@ -1488,6 +1491,44 @@ export class OverworldScene extends Phaser.Scene {
       label: 'Press [E] or Click → Player Trading Market Board (5% Tax)',
       isDungeonPortal: false,
       onInteract: () => EventBus.emit('ui:openModal', { modal: 'market' }),
+    });
+
+    // 4B. UPDATE 2.7 — GRAND ANGKOR AUCTION HALL PODIUM (Right beside Village Market Board!)
+    const aucGlow = this.add
+      .image(445, 735, 'torch_glow')
+      .setTint(0xfacc15)
+      .setScale(1.15)
+      .setAlpha(0.55)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(740);
+    vfxManager.applyBloom(this, aucGlow, { color: 0xfacc15, strength: 1.5 });
+    this.glowLights.push(aucGlow);
+    const auctionHall = this.addBuildingOrProp({
+      texture: 'ancient_pagoda',
+      x: 445,
+      y: 762,
+      scale: 1.12,
+      shadowW: 76,
+      shadowH: 18,
+      bodyW: 52,
+      bodyH: 22,
+      label: '🏛️ ANGKOR AUCTION HALL · RARE+',
+      joinArrowY: 684,
+    });
+    auctionHall.setTint(0xfde68a);
+    const openAuctionHall = () => {
+      if (!this.guardInteractRange(445, 762, 130)) return;
+      soundManager.playSfx('click');
+      EventBus.emit('ui:openModal', { modal: 'auctionHouse' });
+    };
+    auctionHall.setInteractive({ useHandCursor: true }).on('pointerdown', openAuctionHall);
+    this.landmarks.push({
+      x: 445,
+      y: 772,
+      radius: 68,
+      label: 'Press [E] or Click → 🏛️ Enter Angkor Auction Hall (Rare/Mythic/Ancient Timed Bids)',
+      isDungeonPortal: false,
+      onInteract: openAuctionHall,
     });
 
     // 5. PHUM NIGHT CLUB ENTRANCE (South-East)

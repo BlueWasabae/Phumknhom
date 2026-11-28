@@ -7,8 +7,11 @@ import type {
   EquippedLoadout,
   KhmerClassId,
   PlacedHouseDecor,
+  PlayerMailEntry,
   PlayerState,
   SkillId,
+  TradeCompletedReceipt,
+  TradeSessionSnapshot,
   TukTukCartListing,
   WeaponAuraId,
   ZoneType,
@@ -166,6 +169,9 @@ export interface InspectedRemotePlayer {
   level: number;
   stylish: number;
   areaId: string;
+  x?: number;
+  y?: number;
+  distancePx?: number;
   loadout: EquippedLoadout;
 }
 
@@ -315,6 +321,16 @@ export interface EventMap {
   'dive:hudUpdate': DiveHudPayload | null;
   'dive:completed': DiveCompletedPayload;
   'blackMarket:changed': { active: boolean; manual: boolean; rotationSeed: number };
+  'trade:incoming': {
+    tradeId: string;
+    fromSessionId: string;
+    fromName: string;
+    snapshot: TradeSessionSnapshot;
+  };
+  'trade:state': TradeSessionSnapshot;
+  'trade:completed': TradeCompletedReceipt;
+  'trade:cancelled': { tradeId: string; reason: string };
+  'mail:notification': { mail: PlayerMailEntry; text: string };
   'worldEvent:reward': {
     skillId?: SkillId;
     xp?: number;
@@ -433,7 +449,9 @@ export interface EventMap {
       | 'achievements'
       | 'reliquary'
       | 'awakening'
-      | 'blackMarket';
+      | 'blackMarket'
+      | 'auctionHouse'
+      | 'mailbox';
     leaderboardCategory?: 'farmer' | 'stylish' | 'slayer' | 'tower' | 'boss_rush';
     farmTab?: 'seeds' | 'livestock' | 'artisan';
     shopTab?: 'primary' | 'secondary';

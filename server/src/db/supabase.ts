@@ -92,6 +92,8 @@ export interface SavedPlayerProfile {
   };
   hasBioluminescentWaveAura?: boolean;
   blackMarketPurchasedKeys?: string[];
+  tradeAuctionHistory?: unknown[];
+  mailbox?: unknown[];
   hasCompletedCreation?: boolean;
   activeClass?: string;
   weapon?: Record<string, unknown>;
@@ -340,6 +342,185 @@ export async function isPlayerVip(playerId: string): Promise<boolean> {
   return typeof until === 'number' && until > now;
 }
 
+export async function creditPlayerGold(playerId: string, deltaGold: number): Promise<void> {
+  const gain = Math.max(0, Math.floor(deltaGold));
+  if (gain <= 0 || !playerId || playerId === 'guest' || playerId.startsWith('npc_')) return;
+
+  if (supabaseClient) {
+    const { data } = await supabaseClient
+      .from('players')
+      .select('gold')
+      .eq('id', playerId)
+      .maybeSingle();
+    if (data && typeof data.gold === 'number') {
+      await supabaseClient
+        .from('players')
+        .update({ gold: data.gold + gain, updated_at: new Date().toISOString() })
+        .eq('id', playerId);
+    }
+    return;
+  }
+
+  const db = readLocalDb();
+  const row = db.players.find((p) => p.id === playerId);
+  if (row) {
+    row.gold = (row.gold ?? 0) + gain;
+    row.updated_at = new Date().toISOString();
+    writeLocalDb(db);
+  }
+}
+
+export interface AtomicTradeParty {
+  playerId: string;
+  giveCoins: number;
+  receiveCoins: number;
+  giveItems: Array<{ itemId: string; quantity: number; quality?: string; itemLevel?: number }>;
+  receiveItems: Array<{ itemId: string; quantity: number; quality?: string; itemLevel?: number }>;
+}
+
+/**
+ * Verifies & persists an atomic 0%-tax P2P trade swap for registered DB/Supabase players.
+ * Guest sessions (empty or 'guest' playerId) are validated against live session snapshots by tradeService.
+ */
+export async function executeAtomicTradeInDb(
+  partyA: AtomicTradeParty,
+  partyB: AtomicTradeParty
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const isReg = (id: string) => Boolean(id && id !== 'guest' && !id.startsWith('guest_'));
+  const regA = isReg(partyA.playerId);
+  const regB = isReg(partyB.playerId);
+  if (!regA && !regB) {
+    return { ok: true };
+  }
+
+  type RawInvItem = { itemId: string; quantity: number; itemLevel?: number; quality?: string };
+
+  const applySwapToInventory = (
+    rawInv: unknown[],
+    give: AtomicTradeParty['giveItems'],
+    receive: AtomicTradeParty['receiveItems']
+  ): { ok: true; nextInv: RawInvItem[] } | { ok: false; error: string } => {
+    const inv: RawInvItem[] = Array.isArray(rawInv)
+      ? rawInv.map((x) => {
+          const o = x as RawInvItem;
+          return {
+            itemId: String(o.itemId || ''),
+            quantity: Math.max(0, Math.floor(Number(o.quantity ?? 0))),
+            itemLevel: typeof o.itemLevel === 'number' ? o.itemLevel : 1,
+            quality: o.quality === 'gold_star' ? 'gold_star' : 'normal',
+          };
+        })
+      : [];
+
+    for (const g of give) {
+      let rem = Math.max(1, Math.floor(g.quantity));
+      const targetQual = g.quality === 'gold_star' ? 'gold_star' : 'normal';
+      for (const slot of inv) {
+        if (slot.itemId === g.itemId && (slot.quality ?? 'normal') === targetQual && rem > 0) {
+          const take = Math.min(slot.quantity, rem);
+          slot.quantity -= take;
+          rem -= take;
+        }
+      }
+      if (rem > 0) {
+        return { ok: false, error: `Insufficient item quantity for ${g.itemId}.` };
+      }
+    }
+
+    const cleaned = inv.filter((s) => s.quantity > 0);
+    for (const r of receive) {
+      const targetQual = r.quality === 'gold_star' ? 'gold_star' : 'normal';
+      const ex = cleaned.find((s) => s.itemId === r.itemId && (s.quality ?? 'normal') === targetQual);
+      if (ex) {
+        ex.quantity += Math.max(1, Math.floor(r.quantity));
+      } else {
+        cleaned.push({
+          itemId: r.itemId,
+          quantity: Math.max(1, Math.floor(r.quantity)),
+          itemLevel: r.itemLevel ?? 1,
+          quality: targetQual,
+        });
+      }
+    }
+    return { ok: true, nextInv: cleaned };
+  };
+
+  const nowIso = new Date().toISOString();
+
+  if (supabaseClient) {
+    const ids = [regA ? partyA.playerId : null, regB ? partyB.playerId : null].filter(Boolean) as string[];
+    const [{ data: players }, { data: invs }] = await Promise.all([
+      supabaseClient.from('players').select('id, coins').in('id', ids),
+      supabaseClient.from('player_inventory').select('player_id, inventory_json').in('player_id', ids),
+    ]);
+
+    const playerMap = new Map<string, number>();
+    for (const p of players ?? []) playerMap.set(p.id, typeof p.coins === 'number' ? p.coins : 0);
+    const invMap = new Map<string, unknown[]>();
+    for (const inv of invs ?? []) invMap.set(inv.player_id, Array.isArray(inv.inventory_json) ? inv.inventory_json : []);
+
+    const updates: Array<{ id: string; nextCoins: number; nextInv: RawInvItem[] }> = [];
+    for (const [isR, party] of [
+      [regA, partyA],
+      [regB, partyB],
+    ] as const) {
+      if (!isR) continue;
+      const curCoins = playerMap.get(party.playerId);
+      if (curCoins === undefined) continue;
+      if (curCoins < party.giveCoins) {
+        return { ok: false, error: 'A trader no longer has enough Coins for this trade.' };
+      }
+      const swapped = applySwapToInventory(invMap.get(party.playerId) ?? [], party.giveItems, party.receiveItems);
+      if (!swapped.ok) return swapped;
+      updates.push({
+        id: party.playerId,
+        nextCoins: curCoins - party.giveCoins + party.receiveCoins,
+        nextInv: swapped.nextInv,
+      });
+    }
+
+    for (const u of updates) {
+      await Promise.all([
+        supabaseClient.from('players').update({ coins: u.nextCoins, updated_at: nowIso }).eq('id', u.id),
+        supabaseClient
+          .from('player_inventory')
+          .update({ inventory_json: u.nextInv, updated_at: nowIso })
+          .eq('player_id', u.id),
+      ]);
+    }
+    return { ok: true };
+  }
+
+  const db = readLocalDb();
+  const staged: Array<{ row: LocalPlayerRow; nextCoins: number; nextInv: RawInvItem[] }> = [];
+  for (const [isR, party] of [
+    [regA, partyA],
+    [regB, partyB],
+  ] as const) {
+    if (!isR) continue;
+    const row = db.players.find((p) => p.id === party.playerId);
+    if (!row) continue;
+    if ((row.coins ?? 0) < party.giveCoins) {
+      return { ok: false, error: 'A trader no longer has enough Coins for this trade.' };
+    }
+    const swapped = applySwapToInventory(row.inventory_json, party.giveItems, party.receiveItems);
+    if (!swapped.ok) return swapped;
+    staged.push({
+      row,
+      nextCoins: (row.coins ?? 0) - party.giveCoins + party.receiveCoins,
+      nextInv: swapped.nextInv,
+    });
+  }
+
+  for (const s of staged) {
+    s.row.coins = s.nextCoins;
+    s.row.inventory_json = s.nextInv;
+    s.row.updated_at = nowIso;
+  }
+  if (staged.length > 0) writeLocalDb(db);
+  return { ok: true };
+}
+
 // ==================== CRYPTO & AUTH TOKENS ====================
 
 function hashPassword(password: string): string {
@@ -585,6 +766,8 @@ function rowToSavedProfile(row: {
     blackMarketPurchasedKeys: Array.isArray(meta.blackMarketPurchasedKeys)
       ? (meta.blackMarketPurchasedKeys as string[])
       : [],
+    tradeAuctionHistory: Array.isArray(meta.tradeAuctionHistory) ? meta.tradeAuctionHistory : [],
+    mailbox: Array.isArray(meta.mailbox) ? meta.mailbox : [],
     hasCompletedCreation: Boolean(
       meta.hasCompletedCreation ??
         (loadout as { hasCompletedCreation?: boolean }).hasCompletedCreation ??
@@ -952,6 +1135,8 @@ export async function savePlayerProfile(
     blackMarketPurchasedKeys: Array.isArray(profile.blackMarketPurchasedKeys)
       ? profile.blackMarketPurchasedKeys
       : [],
+    tradeAuctionHistory: Array.isArray(profile.tradeAuctionHistory) ? profile.tradeAuctionHistory : [],
+    mailbox: Array.isArray(profile.mailbox) ? profile.mailbox : [],
     hasCompletedCreation: Boolean(
       profile.hasCompletedCreation ??
         (profile.loadout as { hasCompletedCreation?: boolean } | undefined)?.hasCompletedCreation ??

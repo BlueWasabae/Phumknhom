@@ -5,11 +5,17 @@ import {
   createInitialSkillProfile,
   type ActiveDungeonFightInfo,
   type ActiveTreasureMap,
+  type AuctionCategory,
+  type AuctionCurrency,
+  type AuctionListingRecord,
   type BondPartnerRecord,
   type EquippedLoadout,
+  type ItemRarity,
   type KromGuild,
+  type PlayerMailEntry,
   type PlayerState,
   type SkillId,
+  type TradeAuctionHistoryEntry,
   type TukTukCartItem,
   type TukTukCartListing,
 } from '@shared/types';
@@ -131,6 +137,8 @@ export interface SavedProfilePayload {
   pearlDivingStats?: PlayerState['pearlDivingStats'];
   hasBioluminescentWaveAura?: boolean;
   blackMarketPurchasedKeys?: string[];
+  tradeAuctionHistory?: TradeAuctionHistoryEntry[];
+  mailbox?: PlayerMailEntry[];
   hasCompletedCreation?: boolean;
   activeClass: PlayerState['activeClass'];
   weapon: PlayerState['weapon'];
@@ -508,6 +516,8 @@ export function serializePlayerStateForSave(state: PlayerState): SavedProfilePay
       : { divesCompleted: 0, pearlsHarvested: 0, ancientPearlsFound: 0, bestHaulCoins: 0 },
     hasBioluminescentWaveAura: Boolean(state.hasBioluminescentWaveAura ?? false),
     blackMarketPurchasedKeys: [...(state.blackMarketPurchasedKeys ?? [])],
+    tradeAuctionHistory: [...(state.tradeAuctionHistory ?? [])].slice(0, 50),
+    mailbox: [...(state.mailbox ?? [])].slice(0, 50),
     hasCompletedCreation: Boolean(state.hasCompletedCreation ?? state.loadout.hasCompletedCreation),
     activeClass: state.activeClass,
     weapon: { ...state.weapon },
@@ -881,6 +891,10 @@ export function hydratePlayerStateFromSave(
     blackMarketPurchasedKeys: Array.isArray(saved?.blackMarketPurchasedKeys)
       ? [...saved.blackMarketPurchasedKeys]
       : [],
+    tradeAuctionHistory: Array.isArray(saved?.tradeAuctionHistory)
+      ? [...saved.tradeAuctionHistory]
+      : [],
+    mailbox: Array.isArray(saved?.mailbox) ? [...saved.mailbox] : [],
     hasCompletedCreation: Boolean(
       saved?.hasCompletedCreation ?? saved?.loadout?.hasCompletedCreation ?? false
     ),
@@ -2120,4 +2134,162 @@ export async function popPendingReferralCoinsApi(username: string): Promise<numb
   } catch {
     return 0;
   }
+}
+
+// ==================== UPDATE 2.7: TIMED AUCTION HOUSE & MAILBOX API ====================
+
+export async function fetchAuctionListingsApi(filters?: {
+  rarity?: string;
+  category?: string;
+  search?: string;
+}): Promise<{ ok: true; listings: AuctionListingRecord[]; offline?: boolean }> {
+  try {
+    const qs = new URLSearchParams();
+    if (filters?.rarity && filters.rarity !== 'all') qs.set('rarity', filters.rarity);
+    if (filters?.category && filters.category !== 'all') qs.set('category', filters.category);
+    if (filters?.search?.trim()) qs.set('search', filters.search.trim());
+    const res = await fetch(`${getApiBase()}/auction/list?${qs.toString()}`);
+    if (res.ok) {
+      const json = (await res.json()) as { listings?: AuctionListingRecord[] };
+      return { ok: true, listings: Array.isArray(json.listings) ? json.listings : [] };
+    }
+  } catch {
+    // Offline fallback below
+  }
+  return { ok: true, listings: [], offline: true };
+}
+
+export async function createAuctionListingApi(
+  session: AuthSession | null,
+  payload: {
+    sellerName: string;
+    sellerIsVip: boolean;
+    itemId: string;
+    itemName: string;
+    quantity: number;
+    quality: 'normal' | 'gold_star';
+    itemLevel: number;
+    rarity: ItemRarity;
+    category: AuctionCategory;
+    currency: AuctionCurrency;
+    startingBid: number;
+    buyoutPrice: number | null;
+    durationHours: 1 | 6 | 24;
+  }
+): Promise<{ ok: true; listing: AuctionListingRecord } | { ok: false; error: string }> {
+  const res = await postJson<{ ok: boolean; listing: AuctionListingRecord }>(
+    '/auction/create',
+    payload,
+    session?.token
+  );
+  if (res.ok) return { ok: true, listing: res.data.listing };
+  return { ok: false, error: res.error };
+}
+
+export async function placeAuctionBidApi(
+  session: AuthSession | null,
+  payload: { auctionId: string; bidderName: string; bidAmount: number }
+): Promise<
+  | {
+      ok: true;
+      listing: AuctionListingRecord;
+      antiSnipeTriggered: boolean;
+      instantBuyout: boolean;
+    }
+  | { ok: false; error: string }
+> {
+  const res = await postJson<{
+    ok: boolean;
+    listing: AuctionListingRecord;
+    antiSnipeTriggered: boolean;
+    instantBuyout: boolean;
+  }>('/auction/bid', payload, session?.token);
+  if (res.ok) {
+    return {
+      ok: true,
+      listing: res.data.listing,
+      antiSnipeTriggered: Boolean(res.data.antiSnipeTriggered),
+      instantBuyout: Boolean(res.data.instantBuyout),
+    };
+  }
+  return { ok: false, error: res.error };
+}
+
+export async function buyoutAuctionApi(
+  session: AuthSession | null,
+  payload: { auctionId: string; buyerName: string }
+): Promise<{ ok: true; listing: AuctionListingRecord; paidAmount: number } | { ok: false; error: string }> {
+  const res = await postJson<{
+    ok: boolean;
+    listing: AuctionListingRecord;
+    paidAmount: number;
+  }>('/auction/buyout', payload, session?.token);
+  if (res.ok) {
+    return { ok: true, listing: res.data.listing, paidAmount: res.data.paidAmount };
+  }
+  return { ok: false, error: res.error };
+}
+
+export async function fetchPlayerMailApi(
+  session: AuthSession | null,
+  username: string
+): Promise<{ ok: true; mail: PlayerMailEntry[]; offline?: boolean }> {
+  try {
+    const qs = new URLSearchParams();
+    if (session?.playerId) qs.set('playerId', session.playerId);
+    if (username) qs.set('username', username);
+    const res = await fetch(`${getApiBase()}/mail/list?${qs.toString()}`, {
+      headers: session?.token ? { Authorization: `Bearer ${session.token}` } : undefined,
+    });
+    if (res.ok) {
+      const json = (await res.json()) as { mail?: PlayerMailEntry[] };
+      return { ok: true, mail: Array.isArray(json.mail) ? json.mail : [] };
+    }
+  } catch {
+    // Offline fallback
+  }
+  return { ok: true, mail: [], offline: true };
+}
+
+export async function claimAuctionMailApi(
+  session: AuthSession | null,
+  payload: { mailId?: string; username: string }
+): Promise<
+  | {
+      ok: true;
+      claimedCount: number;
+      totalCoins: number;
+      totalGold: number;
+      items: PlayerMailEntry['items'];
+      remainingMail: PlayerMailEntry[];
+    }
+  | { ok: false; error: string }
+> {
+  const res = await postJson<{
+    ok: boolean;
+    claimedCount: number;
+    totalCoins: number;
+    totalGold: number;
+    items: PlayerMailEntry['items'];
+    remainingMail: PlayerMailEntry[];
+  }>(
+    '/auction/claim',
+    {
+      mailId: payload.mailId,
+      playerId: session?.playerId,
+      username: payload.username,
+    },
+    session?.token
+  );
+  if (res.ok) {
+    return {
+      ok: true,
+      claimedCount: res.data.claimedCount,
+      totalCoins: res.data.totalCoins,
+      totalGold: res.data.totalGold,
+      items: res.data.items ?? [],
+      remainingMail: res.data.remainingMail ?? [],
+    };
+  }
+  return { ok: false, error: res.error };
 }

@@ -142,6 +142,111 @@ export interface PlacedHouseDecor {
   rotation?: number; // 0 | 90 | 180 | 270
 }
 
+// ==================== UPDATE 2.7: P2P TRADE, TIMED AUCTION HOUSE & MAILBOX ====================
+
+export interface TradeSlotItem {
+  itemId: string;
+  itemName: string;
+  quantity: number;
+  quality?: QualityTier;
+  itemLevel?: number;
+  rarity: ItemRarity;
+  dropRatePct?: number;
+}
+
+export interface TradeOfferSide {
+  sessionId: string;
+  playerId: string;
+  name: string;
+  items: TradeSlotItem[];
+  coins: number;
+  locked: boolean;
+  confirmed: boolean;
+}
+
+export interface TradeSessionSnapshot {
+  tradeId: string;
+  status: 'pending' | 'active' | 'completed' | 'cancelled';
+  sideA: TradeOfferSide;
+  sideB: TradeOfferSide;
+  bothLockedAt: number | null;
+  warningText: string | null;
+  updatedAt: number;
+}
+
+export interface TradeCompletedReceipt {
+  tradeId: string;
+  partnerName: string;
+  gaveItems: TradeSlotItem[];
+  receivedItems: TradeSlotItem[];
+  gaveCoins: number;
+  receivedCoins: number;
+  taxCoins: 0;
+  timestamp: number;
+}
+
+export type AuctionCurrency = 'coins' | 'gold';
+export type AuctionCategory = 'weapon' | 'wings' | 'pet' | 'armor' | 'relic' | 'material';
+
+export interface AuctionListingRecord {
+  id: string;
+  sellerId: string;
+  sellerName: string;
+  sellerIsVip?: boolean;
+  itemId: string;
+  itemName: string;
+  quantity: number;
+  quality?: QualityTier;
+  itemLevel?: number;
+  rarity: ItemRarity;
+  category: AuctionCategory;
+  currency: AuctionCurrency;
+  startingBid: number;
+  currentBid: number;
+  buyoutPrice: number | null;
+  highestBidderId: string | null;
+  highestBidderName: string | null;
+  bidCount: number;
+  durationHours: 1 | 6 | 24;
+  createdAt: number;
+  endsAt: number;
+  antiSnipeExtensions: number;
+  status: 'active' | 'sold' | 'expired' | 'cancelled';
+}
+
+export interface PlayerMailItemAttachment {
+  itemId: string;
+  itemName: string;
+  quantity: number;
+  quality?: QualityTier;
+  itemLevel?: number;
+  rarity?: ItemRarity;
+}
+
+export interface PlayerMailEntry {
+  id: string;
+  recipientKey: string;
+  recipientName: string;
+  kind: 'auction_won' | 'auction_sold' | 'auction_outbid' | 'auction_expired' | 'trade_receipt' | 'system';
+  title: string;
+  body: string;
+  coins: number;
+  gold: number;
+  items: PlayerMailItemAttachment[];
+  createdAt: number;
+  claimed: boolean;
+}
+
+export interface TradeAuctionHistoryEntry {
+  id: string;
+  kind: 'p2p_trade' | 'auction_sold' | 'auction_bought' | 'auction_listed';
+  summary: string;
+  counterParty?: string;
+  coinsDelta?: number;
+  goldDelta?: number;
+  timestamp: number;
+}
+
 export type DifficultyMode = 'normal' | 'expert' | 'mythic' | 'death';
 
 export type BossId =
@@ -474,6 +579,9 @@ export interface PlayerState {
   };
   hasBioluminescentWaveAura?: boolean;
   blackMarketPurchasedKeys?: string[];
+  /** Update 2.7 — P2P Trade & Auction History + Offline Mailbox Cache */
+  tradeAuctionHistory?: TradeAuctionHistoryEntry[];
+  mailbox?: PlayerMailEntry[];
   hasCompletedCreation?: boolean;
   skillDamagePct: number;
   armorDamagePct: number;

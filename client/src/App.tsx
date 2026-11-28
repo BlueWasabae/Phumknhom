@@ -2,6 +2,9 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   INITIAL_PLAYER_STATE,
   type ActiveDungeonFightInfo,
+  type AuctionCategory,
+  type AuctionCurrency,
+  type AuctionListingRecord,
   type BondPartnerRecord,
   type BossId,
   type ChatMessage,
@@ -9,10 +12,16 @@ import {
   type DifficultyMode,
   type EquipSlot,
   type EquippedLoadout,
+  type ItemRarity,
   type KromGuild,
+  type PlayerMailEntry,
   type PlayerState,
   type QualityTier,
   type SkillId,
+  type TradeAuctionHistoryEntry,
+  type TradeCompletedReceipt,
+  type TradeSessionSnapshot,
+  type TradeSlotItem,
   type TukTukCartItem,
   type TukTukCartListing,
   type WeaponAuraId,
@@ -115,16 +124,22 @@ import {
   acceptFriendRequestApi,
   bankActionApi,
   buyMarketListingApi,
+  buyoutAuctionApi,
   cancelMarketListingApi,
+  claimAuctionMailApi,
   claimFriendReferralApi,
   createAbaKhqrCheckoutApi,
+  createAuctionListingApi,
   createMarketListingApi,
   createStripeCheckoutApi,
   declineFriendRequestApi,
+  fetchAuctionListingsApi,
   fetchFriends,
+  fetchPlayerMailApi,
   hydratePlayerStateFromSave,
   loadGuestCreationProfile,
   loadGuestProgressSnapshot,
+  placeAuctionBidApi,
   popPendingReferralCoinsApi,
   reforgeItemApi,
   sandboxTopUpApi,
@@ -185,6 +200,9 @@ import { DiamondStoreModal } from './ui/DiamondStoreModal';
 import { ReliquaryModal } from './ui/ReliquaryModal';
 import { AwakeningModal } from './ui/AwakeningModal';
 import { DiveHudOverlay } from './ui/DiveHudOverlay';
+import { TradeWindowModal } from './ui/TradeWindowModal';
+import { AuctionHouseModal } from './ui/AuctionHouseModal';
+import { MailModal } from './ui/MailModal';
 import {
   BlackMarketModal,
   type BlackMarketOfferId,
@@ -288,6 +306,8 @@ type ActiveModalType =
   | 'reliquary'
   | 'awakening'
   | 'blackMarket'
+  | 'auctionHouse'
+  | 'mailbox'
   | 'characterCreator';
 
 interface FloatingXpBanner extends SkillXpToastPayload {
@@ -321,6 +341,17 @@ export const App: React.FC = () => {
   const [blackMarketRotationSeed, setBlackMarketRotationSeed] = useState<number>(() =>
     worldEventManager.getBlackMarketSnapshot().rotationSeed
   );
+  const [incomingTrade, setIncomingTrade] = useState<{
+    tradeId: string;
+    fromSessionId: string;
+    fromName: string;
+    snapshot: TradeSessionSnapshot;
+  } | null>(null);
+  const [activeTradeSession, setActiveTradeSession] = useState<TradeSessionSnapshot | null>(null);
+  const [auctionListings, setAuctionListings] = useState<AuctionListingRecord[]>([]);
+  const [auctionLoading, setAuctionLoading] = useState(false);
+  const [playerMail, setPlayerMail] = useState<PlayerMailEntry[]>([]);
+  const [mailLoading, setMailLoading] = useState(false);
   const [focusedCartId, setFocusedCartId] = useState<string | null>(null);
   const [bondPrefillPartner, setBondPrefillPartner] = useState<string | null>(null);
   const [houseDecorateMode, setHouseDecorateMode] = useState(false);
@@ -2698,6 +2729,373 @@ export const App: React.FC = () => {
     };
   }, []);
 
+  // ==================== UPDATE 2.7: LIVE P2P TRADE, TIMED AUCTION HOUSE & MAILBOX ====================
+  const refreshAuctions = useCallback(
+    async (filters?: { rarity?: string; category?: string; search?: string }) => {
+      setAuctionLoading(true);
+      const res = await fetchAuctionListingsApi(filters);
+      setAuctionLoading(false);
+      if (res.ok && !res.offline) {
+        setAuctionListings(res.listings);
+      }
+    },
+    []
+  );
+
+  const refreshMailbox = useCallback(async () => {
+    setMailLoading(true);
+    const res = await fetchPlayerMailApi(authSessionRef.current, playerRef.current.name);
+    setMailLoading(false);
+    if (res.ok && !res.offline) {
+      setPlayerMail(res.mail);
+    }
+  }, []);
+
+  useEffect(() => {
+    const unsubs = [
+      EventBus.on('trade:incoming', (req) => {
+        soundManager.playSfx('click');
+        setIncomingTrade(req);
+        EventBus.emit('ui:toast', {
+          text: `🤝 ${req.fromName} sent you a Live P2P Trade Request!`,
+        });
+      }),
+      EventBus.on('trade:state', (snap) => {
+        setActiveTradeSession(snap);
+        if (snap.status === 'active') {
+          setIncomingTrade(null);
+        }
+      }),
+      EventBus.on('trade:cancelled', ({ reason }) => {
+        setIncomingTrade(null);
+        setActiveTradeSession(null);
+        EventBus.emit('ui:toast', { text: `🤝 Trade cancelled: ${reason}` });
+      }),
+      EventBus.on('trade:completed', (receipt: TradeCompletedReceipt) => {
+        setIncomingTrade(null);
+        setActiveTradeSession(null);
+        soundManager.playSfx('victory');
+        runStateAction((prev) => {
+          let nextInv = prev.inventory.map((i) => ({ ...i }));
+          for (const g of receipt.gaveItems) {
+            let rem = g.quantity;
+            const qual = g.quality ?? 'normal';
+            for (const slot of nextInv) {
+              if (slot.itemId === g.itemId && (slot.quality ?? 'normal') === qual && rem > 0) {
+                const take = Math.min(slot.quantity, rem);
+                slot.quantity -= take;
+                rem -= take;
+              }
+            }
+          }
+          nextInv = nextInv.filter((i) => i.quantity > 0);
+          for (const r of receipt.receivedItems) {
+            const qual = r.quality ?? 'normal';
+            const ex = nextInv.find((s) => s.itemId === r.itemId && (s.quality ?? 'normal') === qual);
+            if (ex) ex.quantity += r.quantity;
+            else nextInv.push({ itemId: r.itemId, quantity: r.quantity, itemLevel: r.itemLevel ?? 1, quality: qual });
+          }
+          const nextCoins = Math.max(0, prev.currencies.coins - receipt.gaveCoins + receipt.receivedCoins);
+          const histEntry: TradeAuctionHistoryEntry = {
+            id: `hist_${receipt.tradeId}`,
+            kind: 'p2p_trade',
+            summary: `🤝 P2P Trade with ${receipt.partnerName} (0% Tax): Gave ${receipt.gaveItems.length} item(s) & ${receipt.gaveCoins.toLocaleString()}c · Received ${receipt.receivedItems.length} item(s) & ${receipt.receivedCoins.toLocaleString()}c`,
+            counterParty: receipt.partnerName,
+            coinsDelta: receipt.receivedCoins - receipt.gaveCoins,
+            timestamp: receipt.timestamp,
+          };
+          return {
+            state: {
+              ...prev,
+              coins: nextCoins,
+              currencies: { ...prev.currencies, coins: nextCoins },
+              inventory: nextInv,
+              tradeAuctionHistory: [histEntry, ...(prev.tradeAuctionHistory ?? [])].slice(0, 50),
+            },
+            ok: true,
+            message: `🤝 Trade Complete with ${receipt.partnerName} (0% Tax)! Swapped ${receipt.gaveItems.length} ↔ ${receipt.receivedItems.length} item(s), Coins net ${
+              receipt.receivedCoins - receipt.gaveCoins >= 0 ? '+' : ''
+            }${(receipt.receivedCoins - receipt.gaveCoins).toLocaleString()}c!`,
+          };
+        });
+      }),
+      EventBus.on('mail:notification', ({ mail, text }) => {
+        soundManager.playSfx('coin');
+        setPlayerMail((prev) => [mail, ...prev.filter((m) => m.id !== mail.id)]);
+        EventBus.emit('ui:toast', { text });
+      }),
+    ];
+    void refreshMailbox();
+    return () => unsubs.forEach((u) => u());
+  }, [refreshMailbox, runStateAction]);
+
+  const handleRequestTrade = useCallback((target: InspectedRemotePlayer) => {
+    if (typeof target.distancePx === 'number' && target.distancePx > 150) {
+      EventBus.emit('ui:toast', {
+        text: `🚶 Move closer to ${target.name} to trade (within 150px)!`,
+      });
+      return;
+    }
+    const sent = roomClient.sendTradeRequest(target.sessionId, true);
+    if (!sent) {
+      EventBus.emit('ui:toast', {
+        text: '⚠️ Connect to the live Plaza server to send P2P Trade requests.',
+      });
+    } else {
+      soundManager.playSfx('click');
+      EventBus.emit('ui:toast', { text: `🤝 Sent Trade Request to ${target.name}...` });
+    }
+  }, []);
+
+  const handleCreateAuction = useCallback(
+    async (payload: {
+      itemId: string;
+      itemName: string;
+      quantity: number;
+      quality: 'normal' | 'gold_star';
+      itemLevel: number;
+      rarity: ItemRarity;
+      category: AuctionCategory;
+      currency: AuctionCurrency;
+      startingBid: number;
+      buyoutPrice: number | null;
+      durationHours: 1 | 6 | 24;
+    }): Promise<{ ok: boolean; message: string }> => {
+      const cur = playerRef.current;
+      const res = await createAuctionListingApi(authSessionRef.current, {
+        ...payload,
+        sellerName: cur.name,
+        sellerIsVip: isVillagePassActive(cur),
+      });
+      if (!res.ok) {
+        return { ok: false, message: res.error };
+      }
+      soundManager.playSfx(
+        payload.rarity === 'ancient' || payload.rarity === 'mythic' ? 'victory' : 'coin'
+      );
+      runStateAction((prev) => {
+        let nextInv = prev.inventory.map((i) => ({ ...i }));
+        const idx = nextInv.findIndex(
+          (i) => i.itemId === payload.itemId && (i.quality ?? 'normal') === payload.quality && i.quantity >= payload.quantity
+        );
+        if (idx >= 0) nextInv[idx].quantity -= payload.quantity;
+        nextInv = nextInv.filter((i) => i.quantity > 0);
+        const hist: TradeAuctionHistoryEntry = {
+          id: `hist_list_${res.listing.id}`,
+          kind: 'auction_listed',
+          summary: `🏛️ Listed [${payload.rarity.toUpperCase()}] ${payload.itemName} in Escrow (${payload.startingBid.toLocaleString()} ${payload.currency})`,
+          timestamp: Date.now(),
+        };
+        return {
+          state: {
+            ...prev,
+            inventory: nextInv,
+            tradeAuctionHistory: [hist, ...(prev.tradeAuctionHistory ?? [])].slice(0, 50),
+          },
+          ok: true,
+          message: `🏛️ Locked ${payload.itemName} in Escrow! Auction live for ${payload.durationHours}h.`,
+        };
+      });
+      if (payload.rarity === 'ancient' || payload.rarity === 'mythic') {
+        EventBus.emit('ticker:push', {
+          text: `🏛️✨ [${payload.rarity.toUpperCase()} AUCTION] ${cur.name} listed ${payload.itemName} starting at ${payload.startingBid.toLocaleString()} ${payload.currency}!`,
+          category: 'market',
+        });
+      }
+      return {
+        ok: true,
+        message: `🏛️ Listed ${payload.itemName} in Angkor Auction Hall Escrow (${payload.durationHours}h)!`,
+      };
+    },
+    [runStateAction]
+  );
+
+  const handleBidAuction = useCallback(
+    async (auction: AuctionListingRecord, bidAmount: number): Promise<{ ok: boolean; message: string }> => {
+      const cur = playerRef.current;
+      const balance = auction.currency === 'gold' ? cur.currencies.gold : cur.currencies.coins;
+      if (balance < bidAmount) {
+        return {
+          ok: false,
+          message: `Need ${bidAmount.toLocaleString()} ${auction.currency === 'gold' ? 'Gold' : 'Coins'} in wallet for Escrow bid.`,
+        };
+      }
+      const res = await placeAuctionBidApi(authSessionRef.current, {
+        auctionId: auction.id,
+        bidderName: cur.name,
+        bidAmount,
+      });
+      if (!res.ok) return { ok: false, message: res.error };
+
+      soundManager.playSfx(res.instantBuyout ? 'victory' : 'coin');
+      const charged = res.instantBuyout && auction.buyoutPrice ? auction.buyoutPrice : bidAmount;
+      runStateAction((prev) => {
+        const nextCoins =
+          auction.currency === 'coins' ? Math.max(0, prev.currencies.coins - charged) : prev.currencies.coins;
+        const nextGold =
+          auction.currency === 'gold' ? Math.max(0, prev.currencies.gold - charged) : prev.currencies.gold;
+        const hist: TradeAuctionHistoryEntry = {
+          id: `hist_bid_${auction.id}_${Date.now()}`,
+          kind: 'auction_bought',
+          summary: res.instantBuyout
+            ? `⚡ Bought out ${auction.itemName} for ${charged.toLocaleString()} ${auction.currency}`
+            : `🔨 Bid ${charged.toLocaleString()} ${auction.currency} on ${auction.itemName}`,
+          counterParty: auction.sellerName,
+          coinsDelta: auction.currency === 'coins' ? -charged : 0,
+          goldDelta: auction.currency === 'gold' ? -charged : 0,
+          timestamp: Date.now(),
+        };
+        return {
+          state: {
+            ...prev,
+            coins: nextCoins,
+            currencies: { ...prev.currencies, coins: nextCoins, gold: nextGold },
+            tradeAuctionHistory: [hist, ...(prev.tradeAuctionHistory ?? [])].slice(0, 50),
+          },
+          ok: true,
+          message: res.instantBuyout
+            ? `⚡ Instant Buyout! ${auction.itemName} sent to your Mailbox!`
+            : `🔨 Highest Bidder on ${auction.itemName} (${charged.toLocaleString()} ${auction.currency})${
+                res.antiSnipeTriggered ? ' · 🛡️ Anti-Snipe +60s!' : '!'
+              }`,
+        };
+      });
+      if (res.instantBuyout) {
+        void refreshMailbox();
+      }
+      return {
+        ok: true,
+        message: res.instantBuyout
+          ? `⚡ Bought out ${auction.itemName}! Claim it in 📬 Mailbox!`
+          : `🔨 Bid accepted (${charged.toLocaleString()} ${auction.currency})${
+              res.antiSnipeTriggered ? ' · 🛡️ Anti-Snipe extended timer +60s!' : ''
+            }`,
+      };
+    },
+    [refreshMailbox, runStateAction]
+  );
+
+  const handleBuyoutAuction = useCallback(
+    async (auction: AuctionListingRecord): Promise<{ ok: boolean; message: string }> => {
+      if (!auction.buyoutPrice) {
+        return { ok: false, message: 'No instant buyout set on this listing.' };
+      }
+      const cur = playerRef.current;
+      const balance = auction.currency === 'gold' ? cur.currencies.gold : cur.currencies.coins;
+      if (balance < auction.buyoutPrice) {
+        return {
+          ok: false,
+          message: `Need ${auction.buyoutPrice.toLocaleString()} ${auction.currency === 'gold' ? 'Gold' : 'Coins'} for Instant Buyout.`,
+        };
+      }
+      const res = await buyoutAuctionApi(authSessionRef.current, {
+        auctionId: auction.id,
+        buyerName: cur.name,
+      });
+      if (!res.ok) return { ok: false, message: res.error };
+
+      soundManager.playSfx('victory');
+      runStateAction((prev) => {
+        const nextCoins =
+          auction.currency === 'coins'
+            ? Math.max(0, prev.currencies.coins - res.paidAmount)
+            : prev.currencies.coins;
+        const nextGold =
+          auction.currency === 'gold'
+            ? Math.max(0, prev.currencies.gold - res.paidAmount)
+            : prev.currencies.gold;
+        const hist: TradeAuctionHistoryEntry = {
+          id: `hist_buyout_${auction.id}_${Date.now()}`,
+          kind: 'auction_bought',
+          summary: `⚡ Instant Buyout: ${auction.itemName} for ${res.paidAmount.toLocaleString()} ${auction.currency}`,
+          counterParty: auction.sellerName,
+          coinsDelta: auction.currency === 'coins' ? -res.paidAmount : 0,
+          goldDelta: auction.currency === 'gold' ? -res.paidAmount : 0,
+          timestamp: Date.now(),
+        };
+        return {
+          state: {
+            ...prev,
+            coins: nextCoins,
+            currencies: { ...prev.currencies, coins: nextCoins, gold: nextGold },
+            tradeAuctionHistory: [hist, ...(prev.tradeAuctionHistory ?? [])].slice(0, 50),
+          },
+          ok: true,
+          message: `⚡ Bought out ${auction.itemName}! Item delivered to your 📬 Mailbox!`,
+        };
+      });
+      void refreshMailbox();
+      return {
+        ok: true,
+        message: `⚡ Instant Buyout Complete! Open 📬 Mailbox to claim ${auction.itemName}!`,
+      };
+    },
+    [refreshMailbox, runStateAction]
+  );
+
+  const handleClaimMail = useCallback(
+    async (mailId?: string): Promise<{ ok: boolean; message: string }> => {
+      const res = await claimAuctionMailApi(authSessionRef.current, {
+        mailId,
+        username: playerRef.current.name,
+      });
+      if (!res.ok) return { ok: false, message: res.error };
+      setPlayerMail(res.remainingMail);
+      if (res.claimedCount === 0) {
+        return { ok: false, message: 'No unclaimed mail attachments right now.' };
+      }
+      soundManager.playSfx('level_up');
+      runStateAction((prev) => {
+        const nextCoins = prev.currencies.coins + res.totalCoins;
+        const nextGold = prev.currencies.gold + res.totalGold;
+        const nextInv = prev.inventory.map((i) => ({ ...i }));
+        for (const it of res.items) {
+          const qual = it.quality ?? 'normal';
+          const ex = nextInv.find((s) => s.itemId === it.itemId && (s.quality ?? 'normal') === qual);
+          if (ex) ex.quantity += it.quantity;
+          else {
+            nextInv.push({
+              itemId: it.itemId,
+              quantity: it.quantity,
+              itemLevel: it.itemLevel ?? 1,
+              quality: qual,
+            });
+          }
+        }
+        const parts: string[] = [];
+        if (res.totalCoins > 0) parts.push(`+${res.totalCoins.toLocaleString()} Coins`);
+        if (res.totalGold > 0) parts.push(`+${res.totalGold.toLocaleString()} Gold`);
+        if (res.items.length > 0) parts.push(`${res.items.length} item(s)`);
+        const hist: TradeAuctionHistoryEntry = {
+          id: `hist_mail_${Date.now()}`,
+          kind: res.items.length > 0 && res.totalCoins === 0 && res.totalGold === 0 ? 'auction_bought' : 'auction_sold',
+          summary: `📬 Claimed ${res.claimedCount} mail attachment(s): ${parts.join(' · ') || 'Receipt'}`,
+          coinsDelta: res.totalCoins,
+          goldDelta: res.totalGold,
+          timestamp: Date.now(),
+        };
+        return {
+          state: {
+            ...prev,
+            coins: nextCoins,
+            currencies: { ...prev.currencies, coins: nextCoins, gold: nextGold },
+            inventory: nextInv,
+            tradeAuctionHistory: [hist, ...(prev.tradeAuctionHistory ?? [])].slice(0, 50),
+          },
+          ok: true,
+          message: `📬 Claimed ${res.claimedCount} Mail! Received ${parts.join(' · ')}!`,
+        };
+      });
+      return {
+        ok: true,
+        message: `📬 Claimed ${res.claimedCount} Mail (${res.totalCoins.toLocaleString()}c, ${res.totalGold}g, ${res.items.length} item(s))!`,
+      };
+    },
+    [runStateAction]
+  );
+
+  const unclaimedMailCount = playerMail.filter((m) => !m.claimed).length;
+
   const shopMode: ShopMode = activeModal === 'snackShop' ? 'snack' : 'fashion';
   const inboxCount = friendsData.incoming.length + dungeonInvites.length;
 
@@ -2749,6 +3147,9 @@ export const App: React.FC = () => {
             }}
             onOpenAuth={() => setActiveModal('auth')}
             onOpenMarket={() => setActiveModal('market')}
+            onOpenAuctionHouse={() => setActiveModal('auctionHouse')}
+            onOpenMailbox={() => setActiveModal('mailbox')}
+            unclaimedMailCount={unclaimedMailCount}
             onOpenBestiary={() => setActiveModal('bestiary')}
             onOpenDiamondStore={() => setActiveModal('diamondStore')}
             onOpenWorldMap={() => setActiveModal('worldMap')}
@@ -3461,6 +3862,7 @@ export const App: React.FC = () => {
             name: target.name,
           })
         }
+        onRequestTrade={handleRequestTrade}
         onOfferBondRing={(target) => {
           setBondPrefillPartner(target.name);
           setActiveModal('bond');
@@ -4230,6 +4632,108 @@ export const App: React.FC = () => {
         open={activeModal === 'admin'}
         authSession={authSession}
         localOnlineCount={networkStatus.playerCount}
+        onClose={() => setActiveModal(null)}
+      />
+
+      {/* Update 2.7: Incoming Live P2P Trade Request Banner */}
+      {incomingTrade && (!activeTradeSession || activeTradeSession.status !== 'active') && (
+        <div className="fixed bottom-24 right-4 z-50 w-[min(92vw,340px)] rounded-2xl border-2 border-amber-400 bg-slate-950/95 p-4 text-amber-50 shadow-2xl space-y-2.5">
+          <div className="flex items-center gap-2 font-display font-black text-sm text-amber-300">
+            <span>🤝</span> Incoming P2P Trade Request!
+          </div>
+          <p className="text-xs text-amber-100/90">
+            <strong>{incomingTrade.fromName}</strong> wants to open a secure 2-step P2P Trade Window (0% Tax).
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                soundManager.playSfx('click');
+                roomClient.sendTradeAccept(incomingTrade.tradeId);
+                setIncomingTrade(null);
+              }}
+              className="flex-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 py-1.5 text-xs font-black text-white border border-emerald-300 cursor-pointer"
+            >
+              ✓ Accept Trade
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                roomClient.sendTradeCancel(incomingTrade.tradeId, `${player.name} declined the trade request.`);
+                setIncomingTrade(null);
+              }}
+              className="flex-1 rounded-xl bg-rose-900 hover:bg-rose-800 py-1.5 text-xs font-black text-rose-100 border border-rose-400/60 cursor-pointer"
+            >
+              ✕ Decline
+            </button>
+          </div>
+        </div>
+      )}
+
+      <TradeWindowModal
+        snapshot={activeTradeSession}
+        mySessionId={roomClient.sessionId ?? ''}
+        player={player}
+        onUpdateOffer={(items: TradeSlotItem[], coins: number) => {
+          if (!activeTradeSession) return;
+          roomClient.sendTradeUpdateOffer({
+            tradeId: activeTradeSession.tradeId,
+            items,
+            coins,
+            walletCoins: player.currencies.coins,
+            inventorySnapshot: player.inventory.map((i) => ({
+              itemId: i.itemId,
+              quantity: i.quantity,
+              quality: i.quality ?? 'normal',
+            })),
+          });
+        }}
+        onToggleLock={() => {
+          if (!activeTradeSession) return;
+          soundManager.playSfx('click');
+          roomClient.sendTradeToggleLock({
+            tradeId: activeTradeSession.tradeId,
+            walletCoins: player.currencies.coins,
+            inventorySnapshot: player.inventory.map((i) => ({
+              itemId: i.itemId,
+              quantity: i.quantity,
+              quality: i.quality ?? 'normal',
+            })),
+          });
+        }}
+        onConfirmTrade={() => {
+          if (!activeTradeSession) return;
+          soundManager.playSfx('magic');
+          roomClient.sendTradeConfirm(activeTradeSession.tradeId);
+        }}
+        onCancelTrade={() => {
+          if (activeTradeSession) {
+            roomClient.sendTradeCancel(activeTradeSession.tradeId);
+          }
+          setActiveTradeSession(null);
+        }}
+      />
+
+      <AuctionHouseModal
+        open={activeModal === 'auctionHouse'}
+        player={player}
+        listings={auctionListings}
+        loading={auctionLoading}
+        onRefresh={(filters) => void refreshAuctions(filters)}
+        onCreateAuction={handleCreateAuction}
+        onBid={handleBidAuction}
+        onBuyout={handleBuyoutAuction}
+        onOpenMailbox={() => setActiveModal('mailbox')}
+        onClose={() => setActiveModal(null)}
+      />
+
+      <MailModal
+        open={activeModal === 'mailbox'}
+        mailEntries={playerMail}
+        history={player.tradeAuctionHistory ?? []}
+        loading={mailLoading}
+        onRefresh={() => void refreshMailbox()}
+        onClaimMail={handleClaimMail}
         onClose={() => setActiveModal(null)}
       />
 
