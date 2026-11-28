@@ -36,6 +36,7 @@ import { vfxManager } from '../animations/VFXManager';
 import { ClassCombatVFX } from '../animations/ClassCombatVFX';
 import { getAwakenedWeaponById } from '@shared/weaponAwakening';
 import { FishingSystem } from '../systems/FishingSystem';
+import { deliveryJobManager } from '../systems/DeliveryJobManager';
 import { MAX_FISHING_DISTANCE, MAX_INTERACT_DISTANCE, enforceInteractRange } from '../systems/CombatAimHelper';
 import type { ActiveWorldEventSnapshot } from '@shared/worldEvents';
 import type { FestivalId } from '@shared/festivals';
@@ -189,6 +190,9 @@ export class OverworldScene extends Phaser.Scene {
     halo: Phaser.GameObjects.Arc;
   }> = [];
   private firefliesActive = false;
+  private deliveryCompassGfx?: Phaser.GameObjects.Graphics;
+  private deliveryDropBeacon?: Phaser.GameObjects.Container;
+  private deliveryDropOrderId: string | null = null;
   private unsubs: Array<() => void> = [];
 
   constructor() {
@@ -258,6 +262,9 @@ export class OverworldScene extends Phaser.Scene {
     this.lastSunsetPulseAt = 0;
     this.fireflies = [];
     this.firefliesActive = false;
+    this.deliveryCompassGfx = undefined;
+    this.deliveryDropOrderId = null;
+    this.deliveryDropBeacon = undefined;
     this.joystick = { x: 0, y: 0 };
   }
 
@@ -593,6 +600,18 @@ export class OverworldScene extends Phaser.Scene {
       }),
       EventBus.on('arena:enterRequest', ({ mode, duelId, spectate, opponentName }) => {
         this.enterArenaPvP({ mode, duelId, spectate, opponentName });
+      }),
+      EventBus.on('delivery:startRequest', ({ hasCoopPassenger }) => {
+        const autoCoop =
+          Boolean(hasCoopPassenger) ||
+          Array.from(this.remotePlayers.values()).some(
+            (rp) => Phaser.Math.Distance.Between(this.player.x, this.player.y, rp.x, rp.y) <= 180
+          );
+        const run = deliveryJobManager.startRun(autoCoop);
+        soundManager.playSfx('coin');
+        EventBus.emit('ui:toast', {
+          text: `📦 Express Delivery Run Started! Deliver 3 hot orders in 90s (${run.orders.map((o) => o.mapLabel).join(' → ')})!`,
+        });
       }),
       EventBus.on('blackMarket:changed', () => {
         this.syncBlackMarketPortal();
@@ -1162,6 +1181,59 @@ export class OverworldScene extends Phaser.Scene {
       label: 'Press [E] or Click → Board Phnom Penh Express Bus & World Map [M]',
       isDungeonPortal: false,
       onInteract: openExpressMap,
+    });
+
+    // 2B. UPDATE 3.2 — TUK-TUK EXPRESS DISPATCH BOARD (Right next to Express Bus Stop!)
+    const dispX = 548;
+    const dispY = 656;
+    const dispBoard = this.add.graphics().setDepth(dispY);
+    dispBoard.fillStyle(0x78350f, 0.96);
+    dispBoard.fillRoundedRect(dispX - 24, dispY - 34, 48, 32, 6);
+    dispBoard.lineStyle(2, 0xfacc15, 0.95);
+    dispBoard.strokeRoundedRect(dispX - 24, dispY - 34, 48, 32, 6);
+    dispBoard.fillStyle(0xfef3c7, 0.95);
+    dispBoard.fillRect(dispX - 18, dispY - 28, 15, 16);
+    dispBoard.fillStyle(0xfde047, 0.95);
+    dispBoard.fillRect(dispX + 2, dispY - 28, 16, 12);
+    dispBoard.fillStyle(0x451a03, 1);
+    dispBoard.fillRect(dispX - 4, dispY - 2, 8, 14);
+    const dispHit = this.add
+      .rectangle(dispX, dispY - 12, 58, 52, 0xffffff, 0)
+      .setDepth(dispY + 12)
+      .setInteractive({ useHandCursor: true });
+    const dispArrow = this.add.image(dispX, dispY - 46, 'join_arrow').setScale(0.48).setDepth(dispY + 18);
+    this.tweens.add({ targets: dispArrow, y: dispY - 52, duration: 540, yoyo: true, repeat: -1 });
+    this.add
+      .text(dispX, dispY + 16, '📦 TUK-TUK DISPATCH BOARD', {
+        fontFamily: 'Fredoka, sans-serif',
+        fontSize: '10px',
+        fontStyle: 'bold',
+        color: '#fef08a',
+        backgroundColor: 'rgba(120, 53, 15, 0.92)',
+        padding: { x: 6, y: 2 },
+      })
+      .setResolution(2)
+      .setScale(0.42)
+      .setOrigin(0.5, 0)
+      .setDepth(dispY + 20);
+    const triggerDelivery = () => {
+      if (!this.guardInteractRange(dispX, dispY, 125)) return;
+      if (deliveryJobManager.getActiveRun()) {
+        EventBus.emit('ui:toast', {
+          text: '📦 Delivery Run already active! Follow the glowing golden compass arrow to deliver your 3 hot orders!',
+        });
+        return;
+      }
+      EventBus.emit('delivery:startRequest', {});
+    };
+    dispHit.on('pointerdown', triggerDelivery);
+    this.landmarks.push({
+      x: dispX,
+      y: dispY,
+      radius: 56,
+      label: 'Press [E] or Click → 📦 Start 90s Express Delivery Run (250–600c + Friendly XP!)',
+      isDungeonPortal: false,
+      onInteract: triggerDelivery,
     });
 
     // 3. ATM BANK VAULT (North-West Lawn — generous spacing!)
@@ -2048,6 +2120,68 @@ export class OverworldScene extends Phaser.Scene {
       isDungeonPortal: false,
       onInteract: () => EventBus.emit('ui:openModal', { modal: 'arena' }),
     });
+
+    // 7. UPDATE 3.2 — SBEK THOM SHADOW PUPPET THEATER STAGE (South-West Sacred Terrace)
+    const stX = 345;
+    const stY = 815;
+    const stGfx = this.add.graphics().setDepth(stY - 6);
+    // Dark teak theater frame + warm backlit parchment screen
+    stGfx.fillStyle(0x3b1808, 0.98);
+    stGfx.fillRoundedRect(stX - 68, stY - 58, 136, 74, 10);
+    stGfx.lineStyle(2.5, 0xf59e0b, 0.95);
+    stGfx.strokeRoundedRect(stX - 68, stY - 58, 136, 74, 10);
+    // Warm glowing parchment projection screen
+    stGfx.fillStyle(0xfef08a, 0.9);
+    stGfx.fillRoundedRect(stX - 56, stY - 48, 112, 50, 6);
+    // Stylized Hanuman & Preah Ream shadow silhouettes on the screen
+    stGfx.fillStyle(0x1c0a03, 0.92);
+    stGfx.fillRect(stX - 30, stY - 36, 12, 26);
+    stGfx.fillTriangle(stX - 24, stY - 44, stX - 30, stY - 34, stX - 18, stY - 34);
+    stGfx.fillRect(stX + 14, stY - 34, 14, 24);
+    stGfx.fillCircle(stX + 21, stY - 38, 6);
+    // Flickering coconut-husk firelight bloom behind screen
+    const stGlow = this.add
+      .image(stX, stY - 22, 'torch_glow')
+      .setTint(0xf97316)
+      .setScale(1.15)
+      .setAlpha(0.55)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(stY + 12);
+    this.glowLights.push(stGlow);
+    this.tweens.add({ targets: stGlow, alpha: 0.34, scale: 1.32, duration: 760, yoyo: true, repeat: -1 });
+    const stHit = this.add
+      .rectangle(stX, stY - 18, 142, 86, 0xffffff, 0)
+      .setDepth(stY + 18)
+      .setInteractive({ useHandCursor: true });
+    const stArrow = this.add.image(stX, stY - 70, 'join_arrow').setScale(0.54).setDepth(stY + 25);
+    this.tweens.add({ targets: stArrow, y: stY - 76, duration: 540, yoyo: true, repeat: -1 });
+    this.add
+      .text(stX, stY + 22, '🎭 SBEK THOM SHADOW THEATER · REAMKER', {
+        fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
+        fontSize: '11px',
+        fontStyle: 'bold',
+        color: '#fef08a',
+        backgroundColor: 'rgba(124, 45, 18, 0.94)',
+        padding: { x: 8, y: 2 },
+      })
+      .setResolution(2)
+      .setScale(0.45)
+      .setOrigin(0.5, 0)
+      .setDepth(stY + 30);
+    const openTheater = () => {
+      if (!this.guardInteractRange(stX, stY, 145)) return;
+      soundManager.playSfx('magic');
+      EventBus.emit('ui:openModal', { modal: 'sbekThom' });
+    };
+    stHit.on('pointerdown', openTheater);
+    this.landmarks.push({
+      x: stX,
+      y: stY,
+      radius: 86,
+      label: 'Press [E] or Click → 🎭 Sbek Thom Shadow Puppet Theater & 5-Part Reamker Questline',
+      isDungeonPortal: false,
+      onInteract: openTheater,
+    });
   }
 
   // ==================== MAP 4: GREEN PARK & RIVERSIDE PIER ====================
@@ -2337,6 +2471,84 @@ export class OverworldScene extends Phaser.Scene {
       label: 'Press [E] or Click → 🏁 Enter Village Pet Racing Arena (Win Coins, Pet XP Treats & Champion Ribbon!)',
       isDungeonPortal: false,
       onInteract: openPetTrack,
+    });
+
+    // UPDATE 3.2 — FLOATING MEKONG RIVER MARKET DOCK & BOBBING SAMPAN BOATS (East Shoreline)
+    const fmX = 1135;
+    const fmY = 855;
+    const dockGfx = this.add.graphics().setDepth(fmY - 12);
+    // Warm timber riverside jetty planks + lantern posts
+    dockGfx.fillStyle(0x78350f, 0.96);
+    dockGfx.fillRoundedRect(fmX - 74, fmY - 22, 148, 34, 6);
+    dockGfx.lineStyle(2, 0xf59e0b, 0.9);
+    dockGfx.strokeRoundedRect(fmX - 74, fmY - 22, 148, 34, 6);
+    for (let px = fmX - 64; px <= fmX + 64; px += 16) {
+      dockGfx.lineStyle(1, 0x451a03, 0.65);
+      dockGfx.lineBetween(px, fmY - 22, px, fmY + 12);
+    }
+    // 3 Bobbing Wooden Sampan Trade Boats loaded with tropical fruit, Angkor silk & Kampot spices
+    const boatSpecs: Array<{ bx: number; by: number; cargoCol: number; accent: number; phase: number }> = [
+      { bx: fmX - 48, by: fmY + 34, cargoCol: 0xef4444, accent: 0xfacc15, phase: 0 },
+      { bx: fmX, by: fmY + 42, cargoCol: 0xec4899, accent: 0xfef08a, phase: 1.2 },
+      { bx: fmX + 50, by: fmY + 34, cargoCol: 0x22c55e, accent: 0xf97316, phase: 2.4 },
+    ];
+    for (const b of boatSpecs) {
+      const boatCont = this.add.container(b.bx, b.by).setDepth(b.by);
+      const hull = this.add.ellipse(0, 4, 42, 16, 0x78350f, 0.98).setStrokeStyle(1.5, 0x451a03);
+      const crate1 = this.add.rectangle(-8, -2, 12, 9, b.cargoCol).setStrokeStyle(1, 0x2b1b17);
+      const crate2 = this.add.rectangle(6, -1, 12, 8, b.accent).setStrokeStyle(1, 0x2b1b17);
+      const lantern = this.add.circle(16, -8, 3.5, 0xfef08a, 0.95);
+      boatCont.add([hull, crate1, crate2, lantern]);
+      this.tweens.add({
+        targets: boatCont,
+        y: b.by - 4,
+        angle: 2.2,
+        duration: 1150 + b.phase * 180,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    }
+    const fmGlow = this.add
+      .image(fmX, fmY - 12, 'torch_glow')
+      .setTint(0xf59e0b)
+      .setScale(0.95)
+      .setAlpha(0.55)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(fmY + 12);
+    this.glowLights.push(fmGlow);
+    const fmArrow = this.add.image(fmX, fmY - 44, 'join_arrow').setScale(0.52).setDepth(fmY + 25);
+    this.tweens.add({ targets: fmArrow, y: fmY - 50, duration: 540, yoyo: true, repeat: -1 });
+    this.add
+      .text(fmX, fmY - 26, '🛶 FLOATING MEKONG RIVER MARKET', {
+        fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
+        fontSize: '11px',
+        fontStyle: 'bold',
+        color: '#fef08a',
+        backgroundColor: 'rgba(13, 148, 136, 0.94)',
+        padding: { x: 8, y: 2 },
+      })
+      .setResolution(2)
+      .setScale(0.45)
+      .setOrigin(0.5, 1)
+      .setDepth(fmY + 28);
+    const fmHit = this.add
+      .rectangle(fmX, fmY + 10, 158, 96, 0xffffff, 0)
+      .setDepth(fmY + 30)
+      .setInteractive({ useHandCursor: true });
+    const openFloatingMarket = () => {
+      if (!this.guardInteractRange(fmX, fmY, 155)) return;
+      soundManager.playSfx('coin');
+      EventBus.emit('ui:openModal', { modal: 'floatingMarket' });
+    };
+    fmHit.on('pointerdown', openFloatingMarket);
+    this.landmarks.push({
+      x: fmX,
+      y: fmY,
+      radius: 96,
+      label: 'Press [E] or Click → 🛶 Floating Mekong River Market (Buy Low / Sell High Regional Trade!)',
+      isDungeonPortal: false,
+      onInteract: openFloatingMarket,
     });
   }
 
@@ -5378,6 +5590,11 @@ export class OverworldScene extends Phaser.Scene {
   }
 
   private tryInteractNearest(): void {
+    // Update 3.2 — Deliver active Express Delivery order if standing at the golden drop-off beacon!
+    if (this.tryDeliverNearbyOrder()) {
+      return;
+    }
+
     // Update 3.1 — Catch nearby glowing Firefly during Firefly Night (Green Park / Bamboo Forest)
     if (this.tryCatchNearbyFirefly()) {
       return;
@@ -5677,6 +5894,7 @@ export class OverworldScene extends Phaser.Scene {
     this.npcs.forEach((npc) => npc.update(time, delta, this.player.x, this.player.y));
     const clockSnap = this.atmosphere?.update(time, delta) ?? seasonClock.getSnapshot();
     this.updateFirefliesAndSunset(time, clockSnap);
+    this.updateDeliveryCompassAndBeacon(time);
     if (this.fishingSystem) {
       this.fishingSystem.cancelIfMoved(this.player.x, this.player.y);
       this.fishingSystem.update(time, this.player.x, this.player.y);
@@ -5907,6 +6125,112 @@ export class OverworldScene extends Phaser.Scene {
         this.lastSunsetPulseAt = time;
         EventBus.emit('weather:sunsetPulse', { friendlyXp: 8 });
       }
+    }
+  }
+
+  // ==================== UPDATE 3.2: EXPRESS DELIVERY GOLDEN COMPASS & DROP BEACON ====================
+
+  private tryDeliverNearbyOrder(): boolean {
+    const order = deliveryJobManager.getNextPendingOrder(this.mapId);
+    if (!order || order.mapId !== this.mapId) return false;
+    const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, order.x, order.y);
+    if (dist > 105) return false;
+    const res = deliveryJobManager.deliverOrder(order.id);
+    if (!res.delivered) return false;
+    soundManager.playSfx(res.allDone ? 'victory' : 'coin');
+    if (res.allDone && res.reward) {
+      EventBus.emit('delivery:completed', res.reward);
+    } else {
+      const next = deliveryJobManager.getNextPendingOrder();
+      EventBus.emit('ui:toast', {
+        text: `✅ Delivered ${res.delivered.icon} ${res.delivered.itemName}!${next ? ` Next stop: ${next.icon} ${next.mapLabel}!` : ''}`,
+      });
+    }
+    return true;
+  }
+
+  private updateDeliveryCompassAndBeacon(time: number): void {
+    const tick = deliveryJobManager.tick();
+    if (tick.expired) {
+      EventBus.emit('ui:toast', { text: '⏰ Express Delivery time expired! Visit Tuk-Tuk Dispatch Board in Central Plaza to try again!' });
+    }
+    const order = deliveryJobManager.getNextPendingOrder(this.mapId);
+    if (!order) {
+      this.deliveryCompassGfx?.clear();
+      if (this.deliveryDropBeacon) {
+        this.deliveryDropBeacon.destroy();
+        this.deliveryDropBeacon = undefined;
+        this.deliveryDropOrderId = null;
+      }
+      return;
+    }
+
+    if (!this.deliveryCompassGfx || !this.deliveryCompassGfx.scene) {
+      this.deliveryCompassGfx = this.add.graphics().setDepth(2480);
+    }
+
+    // Target either exact drop-off coordinates on this map, or the portal heading toward the destination map!
+    let targetX = order.x;
+    let targetY = order.y;
+    if (order.mapId !== this.mapId) {
+      const portal = this.mapPortals.find((p) => p.targetMapId === order.mapId) ?? this.mapPortals[0];
+      if (portal) {
+        targetX = portal.x;
+        targetY = portal.y;
+      }
+    }
+
+    // Glowing Golden Compass Arrow orbiting cleanly around the player pointing straight to target
+    const ang = Phaser.Math.Angle.Between(this.player.x, this.player.y, targetX, targetY);
+    const orbitR = 26 + Math.sin(time / 180) * 2.5;
+    const ax = this.player.x + Math.cos(ang) * orbitR;
+    const ay = this.player.y + Math.sin(ang) * orbitR;
+    const tipX = ax + Math.cos(ang) * 10;
+    const tipY = ay + Math.sin(ang) * 10;
+    const leftX = ax + Math.cos(ang + 2.4) * 7;
+    const leftY = ay + Math.sin(ang + 2.4) * 7;
+    const rightX = ax + Math.cos(ang - 2.4) * 7;
+    const rightY = ay + Math.sin(ang - 2.4) * 7;
+
+    this.deliveryCompassGfx.clear();
+    this.deliveryCompassGfx.fillStyle(0xfacc15, 0.96);
+    this.deliveryCompassGfx.lineStyle(1.6, 0x78350f, 1);
+    this.deliveryCompassGfx.fillTriangle(tipX, tipY, leftX, leftY, rightX, rightY);
+    this.deliveryCompassGfx.strokeTriangle(tipX, tipY, leftX, leftY, rightX, rightY);
+
+    // Render glowing golden drop-off beacon when on the order's destination map
+    if (order.mapId === this.mapId) {
+      if (this.deliveryDropOrderId !== order.id || !this.deliveryDropBeacon) {
+        this.deliveryDropBeacon?.destroy();
+        const cont = this.add.container(order.x, order.y).setDepth(order.y + 45);
+        const ring = this.add.ellipse(0, 4, 48, 22, 0xfacc15, 0.32).setStrokeStyle(2.5, 0xfef08a);
+        const arrow = this.add.image(0, -34, 'join_arrow').setScale(0.6);
+        const tag = this.add
+          .text(0, -52, `📦 DELIVER: ${order.itemName} [E]`, {
+            fontFamily: 'Fredoka, sans-serif',
+            fontSize: '11px',
+            fontStyle: 'bold',
+            color: '#fef08a',
+            backgroundColor: 'rgba(180, 83, 9, 0.95)',
+            padding: { x: 7, y: 2 },
+          })
+          .setResolution(2)
+          .setScale(0.45)
+          .setOrigin(0.5, 1);
+        const hit = this.add.circle(0, 0, 34, 0xffffff, 0).setInteractive({ useHandCursor: true });
+        hit.on('pointerdown', () => {
+          if (!this.guardInteractRange(order.x, order.y, 125)) return;
+          this.tryDeliverNearbyOrder();
+        });
+        this.tweens.add({ targets: arrow, y: -42, duration: 480, yoyo: true, repeat: -1 });
+        cont.add([ring, arrow, tag, hit]);
+        this.deliveryDropBeacon = cont;
+        this.deliveryDropOrderId = order.id;
+      }
+    } else if (this.deliveryDropBeacon) {
+      this.deliveryDropBeacon.destroy();
+      this.deliveryDropBeacon = undefined;
+      this.deliveryDropOrderId = null;
     }
   }
 }

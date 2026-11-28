@@ -40,12 +40,13 @@ export class NpcVillager {
       .setAlpha(0.72)
       .setDepth(this.y + 4);
 
-    this.paperDoll = new PaperDoll(scene, this.x, this.y, def.loadout, `npc_${def.id}`);
+    // Plant boots solidly onto the ground shadow (same +8 offset as Player so NPCs NEVER float!)
+    this.paperDoll = new PaperDoll(scene, this.x, this.y + 8, def.loadout, `npc_${def.id}`);
     this.paperDoll.setScale(0.48);
     this.paperDoll.setDepth(this.y + 10);
 
     this.nameTag = scene.add
-      .text(this.x, this.y + 12, `${def.name}`, {
+      .text(this.x, this.y + 11, `${def.name}`, {
         fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
         fontSize: '11px',
         fontStyle: 'bold',
@@ -125,13 +126,13 @@ export class NpcVillager {
       ? WALK_FRAMES[Math.floor(time / 160) % WALK_FRAMES.length]
       : 'idle';
 
-    this.paperDoll.setPosition(this.x, this.y);
+    this.paperDoll.setPosition(this.x, this.y + 8);
     this.paperDoll.setDepth(this.y + 10);
     this.paperDoll.setPoseAndFacing(pose, this.facing, time);
 
     this.shadow.setPosition(this.x, this.y + 8).setDepth(this.y + 4);
-    this.nameTag.setPosition(this.x, this.y + 12).setDepth(this.y + 30);
-    this.hitZone.setPosition(this.x, this.y - 6).setDepth(this.y + 35);
+    this.nameTag.setPosition(this.x, this.y + 11).setDepth(this.y + 30);
+    this.hitZone.setPosition(this.x, this.y - 2).setDepth(this.y + 35);
 
     const bob = Math.sin(time * 0.006) * 2.5;
     this.bubblePill

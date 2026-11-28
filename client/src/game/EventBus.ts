@@ -275,6 +275,15 @@ export interface EventMap {
   'weather:sunsetPulse': {
     friendlyXp: number;
   };
+  'delivery:completed': {
+    coins: number;
+    friendlyXp: number;
+    remainingSec: number;
+    coopBonusApplied: boolean;
+  };
+  'delivery:startRequest': {
+    hasCoopPassenger?: boolean;
+  };
   'network:status': NetworkStatusPayload;
   'network:remoteChat': RemoteChatPayload;
   'network:switchArea': { areaId: string };
@@ -537,7 +546,9 @@ export interface EventMap {
       | 'patchNotes'
       | 'feedback'
       | 'arena'
-      | 'emoteWheel';
+      | 'emoteWheel'
+      | 'floatingMarket'
+      | 'sbekThom';
     leaderboardCategory?: 'farmer' | 'stylish' | 'slayer' | 'tower' | 'boss_rush' | 'pvp';
     farmTab?: 'seeds' | 'livestock' | 'artisan';
     shopTab?: 'primary' | 'secondary';

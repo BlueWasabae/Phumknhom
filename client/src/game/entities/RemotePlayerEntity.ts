@@ -4,7 +4,7 @@ import { KHMER_EMOTES, isKhmerEmoteId } from '@shared/emotes';
 import { EventBus } from '../EventBus';
 import { PaperDoll, type PaperDollFacing, type PaperDollPose } from './PaperDoll';
 import { Pet } from './Pet';
-import { MountEntity, getMountSpec } from './MountEntity';
+import { COOP_TWO_SEAT_MOUNT_IDS, MountEntity, getMountSpec } from './MountEntity';
 import { parseAppearance, roomClient, type RemotePlayerSnapshot } from '../network/RoomClient';
 
 /**
@@ -108,7 +108,7 @@ export class RemotePlayerEntity {
     this.mount.setMount(this.activeMountId || null);
 
     this.hopInBadge = scene.add
-      .text(this.x, this.y - 26, '🚕 Hop In!', {
+      .text(this.x, this.y - 26, '🤝 Hop On!', {
         fontFamily: 'Fredoka, sans-serif',
         fontSize: '11px',
         fontStyle: 'bold',
@@ -120,11 +120,11 @@ export class RemotePlayerEntity {
       .setScale(this.uiScale)
       .setOrigin(0.5, 1)
       .setDepth(2520)
-      .setVisible(this.activeMountId === 'mount_mini_tuk_tuk')
+      .setVisible(COOP_TWO_SEAT_MOUNT_IDS.has(this.activeMountId))
       .setInteractive({ useHandCursor: true });
     this.hopInBadge.on('pointerdown', () => {
       roomClient.sendTukTukHop(this.sessionId);
-      EventBus.emit('ui:toast', { text: `🚕 Hopped into the back seat of ${this.name}'s Mini Tuk-Tuk! (Move to hop out)` });
+      EventBus.emit('ui:toast', { text: `🤝 Hopped onto ${this.name}'s 2-Seat Co-op Mount! (Move to dismount)` });
     });
 
     const displayTag = snapshot.kromTag ? `[${snapshot.kromTag}] ${this.name}` : this.name;
@@ -205,15 +205,15 @@ export class RemotePlayerEntity {
     if (nextMount !== this.activeMountId) {
       this.activeMountId = nextMount;
       this.mount.setMount(this.activeMountId || null);
-      this.hopInBadge.setVisible(this.activeMountId === 'mount_mini_tuk_tuk');
+      this.hopInBadge.setVisible(COOP_TWO_SEAT_MOUNT_IDS.has(this.activeMountId));
     }
   }
 
-  public showSpeechBubble(text: string, durationMs = 4500): void {
+  public showSpeechBubble(text: string, durationMs = 5500): void {
     const clean = text.trim().slice(0, 120);
     if (!clean) return;
-    this.bubbleText.setText(clean).setVisible(true);
-    this.bubbleBg.setVisible(true);
+    this.bubbleText.setText(clean).setVisible(true).setDepth(3191);
+    this.bubbleBg.setVisible(true).setDepth(3190);
     this.bubbleExpiresAt = this.scene.time.now + durationMs;
   }
 
@@ -259,7 +259,7 @@ export class RemotePlayerEntity {
 
     const mSpec = getMountSpec(this.activeMountId);
     this.mount.update(this.x, this.y, this.facing, movingNow, time);
-    this.hopInBadge.setPosition(this.x, this.y - 24).setVisible(this.activeMountId === 'mount_mini_tuk_tuk');
+    this.hopInBadge.setPosition(this.x, this.y - 24).setVisible(COOP_TWO_SEAT_MOUNT_IDS.has(this.activeMountId));
 
     this.paperDoll.setPosition(this.x, this.y + 8 + (mSpec ? mSpec.seatOffsetY : 0));
     this.paperDoll.setPoseAndFacing(mSpec ? 'idle' : pose, this.facing, time);

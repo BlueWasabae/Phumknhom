@@ -84,12 +84,18 @@ export class PlazaRoom extends Room<PlazaState> {
       }
     });
 
+    const TWO_SEAT_MOUNTS = new Set([
+      'mount_golden_cloud',
+      'mount_royal_elephant',
+      'mount_spirit_dragon',
+    ]);
+
     this.onMessage('mountState', (client, payload: { activeMountId?: string | null }) => {
       const player = this.state.players.get(client.sessionId);
       if (!player) return;
       player.activeMountId = typeof payload?.activeMountId === 'string' ? payload.activeMountId.slice(0, 36) : '';
-      if (player.activeMountId !== 'mount_mini_tuk_tuk') {
-        // Eject any passenger riding in back seat if driver dismounts
+      if (!TWO_SEAT_MOUNTS.has(player.activeMountId)) {
+        // Eject any passenger riding in back seat if driver dismounts from a 2-seat mount
         this.state.players.forEach((other) => {
           if (other.ridingDriverSessionId === client.sessionId) {
             other.ridingDriverSessionId = '';
@@ -107,7 +113,7 @@ export class PlazaRoom extends Room<PlazaState> {
         return;
       }
       const driver = this.state.players.get(targetDriverId);
-      if (driver && driver.activeMountId === 'mount_mini_tuk_tuk') {
+      if (driver && TWO_SEAT_MOUNTS.has(driver.activeMountId)) {
         rider.ridingDriverSessionId = targetDriverId;
         rider.activeMountId = '';
       }

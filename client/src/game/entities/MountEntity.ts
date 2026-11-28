@@ -2,16 +2,28 @@ import Phaser from 'phaser';
 import { seasonClock } from '../systems/SeasonClock';
 import { soundManager } from '../systems/SoundManager';
 
-export type KhmerMountId = 'mount_village_bicycle' | 'mount_water_buffalo' | 'mount_mini_tuk_tuk';
+export type KhmerMountId =
+  | 'mount_village_bicycle'
+  | 'mount_water_buffalo'
+  | 'mount_golden_cloud'
+  | 'mount_royal_elephant'
+  | 'mount_shadow_singha'
+  | 'mount_celestial_garuda'
+  | 'mount_spirit_dragon'
+  | 'mount_bamboo_hoverboard';
 
 export interface MountSpec {
   id: KhmerMountId;
   name: string;
   khmerName: string;
+  icon: string;
+  archetype: string;
   speedBonusPct: number;
   seatOffsetY: number;
   hasHeadlights: boolean;
   hasDustTrail: boolean;
+  trailColor: number;
+  floats: boolean;
   allowsPassenger: boolean;
 }
 
@@ -20,44 +32,140 @@ export const KHMER_MOUNT_SPECS: Record<KhmerMountId, MountSpec> = {
     id: 'mount_village_bicycle',
     name: 'Village Bicycle',
     khmerName: 'កង់ភូមិខ្មែរ',
+    icon: '🚲',
+    archetype: 'Classic Town Bike',
     speedBonusPct: 0.35,
     seatOffsetY: -6,
     hasHeadlights: false,
     hasDustTrail: false,
+    trailColor: 0xd6d3d1,
+    floats: false,
     allowsPassenger: false,
   },
   mount_water_buffalo: {
     id: 'mount_water_buffalo',
     name: 'Water Buffalo',
     khmerName: 'ក្របីស្រែខ្មែរ',
+    icon: '🐃',
+    archetype: 'Classic Beast Mount',
     speedBonusPct: 0.45,
     seatOffsetY: -10,
     hasHeadlights: false,
     hasDustTrail: true,
+    trailColor: 0xd6d3d1,
+    floats: false,
     allowsPassenger: false,
   },
-  mount_mini_tuk_tuk: {
-    id: 'mount_mini_tuk_tuk',
-    name: 'Mini Tuk-Tuk',
-    khmerName: 'រ៉ឺម៉ក់កង់បីខ្មែរ',
-    speedBonusPct: 0.6,
+  mount_bamboo_hoverboard: {
+    id: 'mount_bamboo_hoverboard',
+    name: 'Enchanted Bamboo Hoverboard',
+    khmerName: 'ក្តារហោះឫស្សីទេព',
+    icon: '🛹',
+    archetype: 'Hoverboard / Glider',
+    speedBonusPct: 0.54,
     seatOffsetY: -8,
     hasHeadlights: true,
     hasDustTrail: true,
+    trailColor: 0x38bdf8,
+    floats: true,
+    allowsPassenger: false,
+  },
+  mount_royal_elephant: {
+    id: 'mount_royal_elephant',
+    name: 'Royal White Elephant',
+    khmerName: 'ដំរីសរាជវង្សអង្គរ',
+    icon: '🐘',
+    archetype: '2-Seat War Elephant',
+    speedBonusPct: 0.56,
+    seatOffsetY: -13,
+    hasHeadlights: true,
+    hasDustTrail: true,
+    trailColor: 0xfde047,
+    floats: false,
+    allowsPassenger: true,
+  },
+  mount_shadow_singha: {
+    id: 'mount_shadow_singha',
+    name: 'Shadow Singha Lion',
+    khmerName: 'សិង្ហស្រមោលអង្គរ',
+    icon: '🦁',
+    archetype: 'MMO Armored Dire Lion',
+    speedBonusPct: 0.58,
+    seatOffsetY: -10,
+    hasHeadlights: true,
+    hasDustTrail: true,
+    trailColor: 0xc084fc,
+    floats: false,
+    allowsPassenger: false,
+  },
+  mount_golden_cloud: {
+    id: 'mount_golden_cloud',
+    name: 'Golden Naga Cloud',
+    khmerName: 'ពពកនាគមាសទេវតា',
+    icon: '☁️',
+    archetype: '2-Seat Flying Nimbus',
+    speedBonusPct: 0.6,
+    seatOffsetY: -11,
+    hasHeadlights: true,
+    hasDustTrail: true,
+    trailColor: 0xfacc15,
+    floats: true,
+    allowsPassenger: true,
+  },
+  mount_celestial_garuda: {
+    id: 'mount_celestial_garuda',
+    name: 'Celestial Garuda Strider',
+    khmerName: 'គ្រុឌមាសទេវតា',
+    icon: '🦅',
+    archetype: 'RPG Chocobo / Phoenix Bird',
+    speedBonusPct: 0.62,
+    seatOffsetY: -11,
+    hasHeadlights: true,
+    hasDustTrail: true,
+    trailColor: 0xfb923c,
+    floats: false,
+    allowsPassenger: false,
+  },
+  mount_spirit_dragon: {
+    id: 'mount_spirit_dragon',
+    name: 'Emerald Mekong Dragon',
+    khmerName: 'នាគព្រលឹងមេគង្គ',
+    icon: '🐉',
+    archetype: '2-Seat Eastern Dragon',
+    speedBonusPct: 0.65,
+    seatOffsetY: -12,
+    hasHeadlights: true,
+    hasDustTrail: true,
+    trailColor: 0x34d399,
+    floats: true,
     allowsPassenger: true,
   },
 };
 
-export function getMountSpec(mountId: string | null | undefined): MountSpec | null {
+export const COOP_TWO_SEAT_MOUNT_IDS = new Set<string>([
+  'mount_golden_cloud',
+  'mount_royal_elephant',
+  'mount_spirit_dragon',
+]);
+
+export function normalizeLegacyMountId(mountId: string | null | undefined): KhmerMountId | null {
   if (!mountId) return null;
-  return (KHMER_MOUNT_SPECS as Record<string, MountSpec>)[mountId] ?? null;
+  // Auto-migrate removed Mini Tuk-Tuk mount into the iconic 2-Seat Golden Naga Cloud!
+  if (mountId === 'mount_mini_tuk_tuk') return 'mount_golden_cloud';
+  if (mountId in KHMER_MOUNT_SPECS) return mountId as KhmerMountId;
+  return null;
+}
+
+export function getMountSpec(mountId: string | null | undefined): MountSpec | null {
+  const norm = normalizeLegacyMountId(mountId);
+  if (!norm) return null;
+  return KHMER_MOUNT_SPECS[norm] ?? null;
 }
 
 /**
- * Crisp 16-bit pixel-art Rideable Khmer Mount entity rendered underneath the player:
- * - Village Bicycle (+35% speed, woven basket & spoked wheels)
- * - Water Buffalo (+45% speed, curved horns & gentle dust puffs)
- * - 2-Seat Mini Tuk-Tuk (+60% speed, night headlight beams, [H] horn, passenger seat!)
+ * Crisp 16-bit pixel-art Rideable Mounts inspired by iconic gaming history archetypes
+ * (Flying Nimbus Cloud, Royal War Elephant, Armored Lion, Chocobo/Garuda Strider,
+ * Eastern Spirit Dragon, Enchanted Hoverboard, Water Buffalo & Village Bicycle).
  */
 export class MountEntity {
   public readonly container: Phaser.GameObjects.Container;
@@ -65,29 +173,23 @@ export class MountEntity {
 
   private scene: Phaser.Scene;
   private sprite: Phaser.GameObjects.Image;
-  private headlightBeam: Phaser.GameObjects.Triangle;
-  private headlightGlow: Phaser.GameObjects.Image;
+  private auraGlow: Phaser.GameObjects.Image;
   private lastDustAt = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     this.scene = scene;
     this.ensureMountTextures(scene);
 
-    this.headlightBeam = scene.add
-      .triangle(28, 2, 0, 0, 62, -20, 62, 20, 0xfef08a, 0.24)
-      .setBlendMode(Phaser.BlendModes.ADD)
-      .setVisible(false);
-
-    this.headlightGlow = scene.add
-      .image(20, 2, 'torch_glow')
-      .setTint(0xfef08a)
-      .setScale(0.55)
-      .setAlpha(0.6)
+    this.auraGlow = scene.add
+      .image(0, 2, 'torch_glow')
+      .setTint(0xfacc15)
+      .setScale(0.68)
+      .setAlpha(0.5)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setVisible(false);
 
     this.sprite = scene.add.image(0, 0, 'mount_tex_mount_village_bicycle').setOrigin(0.5, 0.72);
-    this.container = scene.add.container(x, y, [this.headlightBeam, this.headlightGlow, this.sprite]);
+    this.container = scene.add.container(x, y, [this.auraGlow, this.sprite]);
     this.container.setVisible(false);
   }
 
@@ -105,9 +207,8 @@ export class MountEntity {
 
     const O = '#2b1b17';
 
-    // 1. Village Bicycle (mint-teal frame + front woven rattan basket + spoked wheels)
+    // 1. Village Bicycle
     mk('mount_tex_mount_village_bicycle', 42, 28, (ctx) => {
-      // Rear & front wheels
       for (const wx of [4, 28]) {
         ctx.fillStyle = O;
         ctx.fillRect(wx, 14, 10, 10);
@@ -115,103 +216,204 @@ export class MountEntity {
         ctx.fillRect(wx + 1, 15, 8, 8);
         ctx.fillStyle = '#e2e8f0';
         ctx.fillRect(wx + 3, 17, 4, 4);
-        ctx.fillStyle = '#64748b';
-        ctx.fillRect(wx + 4, 18, 2, 2);
       }
-      // Mint frame
       ctx.fillStyle = O;
       ctx.fillRect(9, 10, 22, 6);
       ctx.fillStyle = '#14b8a6';
       ctx.fillRect(10, 11, 20, 4);
-      ctx.fillStyle = '#0d9488';
-      ctx.fillRect(18, 14, 4, 5);
-      // Saddle & handlebars
       ctx.fillStyle = '#78350f';
       ctx.fillRect(11, 7, 7, 3);
       ctx.fillStyle = '#cbd5e1';
       ctx.fillRect(28, 6, 4, 7);
-      // Rattan basket on front
-      ctx.fillStyle = O;
-      ctx.fillRect(32, 7, 8, 7);
       ctx.fillStyle = '#d97706';
-      ctx.fillRect(33, 8, 6, 5);
-      ctx.fillStyle = '#fde68a';
-      ctx.fillRect(34, 9, 4, 2);
+      ctx.fillRect(32, 7, 7, 6);
     });
 
-    // 2. Cambodian Water Buffalo (Krabey — sturdy grey-slate hide, curved horns, red collar)
+    // 2. Water Buffalo
     mk('mount_tex_mount_water_buffalo', 48, 32, (ctx) => {
-      // Legs
       for (const lx of [8, 16, 28, 34]) {
         ctx.fillStyle = O;
         ctx.fillRect(lx, 20, 5, 10);
         ctx.fillStyle = '#475569';
         ctx.fillRect(lx + 1, 20, 3, 8);
-        ctx.fillStyle = '#1e293b';
-        ctx.fillRect(lx + 1, 27, 3, 2);
       }
-      // Barrel body
       ctx.fillStyle = O;
       ctx.fillRect(6, 9, 32, 14);
       ctx.fillStyle = '#64748b';
       ctx.fillRect(7, 10, 30, 12);
-      ctx.fillStyle = '#94a3b8';
-      ctx.fillRect(9, 11, 24, 4);
-      // Red Khmer woven saddle cloth
       ctx.fillStyle = '#dc2626';
       ctx.fillRect(15, 9, 12, 8);
       ctx.fillStyle = '#facc15';
       ctx.fillRect(16, 15, 10, 2);
-      // Head & curved horns
       ctx.fillStyle = O;
       ctx.fillRect(35, 8, 11, 11);
       ctx.fillStyle = '#475569';
       ctx.fillRect(36, 9, 9, 9);
       ctx.fillStyle = '#f8fafc';
       ctx.fillRect(38, 4, 3, 5);
-      ctx.fillRect(35, 3, 4, 2);
       ctx.fillRect(42, 5, 3, 4);
-      // Eye & snout
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(42, 12, 2, 2);
     });
 
-    // 3. 2-Seat Royal Khmer Mini Tuk-Tuk (Emerald-Gold canopy, red seat, headlamp, spoked wheels)
-    mk('mount_tex_mount_mini_tuk_tuk', 54, 34, (ctx) => {
-      // Overhead royal canopy roof
-      ctx.fillStyle = O;
-      ctx.fillRect(4, 2, 34, 8);
-      ctx.fillStyle = '#15803d';
-      ctx.fillRect(5, 3, 32, 6);
+    // 3. Golden Naga Cloud (Flying Nimbus 2-Seat Cloud Mount)
+    mk('mount_tex_mount_golden_cloud', 56, 30, (ctx) => {
+      ctx.fillStyle = '#d97706';
+      ctx.fillRect(6, 14, 44, 12);
+      ctx.fillRect(12, 8, 32, 16);
       ctx.fillStyle = '#facc15';
-      ctx.fillRect(5, 7, 32, 2);
-      // Canopy pillars
-      ctx.fillStyle = '#facc15';
-      ctx.fillRect(6, 9, 2, 11);
-      ctx.fillRect(33, 9, 2, 11);
-      // Back passenger plush crimson seat & front cabin
-      ctx.fillStyle = O;
-      ctx.fillRect(4, 15, 44, 13);
-      ctx.fillStyle = '#166534';
-      ctx.fillRect(5, 16, 42, 11);
-      ctx.fillStyle = '#dc2626';
-      ctx.fillRect(7, 14, 14, 7);
-      ctx.fillStyle = '#facc15';
-      ctx.fillRect(5, 22, 42, 2);
-      // Front windshield & bright yellow headlight
-      ctx.fillStyle = '#7dd3fc';
-      ctx.fillRect(35, 11, 7, 7);
+      ctx.fillRect(8, 13, 40, 10);
+      ctx.fillRect(14, 9, 28, 12);
       ctx.fillStyle = '#fef08a';
-      ctx.fillRect(46, 18, 4, 5);
-      // Wheels
-      for (const wx of [10, 36]) {
+      ctx.fillRect(14, 10, 12, 6);
+      ctx.fillRect(28, 11, 14, 6);
+      // Swirling trailing golden cloud curls
+      ctx.fillStyle = '#fbbf24';
+      ctx.fillRect(2, 17, 7, 5);
+      ctx.fillRect(47, 16, 7, 5);
+      // Lotus crest emblem
+      ctx.fillStyle = '#f43f5e';
+      ctx.fillRect(25, 14, 6, 4);
+    });
+
+    // 4. Royal White Elephant (2-Seat War Elephant with Crimson-Gold Howdah)
+    mk('mount_tex_mount_royal_elephant', 58, 40, (ctx) => {
+      for (const lx of [10, 19, 31, 39]) {
         ctx.fillStyle = O;
-        ctx.fillRect(wx, 24, 9, 9);
-        ctx.fillStyle = '#334155';
-        ctx.fillRect(wx + 1, 25, 7, 7);
+        ctx.fillRect(lx, 25, 7, 13);
+        ctx.fillStyle = '#f1f5f9';
+        ctx.fillRect(lx + 1, 25, 5, 11);
         ctx.fillStyle = '#facc15';
-        ctx.fillRect(wx + 3, 27, 3, 3);
+        ctx.fillRect(lx + 1, 33, 5, 2);
       }
+      ctx.fillStyle = O;
+      ctx.fillRect(8, 10, 38, 18);
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(9, 11, 36, 16);
+      // Crimson-and-Gold Royal Howdah Saddle
+      ctx.fillStyle = '#b91c1c';
+      ctx.fillRect(15, 9, 22, 13);
+      ctx.fillStyle = '#facc15';
+      ctx.fillRect(15, 9, 22, 3);
+      ctx.fillRect(15, 19, 22, 2);
+      // Head, Royal Crown, Ear, Tusks & Trunk
+      ctx.fillStyle = O;
+      ctx.fillRect(42, 8, 13, 14);
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(43, 9, 11, 12);
+      ctx.fillStyle = '#e2e8f0';
+      ctx.fillRect(39, 11, 6, 9);
+      ctx.fillStyle = '#facc15';
+      ctx.fillRect(44, 6, 8, 3);
+      // Trunk
+      ctx.fillStyle = '#f1f5f9';
+      ctx.fillRect(51, 18, 5, 11);
+      ctx.fillRect(53, 26, 4, 4);
+      // Ivory Tusk
+      ctx.fillStyle = '#fef9c3';
+      ctx.fillRect(49, 21, 7, 2);
+    });
+
+    // 5. Shadow Singha Lion (Armored Dire Lion Mount)
+    mk('mount_tex_mount_shadow_singha', 54, 34, (ctx) => {
+      for (const lx of [8, 16, 30, 38]) {
+        ctx.fillStyle = O;
+        ctx.fillRect(lx, 21, 5, 11);
+        ctx.fillStyle = '#312e81';
+        ctx.fillRect(lx + 1, 21, 3, 9);
+        ctx.fillStyle = '#facc15';
+        ctx.fillRect(lx + 1, 28, 3, 2);
+      }
+      ctx.fillStyle = O;
+      ctx.fillRect(8, 10, 34, 14);
+      ctx.fillStyle = '#4c1d95';
+      ctx.fillRect(9, 11, 32, 12);
+      // Golden Angkor Saddle Plate
+      ctx.fillStyle = '#f59e0b';
+      ctx.fillRect(18, 10, 12, 8);
+      // Glowing Violet Mane & Head
+      ctx.fillStyle = '#7e22ce';
+      ctx.fillRect(34, 5, 14, 15);
+      ctx.fillStyle = '#c084fc';
+      ctx.fillRect(36, 7, 10, 11);
+      ctx.fillStyle = '#fde047';
+      ctx.fillRect(43, 10, 2, 2);
+      // Flowing tail
+      ctx.fillStyle = '#a855f7';
+      ctx.fillRect(2, 10, 7, 4);
+    });
+
+    // 6. Celestial Garuda Strider (Classic RPG Chocobo / Golden Phoenix Bird)
+    mk('mount_tex_mount_celestial_garuda', 52, 36, (ctx) => {
+      // Taloned bird legs
+      for (const lx of [19, 28]) {
+        ctx.fillStyle = '#d97706';
+        ctx.fillRect(lx, 23, 4, 10);
+        ctx.fillStyle = '#facc15';
+        ctx.fillRect(lx - 1, 31, 7, 3);
+      }
+      // Feathered Golden Body & Wing
+      ctx.fillStyle = O;
+      ctx.fillRect(10, 11, 28, 14);
+      ctx.fillStyle = '#f59e0b';
+      ctx.fillRect(11, 12, 26, 12);
+      ctx.fillStyle = '#fde047';
+      ctx.fillRect(14, 13, 18, 6);
+      // Tail feathers
+      ctx.fillStyle = '#ef4444';
+      ctx.fillRect(3, 10, 9, 6);
+      ctx.fillStyle = '#facc15';
+      ctx.fillRect(5, 14, 8, 4);
+      // Neck, Crest & Beak
+      ctx.fillStyle = '#f59e0b';
+      ctx.fillRect(33, 5, 9, 12);
+      ctx.fillStyle = '#dc2626';
+      ctx.fillRect(32, 2, 8, 4);
+      ctx.fillStyle = '#fef08a';
+      ctx.fillRect(42, 8, 7, 4);
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(38, 8, 2, 2);
+    });
+
+    // 7. Emerald Mekong Spirit Dragon (2-Seat Floating Eastern Dragon)
+    mk('mount_tex_mount_spirit_dragon', 62, 34, (ctx) => {
+      // Undulating emerald serpentine body
+      ctx.fillStyle = '#065f46';
+      ctx.fillRect(4, 14, 46, 11);
+      ctx.fillStyle = '#10b981';
+      ctx.fillRect(6, 15, 42, 9);
+      ctx.fillStyle = '#fde047';
+      ctx.fillRect(8, 21, 38, 3);
+      // Dorsal golden spines
+      for (let sx = 10; sx <= 40; sx += 8) {
+        ctx.fillStyle = '#facc15';
+        ctx.fillRect(sx, 11, 4, 4);
+      }
+      // Dragon Head, Antlers & Whiskers
+      ctx.fillStyle = '#047857';
+      ctx.fillRect(45, 9, 13, 12);
+      ctx.fillStyle = '#34d399';
+      ctx.fillRect(46, 10, 11, 9);
+      ctx.fillStyle = '#facc15';
+      ctx.fillRect(46, 5, 3, 5);
+      ctx.fillRect(51, 6, 3, 4);
+      ctx.fillStyle = '#fef08a';
+      ctx.fillRect(54, 12, 2, 2);
+      ctx.fillRect(57, 16, 4, 2);
+    });
+
+    // 8. Enchanted Bamboo Hoverboard (Classic Hoverboard / Glider Mount)
+    mk('mount_tex_mount_bamboo_hoverboard', 48, 22, (ctx) => {
+      ctx.fillStyle = O;
+      ctx.fillRect(4, 8, 40, 9);
+      ctx.fillStyle = '#15803d';
+      ctx.fillRect(5, 9, 38, 7);
+      ctx.fillStyle = '#4ade80';
+      ctx.fillRect(8, 10, 32, 3);
+      // Glowing cyan wind-rune thrusters
+      ctx.fillStyle = '#22d3ee';
+      ctx.fillRect(2, 11, 5, 4);
+      ctx.fillRect(14, 15, 20, 3);
+      ctx.fillStyle = '#fef08a';
+      ctx.fillRect(21, 10, 6, 4);
     });
   }
 
@@ -227,16 +429,18 @@ export class MountEntity {
     if (this.scene.textures.exists(key)) {
       this.sprite.setTexture(key);
     }
+    this.auraGlow.setTint(spec.trailColor);
     this.container.setVisible(true);
   }
 
   public honkHorn(): void {
-    if (this.mountId !== 'mount_mini_tuk_tuk') return;
-    soundManager.playSfx('coin');
+    const spec = getMountSpec(this.mountId);
+    if (!spec) return;
+    soundManager.playSfx(spec.floats ? 'magic' : 'coin');
     this.scene.tweens.add({
       targets: this.sprite,
-      scaleY: 1.15,
-      duration: 80,
+      scaleY: 1.18,
+      duration: 90,
       yoyo: true,
       repeat: 1,
     });
@@ -251,34 +455,30 @@ export class MountEntity {
     this.container.setVisible(true);
 
     const flipLeft = facing === 'left';
-    const bounce = isMoving ? Math.sin(time * 0.025) * 1.6 : 0;
-    this.container.setPosition(x, y + 6 + bounce);
+    const floatBob = spec.floats ? Math.sin(time * 0.0065) * 3.0 : isMoving ? Math.sin(time * 0.025) * 1.6 : 0;
+    this.container.setPosition(x, y + 6 + floatBob);
     this.container.setDepth(y + 8);
     this.sprite.setFlipX(flipLeft);
 
-    // Mini Tuk-Tuk glowing headlights at dusk/night!
     const snap = seasonClock.getSnapshot();
-    const lightsOn = spec.hasHeadlights && (snap.nightIntensity > 0.22 || snap.sunsetIntensity > 0.35);
-    this.headlightBeam.setVisible(lightsOn);
-    this.headlightGlow.setVisible(lightsOn);
-    if (lightsOn) {
-      const dir = flipLeft ? -1 : 1;
-      this.headlightBeam.setScale(dir, 1).setPosition(dir * 26, 2);
-      this.headlightGlow.setPosition(dir * 22, 2);
+    const glowVisible = spec.floats || (spec.hasHeadlights && (snap.nightIntensity > 0.2 || snap.sunsetIntensity > 0.3));
+    this.auraGlow.setVisible(glowVisible);
+    if (glowVisible) {
+      this.auraGlow.setAlpha(0.32 + Math.sin(time / 240) * 0.14);
     }
 
-    // Gentle dust trail behind Water Buffalo & Tuk-Tuk when cruising
-    if (spec.hasDustTrail && isMoving && time - this.lastDustAt > 175) {
+    if (spec.hasDustTrail && (isMoving || spec.floats) && time - this.lastDustAt > 165) {
       this.lastDustAt = time;
       const dir = flipLeft ? 1 : -1;
       const puff = this.scene.add
-        .circle(x + dir * 18, y + 9, Phaser.Math.FloatBetween(2.2, 4), 0xd6d3d1, 0.52)
+        .circle(x + dir * 18, y + (spec.floats ? 5 : 9), Phaser.Math.FloatBetween(2.2, 4.2), spec.trailColor, 0.58)
+        .setBlendMode(spec.floats ? Phaser.BlendModes.ADD : Phaser.BlendModes.NORMAL)
         .setDepth(y + 5);
       this.scene.tweens.add({
         targets: puff,
-        x: puff.x + dir * 10,
+        x: puff.x + dir * 12,
         y: puff.y - 6,
-        scale: 1.8,
+        scale: 1.85,
         alpha: 0,
         duration: 420,
         onComplete: () => puff.destroy(),

@@ -235,8 +235,9 @@ function renderHumanChibiPixels(
   const legY = 29 + bodyBob;
 
   // ==================== LAYER 1: WINGS / BACK ====================
-  // Skip flat procedural fallback when an animated 4-frame PNG Wing spritesheet is equipped!
-  if (wingsDef && !(loadout.wings && ANIMATED_PNG_WINGS[loadout.wings])) {
+  // Helper so procedural wings draw behind the body normally, AND IN FRONT OF the back when walking upward (isUp)!
+  const drawProceduralWings = () => {
+    if (!wingsDef || (loadout.wings && ANIMATED_PNG_WINGS[loadout.wings])) return;
     const wMain = wingsDef.primaryColor;
     const wAcc = wingsDef.accentColor;
     const wVar = wingsDef.styleVariant;
@@ -246,7 +247,6 @@ function renderHumanChibiPixels(
       px(ctx, cx - 4, torsoY + 1, 8, 1, wAcc);
       px(ctx, cx - 4, torsoY + 4, 8, 1, wAcc);
     } else if (wVar === 'yant_halo' || wVar === 'lotus_aura' || wVar === 'celestial_naga') {
-      // Sacred glowing mandala ring behind shoulders
       px(ctx, cx - 10, headY + 4, 20, 2, wMain);
       px(ctx, cx - 11, headY + 6, 2, 10, wMain);
       px(ctx, cx + 9, headY + 6, 2, 10, wMain);
@@ -256,7 +256,6 @@ function renderHumanChibiPixels(
       px(ctx, cx - 9, headY + 15, 2, 2, wAcc);
       px(ctx, cx + 7, headY + 15, 2, 2, wAcc);
     } else {
-      // Feathered / Ember / Garuda / Angel-Demon / Naga Wings
       const leftColor = wVar === 'angel_demon' ? '#f8fafc' : wMain;
       const rightColor = wVar === 'angel_demon' ? '#e11d48' : wMain;
       // Left wing
@@ -269,7 +268,15 @@ function renderHumanChibiPixels(
       px(ctx, cx + 7, torsoY - 3, 7, 7, rightColor);
       px(ctx, cx + 8, torsoY - 2, 5, 2, wAcc);
       px(ctx, cx + 10, torsoY + 4, 4, 2, OUTLINE);
+      // Center back clasp when facing upward so wings attach cleanly onto the back!
+      if (isUp) {
+        px(ctx, cx - 5, torsoY - 1, 10, 4, OUTLINE);
+        px(ctx, cx - 4, torsoY, 8, 2, wAcc);
+      }
     }
+  };
+  if (!isUp) {
+    drawProceduralWings();
   }
 
   // ==================== BACK HAIR LAYER (behind body/shoulders) ====================
@@ -813,6 +820,11 @@ function renderHumanChibiPixels(
     }
   }
 
+  // When walking upward (back facing camera), draw procedural wings IN FRONT OF the back!
+  if (isUp) {
+    drawProceduralWings();
+  }
+
   ctx.restore();
 }
 
@@ -1259,6 +1271,12 @@ export class PaperDoll extends Phaser.GameObjects.Container {
       const wingOffsetX = facing === 'left' ? 4 : facing === 'right' ? -4 : 0;
       this.wingSprite.setPosition(wingOffsetX, -22 + vertBob + wingHover);
       this.wingSprite.setFlipX(facing === 'left');
+      // Fix: When walking upward (back faces camera), render animated PNG wings IN FRONT OF bodySprite!
+      if (facing === 'up') {
+        this.moveAbove(this.wingSprite, this.bodySprite);
+      } else {
+        this.moveBelow(this.wingSprite, this.bodySprite);
+      }
     }
 
     // Layer 10: Held Khmer Weapon positioned cleanly at character's hand & rotated along cursor aimAngle when active

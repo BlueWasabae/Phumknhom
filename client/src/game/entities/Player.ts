@@ -265,12 +265,19 @@ export class Player {
     this.mount?.setMount(this.zone === 'overworld' ? this.state.activeMount : null);
   }
 
-  public showSpeechBubble(text: string, durationMs = 4500): void {
+  public showSpeechBubble(text: string, durationMs = 5500): void {
     const clean = text.trim().slice(0, 120);
     if (!clean) return;
-    this.bubbleText.setText(clean).setVisible(true);
-    this.bubbleBg.setVisible(true);
+    this.bubbleText.setText(clean).setVisible(true).setDepth(3201);
+    this.bubbleBg.setVisible(true).setDepth(3200);
     this.bubbleExpiresAt = this.scene.time.now + durationMs;
+    this.bubbleText.setScale(this.uiScale * 0.72);
+    this.scene.tweens.add({
+      targets: this.bubbleText,
+      scale: this.uiScale,
+      duration: 140,
+      ease: 'Back.easeOut',
+    });
   }
 
   public showEmote(emoji: string, durationMs = 3000): void {
@@ -358,7 +365,7 @@ export class Player {
 
     this.pet?.update(time, this.sprite.x, this.sprite.y, this.facingRight);
 
-    const offsetY = this.zone === 'overworld' ? -16 : -36;
+    const offsetY = this.zone === 'overworld' ? -24 : -42;
     const s = this.uiScale;
 
     if (this.bubbleExpiresAt > 0) {

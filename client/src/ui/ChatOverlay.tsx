@@ -75,6 +75,8 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
         kromTag,
         isVip,
       });
+      // Also pop up above the player's head in-world!
+      EventBus.emit('player:chat', { text: `[${kromTag}] ${clean.slice(0, 108)}` });
       setInput('');
       return;
     }

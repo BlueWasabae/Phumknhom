@@ -149,6 +149,9 @@ interface HUDProps {
   onOpenYardDecor?: () => void;
   onOpenArena?: () => void;
   onOpenEmoteWheel?: () => void;
+  onOpenFloatingMarket?: () => void;
+  onOpenSbekThom?: () => void;
+  onStartDeliveryRun?: () => void;
   onOpenPatchNotes?: () => void;
   onOpenFeedback?: () => void;
   onOpenScryingMirror?: () => void;
@@ -228,6 +231,9 @@ export const HUD: React.FC<HUDProps> = ({
   onOpenYardDecor,
   onOpenArena,
   onOpenEmoteWheel,
+  onOpenFloatingMarket,
+  onOpenSbekThom,
+  onStartDeliveryRun,
   onOpenPatchNotes,
   onOpenFeedback,
   onOpenScryingMirror,
@@ -625,13 +631,23 @@ export const HUD: React.FC<HUDProps> = ({
                   : 'bg-amber-100 hover:bg-amber-200 text-amber-950 border-amber-900/35'
               }`}
             >
-              {player.activeMount === 'mount_mini_tuk_tuk'
-                ? '🚕 Riding [V]'
-                : player.activeMount === 'mount_water_buffalo'
-                  ? '🐃 Riding [V]'
-                  : player.activeMount === 'mount_village_bicycle'
-                    ? '🚲 Riding [V]'
-                    : '🚲 Mount [V]'}
+              {player.activeMount === 'mount_golden_cloud'
+                ? '☁️ Riding [V]'
+                : player.activeMount === 'mount_royal_elephant'
+                  ? '🐘 Riding [V]'
+                  : player.activeMount === 'mount_shadow_singha'
+                    ? '🦁 Riding [V]'
+                    : player.activeMount === 'mount_celestial_garuda'
+                      ? '🦅 Riding [V]'
+                      : player.activeMount === 'mount_spirit_dragon'
+                        ? '🐉 Riding [V]'
+                        : player.activeMount === 'mount_bamboo_hoverboard'
+                          ? '🛹 Riding [V]'
+                          : player.activeMount === 'mount_water_buffalo'
+                            ? '🐃 Riding [V]'
+                            : player.activeMount === 'mount_village_bicycle'
+                              ? '🚲 Riding [V]'
+                              : '☁️ Mount [V]'}
             </button>
           )}
           {onOpenLeaderboard && (
@@ -645,8 +661,7 @@ export const HUD: React.FC<HUDProps> = ({
             </button>
           )}
           {onOpenTukTukCart &&
-            (player.activeMount === 'mount_mini_tuk_tuk' ||
-              player.currentMapId === 'temple_district' ||
+            (player.currentMapId === 'temple_district' ||
               player.currentMapId === 'central_plaza') && (
               <button
                 type="button"
@@ -1178,6 +1193,55 @@ export const HUD: React.FC<HUDProps> = ({
                       <Sparkles className="w-4 h-4 text-amber-600" /> Play Khmer Music (Jam)
                     </span>
                     <span className="text-[9px] font-bold text-amber-800">5 Inst</span>
+                  </button>
+                )}
+                {onOpenFloatingMarket && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuDropdownOpen(false);
+                      onOpenFloatingMarket();
+                    }}
+                    className="px-3 py-2 rounded-xl hover:bg-teal-100 text-left flex items-center justify-between gap-2 text-amber-950"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Store className="w-4 h-4 text-teal-700" /> Floating River Market
+                    </span>
+                    <span className="text-[9px] font-bold text-teal-700">Trade</span>
+                  </button>
+                )}
+                {onOpenSbekThom && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuDropdownOpen(false);
+                      onOpenSbekThom();
+                    }}
+                    className="px-3 py-2 rounded-xl hover:bg-orange-100 text-left flex items-center justify-between gap-2 text-amber-950"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-orange-700" /> Sbek Thom &amp; Reamker
+                    </span>
+                    <span className="text-[9px] font-bold text-orange-700">
+                      {(player.reamkerQuestStep ?? 0) >= 6
+                        ? '5/5'
+                        : `${player.reamkerQuestStep ?? 0}/5`}
+                    </span>
+                  </button>
+                )}
+                {onStartDeliveryRun && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuDropdownOpen(false);
+                      onStartDeliveryRun();
+                    }}
+                    className="px-3 py-2 rounded-xl hover:bg-amber-100 text-left flex items-center justify-between gap-2 text-amber-950"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Zap className="w-4 h-4 text-amber-700" /> Express Delivery Job
+                    </span>
+                    <span className="text-[9px] font-bold text-amber-700">90s</span>
                   </button>
                 )}
                 {onOpenArena && (

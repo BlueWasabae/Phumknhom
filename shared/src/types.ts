@@ -674,6 +674,12 @@ export interface PlayerState {
   pvpLosses?: number;
   kunKhmerChampionSash?: boolean;
   ownedEmotes?: import('./emotes').KhmerEmoteId[];
+  /** Update 3.2 — Floating Mekong Regional Trade, Sbek Thom Reamker Questline & Express Delivery Jobs */
+  regionalCargo?: Record<string, number>;
+  merchantXp?: number;
+  reamkerQuestStep?: number; // 0 = not started, 1..5 = active step, 6 = completed
+  reamkerStepProgress?: number;
+  deliveryJobsCompleted?: number;
   hasCompletedCreation?: boolean;
   skillDamagePct: number;
   armorDamagePct: number;
@@ -1003,6 +1009,11 @@ export const INITIAL_PLAYER_STATE: PlayerState = {
   pvpLosses: 0,
   kunKhmerChampionSash: false,
   ownedEmotes: [],
+  regionalCargo: {},
+  merchantXp: 0,
+  reamkerQuestStep: 0,
+  reamkerStepProgress: 0,
+  deliveryJobsCompleted: 0,
   hasCompletedCreation: false,
   skillDamagePct: 0.025,
   armorDamagePct: 0.04,

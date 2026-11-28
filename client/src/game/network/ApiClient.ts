@@ -163,6 +163,11 @@ export interface SavedProfilePayload {
   pvpLosses?: number;
   kunKhmerChampionSash?: boolean;
   ownedEmotes?: KhmerEmoteId[];
+  regionalCargo?: Record<string, number>;
+  merchantXp?: number;
+  reamkerQuestStep?: number;
+  reamkerStepProgress?: number;
+  deliveryJobsCompleted?: number;
   hasCompletedCreation?: boolean;
   activeClass: PlayerState['activeClass'];
   weapon: PlayerState['weapon'];
@@ -577,6 +582,11 @@ export function serializePlayerStateForSave(state: PlayerState): SavedProfilePay
     pvpLosses: state.pvpLosses ?? 0,
     kunKhmerChampionSash: Boolean(state.kunKhmerChampionSash ?? false),
     ownedEmotes: [...(state.ownedEmotes ?? [])],
+    regionalCargo: { ...(state.regionalCargo ?? {}) },
+    merchantXp: state.merchantXp ?? 0,
+    reamkerQuestStep: state.reamkerQuestStep ?? 0,
+    reamkerStepProgress: state.reamkerStepProgress ?? 0,
+    deliveryJobsCompleted: state.deliveryJobsCompleted ?? 0,
     hasCompletedCreation: Boolean(state.hasCompletedCreation ?? state.loadout.hasCompletedCreation),
     activeClass: state.activeClass,
     weapon: { ...state.weapon },
@@ -836,8 +846,15 @@ export function hydratePlayerStateFromSave(
     luckyWheelPity: typeof saved?.luckyWheelPity === 'number' ? saved.luckyWheelPity : 0,
     villagePassUntil: typeof saved?.villagePassUntil === 'number' ? saved.villagePassUntil : null,
     extraBagSlots: typeof saved?.extraBagSlots === 'number' ? saved.extraBagSlots : 0,
-    ownedMounts: Array.isArray(saved?.ownedMounts) ? saved.ownedMounts : [],
-    activeMount: typeof saved?.activeMount === 'string' ? saved.activeMount : null,
+    ownedMounts: Array.isArray(saved?.ownedMounts)
+      ? Array.from(new Set(saved.ownedMounts.map((m) => (m === 'mount_mini_tuk_tuk' ? 'mount_golden_cloud' : m))))
+      : [],
+    activeMount:
+      typeof saved?.activeMount === 'string'
+        ? saved.activeMount === 'mount_mini_tuk_tuk'
+          ? 'mount_golden_cloud'
+          : saved.activeMount
+        : null,
     dailyFreeCoinSpinDate:
       typeof saved?.dailyFreeCoinSpinDate === 'string' ? saved.dailyFreeCoinSpinDate : null,
     lastShrinePrayerDate:
@@ -987,6 +1004,12 @@ export function hydratePlayerStateFromSave(
     pvpLosses: typeof saved?.pvpLosses === 'number' ? saved.pvpLosses : 0,
     kunKhmerChampionSash: Boolean(saved?.kunKhmerChampionSash ?? false),
     ownedEmotes: Array.isArray(saved?.ownedEmotes) ? [...saved.ownedEmotes] : [],
+    regionalCargo:
+      saved?.regionalCargo && typeof saved.regionalCargo === 'object' ? { ...saved.regionalCargo } : {},
+    merchantXp: typeof saved?.merchantXp === 'number' ? saved.merchantXp : 0,
+    reamkerQuestStep: typeof saved?.reamkerQuestStep === 'number' ? saved.reamkerQuestStep : 0,
+    reamkerStepProgress: typeof saved?.reamkerStepProgress === 'number' ? saved.reamkerStepProgress : 0,
+    deliveryJobsCompleted: typeof saved?.deliveryJobsCompleted === 'number' ? saved.deliveryJobsCompleted : 0,
     hasCompletedCreation: Boolean(
       saved?.hasCompletedCreation ?? saved?.loadout?.hasCompletedCreation ?? false
     ),

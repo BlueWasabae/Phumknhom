@@ -384,18 +384,54 @@ export const DIAMOND_SHOP_ITEMS: DiamondShopItemDef[] = [
     itemId: 'hair_royal_braided_crown',
     itemIds: ['hair_royal_braided_crown', 'hair_flowing_apsara_waves', 'salon_floating_lotus_petals'],
   },
-  // ---- MOUNTS & ACCOUNT QoL ----
+  // ---- POPULAR GAMING-HISTORY MOUNTS & ACCOUNT QoL ----
   {
-    id: 'shop_mini_tuk_tuk',
-    name: 'Mini Tuk-Tuk (Plaza Mount)',
-    khmerName: 'រ៉ឺម៉កតុក្កតាភូមិ',
+    id: 'shop_mount_golden_cloud',
+    name: 'Golden Naga Cloud (2-Seat Nimbus)',
+    khmerName: 'ពពកនាគមាសទេវតា (២កៅអី)',
     category: 'mount',
-    diamondCost: 350,
-    icon: '🛺',
-    badge: '+40% Village Speed',
+    diamondCost: 260,
+    icon: '☁️',
+    badge: '2-Seat Flying Nimbus',
     description:
-      'Cruises across Phum Village & Plaza at +40% speed (automatically parked outside Dungeon combat).',
-    mountId: 'mount_mini_tuk_tuk',
+      'Iconic floating golden cloud mount (+60% Village Speed, glowing golden mist & friends can Hop On for Co-op Delivery runs!).',
+    mountId: 'mount_golden_cloud',
+  },
+  {
+    id: 'shop_mount_shadow_singha',
+    name: 'Shadow Singha Lion (MMO Dire Mount)',
+    khmerName: 'សិង្ហស្រមោលអង្គរ',
+    category: 'mount',
+    diamondCost: 280,
+    icon: '🦁',
+    badge: 'Armored Dire Lion',
+    description:
+      'Classic MMO armored lion mount with glowing violet mane & golden saddle (+58% Village Speed, 0 combat P2W).',
+    mountId: 'mount_shadow_singha',
+  },
+  {
+    id: 'shop_mount_celestial_garuda',
+    name: 'Celestial Garuda Strider (RPG Bird)',
+    khmerName: 'គ្រុឌមាសទេវតា',
+    category: 'mount',
+    diamondCost: 310,
+    icon: '🦅',
+    badge: 'Chocobo / Phoenix Bird',
+    description:
+      'Swift golden-feathered Khmer Garuda strider bird leaving fiery plumage trails (+62% Village Speed, 0 combat P2W).',
+    mountId: 'mount_celestial_garuda',
+  },
+  {
+    id: 'shop_mount_spirit_dragon',
+    name: 'Emerald Mekong Dragon (2-Seat Dragon)',
+    khmerName: 'នាគព្រលឹងមេគង្គ (២កៅអី)',
+    category: 'mount',
+    diamondCost: 380,
+    icon: '🐉',
+    badge: '2-Seat Eastern Dragon',
+    description:
+      'Legendary floating emerald Mekong spirit dragon with golden spines (+65% Village Speed & carries a Co-op passenger!).',
+    mountId: 'mount_spirit_dragon',
   },
   {
     id: 'shop_extra_bag_slots',
@@ -713,8 +749,8 @@ export function togglePlazaMount(
     state: { ...state, activeMount: nextActive },
     ok: true,
     message: nextActive
-      ? '🛺 Mounted Mini Tuk-Tuk (+40% Village/Plaza Speed)!'
-      : '🛺 Parked Mini Tuk-Tuk (on foot).',
+      ? `✨ Mounted ${nextActive.replace(/^mount_/, '').replace(/_/g, ' ')}! Press [V] to dismount or [H] to call.`
+      : '🐾 Dismounted — back on foot.',
   };
 }
 

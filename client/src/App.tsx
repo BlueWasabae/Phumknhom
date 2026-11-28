@@ -237,6 +237,19 @@ import {
 import { FeedbackModal } from './ui/FeedbackModal';
 import { ArenaModal } from './ui/ArenaModal';
 import { EmoteWheelModal } from './ui/EmoteWheelModal';
+import { FloatingMarketModal } from './ui/FloatingMarketModal';
+import { SbekThomModal } from './ui/SbekThomModal';
+import { DeliveryHudWidget } from './ui/DeliveryHudWidget';
+import {
+  buyRegionalTradeGood,
+  sellRegionalTradeGood,
+  type RegionalMarketZoneId,
+} from '@shared/regionalTrade';
+import {
+  advanceReamkerQuestProgress,
+  claimReamkerStepReward,
+  startReamkerQuestline,
+} from '@shared/reamkerQuests';
 import type { KhmerEmoteId } from '@shared/emotes';
 import { downloadHeroCardPng } from './utils/HeroCardGenerator';
 import { ScryingMirrorModal } from './ui/ScryingMirrorModal';
@@ -332,6 +345,8 @@ type ActiveModalType =
   | 'patchNotes'
   | 'feedback'
   | 'arena'
+  | 'floatingMarket'
+  | 'sbekThom'
   | 'characterCreator';
 
 interface FloatingXpBanner extends SkillXpToastPayload {
@@ -1786,6 +1801,11 @@ export const App: React.FC = () => {
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || targetEl?.isContentEditable) return;
       if (document.querySelector('dialog[open]')) return;
       const k = e.key.toLowerCase();
+      if (k === 'enter') {
+        e.preventDefault();
+        setChatOpen(true);
+        return;
+      }
       if (k === 'z') {
         e.preventDefault();
         soundManager.playSfx('click');
@@ -2104,6 +2124,26 @@ export const App: React.FC = () => {
             friendly: Math.min(100, prev.lifeStats.friendly + friendlyXp),
           },
         }));
+      }),
+      EventBus.on('delivery:completed', ({ coins, friendlyXp, remainingSec, coopBonusApplied }) => {
+        soundManager.playSfx('victory');
+        runStateAction((prev) => {
+          const nextCoins = prev.currencies.coins + coins;
+          return {
+            state: {
+              ...prev,
+              coins: nextCoins,
+              currencies: { ...prev.currencies, coins: nextCoins },
+              deliveryJobsCompleted: (prev.deliveryJobsCompleted ?? 0) + 1,
+              lifeStats: {
+                ...prev.lifeStats,
+                friendly: Math.min(100, prev.lifeStats.friendly + friendlyXp),
+              },
+            },
+            ok: true,
+            message: `📦 EXPRESS DELIVERY COMPLETE (${remainingSec}s left)! +${coins}c · +${friendlyXp} Friendly XP${coopBonusApplied ? ' (🤝 +25% Co-op Passenger Bonus!)' : ''}`,
+          };
+        });
       }),
       EventBus.on('petRace:finished', ({ place, timeSec, coins, petXpTreats, unlockedChampionRibbon }) => {
         runStateAction((prev) => {
@@ -2760,6 +2800,15 @@ export const App: React.FC = () => {
                     ? 45
                     : 25;
           next = awardSeasonPassXp(next, passXpGain * Math.max(1, amount ?? 1)).state;
+
+          // Update 3.2 — Auto-advance 5-Part Reamker Lore Questline from real gameplay actions!
+          if (category === 'catch_fish') {
+            next = advanceReamkerQuestProgress(next, 'rare_fish_or_pearl', amount ?? 1).state;
+          } else if (category === 'clear_tower_floors' || category === 'defeat_mythic_boss') {
+            next = advanceReamkerQuestProgress(next, 'tower_or_mythic_boss', 1).state;
+          } else if (category === 'defeat_any_boss') {
+            next = advanceReamkerQuestProgress(next, 'museum_and_boss', 1).state;
+          }
 
           const explicitAchs: AchievementId[] = [];
           if (category === 'harvest_crops') explicitAchs.push('first_harvest');
@@ -3466,6 +3515,11 @@ export const App: React.FC = () => {
             onOpenInstrumentJam={() => setInstrumentJamOpen((v) => !v)}
             onOpenArena={() => setActiveModal('arena')}
             onOpenEmoteWheel={() => setEmoteWheelOpen((v) => !v)}
+            onOpenFloatingMarket={() => setActiveModal('floatingMarket')}
+            onOpenSbekThom={() => setActiveModal('sbekThom')}
+            onStartDeliveryRun={() => {
+              EventBus.emit('delivery:startRequest', {});
+            }}
             onOpenPetRace={() => setActiveModal('petRace')}
             onOpenYardDecor={() => {
               setHouseDecorScope('yard');
@@ -5571,6 +5625,81 @@ export const App: React.FC = () => {
         onOpenSeasonPass={() => setActiveModal('seasonPass')}
         onClose={() => setEmoteWheelOpen(false)}
       />
+
+      <FloatingMarketModal
+        open={activeModal === 'floatingMarket'}
+        player={player}
+        onBuyGood={(goodId, zoneId, qty) =>
+          runStateAction((s) => {
+            const res = buyRegionalTradeGood(s, goodId, zoneId, qty);
+            if (res.ok) soundManager.playSfx('coin');
+            return res;
+          })
+        }
+        onSellGood={(goodId, zoneId, qty) =>
+          runStateAction((s) => {
+            const res = sellRegionalTradeGood(s, goodId, zoneId, qty);
+            if (res.ok) soundManager.playSfx(res.droppedAbacus ? 'victory' : 'coin');
+            return res;
+          })
+        }
+        onTravelToZone={(targetZoneId: RegionalMarketZoneId) => {
+          if (targetZoneId === 'farm_homestead') {
+            handleTravel(
+              { method: 'pylon', destinationLabel: 'Farm Homestead', targetZone: 'farm' },
+              0
+            );
+            return;
+          }
+          handleTravel(
+            {
+              method: 'pylon',
+              destinationLabel: targetZoneId.replace(/_/g, ' '),
+              targetZone: 'overworld',
+              mapId: targetZoneId,
+            },
+            0
+          );
+        }}
+        onClose={() => setActiveModal(null)}
+      />
+
+      <SbekThomModal
+        open={activeModal === 'sbekThom'}
+        player={player}
+        onStartQuestline={() =>
+          runStateAction((s) => {
+            const res = startReamkerQuestline(s);
+            if (res.ok) soundManager.playSfx('magic');
+            return res;
+          })
+        }
+        onClaimStep={() =>
+          runStateAction((s) => {
+            const res = claimReamkerStepReward(s);
+            if (res.ok) soundManager.playSfx(res.completedAll ? 'victory' : 'coin');
+            return res;
+          })
+        }
+        onClose={() => setActiveModal(null)}
+      />
+
+      {!photoMode && zone === 'overworld' && (
+        <DeliveryHudWidget
+          currentMapId={player.currentMapId ?? 'central_plaza'}
+          onQuickTravelToMap={(mapId) => {
+            handleTravel(
+              {
+                method: 'pylon',
+                destinationLabel: mapId.replace(/_/g, ' '),
+                targetZone: 'overworld',
+                mapId,
+              },
+              0
+            );
+          }}
+        />
+      )}
 
       {incomingDuel && (
         <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 w-[min(92vw,390px)] rounded-2xl bg-gradient-to-r from-red-950 via-stone-950 to-amber-950 border-2 border-amber-400 text-amber-50 p-3 shadow-2xl">

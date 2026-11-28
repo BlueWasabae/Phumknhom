@@ -109,6 +109,11 @@ export interface SavedPlayerProfile {
   pvpLosses?: number;
   kunKhmerChampionSash?: boolean;
   ownedEmotes?: string[];
+  regionalCargo?: Record<string, number>;
+  merchantXp?: number;
+  reamkerQuestStep?: number;
+  reamkerStepProgress?: number;
+  deliveryJobsCompleted?: number;
   hasCompletedCreation?: boolean;
   activeClass?: string;
   weapon?: Record<string, unknown>;
@@ -810,6 +815,14 @@ function rowToSavedProfile(row: {
     pvpLosses: typeof meta.pvpLosses === 'number' ? meta.pvpLosses : 0,
     kunKhmerChampionSash: Boolean(meta.kunKhmerChampionSash ?? false),
     ownedEmotes: Array.isArray(meta.ownedEmotes) ? (meta.ownedEmotes as string[]) : [],
+    regionalCargo:
+      meta.regionalCargo && typeof meta.regionalCargo === 'object'
+        ? (meta.regionalCargo as Record<string, number>)
+        : {},
+    merchantXp: typeof meta.merchantXp === 'number' ? meta.merchantXp : 0,
+    reamkerQuestStep: typeof meta.reamkerQuestStep === 'number' ? meta.reamkerQuestStep : 0,
+    reamkerStepProgress: typeof meta.reamkerStepProgress === 'number' ? meta.reamkerStepProgress : 0,
+    deliveryJobsCompleted: typeof meta.deliveryJobsCompleted === 'number' ? meta.deliveryJobsCompleted : 0,
     hasCompletedCreation: Boolean(
       meta.hasCompletedCreation ??
         (loadout as { hasCompletedCreation?: boolean }).hasCompletedCreation ??
@@ -1198,6 +1211,12 @@ export async function savePlayerProfile(
     pvpLosses: typeof profile.pvpLosses === 'number' && Number.isFinite(profile.pvpLosses) ? Math.max(0, Math.floor(profile.pvpLosses)) : 0,
     kunKhmerChampionSash: Boolean(profile.kunKhmerChampionSash ?? false),
     ownedEmotes: Array.isArray(profile.ownedEmotes) ? profile.ownedEmotes : [],
+    regionalCargo:
+      profile.regionalCargo && typeof profile.regionalCargo === 'object' ? profile.regionalCargo : {},
+    merchantXp: typeof profile.merchantXp === 'number' && Number.isFinite(profile.merchantXp) ? Math.max(0, Math.floor(profile.merchantXp)) : 0,
+    reamkerQuestStep: typeof profile.reamkerQuestStep === 'number' && Number.isFinite(profile.reamkerQuestStep) ? Math.max(0, Math.min(6, Math.floor(profile.reamkerQuestStep))) : 0,
+    reamkerStepProgress: typeof profile.reamkerStepProgress === 'number' && Number.isFinite(profile.reamkerStepProgress) ? Math.max(0, Math.floor(profile.reamkerStepProgress)) : 0,
+    deliveryJobsCompleted: typeof profile.deliveryJobsCompleted === 'number' && Number.isFinite(profile.deliveryJobsCompleted) ? Math.max(0, Math.floor(profile.deliveryJobsCompleted)) : 0,
     hasCompletedCreation: Boolean(
       profile.hasCompletedCreation ??
         (profile.loadout as { hasCompletedCreation?: boolean } | undefined)?.hasCompletedCreation ??
