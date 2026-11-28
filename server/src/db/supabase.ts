@@ -123,6 +123,12 @@ export interface SavedPlayerProfile {
   unlockedDyes?: string[];
   folkGameWins?: number;
   folkBadges?: string[];
+  unlockedCropSlots?: number;
+  pastureLandLevel?: number;
+  ownedFences?: number;
+  discoveredBosses?: string[];
+  mapExplorationPct?: Record<string, number>;
+  discoveredLandmarks?: string[];
   hasCompletedCreation?: boolean;
   activeClass?: string;
   weapon?: Record<string, unknown>;
@@ -846,6 +852,15 @@ function rowToSavedProfile(row: {
       : ['dye_turmeric_gold', 'dye_indigo_krama'],
     folkGameWins: typeof meta.folkGameWins === 'number' ? meta.folkGameWins : 0,
     folkBadges: Array.isArray(meta.folkBadges) ? (meta.folkBadges as string[]) : [],
+    unlockedCropSlots: typeof meta.unlockedCropSlots === 'number' ? meta.unlockedCropSlots : 2,
+    pastureLandLevel: typeof meta.pastureLandLevel === 'number' ? meta.pastureLandLevel : 0,
+    ownedFences: typeof meta.ownedFences === 'number' ? meta.ownedFences : 0,
+    discoveredBosses: Array.isArray(meta.discoveredBosses) ? (meta.discoveredBosses as string[]) : ['sdech_kongkaeb'],
+    mapExplorationPct:
+      meta.mapExplorationPct && typeof meta.mapExplorationPct === 'object'
+        ? (meta.mapExplorationPct as Record<string, number>)
+        : {},
+    discoveredLandmarks: Array.isArray(meta.discoveredLandmarks) ? (meta.discoveredLandmarks as string[]) : [],
     hasCompletedCreation: Boolean(
       meta.hasCompletedCreation ??
         (loadout as { hasCompletedCreation?: boolean }).hasCompletedCreation ??
@@ -1255,6 +1270,22 @@ export async function savePlayerProfile(
         ? Math.max(0, Math.floor(profile.folkGameWins))
         : 0,
     folkBadges: Array.isArray(profile.folkBadges) ? profile.folkBadges : [],
+    unlockedCropSlots:
+      typeof profile.unlockedCropSlots === 'number' && Number.isFinite(profile.unlockedCropSlots)
+        ? Math.max(2, Math.floor(profile.unlockedCropSlots))
+        : 2,
+    pastureLandLevel:
+      typeof profile.pastureLandLevel === 'number' && Number.isFinite(profile.pastureLandLevel)
+        ? Math.max(0, Math.floor(profile.pastureLandLevel))
+        : 0,
+    ownedFences:
+      typeof profile.ownedFences === 'number' && Number.isFinite(profile.ownedFences)
+        ? Math.max(0, Math.floor(profile.ownedFences))
+        : 0,
+    discoveredBosses: Array.isArray(profile.discoveredBosses) ? profile.discoveredBosses : ['sdech_kongkaeb'],
+    mapExplorationPct:
+      profile.mapExplorationPct && typeof profile.mapExplorationPct === 'object' ? profile.mapExplorationPct : {},
+    discoveredLandmarks: Array.isArray(profile.discoveredLandmarks) ? profile.discoveredLandmarks : [],
     hasCompletedCreation: Boolean(
       profile.hasCompletedCreation ??
         (profile.loadout as { hasCompletedCreation?: boolean } | undefined)?.hasCompletedCreation ??

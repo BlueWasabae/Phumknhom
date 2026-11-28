@@ -17,8 +17,13 @@ import {
   FARM_ITEMS,
   FRUIT_TREES,
   LIVESTOCK,
+  LIVESTOCK_PEN_LIMITS,
   PLOT_UNLOCK_COST,
   ROW_CROPS,
+  WOODEN_FENCE_COST,
+  getLivestockSpecies,
+  getNextPastureLandCost,
+  getNextPlotUnlockCost,
 } from '../../data/cropsAndArtisan';
 
 export interface TimedProgress {
@@ -203,16 +208,28 @@ export function getMachineProgress(machine: ArtisanMachineState, now = Date.now(
 export function unlockPlot(state: PlayerState, index: number): ActionResult {
   const plot = state.farm.plots[index];
   if (!plot || plot.unlocked) return { state, ok: false, message: 'Plot already unlocked.' };
-  const paid = spendCoins(state, PLOT_UNLOCK_COST);
-  if (!paid) return { state, ok: false, message: `Need ${PLOT_UNLOCK_COST} Coins to unlock this plot.` };
+  const unlockedCount = state.farm.plots.filter((p) => p.unlocked).length;
+  const cost = getNextPlotUnlockCost(unlockedCount);
+  const paid = spendCoins(state, cost);
+  if (!paid) {
+    return {
+      state,
+      ok: false,
+      message: `Need ${cost.toLocaleString()} Coins to unlock Plot #${index + 1} (Land Slot #${unlockedCount + 1}).`,
+    };
+  }
 
   const plots = paid.farm.plots.map((p) =>
     p.index === index ? { ...p, unlocked: true, tilled: true } : p
   );
   return {
-    state: { ...paid, farm: { ...paid.farm, plots } },
+    state: {
+      ...paid,
+      unlockedCropSlots: unlockedCount + 1,
+      farm: { ...paid.farm, plots },
+    },
     ok: true,
-    message: `Unlocked Plot #${index + 1} for ${PLOT_UNLOCK_COST} Coins!`,
+    message: `Unlocked Crop Plot #${index + 1} for ${cost.toLocaleString()} Coins! (Next plot: ${getNextPlotUnlockCost(unlockedCount + 1).toLocaleString()} C)`,
   };
 }
 
@@ -598,10 +615,66 @@ export function harvestFruitTree(state: PlayerState, slotIndex: number, now = Da
   };
 }
 
+export function buyPastureLandExpansion(state: PlayerState): ActionResult {
+  const curLevel = state.pastureLandLevel ?? 0;
+  if (curLevel >= 3) return { state, ok: false, message: 'Maximum Pasture Land Expansion reached (Lv.3)!' };
+  const cost = getNextPastureLandCost(curLevel);
+  const paid = spendCoins(state, cost);
+  if (!paid) return { state, ok: false, message: `Need ${cost.toLocaleString()} Coins to expand Pasture Land (Lv.${curLevel + 1}).` };
+  return {
+    state: { ...paid, pastureLandLevel: curLevel + 1 },
+    ok: true,
+    message: `🌾 Expanded Pasture Land to Level ${curLevel + 1} (-${cost.toLocaleString()} C)! Now build a Wooden Fence Pen (800 C)!`,
+  };
+}
+
+export function buyWoodenFencePen(state: PlayerState): ActionResult {
+  const landLv = state.pastureLandLevel ?? 0;
+  const fences = state.ownedFences ?? 0;
+  if (landLv <= 0) {
+    return { state, ok: false, message: 'Buy Pasture Land Expansion (2,000 C) first before building a Wooden Fence!' };
+  }
+  if (fences >= landLv) {
+    return {
+      state,
+      ok: false,
+      message: `All ${landLv} pasture section(s) are fenced! Expand Pasture Land first to add another Pen.`,
+    };
+  }
+  const paid = spendCoins(state, WOODEN_FENCE_COST);
+  if (!paid) return { state, ok: false, message: `Need ${WOODEN_FENCE_COST.toLocaleString()} Coins to build a Wooden Fence Pen.` };
+  return {
+    state: { ...paid, ownedFences: fences + 1 },
+    ok: true,
+    message: `🪵 Built Wooden Fence Pen #${fences + 1} (-${WOODEN_FENCE_COST} C)! You can now raise Chickens (max 4), Sheep (max 3), or Cows (max 2)!`,
+  };
+}
+
 export function buyLivestock(state: PlayerState, animalId: string, now = Date.now()): ActionResult {
   const def = LIVESTOCK[animalId];
   if (!def) return { state, ok: false, message: 'Unknown livestock.' };
-  if (state.farm.livestock.length >= 6) return { state, ok: false, message: 'Livestock pasture full (6 animals max).' };
+  const landLv = state.pastureLandLevel ?? 0;
+  const fences = state.ownedFences ?? 0;
+  if (landLv <= 0) {
+    return { state, ok: false, message: 'Step 1 Required: Buy Pasture Land Expansion (2,000 C) first!' };
+  }
+  if (fences <= 0) {
+    return { state, ok: false, message: 'Step 2 Required: Build a Wooden Fence Pen (800 C) before buying animals!' };
+  }
+  const species = getLivestockSpecies(animalId);
+  const ownedOfSpecies = state.farm.livestock.filter((p) => getLivestockSpecies(p.animalId) === species).length;
+  const speciesCap = LIVESTOCK_PEN_LIMITS[species] * fences;
+  if (ownedOfSpecies >= speciesCap) {
+    return {
+      state,
+      ok: false,
+      message: `Pen capacity reached for ${species}s (${ownedOfSpecies}/${speciesCap})! Build another Wooden Fence Pen to raise more.`,
+    };
+  }
+  const maxTotal = Math.min(9, fences * 4);
+  if (state.farm.livestock.length >= maxTotal) {
+    return { state, ok: false, message: `Fenced pasture full (${maxTotal} animals max). Expand Pasture Land & Fence!` };
+  }
   const paid = spendCoins(state, def.costCoins);
   if (!paid) return { state, ok: false, message: `Need ${def.costCoins.toLocaleString()} Coins.` };
 
@@ -615,7 +688,7 @@ export function buyLivestock(state: PlayerState, animalId: string, now = Date.no
   return {
     state: { ...paid, farm: { ...paid.farm, livestock: [...paid.farm.livestock, nextPen] } },
     ok: true,
-    message: `Adopted ${def.name} (${def.khmerName}) into your pasture!`,
+    message: `Adopted ${def.name} (${def.khmerName}) into your fenced pasture!`,
   };
 }
 

@@ -302,38 +302,51 @@ export const ModeSelectorModal: React.FC<ModeSelectorModalProps> = ({
             {bossesInTier.map((b) => {
               const active = selectedBoss === b.id;
               const cleared = player.clearedBosses.includes(b.id);
+              const discoveredList = player.discoveredBosses ?? ['sdech_kongkaeb'];
+              const isDiscovered = cleared || discoveredList.includes(b.id);
               const previewHp = getScaledBossMaxHp(b.id, selectedDiff, 1);
               const dropsExpanded = expandedDropsBossId === b.id;
 
               return (
                 <div
                   key={b.id}
-                  onClick={() => setSelectedBoss(b.id)}
-                  className={`text-left p-3 rounded-xl border-2 transition flex flex-col gap-1.5 cursor-pointer ${
-                    active
-                      ? b.isCalamity
-                        ? 'bg-purple-950/95 text-amber-50 border-yellow-400 ring-2 ring-purple-500 shadow-lg'
-                        : 'bg-amber-100 border-amber-900 ring-2 ring-amber-500 shadow-md'
-                      : b.isCalamity
-                        ? 'bg-slate-950/90 text-amber-100 border-purple-500/60 hover:border-yellow-400'
-                        : 'bg-amber-50/90 border-amber-900/30 hover:bg-white'
+                  onClick={() => {
+                    if (isDiscovered) setSelectedBoss(b.id);
+                  }}
+                  className={`text-left p-3 rounded-xl border-2 transition flex flex-col gap-1.5 ${
+                    !isDiscovered
+                      ? 'bg-slate-900/90 text-slate-300 border-slate-700 opacity-85 cursor-not-allowed'
+                      : active
+                        ? b.isCalamity
+                          ? 'bg-purple-950/95 text-amber-50 border-yellow-400 ring-2 ring-purple-500 shadow-lg cursor-pointer'
+                          : 'bg-amber-100 border-amber-900 ring-2 ring-amber-500 shadow-md cursor-pointer'
+                        : b.isCalamity
+                          ? 'bg-slate-950/90 text-amber-100 border-purple-500/60 hover:border-yellow-400 cursor-pointer'
+                          : 'bg-amber-50/90 border-amber-900/30 hover:bg-white cursor-pointer'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <div className={`font-display font-bold text-sm flex items-center gap-1.5 ${b.isCalamity ? 'text-yellow-300' : 'text-amber-950'}`}>
-                        <span>{b.trophyIcon}</span>
-                        <span>{b.khmerName}</span>
+                      <div className={`font-display font-bold text-sm flex items-center gap-1.5 ${!isDiscovered ? 'text-slate-200' : b.isCalamity ? 'text-yellow-300' : 'text-amber-950'}`}>
+                        <span>{isDiscovered ? b.trophyIcon : '🔒'}</span>
+                        <span>{isDiscovered ? b.khmerName : `Undiscovered Boss #${b.rosterNumber}`}</span>
                         {cleared && <span className="text-emerald-500" title="Defeated">✓</span>}
                       </div>
-                      <div className={`text-[11px] font-bold ${b.isCalamity ? 'text-purple-200' : 'text-amber-800'}`}>
-                        {b.englishName}
+                      <div className={`text-[11px] font-bold ${!isDiscovered ? 'text-amber-300' : b.isCalamity ? 'text-purple-200' : 'text-amber-800'}`}>
+                        {isDiscovered ? b.englishName : `Explore ${b.biomeName} to Discover!`}
                       </div>
                     </div>
                     <span className="px-2 py-0.5 rounded-lg bg-slate-900 text-amber-300 font-display font-bold text-[10px] shrink-0">
                       #{b.rosterNumber} · Lv.{b.recommendedLevel}+
                     </span>
                   </div>
+                  {!isDiscovered && (
+                    <div className="text-[10px] text-amber-200/90 bg-slate-800/90 border border-amber-500/30 rounded-lg px-2 py-1.5">
+                      🧭 <strong>Wild Discovery Clue:</strong>{' '}
+                      {b.discoveryHint ??
+                        `Explore ${b.biomeName} on foot to locate the Hidden Boss Shrine or accept a Boss Hunt Mission!`}
+                    </div>
+                  )}
 
                   <div className="flex flex-wrap gap-1 text-[10px] font-bold">
                     <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-900 border border-rose-400/40">

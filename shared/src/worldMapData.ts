@@ -20,7 +20,7 @@ export const CITY_SERVERS: CityServerDef[] = [
     name: 'Phnom Penh',
     khmerName: 'ភ្នំពេញ',
     tagline: 'Royal Capital & Bustling Riverside Trade Hub',
-    perk: 'High Market Activity · Express Green Bus Terminal · AREA 0–2',
+    perk: 'High Market Activity · Tuk-Tuk Trade Hub · AREA 0–2',
     accentColor: '#f59e0b',
     regionCode: 'KH-PP',
     basePingMs: 18,
@@ -71,7 +71,21 @@ export type VillageMapId =
   | 'bamboo_forest'
   | 'sunken_ruins'
   | 'koh_rong_island'
-  | 'phnom_kulen';
+  | 'phnom_kulen'
+  | 'tonle_sap_marsh'
+  | 'cardamom_jungle'
+  | 'preah_vihear_cliffs';
+
+/** Update 3.6 — Hub-Only Fast Travel: ONLY the 4 Important Hubs allow instant warp (plus farm_homestead via Magic Mirror)! */
+export const FAST_TRAVEL_HUB_IDS: ReadonlySet<VillageMapId> = new Set<VillageMapId>([
+  'central_plaza',
+  'market_street',
+  'temple_district',
+]);
+
+export function isFastTravelHub(mapId: VillageMapId): boolean {
+  return FAST_TRAVEL_HUB_IDS.has(mapId);
+}
 
 export interface VillageMapPortalDef {
   id: string;
@@ -112,7 +126,7 @@ export const VILLAGE_MAPS: Record<VillageMapId, VillageMapDef> = {
     defaultSpawnX: 800,
     defaultSpawnY: 660,
     description:
-      'Spacious village heartland with Campfire Courtyard, AREA 0 sign, Express Bus Stop, ATM Bank Vault & Lucky Wheel.',
+      'Spacious village heartland with Campfire Courtyard, AREA 0 sign, Cobblestone Lantern Avenue, ATM Bank Vault & Lucky Wheel.',
     accentColor: '#f59e0b',
     portals: [
       {
@@ -393,7 +407,7 @@ export const VILLAGE_MAPS: Record<VillageMapId, VillageMapDef> = {
       {
         id: 'wf_south_ruins',
         edge: 'south',
-        x: 800,
+        x: 640,
         y: 1086,
         targetType: 'village_map',
         targetMapId: 'sunken_ruins',
@@ -402,6 +416,19 @@ export const VILLAGE_MAPS: Record<VillageMapId, VillageMapDef> = {
         signLabel: '↓ SUNKEN ANGKOR RUINS',
         khmerLabel: 'ប្រាសាទលិចទឹកអង្គរ',
         prompt: 'Walk through Sunken Gate or [E] → Sunken Angkor Ruins (Mythic Ore, Relic Chests & Guardians)',
+      },
+      {
+        id: 'wf_se_marsh',
+        edge: 'south',
+        x: 1180,
+        y: 1086,
+        targetType: 'village_map',
+        targetMapId: 'tonle_sap_marsh',
+        targetSpawnX: 800,
+        targetSpawnY: 195,
+        signLabel: '↘ TONLE SAP MARSH',
+        khmerLabel: 'ព្រៃលិចទឹកទន្លេសាប',
+        prompt: 'Walk onto Mangrove Boardwalk or [E] → Tonle Sap Marsh (Flooded Mangroves & Preay Teuk!)',
       },
     ],
   },
@@ -473,17 +500,17 @@ export const VILLAGE_MAPS: Record<VillageMapId, VillageMapDef> = {
         prompt: 'Walk through West Bamboo Gate or [E] → Return to Wild Frontier',
       },
       {
-        id: 'bf_east_temple',
+        id: 'bf_east_cardamom',
         edge: 'east',
         x: 1472,
         y: 600,
         targetType: 'village_map',
-        targetMapId: 'temple_district',
-        targetSpawnX: 205,
+        targetMapId: 'cardamom_jungle',
+        targetSpawnX: 195,
         targetSpawnY: 600,
-        signLabel: '→ TEMPLE DISTRICT',
-        khmerLabel: 'សង្កាត់ប្រាសាទ',
-        prompt: 'Walk through Sacred Grove Portal or [E] → Temple District',
+        signLabel: '→ CARDAMOM JUNGLE',
+        khmerLabel: 'ព្រៃជ្រៅភ្នំក្រវាញ',
+        prompt: 'Walk through Ancient Jungle Arch or [E] → Cardamom Jungle (Hidden Ruins, Medicinal Herbs & Yeak Prey!)',
       },
       {
         id: 'bf_south_ruins',
@@ -606,6 +633,104 @@ export const VILLAGE_MAPS: Record<VillageMapId, VillageMapDef> = {
         signLabel: '↓ MISTY BAMBOO FOREST',
         khmerLabel: 'ចុះទៅព្រៃឫស្សីអ័ព្ទ',
         prompt: 'Descend Mountain Stairway or [E] → Return to Misty Bamboo Forest',
+      },
+      {
+        id: 'pk_north_preah_vihear',
+        edge: 'north',
+        x: 700,
+        y: 120,
+        targetType: 'village_map',
+        targetMapId: 'preah_vihear_cliffs',
+        targetSpawnX: 800,
+        targetSpawnY: 1005,
+        signLabel: '↑ PREAH VIHEAR CLIFFS',
+        khmerLabel: 'កំពូលប្រាសាទព្រះវិហារ',
+        prompt: 'Ascend Sky-Cliff Stairway or [E] → Preah Vihear Cliffs (Sky Ores, Wind Shrines & Cliff Bosses!)',
+      },
+    ],
+  },
+  // ==================== UPDATE 3.6: 3 NEW DEEP-EXPLORATION MAPS (EXPLORE ON FOOT ONLY!) ====================
+  tonle_sap_marsh: {
+    id: 'tonle_sap_marsh',
+    name: 'Tonle Sap Marsh',
+    khmerName: 'ព្រៃលិចទឹកទន្លេសាប',
+    icon: '🪷',
+    width: 1600,
+    height: 1200,
+    defaultSpawnX: 800,
+    defaultSpawnY: 220,
+    description:
+      'Flooded mangrove boardwalks draped in lanterns, rare marsh reeds, sunken chests & the monsoon phantom Preay Teuk.',
+    accentColor: '#0891b2',
+    portals: [
+      {
+        id: 'tsm_north_frontier',
+        edge: 'north',
+        x: 800,
+        y: 132,
+        targetType: 'village_map',
+        targetMapId: 'wild_frontier',
+        targetSpawnX: 1180,
+        targetSpawnY: 985,
+        signLabel: '↑ WILD FRONTIER',
+        khmerLabel: 'ព្រៃភ្នំធម្មជាតិ',
+        prompt: 'Walk North along Boardwalk or [E] → Return to Wild Frontier',
+      },
+    ],
+  },
+  cardamom_jungle: {
+    id: 'cardamom_jungle',
+    name: 'Cardamom Jungle',
+    khmerName: 'ព្រៃជ្រៅភ្នំក្រវាញ',
+    icon: '🌿',
+    width: 1600,
+    height: 1200,
+    defaultSpawnX: 215,
+    defaultSpawnY: 600,
+    description:
+      'Dense ancient rainforest canopy hiding overgrown Angkor ruins, rare medicinal herbs & the Cardamom Ogre Shrine of Yeak Prey.',
+    accentColor: '#15803d',
+    portals: [
+      {
+        id: 'cj_west_bamboo',
+        edge: 'west',
+        x: 128,
+        y: 600,
+        targetType: 'village_map',
+        targetMapId: 'bamboo_forest',
+        targetSpawnX: 1385,
+        targetSpawnY: 600,
+        signLabel: '← MISTY BAMBOO FOREST',
+        khmerLabel: 'ព្រៃឫស្សីអ័ព្ទ',
+        prompt: 'Walk West through Jungle Arch or [E] → Return to Misty Bamboo Forest',
+      },
+    ],
+  },
+  preah_vihear_cliffs: {
+    id: 'preah_vihear_cliffs',
+    name: 'Preah Vihear Cliffs',
+    khmerName: 'ប្រាសាទព្រះវិហារកំពូលភ្នំ',
+    icon: '🏔️',
+    width: 1600,
+    height: 1200,
+    defaultSpawnX: 800,
+    defaultSpawnY: 980,
+    description:
+      'Soaring sandstone cliff-top temple sanctuaries swept by mountain winds, rare sky-ore veins & Sdech Damrey Sor / Baksey Meas!',
+    accentColor: '#f59e0b',
+    portals: [
+      {
+        id: 'pvc_south_kulen',
+        edge: 'south',
+        x: 800,
+        y: 1086,
+        targetType: 'village_map',
+        targetMapId: 'phnom_kulen',
+        targetSpawnX: 700,
+        targetSpawnY: 225,
+        signLabel: '↓ PHNOM KULEN SANCTUARY',
+        khmerLabel: 'ភ្នំគូលែនសក្តិសិទ្ធិ',
+        prompt: 'Descend Cliff Stairway or [E] → Return to Phnom Kulen Sanctuary',
       },
     ],
   },

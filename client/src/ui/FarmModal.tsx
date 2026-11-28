@@ -11,6 +11,8 @@ import {
   LIVESTOCK,
   LIVESTOCK_LIST,
   ROW_CROP_LIST,
+  WOODEN_FENCE_COST,
+  getNextPastureLandCost,
 } from '../data/cropsAndArtisan';
 import {
   formatRemainingTime,
@@ -33,6 +35,8 @@ interface FarmModalProps {
   onBuyTree: (treeId: string) => void;
   onHarvestTree: (slotIndex: number) => void;
   onBuyLivestock: (animalId: string) => void;
+  onBuyPastureLand?: () => void;
+  onBuyFence?: () => void;
   onCollectLivestock: (slotIndex: number) => void;
   onBuyMachine: (machineId: string) => void;
   onStartMachine: (slotIndex: number, recipeId: string) => void;
@@ -50,6 +54,8 @@ export const FarmModal: React.FC<FarmModalProps> = ({
   onBuyTree,
   onHarvestTree,
   onBuyLivestock,
+  onBuyPastureLand,
+  onBuyFence,
   onCollectLivestock,
   onBuyMachine,
   onStartMachine,
@@ -241,6 +247,41 @@ export const FarmModal: React.FC<FarmModalProps> = ({
       {/* TAB 2: LIVESTOCK & PERENNIAL FRUIT TREES */}
       {tab === 'livestock' && (
         <div className="space-y-4 text-xs">
+          {/* Update 3.6 — Hardcore 3-Step Livestock Infrastructure: 1. Pasture Land -> 2. Wooden Fence/Pen -> 3. Animals */}
+          <div className="p-3 rounded-xl bg-gradient-to-r from-amber-100 via-emerald-50 to-amber-100 border-2 border-amber-800/50 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="font-display font-bold text-sm text-amber-950">
+                🪵 Livestock Pasture Expansion &amp; Wooden Fence Pens
+              </div>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-700 text-white">
+                Land Lv.{player.pastureLandLevel ?? 0}/3 · Fenced Pens: {player.ownedFences ?? 0}
+              </span>
+            </div>
+            <p className="text-[11px] text-amber-900">
+              Raise livestock in order: <strong>1. Buy Pasture Land</strong> → <strong>2. Build Wooden Fence Pen (800 C)</strong> → <strong>3. Buy Animals</strong> (Max per Pen: 🐓 4 Chickens · 🐑 3 Sheep · 🐄 2 Cows).
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={onBuyPastureLand}
+                disabled={(player.pastureLandLevel ?? 0) >= 3}
+                className="phum-btn px-3 py-1.5 rounded-xl font-display font-bold text-xs cursor-pointer disabled:opacity-45"
+              >
+                🌾 {(player.pastureLandLevel ?? 0) >= 3
+                  ? 'Pasture Maxed (Lv.3)'
+                  : `Expand Pasture Land Lv.${(player.pastureLandLevel ?? 0) + 1} (${getNextPastureLandCost(player.pastureLandLevel ?? 0).toLocaleString()} C)`}
+              </button>
+              <button
+                type="button"
+                onClick={onBuyFence}
+                disabled={(player.ownedFences ?? 0) >= (player.pastureLandLevel ?? 0)}
+                className="phum-btn px-3 py-1.5 rounded-xl font-display font-bold text-xs cursor-pointer disabled:opacity-45"
+              >
+                🪵 Build Wooden Fence Pen ({WOODEN_FENCE_COST.toLocaleString()} C)
+              </button>
+            </div>
+          </div>
+
           {/* Owned Trees & Livestock Status */}
           <div className="grid sm:grid-cols-2 gap-3">
             <div className="p-3 rounded-xl bg-amber-50/95 border-2 border-amber-900/35 space-y-2">

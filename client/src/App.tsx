@@ -87,6 +87,8 @@ import {
   buyFarmSupply,
   buyFruitTree,
   buyLivestock,
+  buyPastureLandExpansion,
+  buyWoodenFencePen,
   collectArtisanOutput,
   collectLivestock,
   fastForwardFarmTimers,
@@ -2230,6 +2232,49 @@ export const App: React.FC = () => {
         EventBus.emit('ticker:push', {
           text: `🎉 ${evt.hostName} is hosting a Village Party in ${evt.mapLabel}! Join for free Feast Buffs & Fireworks!`,
           category: 'club',
+        });
+      }),
+      EventBus.on('boss:discovered', ({ bossId, mapId, source }) => {
+        runStateAction((prev) => {
+          const cur = prev.discoveredBosses ?? ['sdech_kongkaeb'];
+          if (cur.includes(bossId)) {
+            return { state: prev, ok: true, message: `⚔️ Boss Shrine Awakened (${source})!` };
+          }
+          const nextDisc = [...cur, bossId];
+          const curPct = prev.mapExplorationPct?.[mapId] ?? 0;
+          const nextPct = Math.min(100, curPct + 35);
+          return {
+            state: {
+              ...prev,
+              discoveredBosses: nextDisc,
+              mapExplorationPct: { ...(prev.mapExplorationPct ?? {}), [mapId]: nextPct },
+            },
+            ok: true,
+            message: `🧭 NEW BOSS DISCOVERED (${nextDisc.length}/24) via ${source}! Unlocked in Bestiary & Boss Portal!`,
+          };
+        });
+      }),
+      EventBus.on('exploration:progress', ({ mapId, landmarkId, pctGain, label }) => {
+        runStateAction((prev) => {
+          const seen = prev.discoveredLandmarks ?? [];
+          if (seen.includes(landmarkId)) {
+            return { state: prev, ok: true, message: `🧭 ${label} already charted!` };
+          }
+          const curPct = prev.mapExplorationPct?.[mapId] ?? 0;
+          const nextPct = Math.min(100, curPct + pctGain);
+          const bonusCoins = 120 + Math.round(nextPct * 2);
+          const nextCoins = prev.currencies.coins + bonusCoins;
+          return {
+            state: {
+              ...prev,
+              coins: nextCoins,
+              currencies: { ...prev.currencies, coins: nextCoins },
+              discoveredLandmarks: [...seen, landmarkId],
+              mapExplorationPct: { ...(prev.mapExplorationPct ?? {}), [mapId]: nextPct },
+            },
+            ok: true,
+            message: `🗺️ Explored ${label}! ${mapId.replace(/_/g, ' ')} Exploration: ${nextPct}% (+${bonusCoins} C)!`,
+          };
         });
       }),
       EventBus.on('folkGame:completed', ({ game, won, coinsEarned, friendlyXp, bonusItemId, badgeId }) => {
@@ -6145,6 +6190,8 @@ export const App: React.FC = () => {
         onBuyTree={(treeId) => runFarmAction((s) => buyFruitTree(s, treeId))}
         onHarvestTree={(slotIndex) => runFarmAction((s) => harvestFruitTree(s, slotIndex))}
         onBuyLivestock={(animalId) => runFarmAction((s) => buyLivestock(s, animalId))}
+        onBuyPastureLand={() => runFarmAction((s) => buyPastureLandExpansion(s))}
+        onBuyFence={() => runFarmAction((s) => buyWoodenFencePen(s))}
         onCollectLivestock={(slotIndex) => runFarmAction((s) => collectLivestock(s, slotIndex))}
         onBuyMachine={(machineId) => runFarmAction((s) => buyArtisanMachine(s, machineId))}
         onStartMachine={(slotIndex, recipeId) =>

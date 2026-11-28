@@ -9,6 +9,7 @@ import {
   type TukTukCartListing,
 } from '@shared/types';
 import { getPetProgress } from '@shared/petEvolution';
+import { KHMER_BOSS_LIST } from '@shared/khmerBosses';
 import { INSTRUMENT_SKINS } from '@shared/khmerInstruments';
 import { KHMER_EMOTES } from '@shared/emotes';
 import { computeVillageToDungeonBridge } from '@shared/skillTrees';
@@ -358,7 +359,16 @@ export class OverworldScene extends Phaser.Scene {
       this.buildKohRongIslandMap();
     } else if (this.mapId === 'phnom_kulen') {
       this.buildPhnomKulenSanctuaryMap();
+    } else if (this.mapId === 'tonle_sap_marsh') {
+      this.buildTonleSapMarshMap();
+    } else if (this.mapId === 'cardamom_jungle') {
+      this.buildCardamomJungleMap();
+    } else if (this.mapId === 'preah_vihear_cliffs') {
+      this.buildPreahVihearCliffsMap();
     }
+
+    // Update 3.6 — Wild Boss Discovery Shrines & Hidden Exploration Chests across Biome Maps!
+    this.buildBiomeBossShrinesAndExploration();
 
     // 5. Walk-Through Glowing Road Portals & Wooden Signposts at Map Edges
     this.buildWalkThroughRoadPortals();
@@ -484,23 +494,9 @@ export class OverworldScene extends Phaser.Scene {
       }
     });
 
-    // 9. Scheduled Animated Green Village Bus in Central Plaza
-    if (this.mapId === 'central_plaza') {
-      this.time.delayedCall(3500, () => {
-        if (this.scene.isActive('OverworldScene') && this.mapId === 'central_plaza') {
-          this.spawnScheduledGreenBus();
-        }
-      });
-      this.busTimer = this.time.addEvent({
-        delay: 25000,
-        loop: true,
-        callback: () => {
-          if (this.scene.isActive('OverworldScene') && this.mapId === 'central_plaza') {
-            this.spawnScheduledGreenBus();
-          }
-        },
-      });
-    }
+    // Update 3.6 — Express Bus completely removed for open cobblestone Khmer plaza avenues!
+    this.busTimer?.remove(false);
+    this.busTimer = undefined;
 
     this.promptText = this.add
       .text(0, 0, '', {
@@ -1305,74 +1301,35 @@ export class OverworldScene extends Phaser.Scene {
       onInteract: openBounties,
     });
 
-    // 2. EXPRESS BUS STOP + ROOFED WAITING SHELTER & ROUTE MAP (West-Center Avenue)
-    const shelterGfx = this.add.graphics().setDepth(652);
-    // Concrete sidewalk pad
-    shelterGfx.fillStyle(0x94a3b8, 0.92);
-    shelterGfx.fillRoundedRect(378, 636, 116, 36, 6);
-    shelterGfx.lineStyle(2, 0x475569, 0.9);
-    shelterGfx.strokeRoundedRect(378, 636, 116, 36, 6);
-    // Wooden waiting shelter back wall & glass panel
-    shelterGfx.fillStyle(0x78350f, 1);
-    shelterGfx.fillRect(388, 610, 68, 34);
-    shelterGfx.fillStyle(0xbae6fd, 0.75);
-    shelterGfx.fillRect(394, 616, 26, 20);
-    // Illuminated Phnom Penh Express Route Map inside shelter
-    shelterGfx.fillStyle(0x0f172a, 0.95);
-    shelterGfx.fillRect(424, 615, 28, 22);
-    shelterGfx.lineStyle(1.5, 0xfacc15, 0.95);
-    shelterGfx.lineBetween(428, 626, 448, 626);
-    shelterGfx.fillStyle(0x22c55e, 1);
-    shelterGfx.fillCircle(430, 626, 2.5);
-    shelterGfx.fillStyle(0x38bdf8, 1);
-    shelterGfx.fillCircle(438, 626, 2.5);
-    shelterGfx.fillStyle(0xf97316, 1);
-    shelterGfx.fillCircle(446, 626, 2.5);
-    // Shelter roof & pillars
-    const shelterRoof = this.add.graphics().setDepth(666);
-    shelterRoof.fillStyle(0x14532d, 1);
-    shelterRoof.fillRoundedRect(380, 598, 84, 15, 5);
-    shelterRoof.fillStyle(0xfacc15, 0.95);
-    shelterRoof.fillRect(384, 608, 76, 3);
-    shelterRoof.fillStyle(0x57534e, 1);
-    shelterRoof.fillRect(386, 613, 4, 42);
-    shelterRoof.fillRect(454, 613, 4, 42);
+    // 2. UPDATE 3.6 — OPEN KHMER COBBLESTONE PLAZA AVENUE & LANTERN POSTS (Express Bus & Bus Shelter Completely Removed!)
+    const plazaPathGfx = this.add.graphics().setDepth(16);
+    plazaPathGfx.fillStyle(0xb49a78, 0.85);
+    plazaPathGfx.fillRoundedRect(360, 622, 185, 56, 10);
+    plazaPathGfx.lineStyle(2, 0x78593c, 0.7);
+    plazaPathGfx.strokeRoundedRect(360, 622, 185, 56, 10);
+    for (const [lx, ly] of [[385, 620], [520, 620]]) {
+      const post = this.add.graphics().setDepth(ly);
+      post.fillStyle(0x451a03, 1);
+      post.fillRect(lx - 3, ly - 32, 6, 34);
+      post.fillStyle(0xfef08a, 0.96);
+      post.fillRoundedRect(lx - 7, ly - 44, 14, 14, 4);
+      post.lineStyle(1.5, 0xd97706, 1);
+      post.strokeRoundedRect(lx - 7, ly - 44, 14, 14, 4);
+      const lGlow = this.add
+        .image(lx, ly - 36, 'torch_glow')
+        .setTint(0xfacc15)
+        .setScale(0.6)
+        .setAlpha(0.45)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(ly + 5);
+      this.glowLights.push(lGlow);
+    }
+    this.add.image(452, 650, 'soft_shadow').setDisplaySize(44, 10).setDepth(648);
+    this.add.image(452, 647, 'na_bench').setScale(0.95).setDepth(652);
 
-    const busStop = this.addBuildingOrProp({
-      texture: 'bus_stop_sign',
-      x: 476,
-      y: 660,
-      scale: 1.2,
-      shadowW: 28,
-      shadowH: 9,
-      label: 'PHUM EXPRESS TERMINAL',
-      joinArrowY: 604,
-    });
-    this.add.image(422, 656, 'soft_shadow').setDisplaySize(44, 10).setDepth(655);
-    this.add.image(422, 653, 'na_bench').setScale(0.9).setDepth(659);
-    const busZoneHit = this.add
-      .rectangle(432, 636, 118, 64, 0x000000, 0)
-      .setDepth(670)
-      .setInteractive({ useHandCursor: true });
-    const openExpressMap = () => {
-      if (!this.guardInteractRange(446, 656)) return;
-      soundManager.playSfx('click');
-      EventBus.emit('ui:openModal', { modal: 'worldMap' });
-    };
-    busStop.setInteractive({ useHandCursor: true }).on('pointerdown', openExpressMap);
-    busZoneHit.on('pointerdown', openExpressMap);
-    this.landmarks.push({
-      x: 446,
-      y: 656,
-      radius: 62,
-      label: 'Press [E] or Click → Board Phnom Penh Express Bus & World Map [M]',
-      isDungeonPortal: false,
-      onInteract: openExpressMap,
-    });
-
-    // 2B. UPDATE 3.2 — TUK-TUK EXPRESS DISPATCH BOARD (Right next to Express Bus Stop!)
-    const dispX = 548;
-    const dispY = 656;
+    // 2B. UPDATE 3.6 — TUK-TUK EXPRESS DISPATCH BOARD (Relocated cleanly beside East Market Street Entrance!)
+    const dispX = 1270;
+    const dispY = 665;
     const dispBoard = this.add.graphics().setDepth(dispY);
     dispBoard.fillStyle(0x78350f, 0.96);
     dispBoard.fillRoundedRect(dispX - 24, dispY - 34, 48, 32, 6);
@@ -3072,6 +3029,261 @@ export class OverworldScene extends Phaser.Scene {
       this.add.image(520, 455, 'na_ruin_statue').setOrigin(0.5, 0.9).setScale(1.4).setDepth(455);
       this.add.image(880, 455, 'na_ruin_statue').setOrigin(0.5, 0.9).setScale(1.4).setDepth(455);
     }
+  }
+
+  // ==================== UPDATE 3.6: 3 NEW DEEP-EXPLORATION MAPS (EXPLORE ON FOOT!) ====================
+  private buildTonleSapMarshMap(): void {
+    const g = this.add.graphics().setDepth(2);
+    // Flooded Tonle Sap emerald-teal marshwaters with raised timber mangrove boardwalks
+    g.fillStyle(0x0e7490, 0.72);
+    g.fillRoundedRect(120, 170, 1360, 900, 32);
+    g.fillStyle(0x155e75, 0.55);
+    g.fillRoundedRect(200, 250, 1200, 740, 26);
+
+    // Interconnected wooden boardwalk crossways & lantern docks
+    const drawBoardwalk = (x: number, y: number, w: number, h: number) => {
+      g.fillStyle(0x78350f, 0.96);
+      g.fillRoundedRect(x, y, w, h, 8);
+      g.lineStyle(2, 0xb45309, 0.9);
+      g.strokeRoundedRect(x, y, w, h, 8);
+    };
+    drawBoardwalk(740, 140, 120, 860);
+    drawBoardwalk(260, 540, 1080, 110);
+    drawBoardwalk(340, 320, 140, 260);
+    drawBoardwalk(1120, 620, 160, 280);
+
+    // Floating Lotus Pads & Mangrove Trees
+    for (const [mx, my] of [[240, 290], [560, 340], [1040, 320], [1340, 380], [300, 860], [640, 890], [1320, 880]]) {
+      this.add.image(mx, my, 'sv_tree_teal').setOrigin(0.5, 0.9).setScale(1.5).setDepth(my);
+    }
+    this.add
+      .text(800, 250, '🪷 TONLE SAP FLOODED MARSH · ព្រៃលិចទឹកទន្លេសាប\nFlooded Mangrove Boardwalks · Marsh Chests · Monsoon Phantom Preay Teuk', {
+        fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
+        fontSize: '12px',
+        fontStyle: 'bold',
+        color: '#a5f3fc',
+        backgroundColor: 'rgba(12, 74, 110, 0.9)',
+        padding: { x: 12, y: 5 },
+        align: 'center',
+      })
+      .setResolution(2)
+      .setScale(0.52)
+      .setOrigin(0.5)
+      .setDepth(26);
+
+    // Marsh Exploration Chest & Rare Reed Foraging
+    this.spawnExplorationChest(410, 360, 'tonle_sap_marsh', 'tsm_chest_mangrove', 'Sunken Mangrove Chest');
+    this.spawnExplorationChest(1200, 820, 'tonle_sap_marsh', 'tsm_chest_reed', 'Flooded Stilt Relic Chest');
+  }
+
+  private buildCardamomJungleMap(): void {
+    const g = this.add.graphics().setDepth(2);
+    // Deep mossy Cardamom rainforest floor & ancient overgrown stone ruins
+    g.fillStyle(0x14532d, 0.72);
+    g.fillRect(0, 0, MAP_W, MAP_H);
+    g.fillStyle(0x3f6212, 0.58);
+    g.fillRoundedRect(160, 200, 1280, 820, 36);
+    // Ancient mossy jungle trail & stone clearing
+    g.fillStyle(0x78716c, 0.72);
+    g.fillRoundedRect(140, 555, 1320, 90, 14);
+    g.fillRoundedRect(690, 260, 220, 680, 18);
+
+    // Dense Cardamom Canopy Trees & Ancient Ruin Pillars
+    for (const [jx, jy] of [
+      [260, 280], [480, 240], [1120, 260], [1340, 320],
+      [260, 880], [520, 940], [1100, 920], [1360, 860],
+    ]) {
+      this.add.image(jx, jy, 'sv_tree_teal').setOrigin(0.5, 0.92).setScale(1.65).setTint(0x4ade80).setDepth(jy);
+    }
+    if (this.textures.exists('na_ruin_statue')) {
+      for (const [rx, ry] of [[680, 420], [920, 420], [680, 760], [920, 760]]) {
+        this.add.image(rx, ry, 'na_ruin_statue').setOrigin(0.5, 0.9).setScale(1.45).setDepth(ry);
+      }
+    }
+    this.add
+      .text(800, 235, '🌿 CARDAMOM DEEP JUNGLE · ព្រៃជ្រៅភ្នំក្រវាញ\nAncient Rainforest Ruins · Rare Medicinal Herbs · Ogre Shrine of Yeak Prey', {
+        fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
+        fontSize: '12px',
+        fontStyle: 'bold',
+        color: '#bbf7d0',
+        backgroundColor: 'rgba(20, 83, 45, 0.92)',
+        padding: { x: 12, y: 5 },
+        align: 'center',
+      })
+      .setResolution(2)
+      .setScale(0.52)
+      .setOrigin(0.5)
+      .setDepth(26);
+
+    this.spawnExplorationChest(440, 410, 'cardamom_jungle', 'cj_chest_herb', 'Cardamom Herbalist Cache');
+    this.spawnExplorationChest(1180, 770, 'cardamom_jungle', 'cj_chest_ruin', 'Overgrown Jungle Temple Chest');
+  }
+
+  private buildPreahVihearCliffsMap(): void {
+    const g = this.add.graphics().setDepth(2);
+    // High sunlit sandstone cliff plateau with sky-drop precipices & golden wind shrines
+    g.fillStyle(0x0c4a6e, 0.55);
+    g.fillRect(0, 0, MAP_W, 240);
+    g.fillStyle(0xd97706, 0.42);
+    g.fillRoundedRect(140, 220, 1320, 860, 28);
+    g.fillStyle(0xb45309, 0.62);
+    g.fillRoundedRect(240, 290, 1120, 720, 20);
+    // Grand stepped sandstone processional avenue leading north to the Cliff Sanctuary!
+    g.fillStyle(0xfef3c7, 0.65);
+    g.fillRoundedRect(710, 260, 180, 760, 12);
+    g.lineStyle(3, 0xf59e0b, 0.9);
+    g.strokeRoundedRect(710, 260, 180, 760, 12);
+
+    if (this.textures.exists('na_singha_statue')) {
+      for (const [sx, sy] of [[680, 460], [920, 460], [680, 720], [920, 720]]) {
+        this.add.image(sx, sy, 'na_singha_statue').setOrigin(0.5, 0.9).setScale(1.25).setDepth(sy);
+      }
+    }
+    this.add
+      .text(800, 245, '🏔️ PREAH VIHEAR CLIFF TEMPLES · ប្រាសាទព្រះវិហារកំពូលភ្នំ\nHigh Sandstone Sanctuaries · Sky Ores · Sdech Damrey Sor & Baksey Meas', {
+        fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
+        fontSize: '12px',
+        fontStyle: 'bold',
+        color: '#fef08a',
+        backgroundColor: 'rgba(120, 53, 15, 0.92)',
+        padding: { x: 12, y: 5 },
+        align: 'center',
+      })
+      .setResolution(2)
+      .setScale(0.52)
+      .setOrigin(0.5)
+      .setDepth(26);
+
+    this.spawnExplorationChest(390, 520, 'preah_vihear_cliffs', 'pvc_chest_wind', 'Cliff Wind-Shrine Reliquary');
+    this.spawnExplorationChest(1210, 520, 'preah_vihear_cliffs', 'pvc_chest_sky', 'Sky-Ore Sandstone Chest');
+  }
+
+  private spawnExplorationChest(
+    cx: number,
+    cy: number,
+    mapId: VillageMapId,
+    landmarkId: string,
+    label: string
+  ): void {
+    const gfx = this.add.graphics().setDepth(cy);
+    gfx.fillStyle(0x78350f, 1);
+    gfx.fillRoundedRect(cx - 16, cy - 12, 32, 22, 5);
+    gfx.lineStyle(2, 0xfacc15, 1);
+    gfx.strokeRoundedRect(cx - 16, cy - 12, 32, 22, 5);
+    gfx.fillStyle(0xfef08a, 1);
+    gfx.fillRect(cx - 4, cy - 4, 8, 6);
+    const aura = this.add
+      .image(cx, cy - 4, 'torch_glow')
+      .setTint(0xfacc15)
+      .setScale(0.62)
+      .setAlpha(0.5)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(cy - 2);
+    this.glowLights.push(aura);
+    this.add
+      .text(cx, cy + 16, `🗝️ ${label}`, {
+        fontFamily: 'Fredoka, sans-serif',
+        fontSize: '10px',
+        fontStyle: 'bold',
+        color: '#fef08a',
+        backgroundColor: 'rgba(15, 23, 42, 0.85)',
+        padding: { x: 5, y: 2 },
+      })
+      .setResolution(2)
+      .setScale(0.42)
+      .setOrigin(0.5, 0)
+      .setDepth(cy + 8);
+    const hit = this.add.rectangle(cx, cy, 46, 42, 0, 0).setDepth(cy + 10).setInteractive({ useHandCursor: true });
+    const openChest = () => {
+      if (!this.guardInteractRange(cx, cy, 130)) return;
+      soundManager.playSfx('coin');
+      vfxManager.playCoinJackpotVfx(this, cx, cy - 10, cy + 25);
+      EventBus.emit('exploration:progress', { mapId, landmarkId, pctGain: 35, label });
+    };
+    hit.on('pointerdown', openChest);
+    this.landmarks.push({
+      x: cx,
+      y: cy,
+      radius: 68,
+      label: `Press [E] or Click → 🗝️ Open ${label} (+Exploration % & Coins!)`,
+      isDungeonPortal: false,
+      onInteract: openChest,
+    });
+  }
+
+  /**
+   * Update 3.6 — Places glowing Wild Boss Discovery Shrines & Rare Encounter Altars across all Adventure Biomes
+   * so EVERY ONE of the 24 Khmer Bosses can be discovered organically in its authentic home map!
+   */
+  private buildBiomeBossShrinesAndExploration(): void {
+    const mapBosses = KHMER_BOSS_LIST.filter((b) => b.homeMapId === this.mapId);
+    if (mapBosses.length === 0) return;
+    // Skip central hub plaza; temple_district already houses Angkor Dungeon Portal + inner sanctum bosses
+    if (this.mapId === 'central_plaza' || this.mapId === 'market_street') return;
+
+    const spotCoords: Array<[number, number]> =
+      this.mapId === 'phnom_kulen'
+        ? [[340, 320], [1060, 320], [1060, 740]]
+        : this.mapId === 'temple_district'
+          ? [[280, 340], [1320, 340], [800, 235], [1340, 760]]
+          : [[340, 320], [1260, 320], [800, 780], [340, 860]];
+
+    mapBosses.forEach((boss, idx) => {
+      const [sx, sy] = spotCoords[idx % spotCoords.length];
+      const accentHex = Number(boss.accentColor.replace('#', '0x')) || 0xf59e0b;
+      const mist = this.add
+        .image(sx, sy - 10, 'portal_vortex')
+        .setTint(accentHex)
+        .setScale(0.88)
+        .setAlpha(0.55)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(sy - 2);
+      this.tweens.add({ targets: mist, alpha: 0.25, scale: 1.08, duration: 950, yoyo: true, repeat: -1 });
+
+      const shrine = this.add.graphics().setDepth(sy);
+      shrine.fillStyle(0x292524, 0.96);
+      shrine.fillRoundedRect(sx - 24, sy - 24, 48, 34, 8);
+      shrine.lineStyle(2.5, accentHex, 0.95);
+      shrine.strokeRoundedRect(sx - 24, sy - 24, 48, 34, 8);
+      shrine.fillStyle(accentHex, 0.85);
+      shrine.fillCircle(sx, sy - 10, 7);
+
+      this.add
+        .text(sx, sy + 16, `${boss.trophyIcon} WILD SHRINE · ${boss.khmerName} (#${boss.rosterNumber})`, {
+          fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
+          fontSize: '10px',
+          fontStyle: 'bold',
+          color: '#fef08a',
+          backgroundColor: 'rgba(15, 23, 42, 0.92)',
+          padding: { x: 6, y: 2 },
+        })
+        .setResolution(2)
+        .setScale(0.42)
+        .setOrigin(0.5, 0)
+        .setDepth(sy + 10);
+
+      const hit = this.add.rectangle(sx, sy - 4, 62, 56, 0, 0).setDepth(sy + 12).setInteractive({ useHandCursor: true });
+      const awakenBoss = () => {
+        if (!this.guardInteractRange(sx, sy, 135)) return;
+        soundManager.playSfx('magic');
+        vfxManager.playSpriteVfx(this, 'vfx_magic_burst', sx, sy - 12, { scale: 1.8, tint: accentHex, additive: true, depth: sy + 30 });
+        EventBus.emit('boss:discovered', {
+          bossId: boss.id,
+          mapId: this.mapId,
+          source: `${boss.khmerName} Wild Shrine`,
+        });
+        this.enterDungeon(boss.id, 'normal', 'solo');
+      };
+      hit.on('pointerdown', awakenBoss);
+      this.landmarks.push({
+        x: sx,
+        y: sy,
+        radius: 74,
+        label: `Press [E] or Click → ${boss.trophyIcon} Discover & Challenge ${boss.khmerName} (${boss.englishName})!`,
+        isDungeonPortal: true,
+        onInteract: awakenBoss,
+      });
+    });
   }
 
   private spawnSharedPartyFeastTable(evt: {

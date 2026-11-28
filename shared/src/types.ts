@@ -148,7 +148,10 @@ export interface ActiveTreasureMap {
     | 'bamboo_forest'
     | 'sunken_ruins'
     | 'koh_rong_island'
-    | 'phnom_kulen';
+    | 'phnom_kulen'
+    | 'tonle_sap_marsh'
+    | 'cardamom_jungle'
+    | 'preah_vihear_cliffs';
   clueTitle: string;
   clueDescription: string;
   x: number;
@@ -340,7 +343,15 @@ export type BossId =
   | 'kala'
   | 'preah_ko_preah_keo'
   | 'krong_reap'
-  | 'rahu';
+  | 'rahu'
+  | 'khmouch_daeum_chek'
+  | 'preay_teuk'
+  | 'yeak_prey'
+  | 'maccha_tep'
+  | 'sdech_damrey_sor'
+  | 'neak_plerng'
+  | 'baksey_meas'
+  | 'astral_warden_angkor';
 
 export type BossRigType =
   | 'QuadrupedHopperRig'
@@ -594,7 +605,10 @@ export interface PlayerState {
     | 'bamboo_forest'
     | 'sunken_ruins'
     | 'koh_rong_island'
-    | 'phnom_kulen';
+    | 'phnom_kulen'
+    | 'tonle_sap_marsh'
+    | 'cardamom_jungle'
+    | 'preah_vihear_cliffs';
   currentWorldId?: string;
   activeBiome?: string;
   discoveredBiomes?: string[];
@@ -705,6 +719,13 @@ export interface PlayerState {
   unlockedDyes?: string[];
   folkGameWins?: number;
   folkBadges?: string[];
+  /** Update 3.6 — 24-Boss World Discovery, Exploration Progress & Hardcore Farm/Livestock Economy */
+  unlockedCropSlots?: number;
+  pastureLandLevel?: number;
+  ownedFences?: number;
+  discoveredBosses?: string[];
+  mapExplorationPct?: Record<string, number>;
+  discoveredLandmarks?: string[];
   hasCompletedCreation?: boolean;
   skillDamagePct: number;
   armorDamagePct: number;
@@ -772,17 +793,17 @@ export const DEFAULT_LOADOUT: EquippedLoadout = {
 export function createInitialFarmState(now = Date.now()): FarmState {
   // Starter 6x4 Farm Plot grid (18 unlocked + bottom row of 6 unlockable with Coins)
   const plots: FarmPlotState[] = Array.from({ length: 24 }, (_, index) => {
-    const isStarterTrakuon = index === 0;
-    const isStarterRice = index === 1;
+    // Update 3.6 — Hardcore Farm Start: only 2 unlocked crop plots (index 0 & 1); extra slots escalate in price!
+    const isStarter = index < 2;
     return {
       index,
-      unlocked: index < 18,
-      tilled: index < 6,
-      cropId: isStarterTrakuon ? 'trakuon' : isStarterRice ? 'phka_rumduol' : null,
-      plantedAt: isStarterTrakuon ? now - 95_000 : isStarterRice ? now - 120_000 : null,
-      effectiveGrowMs: isStarterTrakuon ? 120_000 : isStarterRice ? 900_000 : 0,
-      watered: isStarterTrakuon || isStarterRice,
-      fertilized: isStarterTrakuon,
+      unlocked: isStarter,
+      tilled: isStarter,
+      cropId: index === 0 ? 'trakuon' : null,
+      plantedAt: index === 0 ? now - 95_000 : null,
+      effectiveGrowMs: index === 0 ? 120_000 : 0,
+      watered: index === 0,
+      fertilized: false,
       spiritInfused: false,
     };
   });
@@ -798,22 +819,8 @@ export function createInitialFarmState(now = Date.now()): FarmState {
         mature: true,
       },
     ],
-    livestock: [
-      {
-        slotIndex: 0,
-        animalId: 'village_chicken',
-        acquiredAt: now - 1_200_000,
-        lastCollectedAt: now - 540_000, // Ready in 60s
-        fed: true,
-      },
-      {
-        slotIndex: 1,
-        animalId: 'khmer_white_cow',
-        acquiredAt: now - 1_200_000,
-        lastCollectedAt: now - 1_140_000, // Ready in 60s
-        fed: true,
-      },
-    ],
+    // Update 3.6 — Zero free livestock! Players must buy Pasture Land -> Wooden Fence/Pen -> Chickens, Sheep & Cows!
+    livestock: [],
     machines: [
       {
         slotIndex: 0,
@@ -1055,6 +1062,12 @@ export const INITIAL_PLAYER_STATE: PlayerState = {
   unlockedDyes: ['dye_turmeric_gold', 'dye_indigo_krama'],
   folkGameWins: 0,
   folkBadges: [],
+  unlockedCropSlots: 2,
+  pastureLandLevel: 0,
+  ownedFences: 0,
+  discoveredBosses: ['sdech_kongkaeb'],
+  mapExplorationPct: {},
+  discoveredLandmarks: [],
   hasCompletedCreation: false,
   skillDamagePct: 0.025,
   armorDamagePct: 0.04,

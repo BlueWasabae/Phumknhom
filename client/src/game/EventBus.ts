@@ -249,6 +249,8 @@ export interface EventMap {
     bonusItemId?: string;
     badgeId?: string;
   };
+  'boss:discovered': { bossId: BossId; mapId: VillageMapId; source: string };
+  'exploration:progress': { mapId: VillageMapId; landmarkId: string; pctGain: number; label: string };
   'party:hostBroadcast': {
     partyId: string;
     hostName: string;

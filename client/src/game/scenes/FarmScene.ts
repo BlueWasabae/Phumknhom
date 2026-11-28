@@ -8,6 +8,7 @@ import {
   LIVESTOCK,
   PLOT_UNLOCK_COST,
   ROW_CROPS,
+  getNextPlotUnlockCost,
 } from '../../data/cropsAndArtisan';
 import {
   autoWaterAllPlotsForMonsoon,
@@ -882,12 +883,14 @@ export class FarmScene extends Phaser.Scene {
 
       if (!plot.unlocked) {
         const isVipSlot = pv.index >= COLS * STANDARD_ROWS;
+        const unlockedNow = this.player.state.farm.plots.filter((p) => p.unlocked).length;
+        const nextCost = getNextPlotUnlockCost(unlockedNow);
         pv.gfx.fillStyle(isVipSlot ? 0x78350f : 0x3f6212, 0.55);
         pv.gfx.lineStyle(1.2, isVipSlot ? 0xfacc15 : 0x854d0e, 0.78);
         pv.gfx.fillRoundedRect(x0, y0, w, h, 4);
         pv.gfx.strokeRoundedRect(x0, y0, w, h, 4);
         pv.badgeText
-          .setText(isVipSlot ? '👑VIP+6' : `🔒${PLOT_UNLOCK_COST}c`)
+          .setText(isVipSlot ? '👑VIP+6' : `🔒${nextCost >= 1000 ? `${(nextCost / 1000).toFixed(1)}k` : `${nextCost}c`}`)
           .setColor(isVipSlot ? '#fde047' : '#fef08a');
         continue;
       }
@@ -1089,8 +1092,9 @@ export class FarmScene extends Phaser.Scene {
 
       const isChicken = pen.animalId === 'village_chicken' || pen.animalId === 'golden_bantam_hen';
       const isCow = pen.animalId === 'khmer_white_cow' || pen.animalId === 'royal_preah_ko_cow';
+      const isSheep = pen.animalId === 'khmer_wool_sheep';
 
-      const shadow = this.add.image(lx, ly + 4, 'soft_shadow').setDisplaySize(isCow ? 28 : 18, 9).setAlpha(0.55);
+      const shadow = this.add.image(lx, ly + 4, 'soft_shadow').setDisplaySize(isCow ? 28 : 20, 9).setAlpha(0.55);
       let animalVisual: Phaser.GameObjects.GameObject;
       if (isCow && this.textures.exists('livestock_khmer_cow')) {
         const cowImg = this.add
@@ -1108,6 +1112,39 @@ export class FarmScene extends Phaser.Scene {
           ease: 'Sine.easeInOut',
         });
         animalVisual = cowImg;
+      } else if (isSheep) {
+        // Detailed layered pixel-art Fluffy Sheep (cloud wool puffs, dark face, ears & hooves!)
+        const sheepCont = this.add.container(lx, ly);
+        const sg = this.add.graphics();
+        // Hooves
+        sg.fillStyle(0x1e293b, 1);
+        sg.fillRect(-7, 2, 3, 5);
+        sg.fillRect(3, 2, 3, 5);
+        // Fluffy layered white wool cloud body
+        sg.fillStyle(0xe2e8f0, 1);
+        sg.fillCircle(-6, -2, 6.5);
+        sg.fillCircle(0, -5, 7.5);
+        sg.fillCircle(6, -2, 6.2);
+        sg.fillStyle(0xffffff, 1);
+        sg.fillCircle(-3, -4, 5.5);
+        sg.fillCircle(3, -3, 5.2);
+        // Dark sheep face, floppy ears & bright eye
+        const dirSign = idx % 2 === 0 ? 1 : -1;
+        sg.fillStyle(0x334155, 1);
+        sg.fillEllipse(dirSign * 9, -4, 8, 7);
+        sg.fillEllipse(dirSign * 6, -7, 4, 2.5);
+        sg.fillStyle(0xfef08a, 1);
+        sg.fillCircle(dirSign * 10, -5, 1.3);
+        sheepCont.add(sg);
+        this.tweens.add({
+          targets: sheepCont,
+          y: ly - 2.5,
+          duration: 740 + idx * 110,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
+        animalVisual = sheepCont;
       } else if (isChicken && this.textures.exists('livestock_chicken_brown')) {
         const texKey = pen.animalId === 'golden_bantam_hen' ? 'livestock_chicken_cute' : idx % 2 === 0 ? 'livestock_chicken_brown' : 'livestock_chicken_white';
         const animKey = `${texKey}_anim`;
@@ -1321,7 +1358,10 @@ export class FarmScene extends Phaser.Scene {
       | 'bamboo_forest'
       | 'sunken_ruins'
       | 'koh_rong_island'
-      | 'phnom_kulen' = 'central_plaza'
+      | 'phnom_kulen'
+      | 'tonle_sap_marsh'
+      | 'cardamom_jungle'
+      | 'preah_vihear_cliffs' = 'central_plaza'
   ): void {
     if (this.transitioning) return;
     this.transitioning = true;

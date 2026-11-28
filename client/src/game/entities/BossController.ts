@@ -175,31 +175,39 @@ export class BossController {
         ? 'boss_ream_eyso_moni_mekhala'
         : 'boss_yeak_thmor';
       this.baseScale = 1.32;
-    } else if (bossId === 'krong_reap' || bossId === 'rahu') {
+    } else if (bossId === 'krong_reap' || bossId === 'rahu' || bossId === 'astral_warden_angkor') {
       resolvedTexKey = scene.textures.exists('boss_krong_reap') ? 'boss_krong_reap' : 'boss_yeak_thmor';
-      this.baseScale = bossId === 'rahu' ? 1.56 : 1.38;
+      this.baseScale = bossId === 'rahu' || bossId === 'astral_warden_angkor' ? 1.56 : 1.38;
     } else if (
       bossId === 'preay_krola_plerng' ||
       bossId === 'apsara_srong' ||
       bossId === 'garuda' ||
       bossId === 'kala' ||
-      bossId === 'khmouch_chheam_prey'
+      bossId === 'khmouch_chheam_prey' ||
+      bossId === 'khmouch_daeum_chek' ||
+      bossId === 'preay_teuk' ||
+      bossId === 'baksey_meas'
     ) {
       resolvedTexKey = scene.textures.exists('boss_arp_prey_chrov_hq')
         ? 'boss_arp_prey_chrov_hq'
         : 'boss_giant_spirit_idle';
-      this.baseScale = bossId === 'garuda' || bossId === 'kala' ? 1.32 : 1.18;
-    } else if (bossId === 'kropeu_neang_kheng') {
+      this.baseScale = bossId === 'garuda' || bossId === 'kala' || bossId === 'baksey_meas' ? 1.32 : 1.18;
+    } else if (bossId === 'kropeu_neang_kheng' || bossId === 'neak_plerng') {
       resolvedTexKey = scene.textures.exists('boss_neak_reach_king')
         ? 'boss_neak_reach_king'
         : 'boss_sdech_kongkaeb_hq';
       this.baseScale = 1.3;
-    } else if (bossId === 'preah_ko_preah_keo') {
+    } else if (bossId === 'preah_ko_preah_keo' || bossId === 'maccha_tep') {
       resolvedTexKey = scene.textures.exists('boss_ream_eyso_moni_mekhala')
         ? 'boss_ream_eyso_moni_mekhala'
         : 'boss_yeak_thmor';
       this.baseScale = 1.36;
-    } else if (bossId === 'reachsey' || bossId === 'hanuman_shadow_general') {
+    } else if (
+      bossId === 'reachsey' ||
+      bossId === 'hanuman_shadow_general' ||
+      bossId === 'yeak_prey' ||
+      bossId === 'sdech_damrey_sor'
+    ) {
       resolvedTexKey = 'boss_yeak_thmor';
       this.baseScale = 1.44;
     } else {

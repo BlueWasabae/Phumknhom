@@ -77,11 +77,39 @@ export interface FarmItemMeta {
   cropId?: string;
 }
 
-export const PLOT_UNLOCK_COST = 250;
-export const FERTILIZER_COST = 200;
+export const PLOT_UNLOCK_COST = 500;
+export const FERTILIZER_COST = 250;
 
 /**
- * Exact 6 Row Crops from docs/GDD_CONTENT_AND_ECONOMY.md §1
+ * Update 3.6 — Escalating Crop Land Slot Formula:
+ * Slot 3 = 500 C -> Slot 4 = 825 C -> Slot 5 = 1,361 C -> Slot 6 = 2,246 C ...
+ */
+export function getNextPlotUnlockCost(currentlyUnlockedPlots: number): number {
+  const extra = Math.max(0, currentlyUnlockedPlots - 2);
+  return Math.round(500 * Math.pow(1.65, extra));
+}
+
+export const PASTURE_LAND_BASE_COST = 2000;
+export const WOODEN_FENCE_COST = 800;
+
+export function getNextPastureLandCost(currentLevel: number): number {
+  return Math.round(PASTURE_LAND_BASE_COST * Math.pow(1.75, Math.max(0, currentLevel)));
+}
+
+export const LIVESTOCK_PEN_LIMITS: Record<'chicken' | 'sheep' | 'cow', number> = {
+  chicken: 4,
+  sheep: 3,
+  cow: 2,
+};
+
+export function getLivestockSpecies(animalId: string): 'chicken' | 'sheep' | 'cow' {
+  if (animalId.includes('sheep')) return 'sheep';
+  if (animalId.includes('cow') || animalId.includes('buffalo')) return 'cow';
+  return 'chicken';
+}
+
+/**
+ * Exact 6 Row Crops — Update 3.6 High-Investment Seed Economy (Jasmine Rice 120c, Pink Lotus 350c, Kampot Pepper 600c!)
  */
 export const ROW_CROPS: Record<string, CropDefinition> = {
   trakuon: {
@@ -91,10 +119,10 @@ export const ROW_CROPS: Record<string, CropDefinition> = {
     khmerName: 'ត្រកួន (Water Morning Glory)',
     seedItemId: 'seed_trakuon',
     harvestItemId: 'crop_trakuon',
-    seedCost: 14,
-    growSeconds: 210, // Hardcore Economy (~1.75x)
-    sellPrice: 18,    // -30% base vendor sell price
-    farmXp: 12,
+    seedCost: 45,
+    growSeconds: 210,
+    sellPrice: 85,
+    farmXp: 14,
     primaryUse: 'Basic HP Snacks, Starter Quests, Pickles',
     stageColors: ['#86efac', '#4ade80', '#22c55e', '#15803d'],
   },
@@ -105,10 +133,10 @@ export const ROW_CROPS: Record<string, CropDefinition> = {
     khmerName: 'ស្លឹកគ្រៃ (Lemongrass)',
     seedItemId: 'seed_slek_krey',
     harvestItemId: 'crop_slek_krey',
-    seedCost: 35,
+    seedCost: 80,
     growSeconds: 510,
-    sellPrice: 42,
-    farmXp: 24,
+    sellPrice: 155,
+    farmXp: 26,
     primaryUse: 'Anti-Poison Elixirs, Soup Base',
     stageColors: ['#bef264', '#84cc16', '#65a30d', '#3f6212'],
   },
@@ -119,10 +147,10 @@ export const ROW_CROPS: Record<string, CropDefinition> = {
     khmerName: 'ស្រូវផ្ការំដួល (Jasmine Rice)',
     seedItemId: 'seed_phka_rumduol',
     harvestItemId: 'crop_phka_rumduol',
-    seedCost: 85,
+    seedCost: 120,
     growSeconds: 1500,
-    sellPrice: 105,
-    farmXp: 45,
+    sellPrice: 245,
+    farmXp: 52,
     primaryUse: 'Rice Mill Flour/Noodles, Num Pang, Pet Food',
     stageColors: ['#bef264', '#a3e635', '#facc15', '#eab308'],
   },
@@ -133,10 +161,10 @@ export const ROW_CROPS: Record<string, CropDefinition> = {
     khmerName: 'ម្ទេសក្រហម (Red Chili)',
     seedItemId: 'seed_mtes',
     harvestItemId: 'crop_mtes',
-    seedCost: 165,
+    seedCost: 220,
     growSeconds: 2400,
-    sellPrice: 210,
-    farmXp: 70,
+    sellPrice: 440,
+    farmXp: 78,
     primaryUse: 'Attack Buff Skewers, Fire Potions, Spicy Prahok',
     stageColors: ['#86efac', '#4ade80', '#fb923c', '#dc2626'],
   },
@@ -147,10 +175,10 @@ export const ROW_CROPS: Record<string, CropDefinition> = {
     khmerName: 'ផ្កាឈូក (Sacred Lotus)',
     seedItemId: 'seed_pink_lotus',
     harvestItemId: 'crop_pink_lotus',
-    seedCost: 420,
+    seedCost: 350,
     growSeconds: 4500,
-    sellPrice: 525,
-    farmXp: 120,
+    sellPrice: 720,
+    farmXp: 135,
     primaryUse: 'Spirit Keg Elixirs, Mana Teas, Magic Staffs',
     stageColors: ['#86efac', '#34d399', '#f9a8d4', '#ec4899'],
   },
@@ -161,10 +189,10 @@ export const ROW_CROPS: Record<string, CropDefinition> = {
     khmerName: 'ម្រេចកំពត (Kampot Pepper)',
     seedItemId: 'seed_kampot_pepper',
     harvestItemId: 'crop_kampot_pepper',
-    seedCost: 840,
+    seedCost: 600,
     growSeconds: 9000,
-    sellPrice: 1120,
-    farmXp: 220,
+    sellPrice: 1280,
+    farmXp: 240,
     primaryUse: 'Elite Boss Buff Meals, High Coin Export',
     stageColors: ['#86efac', '#16a34a', '#b91c1c', '#7f1d1d'],
   },
@@ -220,9 +248,9 @@ export const FRUIT_TREES: Record<string, FruitTreeDefinition> = {
   },
   golden_durian_tree: {
     id: 'golden_durian_tree',
-    name: 'Golden Durian Tree',
+    name: 'Golden Durian Sapling',
     khmerName: 'ដើមធូរេនមាស',
-    costCoins: 25000,
+    costCoins: 1500,
     initialGrowSeconds: 28800,
     cooldownSeconds: 10800,
     outputItemId: 'fruit_golden_durian',
@@ -244,13 +272,25 @@ export const LIVESTOCK: Record<string, LivestockDefinition> = {
     id: 'village_chicken',
     name: 'Village Hen Chicken',
     khmerName: 'មាន់ស្រែខ្មែរ',
-    costCoins: 450,
+    costCoins: 600,
     cooldownSeconds: 600,
     outputItemId: 'drop_fresh_egg',
     farmXp: 30,
     bodyColor: '#fef9c3',
     accentColor: '#ef4444',
-    description: 'Cozy village hen — lays Fresh Eggs every 10 min for bakery & Num Pang snacks.',
+    description: 'Max 4 per fenced pen — lays Fresh Eggs every 10 min for bakery & Num Pang snacks.',
+  },
+  khmer_wool_sheep: {
+    id: 'khmer_wool_sheep',
+    name: 'Fluffy Village Sheep',
+    khmerName: 'ចៀមរោមទន់',
+    costCoins: 1800,
+    cooldownSeconds: 900,
+    outputItemId: 'drop_soft_wool',
+    farmXp: 50,
+    bodyColor: '#f8fafc',
+    accentColor: '#334155',
+    description: 'Max 3 per fenced pen — produces Soft Wool every 15 min for Tailor & Dye crafting!',
   },
   golden_bantam_hen: {
     id: 'golden_bantam_hen',
@@ -269,14 +309,14 @@ export const LIVESTOCK: Record<string, LivestockDefinition> = {
     id: 'khmer_white_cow',
     name: 'Khmer Dairy Cow',
     khmerName: 'គោទឹកដោះស្រែ',
-    costCoins: 1400,
+    costCoins: 3500,
     cooldownSeconds: 1200,
     outputItemId: 'drop_fresh_milk',
     bonusItemId: 'fertilizer',
-    farmXp: 55,
+    farmXp: 65,
     bodyColor: '#f8fafc',
     accentColor: '#dc2626',
-    description: 'Gentle white Cambodian cow with red-gold bell — yields Fresh Milk & Fertilizer every 20 min!',
+    description: 'Max 2 per fenced pen — yields Fresh Milk for Kafé Tek Dos Ko & Rich Fertilizer!',
   },
   royal_preah_ko_cow: {
     id: 'royal_preah_ko_cow',
@@ -506,10 +546,10 @@ export const FARM_ITEMS: Record<string, FarmItemMeta> = {
     khmerName: 'គ្រាប់ស្រូវផ្ការំដួល',
     kind: 'seed',
     rarity: 'uncommon',
-    buyCoins: 60,
-    sellCoins: 25,
+    buyCoins: 120,
+    sellCoins: 45,
     primaryColor: '#facc15',
-    description: 'Jasmine Rice. Grows in 15 min. Sells for 150 Coins.',
+    description: 'Jasmine Rice (120 C). High-yield staple crop.',
     cropId: 'phka_rumduol',
   },
   seed_mtes: {
@@ -518,10 +558,10 @@ export const FARM_ITEMS: Record<string, FarmItemMeta> = {
     khmerName: 'គ្រាប់ម្ទេស',
     kind: 'seed',
     rarity: 'uncommon',
-    buyCoins: 120,
-    sellCoins: 50,
+    buyCoins: 220,
+    sellCoins: 85,
     primaryColor: '#ef4444',
-    description: 'Red Chili. Grows in 25 min. Sells for 300 Coins.',
+    description: 'Red Chili (220 C). Spicy combat skewer ingredient.',
     cropId: 'mtes',
   },
   seed_pink_lotus: {
@@ -530,10 +570,10 @@ export const FARM_ITEMS: Record<string, FarmItemMeta> = {
     khmerName: 'គ្រាប់ផ្កាឈូក',
     kind: 'seed',
     rarity: 'rare',
-    buyCoins: 300,
-    sellCoins: 120,
+    buyCoins: 350,
+    sellCoins: 140,
     primaryColor: '#ec4899',
-    description: 'Sacred Pink Lotus. Grows in 45 min. Sells for 750 Coins.',
+    description: 'Sacred Pink Lotus (350 C). Brews elite Spirit Keg elixirs.',
     cropId: 'pink_lotus',
   },
   seed_kampot_pepper: {
@@ -545,7 +585,7 @@ export const FARM_ITEMS: Record<string, FarmItemMeta> = {
     buyCoins: 600,
     sellCoins: 250,
     primaryColor: '#991b1b',
-    description: 'Prized Kampot Pepper. Grows in 90 min. Sells for 1,600 Coins.',
+    description: 'Prized Kampot Pepper (600 C). Premium export spice.',
     cropId: 'kampot_pepper',
   },
   // Harvested Row Crops
@@ -700,6 +740,16 @@ export const FARM_ITEMS: Record<string, FarmItemMeta> = {
     sellCoins: 690,
     primaryColor: '#fef08a',
     description: 'Blessed golden-cream milk from a Sacred Preah Ko Cow — immense trade & feast value!',
+  },
+  drop_soft_wool: {
+    id: 'drop_soft_wool',
+    name: 'Soft Sheep Wool',
+    khmerName: 'រោមចៀមទន់',
+    kind: 'livestock_drop',
+    rarity: 'rare',
+    sellCoins: 260,
+    primaryColor: '#f8fafc',
+    description: 'Plush hand-sheared wool used for Tailor garments & Botanical Dye crafting!',
   },
   item_kulen_wild_orchid: {
     id: 'item_kulen_wild_orchid',

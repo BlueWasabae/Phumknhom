@@ -6,6 +6,7 @@ import {
   WORLD_BIOMES,
   WORLD_BIOME_LIST,
   getBiomeOrFallback,
+  isFastTravelHub,
   type BiomeId,
   type CityDistrictId,
 } from '@shared/worldMapData';
@@ -135,26 +136,29 @@ export const WorldMapModal: React.FC<WorldMapModalProps> = ({
           </div>
         </div>
 
-        {/* 5 Spacious Connected Village & Frontier Maps (Walk-Through Portals + Instant Fast-Travel!) */}
+        {/* Update 3.6 — Hub-Only Fast Travel (4 Hubs) + Deep-Exploration Maps (Explore on Foot!) */}
         <div className="p-2.5 rounded-2xl bg-amber-50/95 border-2 border-amber-900/35 space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="font-display font-bold text-xs text-amber-950">
-              🏡 5 Connected Village &amp; Frontier Maps (Walk-Through Road Portals &amp; Express Bus)
+              🗺️ Village Hubs (Fast Travel) &amp; Deep-Exploration Wilds (Explore on Foot via Gateways!)
             </div>
             <span className="text-[10px] font-bold text-amber-900 bg-amber-200/80 px-2 py-0.5 rounded-full">
-              1600×1200 Spacious Layouts
+              4 Fast-Travel Hubs · {VILLAGE_MAP_LIST.length - 3} Walk-In Adventure Zones
             </span>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-1.5">
             {VILLAGE_MAP_LIST.map((m) => {
               const isHere =
                 player.zone === 'overworld' && (player.currentMapId ?? 'central_plaza') === m.id;
+              const canFastTravel = isFastTravelHub(m.id);
+              const expPct = player.mapExplorationPct?.[m.id] ?? 0;
               return (
                 <button
                   key={m.id}
                   type="button"
-                  disabled={inActiveBossFight}
-                  onClick={() =>
+                  disabled={inActiveBossFight || !canFastTravel}
+                  onClick={() => {
+                    if (!canFastTravel) return;
                     doWarp({
                       method: 'pylon',
                       destinationLabel: `${m.name} (${m.khmerName})`,
@@ -162,26 +166,49 @@ export const WorldMapModal: React.FC<WorldMapModalProps> = ({
                       mapId: m.id,
                       spawnX: m.defaultSpawnX,
                       spawnY: m.defaultSpawnY,
-                    })
+                    });
+                  }}
+                  title={
+                    canFastTravel
+                      ? `Fast Travel Hub: Instant warp to ${m.name}`
+                      : `Explore on Foot: Walk or ride through physical map portals to reach ${m.name}!`
                   }
-                  className={`p-2 rounded-xl border-2 text-left transition cursor-pointer disabled:opacity-45 ${
+                  className={`p-2 rounded-xl border-2 text-left transition ${
                     isHere
                       ? 'bg-amber-800 text-amber-50 border-amber-950 shadow'
-                      : 'bg-white hover:bg-amber-100 text-amber-950 border-amber-900/30'
+                      : canFastTravel
+                        ? 'bg-white hover:bg-amber-100 text-amber-950 border-amber-700/50 cursor-pointer'
+                        : 'bg-slate-100/90 text-slate-700 border-slate-300 cursor-not-allowed opacity-90'
                   }`}
                 >
                   <div className="flex items-center justify-between gap-1">
                     <span className="text-sm">{m.icon}</span>
-                    {isHere && (
+                    {isHere ? (
                       <span className="text-[8px] font-bold px-1.5 py-0.2 rounded bg-yellow-300 text-amber-950">
                         HERE
+                      </span>
+                    ) : canFastTravel ? (
+                      <span className="text-[8px] font-bold px-1.5 py-0.2 rounded bg-emerald-600 text-white">
+                        ⚡ HUB WARP
+                      </span>
+                    ) : (
+                      <span className="text-[8px] font-bold px-1.5 py-0.2 rounded bg-slate-700 text-amber-200">
+                        🚶 Explore on Foot
                       </span>
                     )}
                   </div>
                   <div className="font-display font-bold text-[11px] truncate mt-0.5">{m.name}</div>
-                  <div className={`text-[9px] truncate ${isHere ? 'text-amber-200' : 'text-amber-800'}`}>
+                  <div className={`text-[9px] truncate ${isHere ? 'text-amber-200' : canFastTravel ? 'text-amber-800' : 'text-slate-500'}`}>
                     {m.khmerName}
                   </div>
+                  {!canFastTravel && (
+                    <div className="mt-1 flex items-center gap-1.5">
+                      <div className="flex-1 h-1.5 rounded-full bg-slate-300 overflow-hidden">
+                        <div className="h-full bg-emerald-500" style={{ width: `${Math.min(100, expPct)}%` }} />
+                      </div>
+                      <span className="text-[8px] font-mono font-bold text-slate-600">{expPct}%</span>
+                    </div>
+                  )}
                 </button>
               );
             })}
