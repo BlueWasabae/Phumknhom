@@ -27,7 +27,7 @@ import {
 } from '../animations/ClassCombatVFX';
 import { vfxManager } from '../animations/VFXManager';
 import { soundManager } from '../systems/SoundManager';
-import { getCursorAimAngle } from '../systems/CombatAimHelper';
+import { PlatformDropController, getCursorAimAngle } from '../systems/CombatAimHelper';
 import { worldBossManager } from '../systems/WorldBossManager';
 import { roomClient, type RemoteWorldBossPlayer } from '../network/RoomClient';
 
@@ -75,10 +75,12 @@ export class WorldBossScene extends Phaser.Scene {
   private initialState: PlayerState = { ...INITIAL_PLAYER_STATE };
   private player!: Player;
   private vfx!: ClassCombatVFX;
-  private platforms!: Phaser.Physics.Arcade.StaticGroup;
+  private solidFloor!: Phaser.Physics.Arcade.StaticGroup;
+  private elevatedPlatforms!: Phaser.Physics.Arcade.StaticGroup;
 
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keys!: Record<'W' | 'A' | 'S' | 'D' | 'SPACE' | 'Q' | 'E' | 'J' | 'R' | 'SHIFT', Phaser.Input.Keyboard.Key>;
+  private platformDrop = new PlatformDropController();
   private joystick: JoystickVector = { x: 0, y: 0 };
 
   // Ancient Naga Colossus multi-segment visuals
@@ -163,6 +165,7 @@ export class WorldBossScene extends Phaser.Scene {
     this.jumpsRemaining = 2;
     this.lastHurtAt = 0;
     this.joystick = { x: 0, y: 0 };
+    this.platformDrop.reset();
   }
 
   create(): void {
@@ -177,7 +180,23 @@ export class WorldBossScene extends Phaser.Scene {
 
     this.player = new Player(this, 360, FLOOR_Y - 38, this.initialState, 'dungeon');
     this.player.sprite.setDepth(45);
-    this.physics.add.collider(this.player.sprite, this.platforms);
+    this.physics.add.collider(this.player.sprite, this.solidFloor);
+    this.physics.add.collider(
+      this.player.sprite,
+      this.elevatedPlatforms,
+      undefined,
+      (playerObj, platObj) => {
+        const p = playerObj as Phaser.Physics.Arcade.Sprite;
+        const plat = platObj as Phaser.GameObjects.Rectangle;
+        const body = p.body as Phaser.Physics.Arcade.Body;
+        return (
+          this.time.now >= this.grappleActiveUntil &&
+          !this.platformDrop.isDropping(this.time.now) &&
+          body.velocity.y >= 0 &&
+          body.bottom <= plat.y - plat.height / 2 + 14
+        );
+      }
+    );
 
     this.cameras.main.setBounds(0, 0, ARENA_W, ARENA_H);
     this.cameras.main.startFollow(this.player.sprite, true, 0.14, 0.14);
@@ -204,7 +223,7 @@ export class WorldBossScene extends Phaser.Scene {
       .text(
         this.scale.width / 2,
         this.scale.height - 26,
-        '⚔️ Click / Space: Attack · [Q]: Bamboo Grapple onto Stone Pillars (dodge Tidal Wave!) · Double-Jump: W/Up · Exit: [Esc]',
+        '⚔️ Click / Space: Attack · [Q]: Grapple Pillars · Double-Jump: W/Up · Drop: [2× Ctrl] · Exit: [Esc]',
         {
           fontFamily: 'Fredoka, sans-serif',
           fontSize: '12px',
@@ -224,6 +243,7 @@ export class WorldBossScene extends Phaser.Scene {
       'W' | 'A' | 'S' | 'D' | 'SPACE' | 'Q' | 'E' | 'J' | 'R' | 'SHIFT',
       Phaser.Input.Keyboard.Key
     >;
+    this.platformDrop.bindKeyboard(this);
     this.input.keyboard!.clearCaptures();
     this.input.keyboard!.on('keydown-ESC', () => this.exitToSunkenRuins());
 
@@ -290,13 +310,14 @@ export class WorldBossScene extends Phaser.Scene {
     spire.fillRect(BOSS_HOME_X - 10, 170, 20, FLOOR_Y - 210);
 
     // Flooded temple sandstone floor + glowing emerald water sheen
-    this.platforms = this.physics.add.staticGroup();
+    this.solidFloor = this.physics.add.staticGroup();
+    this.elevatedPlatforms = this.physics.add.staticGroup();
     const floorRect = this.add
       .rectangle(ARENA_W / 2, FLOOR_Y + 62, ARENA_W, 124, 0x164e63, 0.96)
       .setStrokeStyle(3, 0x22d3ee, 0.75)
       .setDepth(12);
     this.physics.add.existing(floorRect, true);
-    this.platforms.add(floorRect);
+    this.solidFloor.add(floorRect);
 
     // Water shimmer line across floor
     const waterTop = this.add
@@ -322,7 +343,7 @@ export class WorldBossScene extends Phaser.Scene {
         .setStrokeStyle(2.5, 0xfacc15, 0.9)
         .setDepth(16);
       this.physics.add.existing(plat, true);
-      this.platforms.add(plat);
+      this.elevatedPlatforms.add(plat);
 
       // Glowing Q Grapple ring indicator on each overhead stone pillar
       const ring = this.add
@@ -1041,6 +1062,13 @@ export class WorldBossScene extends Phaser.Scene {
       Phaser.Input.Keyboard.JustDown(this.keys.W)
     ) {
       this.performJump();
+    }
+    const typing =
+      Boolean(document.querySelector('dialog[open]')) ||
+      document.activeElement?.tagName === 'INPUT' ||
+      document.activeElement?.tagName === 'TEXTAREA';
+    if (!typing && !this.raidEnded && time > this.grappleActiveUntil) {
+      this.platformDrop.update(this, time, this.player.sprite, FLOOR_Y);
     }
     if (Phaser.Input.Keyboard.JustDown(this.keys.Q)) {
       this.triggerBambooGrapple();

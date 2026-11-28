@@ -40,6 +40,7 @@ import { vfxManager } from '../animations/VFXManager';
 import {
   GRAPPLE_MAX_DURATION_MS,
   GRAPPLE_PULL_SPEED,
+  PlatformDropController,
   drawBambooVineTether,
   getCursorAimAngle,
   resolveCursorGrappleAnchor,
@@ -174,6 +175,7 @@ export class DungeonBossScene extends Phaser.Scene {
     'A' | 'D' | 'W' | 'E' | 'G' | 'J' | 'K' | 'L' | 'F' | 'Q' | 'R' | 'X' | 'SHIFT' | 'SPACE',
     Phaser.Input.Keyboard.Key
   >;
+  private platformDrop = new PlatformDropController();
   private joystick: JoystickVector = { x: 0, y: 0 };
   private jumpsUsed = 0;
   private prevOnGround = true;
@@ -263,6 +265,7 @@ export class DungeonBossScene extends Phaser.Scene {
     this.playerDefeated = false;
     this.lootBag = null;
     this.cheerPackages = [];
+    this.platformDrop.reset();
   }
 
   create(): void {
@@ -295,7 +298,12 @@ export class DungeonBossScene extends Phaser.Scene {
         const p = playerObj as Phaser.Physics.Arcade.Sprite;
         const plat = platObj as Phaser.GameObjects.Rectangle;
         const body = p.body as Phaser.Physics.Arcade.Body;
-        return !this.grappleActive && body.velocity.y >= 0 && body.bottom <= plat.y - plat.height / 2 + 14;
+        return (
+          !this.grappleActive &&
+          !this.platformDrop.isDropping(this.time.now) &&
+          body.velocity.y >= 0 &&
+          body.bottom <= plat.y - plat.height / 2 + 14
+        );
       }
     );
 
@@ -353,6 +361,7 @@ export class DungeonBossScene extends Phaser.Scene {
       'A' | 'D' | 'W' | 'E' | 'G' | 'J' | 'K' | 'L' | 'F' | 'Q' | 'R' | 'X' | 'SHIFT' | 'SPACE',
       Phaser.Input.Keyboard.Key
     >;
+    this.platformDrop.bindKeyboard(this);
     this.input.keyboard!.clearCaptures();
     this.input.enabled = true;
     if (this.input.keyboard) {
@@ -2653,6 +2662,7 @@ export class DungeonBossScene extends Phaser.Scene {
         ) {
           this.performJump();
         }
+        this.platformDrop.update(this, time, this.player.sprite, FLOOR_Y);
         if (Phaser.Input.Keyboard.JustDown(this.keys.Q) || Phaser.Input.Keyboard.JustDown(this.keys.G)) {
           this.performBambooGrapple();
         }

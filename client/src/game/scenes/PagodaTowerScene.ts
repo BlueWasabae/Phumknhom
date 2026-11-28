@@ -15,6 +15,7 @@ import { vfxManager } from '../animations/VFXManager';
 import {
   GRAPPLE_MAX_DURATION_MS,
   GRAPPLE_PULL_SPEED,
+  PlatformDropController,
   drawBambooVineTether,
   enforceInteractRange,
   getCursorAimAngle,
@@ -100,6 +101,7 @@ export class PagodaTowerScene extends Phaser.Scene {
 
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keys!: Record<'W' | 'A' | 'S' | 'D' | 'E' | 'G' | 'J' | 'K' | 'Q' | 'R' | 'SHIFT' | 'SPACE', Phaser.Input.Keyboard.Key>;
+  private platformDrop = new PlatformDropController();
   private dashVelX = 0;
   private joystick: JoystickVector = { x: 0, y: 0 };
   private vfx!: ClassCombatVFX;
@@ -151,6 +153,7 @@ export class PagodaTowerScene extends Phaser.Scene {
     this.projectiles = [];
     this.nextPortalGroup = [];
     this.joystick = { x: 0, y: 0 };
+    this.platformDrop.reset();
   }
 
   create(): void {
@@ -176,10 +179,26 @@ export class PagodaTowerScene extends Phaser.Scene {
     this.player = new Player(this, 220, FLOOR_Y - 36, startState, 'dungeon');
     this.player.body.setGravityY(0);
     this.physics.add.collider(this.player.sprite, this.floorCollider);
-    this.physics.add.collider(this.player.sprite, this.elevatedPlatforms, undefined, () => {
-      const dropThrough = this.keys.S.isDown || this.cursors.down.isDown;
-      return !dropThrough && this.player.body.velocity.y >= 0;
-    });
+    this.physics.add.collider(
+      this.player.sprite,
+      this.elevatedPlatforms,
+      undefined,
+      (playerObj, platObj) => {
+        const p = playerObj as Phaser.Physics.Arcade.Sprite;
+        const plat = platObj as Phaser.GameObjects.Rectangle;
+        const body = p.body as Phaser.Physics.Arcade.Body;
+        const dropThrough =
+          this.platformDrop.isDropping(this.time.now) ||
+          this.keys.S.isDown ||
+          this.cursors.down.isDown;
+        return (
+          this.time.now >= this.grappleActiveUntil &&
+          !dropThrough &&
+          body.velocity.y >= 0 &&
+          body.bottom <= plat.y - plat.height / 2 + 14
+        );
+      }
+    );
 
     this.grappleLine = this.add.graphics().setDepth(90);
 
@@ -219,6 +238,7 @@ export class PagodaTowerScene extends Phaser.Scene {
       'W' | 'A' | 'S' | 'D' | 'E' | 'G' | 'J' | 'K' | 'Q' | 'R' | 'SHIFT' | 'SPACE',
       Phaser.Input.Keyboard.Key
     >;
+    this.platformDrop.bindKeyboard(this);
     this.input.keyboard!.clearCaptures();
     this.input.mouse?.disableContextMenu();
 
@@ -1024,6 +1044,7 @@ export class PagodaTowerScene extends Phaser.Scene {
         this.jumpsUsed += 1;
         this.player.body.setVelocityY(-470 * (1 + bridge.jumpPowerBonusPct));
       }
+      this.platformDrop.update(this, time, this.player.sprite, FLOOR_Y);
       if (Phaser.Input.Keyboard.JustDown(this.keys.SPACE) || Phaser.Input.Keyboard.JustDown(this.keys.J)) {
         const dir = this.player.facing === 'left' ? -1 : 1;
         this.performAttack(this.player.x + dir * 160, this.player.y - 16);

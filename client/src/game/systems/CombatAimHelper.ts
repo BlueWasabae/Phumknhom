@@ -5,6 +5,98 @@ export const MAX_FISHING_DISTANCE = 110;
 export const MAX_GRAPPLE_RANGE = 340;
 export const GRAPPLE_PULL_SPEED = 520;
 export const GRAPPLE_MAX_DURATION_MS = 520;
+export const DOUBLE_CTRL_WINDOW_MS = 340;
+export const PLATFORM_DROP_DURATION_MS = 280;
+
+/**
+ * Reusable Double-Tap `Ctrl` one-way platform drop-through controller for all side-scrolling scenes.
+ * - Detects two non-repeating `Ctrl` key presses (Left or Right Control) within `340ms`.
+ * - Nudges the player safely past the elevated platform lip and disables elevated-platform collision
+ *   for `280ms`, while leaving the arena's solid main floor completely impenetrable.
+ */
+export class PlatformDropController {
+  private ctrlKey: Phaser.Input.Keyboard.Key | null = null;
+  private lastCtrlTapAt = 0;
+  private dropThroughUntil = 0;
+
+  reset(): void {
+    this.ctrlKey = null;
+    this.lastCtrlTapAt = 0;
+    this.dropThroughUntil = 0;
+  }
+
+  bindKeyboard(scene: Phaser.Scene): void {
+    this.lastCtrlTapAt = 0;
+    this.dropThroughUntil = 0;
+    this.ctrlKey = scene.input.keyboard
+      ? scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.CTRL, false)
+      : null;
+  }
+
+  isDropping(now: number): boolean {
+    return now < this.dropThroughUntil;
+  }
+
+  /**
+   * Poll every frame in scene `update()` while player controls are active.
+   * Returns `true` on the frame a double-Ctrl drop-through triggers.
+   */
+  update(
+    scene: Phaser.Scene,
+    now: number,
+    playerSprite: Phaser.Physics.Arcade.Sprite,
+    floorY: number
+  ): boolean {
+    if (!this.ctrlKey || !Phaser.Input.Keyboard.JustDown(this.ctrlKey)) return false;
+
+    if (this.lastCtrlTapAt > 0 && now - this.lastCtrlTapAt <= DOUBLE_CTRL_WINDOW_MS) {
+      this.lastCtrlTapAt = 0;
+      return this.triggerDrop(scene, now, playerSprite, floorY);
+    }
+
+    this.lastCtrlTapAt = now;
+    return false;
+  }
+
+  /**
+   * Triggers a clean drop-through if the player is above the solid ground floor (`body.bottom < floorY - 20`).
+   */
+  triggerDrop(
+    scene: Phaser.Scene,
+    now: number,
+    playerSprite: Phaser.Physics.Arcade.Sprite,
+    floorY: number
+  ): boolean {
+    const body = playerSprite.body as Phaser.Physics.Arcade.Body | null;
+    if (!body) return false;
+    // Never nudge or drop through the main arena floor
+    if (body.bottom >= floorY - 20) return false;
+
+    const wasGrounded = body.blocked.down || body.touching.down;
+    this.dropThroughUntil = now + PLATFORM_DROP_DURATION_MS;
+    if (wasGrounded) {
+      playerSprite.y += 6;
+    }
+    body.setVelocityY(Math.max(body.velocity.y, 195));
+
+    // Crisp subtle downward wind ring VFX at player's feet
+    const ring = scene.add
+      .ellipse(playerSprite.x, body.bottom, 26, 8, 0xfef08a, 0.42)
+      .setStrokeStyle(1.5, 0xfde047, 0.85)
+      .setDepth(64);
+    scene.tweens.add({
+      targets: ring,
+      scaleX: 1.55,
+      scaleY: 0.7,
+      y: body.bottom - 10,
+      alpha: 0,
+      duration: 210,
+      ease: 'Cubic.easeOut',
+      onComplete: () => ring.destroy(),
+    });
+    return true;
+  }
+}
 
 export interface GrapplePlatformRect {
   x: number;

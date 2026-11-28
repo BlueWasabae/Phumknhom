@@ -14,6 +14,7 @@ import {
   GRAPPLE_MAX_DURATION_MS,
   GRAPPLE_PULL_SPEED,
   MAX_INTERACT_DISTANCE,
+  PlatformDropController,
   drawBambooVineTether,
   enforceInteractRange,
   getCursorAimAngle,
@@ -138,6 +139,7 @@ export class CavernExploreScene extends Phaser.Scene {
 
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keys!: Record<'A' | 'D' | 'W' | 'E' | 'J' | 'G' | 'Q' | 'SHIFT' | 'SPACE', Phaser.Input.Keyboard.Key>;
+  private platformDrop = new PlatformDropController();
   private joystick: JoystickVector = { x: 0, y: 0 };
 
   private jumpsUsed = 0;
@@ -204,6 +206,7 @@ export class CavernExploreScene extends Phaser.Scene {
     this.nearExitSent = false;
     this.transitioning = false;
     this.joystick = { x: 0, y: 0 };
+    this.platformDrop.reset();
   }
 
   create(): void {
@@ -229,7 +232,12 @@ export class CavernExploreScene extends Phaser.Scene {
         const p = playerObj as Phaser.Physics.Arcade.Sprite;
         const plat = platObj as Phaser.GameObjects.Rectangle;
         const body = p.body as Phaser.Physics.Arcade.Body;
-        return !this.grappleActive && body.velocity.y >= 0 && body.bottom <= plat.y - plat.height / 2 + 14;
+        return (
+          !this.grappleActive &&
+          !this.platformDrop.isDropping(this.time.now) &&
+          body.velocity.y >= 0 &&
+          body.bottom <= plat.y - plat.height / 2 + 14
+        );
       }
     );
 
@@ -254,6 +262,7 @@ export class CavernExploreScene extends Phaser.Scene {
         'A' | 'D' | 'W' | 'E' | 'J' | 'G' | 'Q' | 'SHIFT' | 'SPACE',
         Phaser.Input.Keyboard.Key
       >;
+      this.platformDrop.bindKeyboard(this);
       this.input.keyboard.clearCaptures();
     }
 
@@ -273,7 +282,7 @@ export class CavernExploreScene extends Phaser.Scene {
       .text(
         295,
         FLOOR_Y - 122,
-        '⛏️ ANCIENT KHMER CAVERNS\n[A/D] Move · [W/Space] Jump · [Q] Bamboo Vine Grapple\n[J / Click] Aim & Mine Ores / Fight · [E] Open Chests / Exit',
+        '⛏️ ANCIENT KHMER CAVERNS\n[A/D] Move · [W/Space] Jump · [2× Ctrl] Drop · [Q] Grapple\n[J / Click] Aim & Mine Ores / Fight · [E] Open Chests / Exit',
         {
           fontFamily: 'Fredoka, sans-serif',
           fontSize: '11px',
@@ -1438,6 +1447,7 @@ export class CavernExploreScene extends Phaser.Scene {
         ) {
           this.performJump();
         }
+        this.platformDrop.update(this, time, this.player.sprite, FLOOR_Y);
         if (this.keys && (Phaser.Input.Keyboard.JustDown(this.keys.Q) || Phaser.Input.Keyboard.JustDown(this.keys.G))) {
           this.performBambooGrapple();
         }

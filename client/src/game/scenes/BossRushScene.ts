@@ -21,6 +21,7 @@ import { soundManager } from '../systems/SoundManager';
 import {
   GRAPPLE_MAX_DURATION_MS,
   GRAPPLE_PULL_SPEED,
+  PlatformDropController,
   drawBambooVineTether,
   getCursorAimAngle,
   resolveCursorGrappleAnchor,
@@ -64,6 +65,7 @@ export class BossRushScene extends Phaser.Scene {
     'A' | 'D' | 'W' | 'E' | 'G' | 'J' | 'K' | 'L' | 'F' | 'Q' | 'R' | 'X' | 'SHIFT' | 'SPACE',
     Phaser.Input.Keyboard.Key
   >;
+  private platformDrop = new PlatformDropController();
   private joystick: JoystickVector = { x: 0, y: 0 };
   private jumpsUsed = 0;
   private dashActiveUntil = 0;
@@ -135,6 +137,7 @@ export class BossRushScene extends Phaser.Scene {
     this.furyActiveUntil = 0;
     this.damageTakenTotal = 0;
     this.signatureCooldownUntil = 0;
+    this.platformDrop.reset();
   }
 
   create(): void {
@@ -165,7 +168,12 @@ export class BossRushScene extends Phaser.Scene {
         const p = playerObj as Phaser.Physics.Arcade.Sprite;
         const plat = platObj as Phaser.GameObjects.Rectangle;
         const body = p.body as Phaser.Physics.Arcade.Body;
-        return !this.grappleActive && body.velocity.y >= 0 && body.bottom <= plat.y - plat.height / 2 + 14;
+        return (
+          !this.grappleActive &&
+          !this.platformDrop.isDropping(this.time.now) &&
+          body.velocity.y >= 0 &&
+          body.bottom <= plat.y - plat.height / 2 + 14
+        );
       }
     );
 
@@ -197,6 +205,7 @@ export class BossRushScene extends Phaser.Scene {
       'A' | 'D' | 'W' | 'E' | 'G' | 'J' | 'K' | 'L' | 'F' | 'Q' | 'R' | 'X' | 'SHIFT' | 'SPACE',
       Phaser.Input.Keyboard.Key
     >;
+    this.platformDrop.bindKeyboard(this);
     this.input.keyboard!.clearCaptures();
     this.input.enabled = true;
     if (this.input.keyboard) {
@@ -829,6 +838,7 @@ export class BossRushScene extends Phaser.Scene {
         if (Phaser.Input.Keyboard.JustDown(this.keys.SPACE) || Phaser.Input.Keyboard.JustDown(this.keys.W) || Phaser.Input.Keyboard.JustDown(this.cursors.up)) {
           this.performJump();
         }
+        this.platformDrop.update(this, time, this.player.sprite, FLOOR_Y);
         if (Phaser.Input.Keyboard.JustDown(this.keys.Q) || Phaser.Input.Keyboard.JustDown(this.keys.G)) this.performGrapple();
         if (
           Phaser.Input.Keyboard.JustDown(this.keys.SHIFT) ||
