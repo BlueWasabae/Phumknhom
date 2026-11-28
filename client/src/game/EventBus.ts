@@ -342,6 +342,7 @@ export interface EventMap {
   };
   'bossRush:enterRequest': {
     difficulty: DifficultyMode;
+    rushMode?: 'classic' | 'grand_16';
   };
   'bossRush:completed': {
     elapsedMs: number;

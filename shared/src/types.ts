@@ -327,10 +327,20 @@ export type DifficultyMode = 'normal' | 'expert' | 'mythic' | 'death';
 export type BossId =
   | 'sdech_kongkaeb'
   | 'arp_prey_chrov'
+  | 'khmouch_chheam_prey'
+  | 'preay_krola_plerng'
   | 'yeak_thmor'
   | 'neak_reach'
+  | 'kropeu_neang_kheng'
+  | 'apsara_srong'
+  | 'reachsey'
   | 'ream_eyso_moni_mekhala'
-  | 'krong_reap';
+  | 'hanuman_shadow_general'
+  | 'garuda'
+  | 'kala'
+  | 'preah_ko_preah_keo'
+  | 'krong_reap'
+  | 'rahu';
 
 export type BossRigType =
   | 'QuadrupedHopperRig'

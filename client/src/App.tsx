@@ -2719,6 +2719,21 @@ export const App: React.FC = () => {
       }),
       EventBus.on('dungeon:outcome', (outcome) => {
         if (outcome && outcome.outcome === 'victory') {
+          if (outcome.bossId === 'rahu') {
+            runStateAction((prev) => ({
+              state: {
+                ...prev,
+                unlockedTitles: Array.from(new Set([...(prev.unlockedTitles ?? []), 'Devourer of Eclipses'])),
+                activeTitle: 'Devourer of Eclipses',
+              },
+              ok: true,
+              message: '🌑 CALAMITY VANQUISHED! Unlocked Title: Devourer of Eclipses!',
+            }));
+            EventBus.emit('ticker:push', {
+              text: `🌑 [CALAMITY SLAIN] ${playerRef.current.name} vanquished Rahu — Eclipse Sovereign and earned the title "Devourer of Eclipses"!`,
+              category: 'boss',
+            });
+          }
           if (playerRef.current.kromId && playerRef.current.kromTag) {
             void recordKromBossTrophyApi(authSessionRef.current, {
               kromId: playerRef.current.kromId,
@@ -3869,10 +3884,10 @@ export const App: React.FC = () => {
           setActiveModal(null);
           EventBus.emit('dungeon:enterRequest', { bossId, difficulty, partyMode, partyId });
         }}
-        onEnterBossRush={(difficulty: DifficultyMode) => {
+        onEnterBossRush={(difficulty: DifficultyMode, rushMode?: 'classic' | 'grand_16') => {
           soundManager.playSfx('click');
           setActiveModal(null);
-          EventBus.emit('bossRush:enterRequest', { difficulty });
+          EventBus.emit('bossRush:enterRequest', { difficulty, rushMode });
         }}
       />
 

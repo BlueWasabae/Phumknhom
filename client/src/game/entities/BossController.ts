@@ -175,9 +175,33 @@ export class BossController {
         ? 'boss_ream_eyso_moni_mekhala'
         : 'boss_yeak_thmor';
       this.baseScale = 1.32;
-    } else if (bossId === 'krong_reap') {
+    } else if (bossId === 'krong_reap' || bossId === 'rahu') {
       resolvedTexKey = scene.textures.exists('boss_krong_reap') ? 'boss_krong_reap' : 'boss_yeak_thmor';
-      this.baseScale = 1.38;
+      this.baseScale = bossId === 'rahu' ? 1.56 : 1.38;
+    } else if (
+      bossId === 'preay_krola_plerng' ||
+      bossId === 'apsara_srong' ||
+      bossId === 'garuda' ||
+      bossId === 'kala' ||
+      bossId === 'khmouch_chheam_prey'
+    ) {
+      resolvedTexKey = scene.textures.exists('boss_arp_prey_chrov_hq')
+        ? 'boss_arp_prey_chrov_hq'
+        : 'boss_giant_spirit_idle';
+      this.baseScale = bossId === 'garuda' || bossId === 'kala' ? 1.32 : 1.18;
+    } else if (bossId === 'kropeu_neang_kheng') {
+      resolvedTexKey = scene.textures.exists('boss_neak_reach_king')
+        ? 'boss_neak_reach_king'
+        : 'boss_sdech_kongkaeb_hq';
+      this.baseScale = 1.3;
+    } else if (bossId === 'preah_ko_preah_keo') {
+      resolvedTexKey = scene.textures.exists('boss_ream_eyso_moni_mekhala')
+        ? 'boss_ream_eyso_moni_mekhala'
+        : 'boss_yeak_thmor';
+      this.baseScale = 1.36;
+    } else if (bossId === 'reachsey' || bossId === 'hanuman_shadow_general') {
+      resolvedTexKey = 'boss_yeak_thmor';
+      this.baseScale = 1.44;
     } else {
       // Boss #5: Yeak Thmor -> REAL cleaned transparent Khmer sprite (/assets/khmer/bosses/boss_yeak_thmor.png)
       resolvedTexKey = 'boss_yeak_thmor';
@@ -205,6 +229,61 @@ export class BossController {
       .setOrigin(0.5, isAirborne ? 0.5 : 0.96)
       .setScale(this.baseScale)
       .setDepth(42);
+
+    // Update 3.5 — Distinct Elemental Bloom, Solar Wings (Garuda), Time Visage Aura (Kala) & Sky Eclipse (Rahu)!
+    const bossThemeTint: Partial<Record<BossId, number>> = {
+      preay_krola_plerng: 0xfb923c,
+      khmouch_chheam_prey: 0x34d399,
+      kropeu_neang_kheng: 0x2dd4bf,
+      apsara_srong: 0xfbbf24,
+      reachsey: 0xfde047,
+      hanuman_shadow_general: 0xe2e8f0,
+      garuda: 0xfacc15,
+      kala: 0x38bdf8,
+      preah_ko_preah_keo: 0x34d399,
+      rahu: 0xc084fc,
+    };
+    const themeTint = bossThemeTint[bossId];
+    if (themeTint) {
+      this.sprite.setTint(themeTint);
+      vfxManager.applyGlow(scene, this.sprite, themeTint, bossId === 'rahu' ? 3.8 : 2.2, 0.35);
+    }
+
+    if (bossId === 'rahu') {
+      // Calamity Superboss Rahu physically eclipses the arena sky with a blazing black-and-gold solar corona!
+      scene.add.rectangle(900, 340, 2200, 920, 0x05020d, 0.44).setDepth(18);
+      const eclipseCorona = scene.add
+        .circle(900, 210, 128, 0xfacc15, 0.36)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(19);
+      scene.add.circle(900, 210, 102, 0x090512, 0.98).setStrokeStyle(5, 0xfef08a, 0.96).setDepth(20);
+      vfxManager.applyBloom(scene, eclipseCorona, { color: 0xfacc15, strength: 2.0 });
+      scene.tweens.add({
+        targets: eclipseCorona,
+        scale: 1.14,
+        alpha: 0.54,
+        duration: 1650,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    } else if (bossId === 'garuda') {
+      // Garuda Solar Sky Sovereign blazing solar halo!
+      const sunHalo = scene.add
+        .circle(spawnX, this.y - 20, 96, 0xf59e0b, 0.28)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(41);
+      vfxManager.applyBloom(scene, sunHalo, { color: 0xfacc15, strength: 1.8 });
+      this.arpOuterGlow = sunHalo;
+    } else if (bossId === 'kala') {
+      // Kala Devourer of Time pulsing cyan chrono-ring!
+      const chronoHalo = scene.add
+        .circle(spawnX, this.y, 110, 0x06b6d4, 0.26)
+        .setStrokeStyle(3, 0x67e8f9, 0.85)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(41);
+      this.arpOuterGlow = chronoHalo;
+    }
 
     if (idleAnimKey && scene.anims.exists(idleAnimKey)) {
       this.sprite.play(idleAnimKey);

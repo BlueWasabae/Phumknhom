@@ -17,7 +17,7 @@ interface ModeSelectorModalProps {
     partyMode: 'solo' | 'coop',
     partyId?: string
   ) => void;
-  onEnterBossRush?: (difficulty: DifficultyMode) => void;
+  onEnterBossRush?: (difficulty: DifficultyMode, rushMode?: 'classic' | 'grand_16') => void;
 }
 
 const DIFFICULTY_OPTIONS: Array<{
@@ -63,17 +63,29 @@ export const ModeSelectorModal: React.FC<ModeSelectorModalProps> = ({
   onEnterBossRush,
 }) => {
   const [modalTab, setModalTab] = useState<'single' | 'boss_rush'>('single');
+  const [selectedTier, setSelectedTier] = useState<1 | 2 | 3 | 4>(1);
+  const [expandedDropsBossId, setExpandedDropsBossId] = useState<BossId | null>(null);
   const [selectedBoss, setSelectedBoss] = useState<BossId>(initialBossId ?? 'sdech_kongkaeb');
   const [selectedDiff, setSelectedDiff] = useState<DifficultyMode>('normal');
   const [rushDiff, setRushDiff] = useState<DifficultyMode>('mythic');
+  const [rushMode, setRushMode] = useState<'classic' | 'grand_16'>('grand_16');
   const [partyMode, setPartyMode] = useState<'solo' | 'coop'>('solo');
 
   useEffect(() => {
     if (open && initialBossId) {
       setSelectedBoss(initialBossId);
+      setSelectedTier(KHMER_BOSSES[initialBossId]?.tier ?? 1);
       setModalTab('single');
     }
   }, [initialBossId, open]);
+
+  const TIER_META: Array<{ tier: 1 | 2 | 3 | 4; label: string; subtitle: string; badge: string }> = [
+    { tier: 1, label: 'Tier 1', subtitle: 'Village & Frontier', badge: 'Lv.1–7' },
+    { tier: 2, label: 'Tier 2', subtitle: 'Mythic Guardians', badge: 'Lv.8–20' },
+    { tier: 3, label: 'Tier 3', subtitle: 'Angkor Sovereigns', badge: 'Lv.24–38' },
+    { tier: 4, label: 'Tier 4', subtitle: 'Calamity (Rahu)', badge: 'Lv.45+' },
+  ];
+  const bossesInTier = KHMER_BOSS_LIST.filter((b) => b.tier === selectedTier);
 
   const formatBestRush = (ms?: number | null) => {
     if (!ms || ms <= 0) return 'Not cleared yet';
@@ -114,7 +126,7 @@ export const ModeSelectorModal: React.FC<ModeSelectorModalProps> = ({
                 : 'bg-amber-50 text-amber-950 border-amber-900/30 hover:bg-amber-100'
             }`}
           >
-            <Skull className="w-4 h-4" /> Single Boss Raid (6 Bosses)
+            <Skull className="w-4 h-4" /> 4-Tier Pantheon ({KHMER_BOSS_LIST.length} Bosses)
           </button>
           <button
             type="button"
@@ -125,7 +137,7 @@ export const ModeSelectorModal: React.FC<ModeSelectorModalProps> = ({
                 : 'bg-purple-50 text-purple-950 border-purple-700/40 hover:bg-purple-100'
             }`}
           >
-            <Zap className="w-4 h-4 text-yellow-400" /> ⚡ Mythic Boss Rush
+            <Zap className="w-4 h-4 text-yellow-400" /> ⚡ Boss Rush &amp; Grand 16-Rush
           </button>
         </div>
 
@@ -135,10 +147,15 @@ export const ModeSelectorModal: React.FC<ModeSelectorModalProps> = ({
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <div className="font-display font-bold text-base text-amber-300 flex items-center gap-1.5">
-                    <Crown className="w-4 h-4" /> Mythic Boss Rush · 6-Boss Speedrun Gauntlet
+                    <Crown className="w-4 h-4" />{' '}
+                    {rushMode === 'grand_16'
+                      ? 'Grand 16-Boss Pantheon Rush'
+                      : 'Classic 6-Boss Speedrun Gauntlet'}
                   </div>
                   <p className="text-[11px] text-amber-100/90 mt-0.5">
-                    Battle all 6 Khmer Bosses back-to-back with a live Speedrun Timer and a 5-second breather + full heal between fights!
+                    {rushMode === 'grand_16'
+                      ? 'Conquer all 16 Khmer Mythic Bosses back-to-back culminating in Calamity Superboss Rahu!'
+                      : 'Battle the classic 6 Khmer Bosses back-to-back with a live Speedrun Timer & 5s breather heals!'}
                   </p>
                 </div>
                 <div className="px-3 py-1.5 rounded-xl bg-slate-950/70 border border-amber-400/50 text-right">
@@ -151,13 +168,38 @@ export const ModeSelectorModal: React.FC<ModeSelectorModalProps> = ({
                 </div>
               </div>
 
-              <div className="grid sm:grid-cols-3 gap-1.5 text-[10px] font-bold">
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRushMode('classic')}
+                  className={`p-2 rounded-xl border-2 text-left text-xs font-display font-bold transition cursor-pointer ${
+                    rushMode === 'classic'
+                      ? 'bg-amber-500/25 border-yellow-300 text-yellow-200'
+                      : 'bg-white/5 border-white/15 text-amber-100/75 hover:bg-white/10'
+                  }`}
+                >
+                  ⚔️ Classic Boss Rush (6 Bosses)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRushMode('grand_16')}
+                  className={`p-2 rounded-xl border-2 text-left text-xs font-display font-bold transition cursor-pointer ${
+                    rushMode === 'grand_16'
+                      ? 'bg-fuchsia-600/35 border-yellow-300 text-yellow-200 shadow-[0_0_16px_rgba(250,204,21,0.3)]'
+                      : 'bg-white/5 border-white/15 text-amber-100/75 hover:bg-white/10'
+                  }`}
+                >
+                  🌑 Grand 16-Boss Pantheon Rush (+8,000 C!)
+                </button>
+              </div>
+
+              <div className="grid sm:grid-cols-4 gap-1.5 text-[10px] font-bold max-h-36 overflow-y-auto pr-1">
                 {KHMER_BOSS_LIST.map((b, idx) => (
                   <div
                     key={b.id}
-                    className="px-2.5 py-1.5 rounded-xl bg-white/10 border border-amber-300/30 flex items-center gap-1.5"
+                    className="px-2 py-1 rounded-xl bg-white/10 border border-amber-300/30 flex items-center gap-1.5"
                   >
-                    <span className="w-5 h-5 rounded-full bg-amber-400 text-amber-950 flex items-center justify-center shrink-0">
+                    <span className="w-4 h-4 rounded-full bg-amber-400 text-amber-950 flex items-center justify-center shrink-0 text-[9px]">
                       {idx + 1}
                     </span>
                     <span className="truncate">{b.khmerName}</span>
@@ -171,7 +213,9 @@ export const ModeSelectorModal: React.FC<ModeSelectorModalProps> = ({
                 🏆 Boss Rush Clear Jackpot &amp; Speedrun Leaderboard
               </div>
               <div className="flex flex-wrap gap-1.5 text-[10px] font-bold">
-                <span className="px-2 py-1 rounded-lg bg-amber-200 text-amber-950">🪙 +3,000 Coins &amp; +15 Gold</span>
+                <span className="px-2 py-1 rounded-lg bg-amber-200 text-amber-950">
+                  🪙 +{rushMode === 'grand_16' ? '8,000' : '3,000'} Coins &amp; +{rushMode === 'grand_16' ? '35' : '15'} Gold
+                </span>
                 <span className="px-2 py-1 rounded-lg bg-purple-200 text-purple-950">👑 Title: Sovereign of Angkor</span>
                 <span className="px-2 py-1 rounded-lg bg-rose-200 text-rose-950">🪽 Radiant Angkor Sovereign Wings</span>
                 <span className="px-2 py-1 rounded-lg bg-sky-200 text-sky-950">⏱️ Boss Rush Speedrun Hall of Fame</span>
@@ -197,48 +241,97 @@ export const ModeSelectorModal: React.FC<ModeSelectorModalProps> = ({
                   type="button"
                   onClick={() => {
                     onClose();
-                    onEnterBossRush?.(rushDiff);
+                    onEnterBossRush?.(rushDiff, rushMode);
                   }}
                   className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-rose-600 via-purple-700 to-amber-600 hover:brightness-110 text-white border-2 border-amber-300 font-display font-bold text-sm flex items-center gap-2 shadow-lg cursor-pointer"
                 >
-                  <Zap className="w-4 h-4 text-yellow-300" /> LAUNCH MYTHIC BOSS RUSH
+                  <Zap className="w-4 h-4 text-yellow-300" />{' '}
+                  {rushMode === 'grand_16' ? 'LAUNCH GRAND 16-BOSS RUSH' : 'LAUNCH CLASSIC BOSS RUSH'}
                 </button>
               </div>
             </div>
           </div>
         ) : (
           <>
-        {/* 1. BOSS SELECTION */}
-        <div className="space-y-1.5">
-          <div className="font-display font-bold text-xs uppercase text-amber-900 flex items-center gap-1.5">
-            <Skull className="w-4 h-4 text-rose-700" /> 1. Select Khmer Boss
+        {/* 1. 4-TIER BOSS PROGRESSION LADDER */}
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="font-display font-bold text-xs uppercase text-amber-900 flex items-center gap-1.5">
+              <Skull className="w-4 h-4 text-rose-700" /> 1. 4-Tier Khmer Boss Progression Ladder
+            </div>
+            <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-500/40 px-2 py-0.5 rounded-full">
+              Defeated: {player.clearedBosses.length}/{KHMER_BOSS_LIST.length}
+            </span>
           </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+            {TIER_META.map((tm) => {
+              const tierBosses = KHMER_BOSS_LIST.filter((b) => b.tier === tm.tier);
+              const clearedInTier = tierBosses.filter((b) => player.clearedBosses.includes(b.id)).length;
+              const isSelected = selectedTier === tm.tier;
+              return (
+                <button
+                  key={tm.tier}
+                  type="button"
+                  onClick={() => {
+                    setSelectedTier(tm.tier);
+                    if (tierBosses[0]) setSelectedBoss(tierBosses[0].id);
+                  }}
+                  className={`px-2.5 py-2 rounded-xl border-2 text-left transition cursor-pointer ${
+                    isSelected
+                      ? tm.tier === 4
+                        ? 'bg-gradient-to-br from-purple-950 to-slate-950 text-yellow-200 border-yellow-400 shadow'
+                        : 'bg-amber-800 text-amber-50 border-amber-950 shadow'
+                      : 'bg-amber-50 text-amber-950 border-amber-900/25 hover:bg-amber-100'
+                  }`}
+                >
+                  <div className="flex items-center justify-between text-[11px] font-display font-bold">
+                    <span>{tm.label}</span>
+                    <span className="text-[9px] opacity-85">{tm.badge}</span>
+                  </div>
+                  <div className="text-[10px] font-bold opacity-90 truncate">{tm.subtitle}</div>
+                  <div className="text-[9px] opacity-75">
+                    {clearedInTier}/{tierBosses.length} Cleared
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
           <div className="grid sm:grid-cols-2 gap-2.5">
-            {KHMER_BOSS_LIST.map((b) => {
+            {bossesInTier.map((b) => {
               const active = selectedBoss === b.id;
               const cleared = player.clearedBosses.includes(b.id);
               const previewHp = getScaledBossMaxHp(b.id, selectedDiff, 1);
+              const dropsExpanded = expandedDropsBossId === b.id;
 
               return (
-                <button
+                <div
                   key={b.id}
-                  type="button"
                   onClick={() => setSelectedBoss(b.id)}
-                  className={`text-left p-3 rounded-xl border-2 transition flex flex-col gap-1.5 ${
+                  className={`text-left p-3 rounded-xl border-2 transition flex flex-col gap-1.5 cursor-pointer ${
                     active
-                      ? 'bg-amber-100 border-amber-900 ring-2 ring-amber-500 shadow-md'
-                      : 'bg-amber-50/90 border-amber-900/30 hover:bg-white'
+                      ? b.isCalamity
+                        ? 'bg-purple-950/95 text-amber-50 border-yellow-400 ring-2 ring-purple-500 shadow-lg'
+                        : 'bg-amber-100 border-amber-900 ring-2 ring-amber-500 shadow-md'
+                      : b.isCalamity
+                        ? 'bg-slate-950/90 text-amber-100 border-purple-500/60 hover:border-yellow-400'
+                        : 'bg-amber-50/90 border-amber-900/30 hover:bg-white'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <div className="font-display font-bold text-sm text-amber-950">
-                        {b.khmerName}
+                      <div className={`font-display font-bold text-sm flex items-center gap-1.5 ${b.isCalamity ? 'text-yellow-300' : 'text-amber-950'}`}>
+                        <span>{b.trophyIcon}</span>
+                        <span>{b.khmerName}</span>
+                        {cleared && <span className="text-emerald-500" title="Defeated">✓</span>}
                       </div>
-                      <div className="text-[11px] font-bold text-amber-800">{b.englishName}</div>
+                      <div className={`text-[11px] font-bold ${b.isCalamity ? 'text-purple-200' : 'text-amber-800'}`}>
+                        {b.englishName}
+                      </div>
                     </div>
                     <span className="px-2 py-0.5 rounded-lg bg-slate-900 text-amber-300 font-display font-bold text-[10px] shrink-0">
-                      #{b.rosterNumber}
+                      #{b.rosterNumber} · Lv.{b.recommendedLevel}+
                     </span>
                   </div>
 
@@ -247,31 +340,58 @@ export const ModeSelectorModal: React.FC<ModeSelectorModalProps> = ({
                       HP: {previewHp.toLocaleString()}
                     </span>
                     <span className="px-1.5 py-0.5 rounded bg-orange-100 text-orange-900 border border-orange-400/40">
-                      Base ATK: {b.baseAttack}
+                      ATK: {b.baseAttack}
                     </span>
                     <span className="px-1.5 py-0.5 rounded bg-sky-100 text-sky-900 border border-sky-400/40">
-                      {b.rig}
+                      {b.biomeName}
                     </span>
                     {cleared && (
                       <span className="px-1.5 py-0.5 rounded bg-emerald-700 text-white inline-flex items-center gap-0.5">
-                        <Trophy className="w-2.5 h-2.5" /> Cleared
+                        <Trophy className="w-2.5 h-2.5" /> Cleared ✓
                       </span>
                     )}
                   </div>
 
-                  <div className="text-[10px] text-amber-950/90 leading-snug space-y-0.5 pt-0.5 border-t border-amber-900/15">
-                    <div>
-                      <strong>P1:</strong> {b.phase1Summary}
-                    </div>
-                    <div>
-                      <strong>P2:</strong> {b.phase2Summary}
-                    </div>
+                  <div className={`text-[10px] leading-snug space-y-0.5 pt-0.5 border-t ${b.isCalamity ? 'border-purple-700/50 text-purple-100' : 'border-amber-900/15 text-amber-950/90'}`}>
+                    <div><strong>P1:</strong> {b.phase1Summary}</div>
+                    <div><strong>P2:</strong> {b.phase2Summary}</div>
                     {b.phase3Summary && (
-                      <div className="text-rose-900">
+                      <div className={b.isCalamity ? 'text-yellow-300' : 'text-rose-900'}>
                         <strong>P3 (&lt;30%):</strong> {b.phase3Summary}
                       </div>
                     )}
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setExpandedDropsBossId(dropsExpanded ? null : b.id);
+                    }}
+                    className={`text-[10px] font-bold self-start px-2 py-0.5 rounded-lg border cursor-pointer ${
+                      b.isCalamity
+                        ? 'bg-purple-900/70 border-yellow-400/50 text-yellow-200'
+                        : 'bg-white/80 border-amber-800/30 text-amber-900 hover:bg-amber-200/60'
+                    }`}
+                  >
+                    {dropsExpanded ? '▾ Hide Drop Table (%)' : `▸ Drop Table (${b.drops.length} drops)`}
+                  </button>
+
+                  {dropsExpanded && (
+                    <div className={`rounded-lg p-2 space-y-1 text-[10px] border ${b.isCalamity ? 'bg-slate-900/90 border-purple-500/40' : 'bg-white/90 border-amber-900/20'}`}>
+                      {b.drops.map((d) => {
+                        const pct = selectedDiff === 'normal' ? d.chanceNormal : d.chanceExpert;
+                        return (
+                          <div key={`${b.id}_${d.itemId}_${d.label}`} className="flex items-center justify-between gap-2">
+                            <span className="font-bold truncate">{d.label} ×{d.quantity}</span>
+                            <span className="font-mono font-bold text-emerald-600 shrink-0">
+                              {pct >= 0.01 ? `${(pct * 100).toFixed(pct < 0.1 ? 1 : 0)}%` : `${(pct * 100).toFixed(2)}%`}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
 
                   {b.noHitEasterEggHint && (
                     <div className="text-[10px] font-bold text-amber-800 bg-yellow-100/90 border border-yellow-500/60 rounded-lg px-2 py-1 flex items-center gap-1">
@@ -279,7 +399,7 @@ export const ModeSelectorModal: React.FC<ModeSelectorModalProps> = ({
                       <span>{b.noHitEasterEggHint}</span>
                     </div>
                   )}
-                </button>
+                </div>
               );
             })}
           </div>

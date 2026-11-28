@@ -7,7 +7,7 @@ import {
 } from '@shared/types';
 import { calculateDamageTaken, calculatePlayerDamage } from '@shared/balanceFormulas';
 import { computeVillageToDungeonBridge } from '@shared/skillTrees';
-import { BOSS_RUSH_ORDER, KHMER_BOSSES } from '@shared/khmerBosses';
+import { BOSS_RUSH_ORDER, GRAND_BOSS_RUSH_ORDER, KHMER_BOSSES } from '@shared/khmerBosses';
 import { EventBus, type JoystickVector } from '../EventBus';
 import { Player } from '../entities/Player';
 import { BossController } from '../entities/BossController';
@@ -42,7 +42,9 @@ const EXIT_X = 115;
 export class BossRushScene extends Phaser.Scene {
   private initialState: PlayerState = { ...INITIAL_PLAYER_STATE };
   private difficulty: DifficultyMode = 'mythic';
-  private stageIndex = 0; // 0..5
+  private rushMode: 'classic' | 'grand_16' = 'classic';
+  private activeOrder: BossId[] = BOSS_RUSH_ORDER;
+  private stageIndex = 0;
   private runStartedAt = 0;
   private breatherEndsAt = 0;
   private inBreather = false;
@@ -97,8 +99,10 @@ export class BossRushScene extends Phaser.Scene {
     super('BossRushScene');
   }
 
-  init(data?: { playerState?: PlayerState; difficulty?: DifficultyMode }): void {
+  init(data?: { playerState?: PlayerState; difficulty?: DifficultyMode; rushMode?: 'classic' | 'grand_16' }): void {
     this.difficulty = data?.difficulty ?? 'mythic';
+    this.rushMode = data?.rushMode ?? 'classic';
+    this.activeOrder = this.rushMode === 'grand_16' ? GRAND_BOSS_RUSH_ORDER : BOSS_RUSH_ORDER;
     this.initialState = data?.playerState
       ? {
           ...data.playerState,
@@ -338,7 +342,8 @@ export class BossRushScene extends Phaser.Scene {
   private spawnBossStage(idx: number): void {
     this.bossCtrl?.destroy();
     this.stageIndex = idx;
-    const bossId: BossId = BOSS_RUSH_ORDER[idx];
+    const totalStages = this.activeOrder.length;
+    const bossId: BossId = this.activeOrder[idx];
     const def = KHMER_BOSSES[bossId];
 
     this.bossCtrl = new BossController(
@@ -356,7 +361,7 @@ export class BossRushScene extends Phaser.Scene {
           this.spawnFloatingText(x, y, text, color, fontSize ?? '16px'),
         onPhaseChange: (phase) => {
           EventBus.emit('ui:toast', {
-            text: `⚡ Boss Rush ${idx + 1}/6 — ${def.khmerName} entered PHASE ${phase}!`,
+            text: `⚡ Boss Rush ${idx + 1}/${totalStages} — ${def.khmerName} entered PHASE ${phase}!`,
           });
           this.broadcastBossRushHud();
         },
@@ -364,8 +369,9 @@ export class BossRushScene extends Phaser.Scene {
       }
     );
 
-    // Boss Rush pacing: tune HP slightly (65%) so 6 consecutive bosses are thrilling & speedrunnable!
-    this.bossCtrl.maxHp = Math.max(1200, Math.round(this.bossCtrl.maxHp * 0.65));
+    // Boss Rush pacing: tune HP slightly (65% classic / 52% Grand 16-Boss) so full speedruns feel brisk & thrilling!
+    const hpMult = this.rushMode === 'grand_16' ? 0.52 : 0.65;
+    this.bossCtrl.maxHp = Math.max(1200, Math.round(this.bossCtrl.maxHp * hpMult));
     this.bossCtrl.hp = this.bossCtrl.maxHp;
 
     this.breatherBanner.setVisible(false);
@@ -374,7 +380,7 @@ export class BossRushScene extends Phaser.Scene {
     this.spawnFloatingText(
       BOSS_SPAWN_X,
       FLOOR_Y - 190,
-      `STAGE ${idx + 1}/6 · ${def.khmerName}`,
+      `STAGE ${idx + 1}/${totalStages} · ${def.khmerName}`,
       '#fde047',
       '20px'
     );
@@ -383,7 +389,7 @@ export class BossRushScene extends Phaser.Scene {
 
   private handleStageBossDefeated(): void {
     soundManager.playSfx('victory');
-    const clearedId = BOSS_RUSH_ORDER[this.stageIndex];
+    const clearedId = this.activeOrder[this.stageIndex];
     if (!this.player.state.clearedBosses.includes(clearedId)) {
       this.player.state.clearedBosses = [...this.player.state.clearedBosses, clearedId];
     }
@@ -394,21 +400,26 @@ export class BossRushScene extends Phaser.Scene {
       amount: 1,
     });
 
-    // Final Boss #6 cleared -> BOSS RUSH VICTORY!
-    if (this.stageIndex >= BOSS_RUSH_ORDER.length - 1) {
+    // Final Boss cleared -> BOSS RUSH VICTORY!
+    if (this.stageIndex >= this.activeOrder.length - 1) {
       this.completed = true;
       const elapsedMs = Math.max(1000, Date.now() - this.runStartedAt);
       const secStr = this.formatSpeedrun(elapsedMs);
+      const isGrand = this.rushMode === 'grand_16';
       vfxManager.playLevelUpLightPillar(this, this.player.x, this.player.y);
       this.breatherBanner
-        .setText(`👑 MYTHIC BOSS RUSH CLEARED IN ${secStr}!\n+3,000 Coins · +15 Gold · Sovereign of Angkor Title & Radiant Wings!`)
+        .setText(
+          isGrand
+            ? `👑 GRAND 16-BOSS PANTHEON RUSH CLEARED IN ${secStr}!\n+8,000 Coins · +35 Gold · Pantheon Legend Glory!`
+            : `👑 MYTHIC BOSS RUSH CLEARED IN ${secStr}!\n+3,000 Coins · +15 Gold · Sovereign of Angkor Title & Radiant Wings!`
+        )
         .setVisible(true);
 
       EventBus.emit('bossRush:completed', {
         elapsedMs,
         difficulty: this.difficulty,
-        coins: 3000,
-        gold: 15,
+        coins: isGrand ? 8000 : 3000,
+        gold: isGrand ? 35 : 15,
         unlockedSovereignTitle: true,
         unlockedSovereignWings: true,
       });

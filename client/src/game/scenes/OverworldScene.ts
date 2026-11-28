@@ -595,8 +595,8 @@ export class OverworldScene extends Phaser.Scene {
       EventBus.on('dungeon:enterRequest', ({ bossId, difficulty, partyMode, partyId }) => {
         this.enterDungeon(bossId, difficulty, partyMode ?? 'solo', partyId);
       }),
-      EventBus.on('bossRush:enterRequest', ({ difficulty }) => {
-        this.enterBossRush(difficulty);
+      EventBus.on('bossRush:enterRequest', ({ difficulty, rushMode }) => {
+        this.enterBossRush(difficulty, rushMode);
       }),
       EventBus.on('worldBoss:enterRequest', () => {
         this.enterWorldBossRaid();
@@ -6135,13 +6135,14 @@ export class OverworldScene extends Phaser.Scene {
     });
   }
 
-  private enterBossRush(difficulty: DifficultyMode = 'normal'): void {
+  private enterBossRush(difficulty: DifficultyMode = 'normal', rushMode: 'classic' | 'grand_16' = 'classic'): void {
     if (this.transitioning) return;
     this.transitioning = true;
     this.cameras.main.fadeOut(220, 14, 6, 22);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
       this.scene.start('BossRushScene', {
         difficulty,
+        rushMode,
         playerState: {
           ...this.player.state,
           zone: 'dungeon',

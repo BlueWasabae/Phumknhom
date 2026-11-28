@@ -64,7 +64,22 @@ interface TowerProjectile {
   gfx: Phaser.GameObjects.Arc;
 }
 
-const BOSS_CYCLE: BossId[] = ['sdech_kongkaeb', 'arp_prey_chrov', 'yeak_thmor', 'neak_reach'];
+const BOSS_CYCLE: BossId[] = [
+  'sdech_kongkaeb',
+  'arp_prey_chrov',
+  'preay_krola_plerng',
+  'yeak_thmor',
+  'kropeu_neang_kheng',
+  'apsara_srong',
+  'reachsey',
+  'neak_reach',
+  'garuda',
+  'kala',
+  'preah_ko_preah_keo',
+  'ream_eyso_moni_mekhala',
+  'krong_reap',
+  'rahu',
+];
 
 /**
  * Update 1.4 — Endless 50-Floor Pagoda Tower Scene (Side-Scrolling Gauntlet & Mythic Boss Floors)
