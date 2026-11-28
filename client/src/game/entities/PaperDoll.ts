@@ -1262,17 +1262,44 @@ export class PaperDoll extends Phaser.GameObjects.Container {
     this.bodySprite.setRotation(emoteRot);
     this.bodySprite.setScale(emoteScaleX, emoteScaleY);
 
-    // Update 3.1 — Glowing Kun Khmer Champion Sash vanity waist belt!
-    const hasChampionSash = (this.loadout.accessories ?? []).includes('acc_kun_khmer_champion_sash');
-    if (hasChampionSash) {
+    // Update 3.1/3.2 — Glowing Kun Khmer Champion Sash, Sbek Thom Shadow Puppet Aura & Golden Abacus!
+    const accListNow = this.loadout.accessories ?? [];
+    const hasChampionSash = accListNow.includes('acc_kun_khmer_champion_sash');
+    const hasGoldenAbacus = accListNow.includes('acc_golden_abacus');
+    const hasSbekThomAura = this.loadout.wings === 'wings_sbek_thom_aura';
+    if (hasChampionSash || hasGoldenAbacus || hasSbekThomAura) {
       const shimmer = 0.72 + Math.sin(time / 180) * 0.25;
       this.championSashGfx.clear().setVisible(true);
-      this.championSashGfx.fillStyle(0xdc2626, 0.95);
-      this.championSashGfx.fillRoundedRect(-8, -12 + vertBob, 16, 4.5, 1.5);
-      this.championSashGfx.fillStyle(0xfacc15, shimmer);
-      this.championSashGfx.fillRect(-3.5, -12.5 + vertBob, 7, 5.5);
-      this.championSashGfx.lineStyle(1.2, 0xfef08a, shimmer);
-      this.championSashGfx.strokeRoundedRect(-8.5, -12.5 + vertBob, 17, 5.5, 2);
+      if (hasSbekThomAura) {
+        // Animated backlit Sbek Thom shadow-puppet firelight ring + drifting embers!
+        this.championSashGfx.lineStyle(2.2, 0xf97316, 0.55 + Math.sin(time / 160) * 0.25);
+        this.championSashGfx.strokeCircle(0, -18 + vertBob, 18 + Math.sin(time / 240) * 1.5);
+        for (let i = 0; i < 4; i++) {
+          const ang = time * 0.0028 + (Math.PI * 2 * i) / 4;
+          const ex = Math.cos(ang) * 18;
+          const ey = -18 + vertBob + Math.sin(ang) * 14;
+          this.championSashGfx.fillStyle(i % 2 === 0 ? 0xfef08a : 0x1c0a03, 0.85);
+          this.championSashGfx.fillCircle(ex, ey, i % 2 === 0 ? 2.2 : 2.8);
+        }
+      }
+      if (hasChampionSash) {
+        this.championSashGfx.fillStyle(0xdc2626, 0.95);
+        this.championSashGfx.fillRoundedRect(-8, -12 + vertBob, 16, 4.5, 1.5);
+        this.championSashGfx.fillStyle(0xfacc15, shimmer);
+        this.championSashGfx.fillRect(-3.5, -12.5 + vertBob, 7, 5.5);
+        this.championSashGfx.lineStyle(1.2, 0xfef08a, shimmer);
+        this.championSashGfx.strokeRoundedRect(-8.5, -12.5 + vertBob, 17, 5.5, 2);
+      }
+      if (hasGoldenAbacus) {
+        // Golden merchant abacus charm bobbing at waist
+        this.championSashGfx.fillStyle(0xb45309, 0.95);
+        this.championSashGfx.fillRoundedRect(-11, -13 + vertBob, 6, 5, 1);
+        this.championSashGfx.lineStyle(1, 0xfacc15, shimmer);
+        this.championSashGfx.strokeRoundedRect(-11, -13 + vertBob, 6, 5, 1);
+        this.championSashGfx.fillStyle(0xfef08a, 1);
+        this.championSashGfx.fillRect(-9.5, -11.5 + vertBob, 1.5, 2);
+        this.championSashGfx.fillRect(-7, -11.5 + vertBob, 1.5, 2);
+      }
     } else if (this.championSashGfx.visible) {
       this.championSashGfx.clear().setVisible(false);
     }

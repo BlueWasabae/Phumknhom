@@ -1510,13 +1510,17 @@ export const App: React.FC = () => {
           return { state: prev, ok: false, message: `Need ${charged} Coins to reforge.` };
         }
         const nextCoins = prev.currencies.coins - charged;
+        let nextState: PlayerState = {
+          ...prev,
+          coins: nextCoins,
+          currencies: { ...prev.currencies, coins: nextCoins },
+          ...(category === 'weapon' ? { weaponPrefix: mod.id } : { armorPrefix: mod.id }),
+        };
+        if (category === 'weapon') {
+          nextState = advanceReamkerQuestProgress(nextState, 'weapon_forge_or_reforge', 1).state;
+        }
         return {
-          state: {
-            ...prev,
-            coins: nextCoins,
-            currencies: { ...prev.currencies, coins: nextCoins },
-            ...(category === 'weapon' ? { weaponPrefix: mod.id } : { armorPrefix: mod.id }),
-          },
+          state: nextState,
           ok: true,
           message: `🔨 Reforged ${category} → ${mod.name} (${mod.summary}) [-${charged}c]!`,
         };
@@ -2233,14 +2237,17 @@ export const App: React.FC = () => {
             inventory: nextInv,
             activeTreasureMap: nextTreasureMap,
           };
-          const xpRes = awardSkillXp(withLoot, skillId, xp);
+          let finalState = awardSkillXp(withLoot, skillId, xp).state;
+          if (skillId === 'foraging' || itemId === 'mat_spirit_bamboo_heart') {
+            finalState = advanceReamkerQuestProgress(finalState, 'bamboo_gather', 1).state;
+          }
           if (skillId === 'mining') {
             window.setTimeout(() => {
               EventBus.emit('bounty:progress', { category: 'mine_ores', amount: 1 });
             }, 0);
           }
           return {
-            state: xpRes.state,
+            state: finalState,
             ok: true,
             message: `${label}${mapNote}${chaseNote}`,
           };
@@ -3015,6 +3022,13 @@ export const App: React.FC = () => {
             },
           };
           nextState = awardSkillXp(nextState, 'fishing', res.fishingXp).state;
+          if (res.seaPearls > 0 || res.ancientPearls > 0) {
+            nextState = advanceReamkerQuestProgress(
+              nextState,
+              'rare_fish_or_pearl',
+              res.seaPearls + res.ancientPearls
+            ).state;
+          }
           return {
             state: nextState,
             ok: true,
