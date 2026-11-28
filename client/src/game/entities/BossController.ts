@@ -774,10 +774,27 @@ export class BossController {
       this.startWindup('yellow', windup, overdrive ? '⚡ STORM OVERDRIVE PHKAK!' : '⚡ LIGHTNING AXE THROW!', () => {
         this.stage = 'active';
         const axe = this.scene.add.container(this.x + dir * 24, this.floorY - 62).setDepth(64);
-        const glow = this.scene.add.circle(0, 0, 26, 0xfacc15, 0.36).setBlendMode(Phaser.BlendModes.ADD);
-        const blade = this.scene.add.rectangle(0, 0, 38, 12, 0xfef08a, 0.98).setStrokeStyle(2, 0xd97706);
-        const edge = this.scene.add.triangle(16, 0, 0, -14, 14, 0, 0, 14, 0xfacc15, 1);
-        axe.add([glow, blade, edge]);
+        const glow = this.scene.add.circle(0, 0, 28, 0xfacc15, 0.34).setBlendMode(Phaser.BlendModes.ADD);
+        axe.add(glow);
+        if (this.scene.textures.exists('vfx_lightning_burst') && this.scene.anims.exists('vfx_lightning_burst_anim')) {
+          const spark = this.scene.add
+            .sprite(0, 0, 'vfx_lightning_burst', 0)
+            .setScale(1.4)
+            .setBlendMode(Phaser.BlendModes.ADD)
+            .play({ key: 'vfx_lightning_burst_anim', repeat: -1 });
+          axe.add(spark);
+        }
+        if (this.scene.textures.exists('wp_axe')) {
+          const axeSpr = this.scene.add.image(0, 0, 'wp_axe').setScale(2.7).setTint(0xfde047);
+          axe.add(axeSpr);
+        } else {
+          const axeGfx = this.scene.add.graphics();
+          axeGfx.fillStyle(0xfef08a, 1);
+          axeGfx.fillRoundedRect(-18, -4, 34, 8, 3);
+          axeGfx.fillStyle(0xfacc15, 1);
+          axeGfx.fillCircle(14, 0, 12);
+          axe.add(axeGfx);
+        }
         vfxManager.applyGlow(this.scene, axe, 0xfacc15, 3.2, 0.45);
 
         const nowMs = this.scene.time.now;
@@ -1189,10 +1206,41 @@ export class BossController {
         for (let i = 0; i < toSpawn; i++) {
           const spawnDir = i === 0 ? dir : -dir;
           const tad = this.scene.add.container(this.x + spawnDir * 44, this.floorY - 38).setDepth(56);
-          const body = this.scene.add.circle(0, 0, 14, 0x22c55e, 1).setStrokeStyle(2, 0x052e16);
-          const eye = this.scene.add.circle(spawnDir * 5, -4, 3.5, 0xfef08a, 1);
-          const tail = this.scene.add.triangle(-spawnDir * 14, 2, -6, -6, 6, 0, -6, 6, 0x15803d, 1);
-          tad.add([tail, body, eye]);
+          if (this.scene.textures.exists('vfx_poison_orb') && this.scene.anims.exists('vfx_poison_orb_anim')) {
+            const aura = this.scene.add
+              .sprite(0, 0, 'vfx_poison_orb', 0)
+              .setScale(1.15)
+              .setAlpha(0.75)
+              .setBlendMode(Phaser.BlendModes.ADD)
+              .play('vfx_poison_orb_anim');
+            tad.add(aura);
+          }
+          // Detailed pixel-art swamp froglet minion with crouched legs, spotted back & glowing golden eyes
+          const frogGfx = this.scene.add.graphics();
+          frogGfx.fillStyle(0x14532d, 1);
+          frogGfx.fillRoundedRect(-14, 2, 10, 8, 3);
+          frogGfx.fillRoundedRect(4, 2, 10, 8, 3);
+          frogGfx.fillStyle(0x16a34a, 1);
+          frogGfx.fillEllipse(0, 0, 26, 20);
+          frogGfx.lineStyle(2, 0x052e16, 1);
+          frogGfx.strokeEllipse(0, 0, 26, 20);
+          frogGfx.fillStyle(0x86efac, 0.9);
+          frogGfx.fillEllipse(0, 4, 15, 7);
+          frogGfx.fillStyle(0x15803d, 1);
+          frogGfx.fillCircle(-6, -5, 3);
+          frogGfx.fillCircle(4, -6, 2.5);
+          // Raised amphibian eyes + tiny brass crown glint
+          frogGfx.fillStyle(0x22c55e, 1);
+          frogGfx.fillCircle(spawnDir * 6 - 3, -9, 4.5);
+          frogGfx.fillCircle(spawnDir * 6 + 3, -9, 4.5);
+          frogGfx.fillStyle(0xfef08a, 1);
+          frogGfx.fillCircle(spawnDir * 6 - 3, -9, 2.6);
+          frogGfx.fillCircle(spawnDir * 6 + 3, -9, 2.6);
+          frogGfx.fillStyle(0x09090b, 1);
+          frogGfx.fillCircle(spawnDir * 7 - 3, -9, 1.2);
+          frogGfx.fillCircle(spawnDir * 7 + 3, -9, 1.2);
+          tad.add(frogGfx);
+          vfxManager.applyGlow(this.scene, tad, 0x22c55e, 1.6, 0.25);
 
           this.hazards.push({
             kind: 'tadpole',
@@ -1201,16 +1249,17 @@ export class BossController {
             y: this.floorY - 38,
             vx: spawnDir * (145 + i * 35) * this.speedMult,
             vy: -280,
-            width: 28,
+            width: 30,
             height: 28,
             damage: Math.round(this.def.baseAttack * 0.7),
             expiresAt: now + 9500,
             hp: 120,
             alive: true,
-            label: 'Mini Tadpole',
+            label: 'Swamp Froglet',
           });
         }
-        this.callbacks.onFloatingText(this.x, this.floorY - 130, 'Mini Tadpoles Spawned!', '#4ade80', '14px');
+        vfxManager.playSpriteVfx(this.scene, 'vfx_poison_orb', this.x, this.floorY - 52, { scale: 1.5, additive: true, depth: 62 });
+        this.callbacks.onFloatingText(this.x, this.floorY - 130, 'Swamp Froglets Spawned!', '#4ade80', '14px');
         this.nextStateAt = this.scene.time.now + 300;
         this.pendingAction = () => this.enterRecovery(880);
       });
@@ -1407,7 +1456,47 @@ export class BossController {
         this.sprite.clearTint();
         this.scene.cameras.main.shake(150, 0.007);
         for (const bx of dropXs) {
-          const rock = this.scene.add.circle(bx, 110, 22, 0x78716c, 1).setStrokeStyle(3, 0xf59e0b).setDepth(60);
+          const rock = this.scene.add.container(bx, 110).setDepth(60);
+          if (this.scene.textures.exists('vfx_fire_trail') && this.scene.anims.exists('vfx_fire_trail_anim')) {
+            const trail = this.scene.add
+              .sprite(0, -18, 'vfx_fire_trail', 0)
+              .setScale(1.1)
+              .setAngle(-90)
+              .setBlendMode(Phaser.BlendModes.ADD)
+              .play({ key: 'vfx_fire_trail_anim', repeat: -1 });
+            rock.add(trail);
+          }
+          const rg = this.scene.add.graphics();
+          rg.fillStyle(0x44403c, 1);
+          rg.fillPoints(
+            [
+              new Phaser.Geom.Point(-18, -10),
+              new Phaser.Geom.Point(-6, -22),
+              new Phaser.Geom.Point(14, -16),
+              new Phaser.Geom.Point(22, 2),
+              new Phaser.Geom.Point(12, 20),
+              new Phaser.Geom.Point(-12, 18),
+              new Phaser.Geom.Point(-22, 4),
+            ],
+            true
+          );
+          rg.lineStyle(2.5, 0xf59e0b, 0.95);
+          rg.strokePoints(
+            [
+              new Phaser.Geom.Point(-18, -10),
+              new Phaser.Geom.Point(-6, -22),
+              new Phaser.Geom.Point(14, -16),
+              new Phaser.Geom.Point(22, 2),
+              new Phaser.Geom.Point(12, 20),
+              new Phaser.Geom.Point(-12, 18),
+              new Phaser.Geom.Point(-22, 4),
+            ],
+            true
+          );
+          rg.lineStyle(2, 0xfef08a, 0.85);
+          rg.lineBetween(-8, -8, 4, 2);
+          rg.lineBetween(4, 2, -2, 12);
+          rock.add(rg);
           this.hazards.push({
             kind: 'boulder',
             sprite: rock,
@@ -1420,7 +1509,7 @@ export class BossController {
             damage: Math.round(this.def.baseAttack * 0.95),
             expiresAt: this.scene.time.now + 2400,
             alive: true,
-            label: 'Falling Ceiling Boulder',
+            label: 'Falling Laterite Boulder',
           });
         }
         this.nextStateAt = this.scene.time.now + 450;
@@ -1784,10 +1873,41 @@ export class BossController {
         }
       }
 
-      // Sync Boss Visual Position & Aura Lights
+      // Sync Boss Visual Position, Living Stage Animations & Aura Lights
       const isAirborne = this.def.rig === 'FloaterRig' || this.def.rig === 'MultiSegmentWormRig';
-      const breathe = this.stage === 'idle' || this.stage === 'recovery' ? Math.sin(time / 290) * (isAirborne ? 7 : 3) : 0;
-      this.sprite.setPosition(this.x, this.y + breathe);
+      const breathe = this.stage === 'idle' || this.stage === 'recovery' ? Math.sin(time / 270) * (isAirborne ? 8 : 3.2) : 0;
+      const windupShakeX = this.stage === 'windup' ? Math.sin(time * 0.065) * 4.5 : 0;
+      this.sprite.setPosition(this.x + windupShakeX, this.y + breathe);
+
+      // Living boss squash-and-stretch / anticipation crouch / attack lunge / recovery stagger animations!
+      if (!this.isLeaping && !this.isSpinning) {
+        if (this.stage === 'windup') {
+          const pulse = Math.sin(time * 0.03) * 0.06;
+          this.sprite.setScale(this.baseScale * (1.1 + pulse), this.baseScale * (0.88 - pulse));
+          this.sprite.setRotation((this.sprite.flipX ? -1 : 1) * 0.07);
+        } else if (this.stage === 'active') {
+          const lunge = Math.sin(time * 0.025) * 0.05;
+          this.sprite.setScale(this.baseScale * (0.94 + lunge), this.baseScale * (1.1 + Math.abs(lunge)));
+          this.sprite.setRotation((this.sprite.flipX ? 1 : -1) * 0.09);
+        } else if (this.stage === 'recovery') {
+          const sway = Math.sin(time * 0.012) * 0.08;
+          this.sprite.setScale(this.baseScale * 1.05, this.baseScale * 0.94);
+          this.sprite.setRotation(sway);
+        } else if (this.stage === 'phase_roar') {
+          const roar = Math.sin(time * 0.04) * 0.1;
+          this.sprite.setScale(this.baseScale * (1.14 + roar), this.baseScale * (1.14 - roar * 0.5));
+          this.sprite.setRotation(0);
+        } else {
+          // Idle living breath cycle
+          const breathWave = Math.sin(time / 320);
+          this.sprite.setScale(
+            this.baseScale * (1 + breathWave * 0.035),
+            this.baseScale * (1 - breathWave * 0.035)
+          );
+          this.sprite.setRotation(isAirborne ? Math.sin(time * 0.004) * 0.06 : Math.sin(time / 440) * 0.025);
+        }
+      }
+
       this.shadow.setPosition(this.x, this.floorY - 2);
       const heightFactor = Math.max(0.35, 1 - (this.floorY - this.y) / 390);
       this.shadow.setScale(heightFactor, heightFactor);

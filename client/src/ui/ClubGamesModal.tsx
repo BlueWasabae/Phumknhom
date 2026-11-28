@@ -3,14 +3,17 @@ import type { PlayerState } from '@shared/types';
 import {
   CLUB_PVP_TABLES,
   OUK_PIECE_META,
+  applyBayKhomMove,
   applyOukMove,
   canBeatTienLenCombo,
   classifyTienLenCombo,
   createAuthenticOukBoard,
+  createInitialBayKhomBoard,
   dealAuthenticTienLen,
   getAuthenticOukLegalMoves,
   hasAnyLegalOukMove,
   isOukKingInCheck,
+  type BayKhomBoardState,
   type OukBoard,
   type OukPiece,
   type OukPieceKind,
@@ -24,7 +27,7 @@ import { roomClient } from '../game/network/RoomClient';
 import { CheckCircle2, Coins, Crown, Dices, RotateCcw, Spade, Trophy, Users } from 'lucide-react';
 import { NativeDialog } from './NativeDialog';
 
-export type ClubGameTab = 'kla_klok' | 'ouk_chaktrang' | 'tien_len';
+export type ClubGameTab = 'kla_klok' | 'ouk_chaktrang' | 'tien_len' | 'bay_khom';
 
 interface ClubGamesModalProps {
   open: boolean;
@@ -65,7 +68,7 @@ interface LiveClubSeat {
 
 interface LiveClubTable {
   tableId: string;
-  game: 'tien_len' | 'ouk_chaktrang';
+  game: 'tien_len' | 'ouk_chaktrang' | 'bay_khom';
   stakeCoins: number;
   maxSeats: number;
   status: 'waiting' | 'playing' | 'finished';
@@ -79,6 +82,7 @@ interface LiveClubTable {
   mustIncludeThreeSpades: boolean;
   oukBoardJson: string | null;
   oukTurnSide: OukSide;
+  bayKhomJson?: string | null;
 }
 
 /**
@@ -217,6 +221,9 @@ export const ClubGamesModal: React.FC<ClubGamesModalProps> = ({
   const [localTl, setLocalTl] = useState<LocalTienLenState | null>(null);
   const [localOuk, setLocalOuk] = useState<LocalOukState | null>(null);
   const [oukSelectedSq, setOukSelectedSq] = useState<[number, number] | null>(null);
+  // Update 3.4 — Bay Khom (10-Hole 42-Seed Khmer Mancala) state
+  const [bayKhomBoard, setBayKhomBoard] = useState<BayKhomBoardState>(() => createInitialBayKhomBoard());
+  const [localBayKhomActive, setLocalBayKhomActive] = useState(false);
 
   // ---- Kla Klok state (Preserved As-Is!) ----
   const [chipSize, setChipSize] = useState<number>(50);
@@ -672,6 +679,22 @@ export const ClubGamesModal: React.FC<ClubGamesModalProps> = ({
             }`}
           >
             <Crown className="w-3.5 h-3.5" /> Ouk Chaktrang (Khmer Chess PvP)
+          </button>
+          <button
+            id="tab-club-baykhom"
+            type="button"
+            onClick={() => {
+              soundManager.playSfx('click');
+              setTab('bay_khom');
+              setSelectedTableId('bk_50');
+            }}
+            className={`px-3 py-1.5 rounded-xl font-display font-bold text-xs border-2 flex items-center gap-1.5 cursor-pointer ${
+              tab === 'bay_khom'
+                ? 'bg-orange-800 text-amber-50 border-amber-950'
+                : 'bg-amber-50 text-amber-950 border-amber-900/30'
+            }`}
+          >
+            🥣 Bay Khom (10-Hole Mancala PvP)
           </button>
         </div>
 
@@ -1164,6 +1187,142 @@ export const ClubGamesModal: React.FC<ClubGamesModalProps> = ({
                   ))}
                 </div>
               </div>
+            </div>
+          )}
+          {/* ==================== TAB 4 (UPDATE 3.4): BAY KHOM (10-HOLE 42-SEED KHMER MANCALA PVP) ==================== */}
+          {tab === 'bay_khom' && (
+            <div className="space-y-3">
+              {(() => {
+                const liveBk: BayKhomBoardState | null = activeLiveTable?.bayKhomJson
+                  ? (() => {
+                      try {
+                        return JSON.parse(activeLiveTable.bayKhomJson) as BayKhomBoardState;
+                      } catch {
+                        return null;
+                      }
+                    })()
+                  : null;
+                const board = localBayKhomActive ? bayKhomBoard : (liveBk ?? bayKhomBoard);
+                const totalOnBoard = board.holes.reduce((a, b) => a + b, 0);
+                const handleSow = (holeIdx: number) => {
+                  const next = applyBayKhomMove(board, holeIdx);
+                  if (!next) {
+                    soundManager.playSfx('hit');
+                    return;
+                  }
+                  soundManager.playSfx('coin');
+                  if (localBayKhomActive || !activeLiveTable || activeLiveTable.status !== 'playing') {
+                    setLocalBayKhomActive(true);
+                    setBayKhomBoard(next);
+                    if (next.winner === 0) {
+                      soundManager.playSfx('victory');
+                      onWinClubReward(activeCfg?.stakeCoins ?? 50, 10, `🥣 Won Bay Khom (+${activeCfg?.stakeCoins ?? 50} C)!`);
+                    }
+                  } else {
+                    setBayKhomBoard(next);
+                    roomClient.sendClubMessage('bayKhomMove', {
+                      tableId: activeLiveTable.tableId,
+                      boardJson: JSON.stringify(next),
+                      winnerIdx: next.winner === 0 || next.winner === 1 ? next.winner : null,
+                      summary: next.lastAction,
+                    });
+                  }
+                };
+
+                return (
+                  <div className="p-4 rounded-2xl bg-[#5c3214] border-4 border-[#3a1d09] shadow-xl space-y-3 text-amber-50">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <h3 className="font-display font-bold text-sm text-yellow-200">
+                          🥣 បាយខុម · Authentic 10-Hole Khmer Mancala (42 Seeds · Strictly PvP)
+                        </h3>
+                        <p className="text-[11px] text-amber-200/90">{board.lastAction}</p>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs font-bold">
+                        <span className="px-2.5 py-1 rounded-lg bg-amber-950/80 border border-amber-500/40">
+                          P1 Store: {board.stores[0]} · P2 Store: {board.stores[1]} · Board: {totalOnBoard}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLocalBayKhomActive(true);
+                            setBayKhomBoard(createInitialBayKhomBoard());
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-amber-500 text-amber-950 hover:bg-amber-400 cursor-pointer"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5 inline mr-1" /> New 2P Table
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Carved Oval 10-Hole Wooden Board: End-Tip #0 (5 seeds), Top Side #9..#6 (P2), Bottom Side #1..#4 (P1), End-Tip #5 (5 seeds) */}
+                    <div
+                      id="bay-khom-oval-board"
+                      className="rounded-full bg-gradient-to-b from-[#9a5b2b] to-[#6f3e19] border-4 border-[#3d200c] px-4 py-4 grid grid-cols-[64px_1fr_64px] items-center gap-3 shadow-inner"
+                    >
+                      {/* West End-Tip Hole #0 (5 Seeds) */}
+                      <div className="h-24 rounded-full bg-[#3a1e0b] border-2 border-amber-400/70 flex flex-col items-center justify-center shadow-inner">
+                        <span className="text-[10px] font-bold text-amber-300">TIP #0</span>
+                        <span className="text-xl font-display font-bold text-yellow-300">{board.holes[0]}</span>
+                        <span className="text-[9px] text-amber-200/80">seeds</span>
+                      </div>
+
+                      {/* 8 Side Holes: Top row (P2: 9,8,7,6) & Bottom row (P1: 1,2,3,4) */}
+                      <div className="space-y-2.5">
+                        <div className="grid grid-cols-4 gap-2">
+                          {[9, 8, 7, 6].map((hIdx) => {
+                            const playable = board.turn === 1 && board.holes[hIdx] > 0 && board.winner === null;
+                            return (
+                              <button
+                                key={hIdx}
+                                type="button"
+                                disabled={!playable}
+                                onClick={() => handleSow(hIdx)}
+                                className={`h-14 rounded-2xl border-2 flex flex-col items-center justify-center transition ${
+                                  playable
+                                    ? 'bg-[#45240e] border-yellow-300 hover:bg-[#5c3114] cursor-pointer shadow-[0_0_10px_rgba(250,204,21,0.3)]'
+                                    : 'bg-[#331a09] border-amber-900/60 opacity-85 cursor-not-allowed'
+                                }`}
+                              >
+                                <span className="text-[9px] text-amber-300/80">P2 · #{hIdx}</span>
+                                <span className="text-base font-display font-bold text-amber-50">{board.holes[hIdx]}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <div className="grid grid-cols-4 gap-2">
+                          {[1, 2, 3, 4].map((hIdx) => {
+                            const playable = board.turn === 0 && board.holes[hIdx] > 0 && board.winner === null;
+                            return (
+                              <button
+                                key={hIdx}
+                                type="button"
+                                disabled={!playable}
+                                onClick={() => handleSow(hIdx)}
+                                className={`h-14 rounded-2xl border-2 flex flex-col items-center justify-center transition ${
+                                  playable
+                                    ? 'bg-[#45240e] border-emerald-300 hover:bg-[#5c3114] cursor-pointer shadow-[0_0_10px_rgba(52,211,153,0.35)]'
+                                    : 'bg-[#331a09] border-amber-900/60 opacity-85 cursor-not-allowed'
+                                }`}
+                              >
+                                <span className="text-[9px] text-emerald-300/90">P1 · #{hIdx}</span>
+                                <span className="text-base font-display font-bold text-amber-50">{board.holes[hIdx]}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* East End-Tip Hole #5 (5 Seeds) */}
+                      <div className="h-24 rounded-full bg-[#3a1e0b] border-2 border-amber-400/70 flex flex-col items-center justify-center shadow-inner">
+                        <span className="text-[10px] font-bold text-amber-300">TIP #5</span>
+                        <span className="text-xl font-display font-bold text-yellow-300">{board.holes[5]}</span>
+                        <span className="text-[9px] text-amber-200/80">seeds</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           )}
         </div>

@@ -26,7 +26,7 @@ interface SeatedPlayer {
 
 interface ServerClubTable {
   tableId: string;
-  game: 'tien_len' | 'ouk_chaktrang';
+  game: 'tien_len' | 'ouk_chaktrang' | 'bay_khom';
   stakeCoins: number;
   maxSeats: number;
   status: 'waiting' | 'playing' | 'finished';
@@ -44,15 +44,19 @@ interface ServerClubTable {
   // Ouk Chaktrang shared board JSON
   oukBoardJson: string | null;
   oukTurnSide: 'w' | 'b';
+  // Update 3.4 — Bay Khom (Khmer Mancala) 10-hole 42-seed board JSON
+  bayKhomJson?: string | null;
 }
 
-const TABLE_SPECS: Array<{ tableId: string; game: 'tien_len' | 'ouk_chaktrang'; stakeCoins: number; maxSeats: number }> = [
+const TABLE_SPECS: Array<{ tableId: string; game: 'tien_len' | 'ouk_chaktrang' | 'bay_khom'; stakeCoins: number; maxSeats: number }> = [
   { tableId: 'tl_50', game: 'tien_len', stakeCoins: 50, maxSeats: 4 },
   { tableId: 'tl_200', game: 'tien_len', stakeCoins: 200, maxSeats: 4 },
   { tableId: 'tl_1000', game: 'tien_len', stakeCoins: 1000, maxSeats: 4 },
   { tableId: 'ouk_50', game: 'ouk_chaktrang', stakeCoins: 50, maxSeats: 2 },
   { tableId: 'ouk_200', game: 'ouk_chaktrang', stakeCoins: 200, maxSeats: 2 },
   { tableId: 'ouk_1000', game: 'ouk_chaktrang', stakeCoins: 1000, maxSeats: 2 },
+  { tableId: 'bk_50', game: 'bay_khom', stakeCoins: 50, maxSeats: 2 },
+  { tableId: 'bk_200', game: 'bay_khom', stakeCoins: 200, maxSeats: 2 },
 ];
 
 const TL_RANKS: Array<[string, number]> = [
@@ -355,6 +359,45 @@ export class ClubRoom extends Room<ClubState> {
         summary: `${p.name} rolled ${dice.join(' · ')}`,
       });
     });
+
+    // Update 3.4 — Bay Khom (10-Hole Khmer Mancala, 42 Seeds) Strictly PvP Move Handler
+    this.onMessage(
+      'bayKhomMove',
+      (
+        client,
+        payload: { tableId?: string; boardJson?: string; winnerIdx?: number | null; summary?: string }
+      ) => {
+        const table = payload?.tableId ? this.tables.get(payload.tableId) : undefined;
+        if (!table || table.game !== 'bay_khom' || table.status !== 'playing') return;
+        const seatIdx = table.seats.findIndex((s) => s.sessionId === client.sessionId);
+        if (seatIdx !== table.turnIndex) return;
+        if (typeof payload.boardJson === 'string' && payload.boardJson.length <= 4096) {
+          table.bayKhomJson = payload.boardJson;
+        }
+        table.lastSummary = typeof payload.summary === 'string' ? payload.summary.slice(0, 140) : 'Bay Khom move played.';
+        if (payload.winnerIdx === 0 || payload.winnerIdx === 1) {
+          const winner = table.seats[payload.winnerIdx];
+          table.status = 'finished';
+          table.winnerName = winner?.name ?? 'Player';
+          table.lastSummary = `🏆 ${table.winnerName} won Bay Khom (+${table.potCoins} C pot)!`;
+          pushTickerEvent(`🥣 ${table.winnerName} won a ${table.potCoins} C Bay Khom match at Phum Club!`, 'club');
+          this.broadcast('clubMatchWin', {
+            tableId: table.tableId,
+            game: 'bay_khom',
+            winnerSessionId: winner?.sessionId ?? client.sessionId,
+            winnerName: table.winnerName,
+            potCoins: table.potCoins,
+            stakeCoins: table.stakeCoins,
+          });
+          table.seats.forEach((s) => {
+            s.ready = false;
+          });
+        } else {
+          table.turnIndex = (table.turnIndex + 1) % Math.max(1, table.seats.length);
+        }
+        this.broadcastTables();
+      }
+    );
   }
 
   private startTableMatch(table: ServerClubTable): void {
@@ -380,6 +423,16 @@ export class ClubRoom extends Room<ClubState> {
       });
 
       table.lastSummary = `🃏 Dealer dealt 13 cards! ${table.seats[starterIndex].name} leads${requires3S ? ' with 3♠' : ''}!`;
+    } else if (table.game === 'bay_khom') {
+      table.turnIndex = 0;
+      table.bayKhomJson = JSON.stringify({
+        holes: [5, 4, 4, 4, 4, 5, 4, 4, 4, 4],
+        stores: [0, 0],
+        turn: 0,
+        winner: null,
+        lastAction: `🥣 Bay Khom Match Started! ${table.seats[0]?.name ?? 'Player 1'} sows first!`,
+      });
+      table.lastSummary = `🥣 Bay Khom Started! ${table.seats[0]?.name ?? 'P1'} vs ${table.seats[1]?.name ?? 'P2'} (${table.potCoins} C pot).`;
     } else {
       table.turnIndex = 0; // Seat 0 = White (Gold), Seat 1 = Black (Ebony)
       table.oukBoardJson = null;
@@ -458,6 +511,7 @@ export class ClubRoom extends Room<ClubState> {
       mustIncludeThreeSpades: t.mustIncludeThreeSpades,
       oukBoardJson: t.oukBoardJson,
       oukTurnSide: t.oukTurnSide,
+      bayKhomJson: t.bayKhomJson ?? null,
     }));
   }
 

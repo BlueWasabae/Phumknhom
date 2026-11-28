@@ -242,6 +242,9 @@ import { SbekThomModal } from './ui/SbekThomModal';
 import { DeliveryHudWidget } from './ui/DeliveryHudWidget';
 import { KiteWorkshopModal } from './ui/KiteWorkshopModal';
 import { PartyHostModal } from './ui/PartyHostModal';
+import { FolkGamesModal } from './ui/FolkGamesModal';
+import { DyeStudioModal } from './ui/DyeStudioModal';
+import type { DyeSlot, OutfitDyeDef } from '@shared/dyeCatalog';
 import {
   PARTY_ALLOWED_MAPS,
   VILLAGE_PARTY_KITS,
@@ -359,6 +362,8 @@ type ActiveModalType =
   | 'sbekThom'
   | 'kiteWorkshop'
   | 'partyHost'
+  | 'folkGames'
+  | 'dyeStudio'
   | 'characterCreator';
 
 interface FloatingXpBanner extends SkillXpToastPayload {
@@ -2227,6 +2232,39 @@ export const App: React.FC = () => {
           category: 'club',
         });
       }),
+      EventBus.on('folkGame:completed', ({ game, won, coinsEarned, friendlyXp, bonusItemId, badgeId }) => {
+        runStateAction((prev) => {
+          const nextCoins = prev.currencies.coins + coinsEarned;
+          const nextInv = prev.inventory.map((i) => ({ ...i }));
+          let grantedItemLabel = '';
+          if (bonusItemId && !nextInv.some((i) => i.itemId === bonusItemId)) {
+            nextInv.push({ itemId: bonusItemId, quantity: 1, itemLevel: 1, quality: 'normal' });
+            grantedItemLabel = ' · 👑 RARE CLAY POT CROWN UNLOCKED!';
+          }
+          const nextBadges = Array.from(new Set([...(prev.folkBadges ?? []), ...(badgeId ? [badgeId] : [])]));
+          const gameTitle =
+            game === 'bos_angkunh' ? 'Bos Angkunh' : game === 'veay_kaom' ? "Veay K'aom" : 'Teanh Prot';
+          return {
+            state: {
+              ...prev,
+              coins: nextCoins,
+              currencies: { ...prev.currencies, coins: nextCoins },
+              inventory: nextInv,
+              folkGameWins: (prev.folkGameWins ?? 0) + (won ? 1 : 0),
+              folkBadges: nextBadges,
+              lifeStats: {
+                ...prev.lifeStats,
+                friendly: Math.min(100, prev.lifeStats.friendly + friendlyXp),
+                happy: Math.min(100, prev.lifeStats.happy + (won ? 14 : 5)),
+              },
+            },
+            ok: true,
+            message: `${won ? '🏆' : '🏮'} ${gameTitle} finished! +${coinsEarned}c · +${friendlyXp} Friendly XP${grantedItemLabel}${
+              badgeId ? ' · 🪢 Tug-of-War Champion Badge!' : ''
+            }`,
+          };
+        });
+      }),
       EventBus.on('petRace:finished', ({ place, timeSec, coins, petXpTreats, unlockedChampionRibbon }) => {
         runStateAction((prev) => {
           const nextCoins = prev.currencies.coins + coins;
@@ -3614,6 +3652,8 @@ export const App: React.FC = () => {
             }}
             onOpenKiteWorkshop={() => setActiveModal('kiteWorkshop')}
             onOpenPartyHost={() => setActiveModal('partyHost')}
+            onOpenFolkGames={() => setActiveModal('folkGames')}
+            onOpenDyeStudio={() => setActiveModal('dyeStudio')}
             onOpenPetRace={() => setActiveModal('petRace')}
             onOpenYardDecor={() => {
               setHouseDecorScope('yard');
@@ -5874,6 +5914,81 @@ export const App: React.FC = () => {
               palette: kit.palette,
             });
           }
+        }}
+        onClose={() => setActiveModal(null)}
+      />
+
+      <FolkGamesModal
+        open={activeModal === 'folkGames'}
+        player={player}
+        onLaunchGame={(game) => {
+          setActiveModal(null);
+          EventBus.emit('folkGame:launchRequest', { game, returnX: 1195, returnY: 440 });
+        }}
+        onClose={() => setActiveModal(null)}
+      />
+
+      <DyeStudioModal
+        open={activeModal === 'dyeStudio'}
+        player={player}
+        onUnlockDye={(dye: OutfitDyeDef) => {
+          runStateAction((prev) => {
+            if ((prev.unlockedDyes ?? []).includes(dye.id)) {
+              return { state: prev, ok: true, message: `${dye.name} is already unlocked!` };
+            }
+            if (dye.category === 'prismatic') {
+              if (prev.currencies.diamonds < dye.diamondCost) {
+                return { state: prev, ok: false, message: `Need ${dye.diamondCost} 💎 Diamonds for ${dye.name}.` };
+              }
+              const nextDiamonds = prev.currencies.diamonds - dye.diamondCost;
+              return {
+                state: {
+                  ...prev,
+                  currencies: { ...prev.currencies, diamonds: nextDiamonds },
+                  unlockedDyes: [...(prev.unlockedDyes ?? []), dye.id],
+                },
+                ok: true,
+                message: `✨ Unlocked Prismatic Dye: ${dye.name} (${dye.khmerName})!`,
+              };
+            }
+            if (prev.currencies.coins < dye.coinCost) {
+              return { state: prev, ok: false, message: `Need ${dye.coinCost} C for ${dye.name}.` };
+            }
+            const nextCoins = prev.currencies.coins - dye.coinCost;
+            return {
+              state: {
+                ...prev,
+                coins: nextCoins,
+                currencies: { ...prev.currencies, coins: nextCoins },
+                unlockedDyes: [...(prev.unlockedDyes ?? []), dye.id],
+              },
+              ok: true,
+              message: `🎨 Crafted Botanical Dye: ${dye.name} (${dye.khmerName})!`,
+            };
+          });
+        }}
+        onEquipDye={(slot: DyeSlot, dyeId: string | null) => {
+          runStateAction((prev) => {
+            const nextDyes: Record<string, string> = { ...(prev.equippedDyes ?? prev.loadout.equippedDyes ?? {}) };
+            if (dyeId) nextDyes[slot] = dyeId;
+            else delete nextDyes[slot];
+            const nextLoadout = { ...prev.loadout, equippedDyes: nextDyes };
+            const nextState: PlayerState = {
+              ...prev,
+              equippedDyes: nextDyes,
+              loadout: nextLoadout,
+            };
+            EventBus.emit('player:loadoutChanged', {
+              loadout: nextLoadout,
+              activeClass: nextState.activeClass,
+              playerState: nextState,
+            });
+            return {
+              state: nextState,
+              ok: true,
+              message: dyeId ? `🎨 Applied dye to ${slot} & synced live!` : `🔄 Reset ${slot} dye to natural color.`,
+            };
+          });
         }}
         onClose={() => setActiveModal(null)}
       />

@@ -32,6 +32,7 @@ import {
 import { ClubRoom } from './rooms/ClubRoom';
 import { PetRaceRoom } from './rooms/PetRaceRoom';
 import { ArenaRoom } from './rooms/ArenaRoom';
+import { FolkGamesRoom } from './rooms/FolkGamesRoom';
 import {
   WorldBossRoom,
   getWorldBossSnapshot,
@@ -1327,6 +1328,7 @@ gameServer.define('club', ClubRoom).filterBy(['cityServer']);
 gameServer.define('world_boss', WorldBossRoom);
 gameServer.define('pet_race', PetRaceRoom);
 gameServer.define('arena', ArenaRoom).filterBy(['duelId']);
+gameServer.define('folk_games', FolkGamesRoom);
 
 startWorldBossScheduler();
 startAuctionHouseSweeper();

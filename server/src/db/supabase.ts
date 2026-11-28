@@ -119,6 +119,10 @@ export interface SavedPlayerProfile {
   activeKiteId?: string;
   partyHostCount?: number;
   partyFeastBuffUntil?: number;
+  equippedDyes?: Record<string, string>;
+  unlockedDyes?: string[];
+  folkGameWins?: number;
+  folkBadges?: string[];
   hasCompletedCreation?: boolean;
   activeClass?: string;
   weapon?: Record<string, unknown>;
@@ -833,6 +837,15 @@ function rowToSavedProfile(row: {
     activeKiteId: typeof meta.activeKiteId === 'string' ? meta.activeKiteId : 'kite_classic_bamboo',
     partyHostCount: typeof meta.partyHostCount === 'number' ? meta.partyHostCount : 0,
     partyFeastBuffUntil: typeof meta.partyFeastBuffUntil === 'number' ? meta.partyFeastBuffUntil : 0,
+    equippedDyes:
+      meta.equippedDyes && typeof meta.equippedDyes === 'object'
+        ? (meta.equippedDyes as Record<string, string>)
+        : {},
+    unlockedDyes: Array.isArray(meta.unlockedDyes)
+      ? (meta.unlockedDyes as string[])
+      : ['dye_turmeric_gold', 'dye_indigo_krama'],
+    folkGameWins: typeof meta.folkGameWins === 'number' ? meta.folkGameWins : 0,
+    folkBadges: Array.isArray(meta.folkBadges) ? (meta.folkBadges as string[]) : [],
     hasCompletedCreation: Boolean(
       meta.hasCompletedCreation ??
         (loadout as { hasCompletedCreation?: boolean }).hasCompletedCreation ??
@@ -1232,6 +1245,16 @@ export async function savePlayerProfile(
     activeKiteId: typeof profile.activeKiteId === 'string' ? profile.activeKiteId : 'kite_classic_bamboo',
     partyHostCount: typeof profile.partyHostCount === 'number' && Number.isFinite(profile.partyHostCount) ? Math.max(0, Math.floor(profile.partyHostCount)) : 0,
     partyFeastBuffUntil: typeof profile.partyFeastBuffUntil === 'number' && Number.isFinite(profile.partyFeastBuffUntil) ? Math.max(0, Math.floor(profile.partyFeastBuffUntil)) : 0,
+    equippedDyes:
+      profile.equippedDyes && typeof profile.equippedDyes === 'object' ? profile.equippedDyes : {},
+    unlockedDyes: Array.isArray(profile.unlockedDyes)
+      ? profile.unlockedDyes
+      : ['dye_turmeric_gold', 'dye_indigo_krama'],
+    folkGameWins:
+      typeof profile.folkGameWins === 'number' && Number.isFinite(profile.folkGameWins)
+        ? Math.max(0, Math.floor(profile.folkGameWins))
+        : 0,
+    folkBadges: Array.isArray(profile.folkBadges) ? profile.folkBadges : [],
     hasCompletedCreation: Boolean(
       profile.hasCompletedCreation ??
         (profile.loadout as { hasCompletedCreation?: boolean } | undefined)?.hasCompletedCreation ??

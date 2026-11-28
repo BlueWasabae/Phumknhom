@@ -1800,6 +1800,19 @@ export const ITEM_CATALOG: Record<string, CatalogItem> = {
     styleVariant: 'lotus_aura',
     stats: {},
   },
+  hat_clay_pot_crown: {
+    id: 'hat_clay_pot_crown',
+    name: 'Clay Pot Crown',
+    khmerName: 'ម្កុដក្អមដីកំពង់ឆ្នាំង',
+    slot: 'hat',
+    rarity: 'epic',
+    stylishScore: 120,
+    description: 'Rare festive Kampong Chhnang terracotta pot crown won by smashing the blindfolded Veay K’aom pot!',
+    primaryColor: '#c2410c',
+    accentColor: '#fef08a',
+    styleVariant: 'royal_crown',
+    stats: {},
+  },
 
   // ==================== UPDATE 1.4: WORLD EVENT & MUSEUM EXCLUSIVE VANITY ====================
   wings_rain_caller_umbrella: {

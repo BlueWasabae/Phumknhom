@@ -9,6 +9,7 @@ import {
 } from '@shared/characterStyles';
 import { ITEM_CATALOG } from '../../data/items';
 import { COMBAT_ARMOR_SETS } from '../../data/armorSets';
+import { getOutfitDye } from '@shared/dyeCatalog';
 import { vfxManager } from '../animations/VFXManager';
 
 export type PaperDollPose =
@@ -161,6 +162,7 @@ function buildLoadoutSignature(raw: EquippedLoadout | null | undefined): string 
     loadout.wings ?? '',
     loadout.armor ?? '',
     loadout.showVanityOverArmor === false ? 'armor_vis' : 'vanity_vis',
+    loadout.equippedDyes ? JSON.stringify(loadout.equippedDyes) : '',
   ].join('|');
 }
 
@@ -213,15 +215,39 @@ function renderHumanChibiPixels(
   const wingsDef = loadout.wings ? ITEM_CATALOG[loadout.wings] : undefined;
 
   // Vanity items ALWAYS override visual style when showVanity is ON (default).
-  // When toggled OFF and a Combat Armor Set is worn, display its combat armor plates!
+  // Update 3.4 — Botanical & Prismatic Dye Studio overrides apply cleanly to Shirt, Pants, Krama & Wings!
+  const dyes = loadout.equippedDyes ?? {};
+  const shirtDye = getOutfitDye(dyes.shirt);
+  const pantsDye = getOutfitDye(dyes.pants);
+  const kramaDye = getOutfitDye(dyes.krama);
+  const wingsDye = getOutfitDye(dyes.wings);
+
   const useCombatArmorLook = !showVanity && Boolean(combatArmorSet);
-  const shirtMain = useCombatArmorLook ? combatArmorSet!.primaryColor : (shirtDef?.primaryColor ?? '#3b82f6');
-  const shirtAccent = useCombatArmorLook ? combatArmorSet!.accentColor : (shirtDef?.accentColor ?? '#fef3c7');
+  const shirtMain = shirtDye
+    ? shirtDye.primaryHex
+    : useCombatArmorLook
+      ? combatArmorSet!.primaryColor
+      : (shirtDef?.primaryColor ?? '#3b82f6');
+  const shirtAccent = kramaDye
+    ? kramaDye.primaryHex
+    : shirtDye
+      ? shirtDye.accentHex
+      : useCombatArmorLook
+        ? combatArmorSet!.accentColor
+        : (shirtDef?.accentColor ?? '#fef3c7');
   const shirtShade = shiftHex(shirtMain, -36);
   const shirtHi = shiftHex(shirtMain, 26);
 
-  const pantsMain = useCombatArmorLook ? combatArmorSet!.pantsColor : (pantsDef?.primaryColor ?? '#334155');
-  const pantsAccent = useCombatArmorLook ? combatArmorSet!.accentColor : (pantsDef?.accentColor ?? '#64748b');
+  const pantsMain = pantsDye
+    ? pantsDye.primaryHex
+    : useCombatArmorLook
+      ? combatArmorSet!.pantsColor
+      : (pantsDef?.primaryColor ?? '#334155');
+  const pantsAccent = pantsDye
+    ? pantsDye.accentHex
+    : useCombatArmorLook
+      ? combatArmorSet!.accentColor
+      : (pantsDef?.accentColor ?? '#64748b');
   const pantsShade = shiftHex(pantsMain, -30);
 
   ctx.save();
@@ -238,8 +264,8 @@ function renderHumanChibiPixels(
   // Helper so procedural wings draw behind the body normally, AND IN FRONT OF the back when walking upward (isUp)!
   const drawProceduralWings = () => {
     if (!wingsDef || (loadout.wings && ANIMATED_PNG_WINGS[loadout.wings])) return;
-    const wMain = wingsDef.primaryColor;
-    const wAcc = wingsDef.accentColor;
+    const wMain = wingsDye ? wingsDye.primaryHex : wingsDef.primaryColor;
+    const wAcc = wingsDye ? wingsDye.accentHex : wingsDef.accentColor;
     const wVar = wingsDef.styleVariant;
     if (wVar === 'basket') {
       px(ctx, cx - 5, torsoY - 1, 10, 8, OUTLINE);
@@ -1069,17 +1095,40 @@ export class PaperDoll extends Phaser.GameObjects.Container {
     }
 
     const wingId = this.loadout.wings;
+    const wingDye = getOutfitDye(this.loadout.equippedDyes?.wings);
+    const shirtDye = getOutfitDye(this.loadout.equippedDyes?.shirt);
+    const kramaDye = getOutfitDye(this.loadout.equippedDyes?.krama);
+    const prismaticDye = [wingDye, shirtDye, kramaDye].find((d) => d?.shimmerGlowHex);
+
     const pngWing = wingId ? ANIMATED_PNG_WINGS[wingId] : undefined;
     if (pngWing && wingId && this.scene.textures.exists(wingId)) {
       this.wingSprite.setTexture(wingId, 0).setVisible(true);
       this.wingSprite.postFX?.clear?.();
-      vfxManager.applyGlow(this.scene, this.wingSprite, pngWing.glowColor, pngWing.bloomStrength * 2.1, 0.35);
+      if (wingDye) {
+        const tintHex = Number(wingDye.primaryHex.replace('#', '0x'));
+        if (Number.isFinite(tintHex)) this.wingSprite.setTint(tintHex);
+      } else {
+        this.wingSprite.clearTint();
+      }
+      vfxManager.applyGlow(
+        this.scene,
+        this.wingSprite,
+        wingDye?.shimmerGlowHex ?? pngWing.glowColor,
+        pngWing.bloomStrength * (wingDye?.shimmerGlowHex ? 2.4 : 2.1),
+        0.38
+      );
       if (this.scene.anims.exists(pngWing.animKey)) {
         this.wingSprite.play(pngWing.animKey, true);
       }
     } else {
       this.wingSprite.stop();
       this.wingSprite.setVisible(false);
+    }
+
+    // Subtle Prismatic/Metallic Dye Studio bloom shimmer on PaperDoll body!
+    this.bodySprite.postFX?.clear?.();
+    if (prismaticDye?.shimmerGlowHex) {
+      vfxManager.applyGlow(this.scene, this.bodySprite, prismaticDye.shimmerGlowHex, 1.85, 0.28);
     }
 
     const wingDef = wingId ? ITEM_CATALOG[wingId] : undefined;
@@ -1089,8 +1138,10 @@ export class PaperDoll extends Phaser.GameObjects.Container {
       accList.includes('acc_wind_walker_boots') ||
       accList.includes('acc_sovereign_aegis_charm');
 
-    if (wingDef && wingDef.styleVariant !== 'basket') {
-      const tintNum = Number(wingDef.primaryColor.replace('#', '0x'));
+    if (prismaticDye?.shimmerGlowHex) {
+      this.auraGlow.setTint(prismaticDye.shimmerGlowHex).setAlpha(0.54).setVisible(true);
+    } else if (wingDef && wingDef.styleVariant !== 'basket') {
+      const tintNum = Number((wingDye?.primaryHex ?? wingDef.primaryColor).replace('#', '0x'));
       this.auraGlow.setTint(Number.isFinite(tintNum) ? tintNum : 0xfacc15).setAlpha(0.5).setVisible(true);
     } else if (hasApexAcc) {
       const accTint = accList.includes('acc_angkor_phantom_stride')
@@ -1145,14 +1196,35 @@ export class PaperDoll extends Phaser.GameObjects.Container {
     }
 
     const isWalking = pose === 'walk1' || pose === 'walk2' || pose === 'walk3' || pose === 'walk4';
-    // Update 3.0 — Subtle 2-frame idle breathing + smooth walk-cycle bobbing
-    const breathPhase = !isWalking && pose === 'idle' ? (Math.floor(time / 480) % 2 === 0 ? 0 : 1) : 0;
-    const idleBob = !isWalking && pose === 'idle' ? (breathPhase === 1 ? -1.1 : 0) : 0;
-    const walkBob = isWalking ? -Math.abs(Math.sin(time / 115)) * 1.9 : 0;
+    // Update 3.0 / 3.4 — Lively character animations: smooth breathing, energetic walk stride lean + bounce, attack lunge & jump stretch!
+    const breathWave = !isWalking && pose === 'idle' ? Math.sin(time / 340) : 0;
+    const idleBob = !isWalking && pose === 'idle' ? breathWave * -1.35 : 0;
+    const walkSin = isWalking ? Math.sin(time / 105) : 0;
+    const walkBob = isWalking ? -Math.abs(walkSin) * 2.8 : 0;
     let vertBob = idleBob + walkBob;
-    let emoteRot = 0;
-    let emoteScaleX = 1.38;
-    let emoteScaleY = !isWalking && pose === 'idle' ? (breathPhase === 1 ? 1.418 : 1.38) : 1.38;
+    let emoteRot = isWalking
+      ? (facing === 'left' ? -0.06 : facing === 'right' ? 0.06 : walkSin * 0.055)
+      : pose === 'attack'
+        ? (facing === 'left' ? -0.14 : 0.14)
+        : pose === 'parry'
+          ? (facing === 'left' ? 0.08 : -0.08)
+          : 0;
+    let emoteScaleX =
+      pose === 'attack'
+        ? 1.48
+        : pose === 'jump'
+          ? 1.28
+          : isWalking
+            ? 1.38 + Math.abs(walkSin) * 0.055
+            : 1.38 - breathWave * 0.022;
+    let emoteScaleY =
+      pose === 'attack'
+        ? 1.32
+        : pose === 'jump'
+          ? 1.49
+          : isWalking
+            ? 1.38 - Math.abs(walkSin) * 0.045
+            : 1.38 + breathWave * 0.036;
 
     // Update 3.1 — Live Khmer Emote & Dance Wheel animations + VFX overlays
     if (this.activeEmote && !isWalking) {

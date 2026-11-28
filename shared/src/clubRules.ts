@@ -6,7 +6,111 @@
 //    Ang 1-time Knight Jump, Neang 1-time 2-sq Jump, Koul 4-diag+forward, Trey Bork promotion)
 // ==============================================================================
 
-export type ClubPvpGameType = 'tien_len' | 'ouk_chaktrang';
+export type ClubPvpGameType = 'tien_len' | 'ouk_chaktrang' | 'bay_khom';
+
+export interface BayKhomBoardState {
+  /** 10 holes arranged in an oval: 0 & 5 are end-tips (5 beads each); 1..4 = P1 side (4 each); 6..9 = P2 side (4 each) -> 42 total beads! */
+  holes: number[];
+  stores: [number, number];
+  turn: 0 | 1;
+  winner: 0 | 1 | 'draw' | null;
+  lastAction: string;
+}
+
+export function createInitialBayKhomBoard(): BayKhomBoardState {
+  return {
+    holes: [5, 4, 4, 4, 4, 5, 4, 4, 4, 4],
+    stores: [0, 0],
+    turn: 0,
+    winner: null,
+    lastAction: 'Authentic 10-hole Bay Khom board (42 beads: 5 in both end-tips, 4 in each side hole). Player 1 sows first!',
+  };
+}
+
+/**
+ * Authentic Khmer Bay Khom (បាយខុម) sowing & capture engine:
+ * - Pick a non-empty side hole on your side (P1: 1..4, P2: 6..9).
+ * - Sow seeds one-by-one around the 10-hole oval; if landing in a non-empty hole, continue sowing!
+ * - If the final seed lands in an empty hole, capture all beads from the following hole (and chain across alternating empty/full holes).
+ */
+export function applyBayKhomMove(state: BayKhomBoardState, holeIndex: number): BayKhomBoardState | null {
+  if (state.winner !== null) return null;
+  const validRange = state.turn === 0 ? holeIndex >= 1 && holeIndex <= 4 : holeIndex >= 6 && holeIndex <= 9;
+  if (!validRange || (state.holes[holeIndex] ?? 0) <= 0) return null;
+
+  const holes = state.holes.slice();
+  const stores: [number, number] = [state.stores[0], state.stores[1]];
+  const player = state.turn;
+
+  let idx = holeIndex;
+  let hand = holes[idx];
+  holes[idx] = 0;
+  let captured = 0;
+  let steps = 0;
+
+  while (hand > 0 && steps < 250) {
+    steps += 1;
+    idx = (idx + 1) % 10;
+    holes[idx] += 1;
+    hand -= 1;
+
+    if (hand === 0) {
+      const nextIdx = (idx + 1) % 10;
+      if (holes[nextIdx] > 0 && nextIdx !== 0 && nextIdx !== 5) {
+        // Relay sow from next pit
+        hand = holes[nextIdx];
+        holes[nextIdx] = 0;
+        idx = nextIdx;
+      } else if (holes[nextIdx] === 0) {
+        // Authentic Bay Khom Capture: empty next hole -> capture beads from the hole after it!
+        let checkEmpty = nextIdx;
+        while (holes[checkEmpty] === 0) {
+          const capIdx = (checkEmpty + 1) % 10;
+          if (holes[capIdx] > 0) {
+            captured += holes[capIdx];
+            stores[player] += holes[capIdx];
+            holes[capIdx] = 0;
+            checkEmpty = (capIdx + 1) % 10;
+          } else {
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  // Check if either side or both end-tips are emptied -> award remaining side seeds & conclude!
+  const p1Sum = holes[1] + holes[2] + holes[3] + holes[4];
+  const p2Sum = holes[6] + holes[7] + holes[8] + holes[9];
+  const tipsEmpty = holes[0] === 0 && holes[5] === 0;
+  let winner: 0 | 1 | 'draw' | null = null;
+
+  if (tipsEmpty || p1Sum === 0 || p2Sum === 0) {
+    stores[0] += p1Sum;
+    stores[1] += p2Sum;
+    for (let i = 1; i <= 4; i++) holes[i] = 0;
+    for (let i = 6; i <= 9; i++) holes[i] = 0;
+    winner = stores[0] > stores[1] ? 0 : stores[1] > stores[0] ? 1 : 'draw';
+  }
+
+  const nextTurn: 0 | 1 = player === 0 ? 1 : 0;
+  const label =
+    winner !== null
+      ? winner === 'draw'
+        ? `🤝 Bay Khom Draw! (${stores[0]} vs ${stores[1]} beads)`
+        : `🏆 Player ${winner + 1} wins Bay Khom (${stores[0]} vs ${stores[1]} beads)!`
+      : captured > 0
+        ? `✨ Player ${player + 1} sowed hole #${holeIndex} & captured +${captured} beads!`
+        : `Player ${player + 1} sowed hole #${holeIndex}. Now Player ${nextTurn + 1}'s turn.`;
+
+  return {
+    holes,
+    stores,
+    turn: nextTurn,
+    winner,
+    lastAction: label,
+  };
+}
 
 export interface ClubTableConfig {
   tableId: string;
@@ -79,6 +183,26 @@ export const CLUB_PVP_TABLES: ClubTableConfig[] = [
     maxSeats: 2,
     minSeatsToStart: 2,
     tierBadge: 'High-Roller',
+  },
+  {
+    tableId: 'bk_50',
+    game: 'bay_khom',
+    label: 'Bay Khom · 50 C Stake',
+    khmerLabel: 'តុបាយខុម · ៥០កាក់',
+    stakeCoins: 50,
+    maxSeats: 2,
+    minSeatsToStart: 2,
+    tierBadge: 'Classic',
+  },
+  {
+    tableId: 'bk_200',
+    game: 'bay_khom',
+    label: 'Bay Khom · 200 C Stake',
+    khmerLabel: 'តុបាយខុម · ២០០កាក់',
+    stakeCoins: 200,
+    maxSeats: 2,
+    minSeatsToStart: 2,
+    tierBadge: 'Master',
   },
 ];
 

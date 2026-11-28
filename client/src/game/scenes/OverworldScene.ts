@@ -661,6 +661,20 @@ export class OverworldScene extends Phaser.Scene {
           });
         });
       }),
+      EventBus.on('folkGame:launchRequest', ({ game, returnX, returnY }) => {
+        if (this.transitioning) return;
+        this.transitioning = true;
+        soundManager.playSfx('magic');
+        this.cameras.main.fadeOut(220, 30, 16, 8);
+        this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+          this.scene.start('FolkGamesScene', {
+            playerState: { ...this.player.state, zone: 'overworld', currentMapId: 'green_park' },
+            game,
+            returnX: returnX ?? this.player.x,
+            returnY: returnY ?? this.player.y,
+          });
+        });
+      }),
       EventBus.on('party:hostBroadcast', (evt) => {
         if (evt.mapId !== this.mapId) return;
         this.spawnSharedPartyFeastTable(evt);
@@ -2093,7 +2107,7 @@ export class OverworldScene extends Phaser.Scene {
       onInteract: () => EventBus.emit('ui:openModal', { modal: 'modeSelector' }),
     });
 
-    // 3. PORTAL HALL (3 GLOWING STONE ARCHWAYS ON NORTH TERRACE)
+    // 3. SPACED SACRED PORTAL PAVILIONS (Wide 640px breathing room on North Terrace — zero crowding!)
     const portalHallEntries: Array<{
       x: number;
       y: number;
@@ -2103,24 +2117,8 @@ export class OverworldScene extends Phaser.Scene {
       onEnter: () => void;
     }> = [
       {
-        x: 520,
-        y: 345,
-        tint: 0x22c55e,
-        title: 'CAVERN I · KING FROG',
-        prompt: 'Press [E] or Click → Direct Boss Cavern: Sdech Kongkaeb (Muddy Rice Hollow)',
-        onEnter: () => this.enterDungeon('sdech_kongkaeb', 'normal', 'solo'),
-      },
-      {
-        x: 800,
-        y: 325,
-        tint: 0xf59e0b,
-        title: 'CAVERN II · YEAK THMOR',
-        prompt: 'Press [E] or Click → Direct Boss Cavern: Yeak Thmor (Stone Yaksha Sanctum)',
-        onEnter: () => this.enterDungeon('yeak_thmor', 'expert', 'solo'),
-      },
-      {
-        x: 1080,
-        y: 345,
+        x: 470,
+        y: 330,
         tint: 0xc084fc,
         title: 'ENDLESS PAGODA TOWER',
         prompt: 'Press [E] or Click → Endless 50-Floor Pagoda Tower (Checkpoints & Weapon Auras)',
@@ -2129,8 +2127,8 @@ export class OverworldScene extends Phaser.Scene {
         },
       },
       {
-        x: 1335,
-        y: 385,
+        x: 1130,
+        y: 330,
         tint: 0x10b981,
         title: 'MINING CAVERNS · ORES',
         prompt: 'Press [E] or Click → Enter Side-Scrolling Underground Caverns (Ores, Relic Chests & Grapple)',
@@ -2646,9 +2644,72 @@ export class OverworldScene extends Phaser.Scene {
       onInteract: openPetTrack,
     });
 
-    // UPDATE 3.2 — FLOATING MEKONG RIVER MARKET DOCK & BOBBING SAMPAN BOATS (East Shoreline)
-    const fmX = 1135;
-    const fmY = 855;
+    // UPDATE 3.4 — FESTIVE KHMER VILLAGE FOLK GAMES COURTYARD (Open North-East Lawn of Green Park!)
+    const fgX = 1195;
+    const fgY = 390;
+    const fgGfx = this.add.graphics().setDepth(fgY - 20);
+    // Woven pandan courtyard mat with krama border
+    fgGfx.fillStyle(0x92400e, 0.94);
+    fgGfx.fillRoundedRect(fgX - 78, fgY - 42, 156, 84, 10);
+    fgGfx.fillStyle(0xd97706, 0.92);
+    fgGfx.fillRoundedRect(fgX - 72, fgY - 36, 144, 72, 8);
+    fgGfx.lineStyle(2, 0xfef08a, 0.9);
+    fgGfx.strokeRoundedRect(fgX - 72, fgY - 36, 144, 72, 8);
+    // Hanging colorful Krama pennant banner above courtyard
+    const fgCols = [0xdc2626, 0xfacc15, 0x2563eb, 0x16a34a, 0xec4899];
+    for (let i = 0; i < 8; i++) {
+      const px = fgX - 64 + i * 18;
+      fgGfx.fillStyle(fgCols[i % fgCols.length], 0.95);
+      fgGfx.fillTriangle(px - 6, fgY - 46, px + 6, fgY - 46, px, fgY - 36);
+    }
+    // Decorative Bos Angkunh seeds + Clay Pot + Tug Rope motif on the mat
+    fgGfx.fillStyle(0x451a03, 1);
+    for (let i = -2; i <= 2; i++) fgGfx.fillCircle(fgX - 38 + i * 8, fgY + 12, 3.2);
+    fgGfx.fillStyle(0xc2410c, 1);
+    fgGfx.fillCircle(fgX + 4, fgY - 4, 9);
+    fgGfx.lineStyle(3, 0xfef3c7, 0.9);
+    fgGfx.lineBetween(fgX + 24, fgY + 10, fgX + 62, fgY + 10);
+    fgGfx.fillStyle(0xdc2626, 1);
+    fgGfx.fillRect(fgX + 41, fgY + 4, 4, 12);
+
+    const fgArrow = this.add.image(fgX, fgY - 62, 'join_arrow').setScale(0.55).setDepth(fgY + 22);
+    this.tweens.add({ targets: fgArrow, y: fgY - 70, duration: 540, yoyo: true, repeat: -1 });
+    this.add
+      .text(fgX, fgY + 48, '🏮 KHMER FOLK GAMES COURTYARD · បោះអង្គញ់ · វាយក្អម · ទាញព្រ័ត្រ', {
+        fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
+        fontSize: '10px',
+        fontStyle: 'bold',
+        color: '#fef08a',
+        backgroundColor: 'rgba(120, 53, 15, 0.94)',
+        padding: { x: 8, y: 2 },
+      })
+      .setResolution(2)
+      .setScale(0.45)
+      .setOrigin(0.5, 0)
+      .setDepth(fgY + 25);
+
+    const fgHit = this.add
+      .rectangle(fgX, fgY, 160, 96, 0x000000, 0)
+      .setDepth(fgY + 18)
+      .setInteractive({ useHandCursor: true });
+    const openFolkCourtyard = () => {
+      if (!this.guardInteractRange(fgX, fgY, 145)) return;
+      soundManager.playSfx('click');
+      EventBus.emit('ui:openModal', { modal: 'folkGames' });
+    };
+    fgHit.on('pointerdown', openFolkCourtyard);
+    this.landmarks.push({
+      x: fgX,
+      y: fgY + 12,
+      radius: 86,
+      label: "Press [E] or Click → 🏮 Play Khmer Folk Games (Bos Angkunh, Veay K'aom & Teanh Prot!)",
+      isDungeonPortal: false,
+      onInteract: openFolkCourtyard,
+    });
+
+    // UPDATE 3.2 — FLOATING MEKONG RIVER MARKET DOCK & BOBBING SAMPAN BOATS (Spacious South-Center Shoreline — wide clearance from Pier & Ferry!)
+    const fmX = 830;
+    const fmY = 905;
     const dockGfx = this.add.graphics().setDepth(fmY - 12);
     // Warm timber riverside jetty planks + lantern posts
     dockGfx.fillStyle(0x78350f, 0.96);

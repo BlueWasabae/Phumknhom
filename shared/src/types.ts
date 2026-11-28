@@ -454,6 +454,8 @@ export interface PlayerAppearance {
   accessories?: (string | null)[];
   /** When true (default), Vanity slots (Hat/Shirt/Pants/Wings) override Combat Armor visuals */
   showVanityOverArmor?: boolean;
+  /** Update 3.4 — Botanical & Prismatic Outfit/Krama/Wings Dye Studio colors */
+  equippedDyes?: Record<string, string>;
   hasCompletedCreation?: boolean;
 }
 
@@ -688,6 +690,11 @@ export interface PlayerState {
   activeKiteId?: string;
   partyHostCount?: number;
   partyFeastBuffUntil?: number;
+  /** Update 3.4 — Village Folk Games, Bay Khom & Botanical/Prismatic Outfit Dye Studio */
+  equippedDyes?: Record<string, string>;
+  unlockedDyes?: string[];
+  folkGameWins?: number;
+  folkBadges?: string[];
   hasCompletedCreation?: boolean;
   skillDamagePct: number;
   armorDamagePct: number;
@@ -1034,6 +1041,10 @@ export const INITIAL_PLAYER_STATE: PlayerState = {
   activeKiteId: 'kite_classic_bamboo',
   partyHostCount: 0,
   partyFeastBuffUntil: 0,
+  equippedDyes: {},
+  unlockedDyes: ['dye_turmeric_gold', 'dye_indigo_krama'],
+  folkGameWins: 0,
+  folkBadges: [],
   hasCompletedCreation: false,
   skillDamagePct: 0.025,
   armorDamagePct: 0.04,

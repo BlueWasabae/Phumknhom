@@ -15,20 +15,28 @@ const MUSIC_Y = 205;
 interface ClubTableNode {
   x: number;
   y: number;
-  game: 'kla_klok' | 'ouk_chaktrang' | 'tien_len';
+  game: 'kla_klok' | 'ouk_chaktrang' | 'tien_len' | 'bay_khom';
   tableId?: string;
   label: string;
   prompt: string;
 }
 
 const CLUB_TABLE_NODES: ClubTableNode[] = [
-  // Left Wing: Kla Klok (3-Dice)
+  // Left Wing: Kla Klok (3-Dice) + Carved Wooden Bay Khom (Khmer Mancala) Tables!
   {
     x: 155,
-    y: 355,
+    y: 285,
     game: 'kla_klok',
     label: '🎲 KLA KLOK (3-Dice)',
     prompt: 'Press [E] or Click → Play Kla Klok (3-Dice)',
+  },
+  {
+    x: 155,
+    y: 425,
+    game: 'bay_khom',
+    tableId: 'bk_50',
+    label: '🥣 BAY KHOM · 50 C / 200 C',
+    prompt: 'Press [E] or Click → Sit at Carved Wooden Bay Khom Table (10-Hole Khmer Mancala PvP!)',
   },
   // Center Wing: 3 Ouk Chaktrang (Authentic Uncheckered PvP Khmer Chess Tables)
   {
@@ -318,6 +326,25 @@ export class ClubScene extends Phaser.Scene {
           const ry = node.y - 20 + Math.floor(i / 3) * 22;
           tg.fillStyle(kkColors[i], 0.92);
           tg.fillRoundedRect(rx, ry, 22, 17, 3);
+        }
+      } else if (node.game === 'bay_khom') {
+        // Carved Wooden 10-Hole Oval Bay Khom (Khmer Mancala) Board!
+        tg.fillStyle(0x78350f, 1);
+        tg.lineStyle(3.5, 0xfacc15, 1);
+        tg.fillEllipse(node.x, node.y, 114, 62);
+        tg.strokeEllipse(node.x, node.y, 114, 62);
+        // 2 End-tip holes (5 seeds each) + 8 Side holes (4 seeds each)
+        tg.fillStyle(0x451a03, 1);
+        tg.fillCircle(node.x - 40, node.y, 9);
+        tg.fillCircle(node.x + 40, node.y, 9);
+        for (let i = 0; i < 4; i++) {
+          const hx = node.x - 21 + i * 14;
+          tg.fillCircle(hx, node.y - 12, 6);
+          tg.fillCircle(hx, node.y + 12, 6);
+          tg.fillStyle(0xfef08a, 0.9);
+          tg.fillCircle(hx, node.y - 12, 2);
+          tg.fillCircle(hx, node.y + 12, 2);
+          tg.fillStyle(0x451a03, 1);
         }
       } else if (node.game === 'ouk_chaktrang') {
         // Authentic UNCHECKERED carved teak-wood board (plain light-brown wood + dark-brown grid lines!)

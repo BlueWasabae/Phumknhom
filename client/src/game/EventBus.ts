@@ -240,6 +240,15 @@ export interface EventMap {
     foragingXp: number;
     unlockedFloatingKite: boolean;
   };
+  'folkGame:launchRequest': { game: 'bos_angkunh' | 'veay_kaom' | 'teanh_prot'; returnX?: number; returnY?: number };
+  'folkGame:completed': {
+    game: 'bos_angkunh' | 'veay_kaom' | 'teanh_prot';
+    won: boolean;
+    coinsEarned: number;
+    friendlyXp: number;
+    bonusItemId?: string;
+    badgeId?: string;
+  };
   'party:hostBroadcast': {
     partyId: string;
     hostName: string;
@@ -575,7 +584,9 @@ export interface EventMap {
       | 'floatingMarket'
       | 'sbekThom'
       | 'kiteWorkshop'
-      | 'partyHost';
+      | 'partyHost'
+      | 'folkGames'
+      | 'dyeStudio';
     leaderboardCategory?: 'farmer' | 'stylish' | 'slayer' | 'tower' | 'boss_rush' | 'pvp';
     farmTab?: 'seeds' | 'livestock' | 'artisan';
     shopTab?: 'primary' | 'secondary';
@@ -584,7 +595,7 @@ export interface EventMap {
     kromTab?: 'overview' | 'vault' | 'war';
     houseDecorTab?: 'interior' | 'yard';
     petId?: string;
-    clubGame?: 'kla_klok' | 'ouk_chaktrang' | 'tien_len';
+    clubGame?: 'kla_klok' | 'ouk_chaktrang' | 'tien_len' | 'bay_khom';
     clubTableId?: string;
     cartId?: string;
     bondPartnerName?: string;

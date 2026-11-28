@@ -9,29 +9,35 @@ interface FishingMiniGameProps {
 }
 
 const TRACK_HEIGHT = 240;
-const BAR_HEIGHT = 64;
+const BAR_HEIGHT = 76;
 const FISH_SIZE = 28;
 
 /**
- * Update 2.3 — Stage 3 Interactive Reeling Mini-Game Overlay:
+ * Update 2.3 / 3.4 Polish — Stage 3 Interactive Reeling Mini-Game Overlay:
  * Hold Click, Touch, or Spacebar to raise the buoyant golden Catch Bar over the darting Mekong fish
  * until the catch progress bar fills to 100%!
+ * Uses stable callback refs + global pointerup/blur safety so parent state ticks NEVER reset an active reel.
  */
 export const FishingMiniGame: React.FC<FishingMiniGameProps> = ({ bite, onComplete, onCancel }) => {
-  const [barY, setBarY] = useState(110);
+  const [barY, setBarY] = useState(100);
   const [fishY, setFishY] = useState(120);
-  const [progress, setProgress] = useState(30);
+  const [progress, setProgress] = useState(35);
   const [holding, setHolding] = useState(false);
 
   const holdingRef = useRef(false);
   const finishedRef = useRef(false);
+  const onCompleteRef = useRef(onComplete);
+  const onCancelRef = useRef(onCancel);
+  onCompleteRef.current = onComplete;
+  onCancelRef.current = onCancel;
+
   const stateRef = useRef({
-    barY: 110,
+    barY: 100,
     barVel: 0,
     fishY: 120,
     fishTargetY: 90,
     nextDartAt: 0,
-    progress: 30,
+    progress: 35,
   });
 
   useEffect(() => {
@@ -40,35 +46,44 @@ export const FishingMiniGame: React.FC<FishingMiniGameProps> = ({ bite, onComple
     holdingRef.current = false;
     setHolding(false);
     stateRef.current = {
-      barY: 110,
+      barY: 100,
       barVel: 0,
       fishY: 120,
-      fishTargetY: 70,
-      nextDartAt: performance.now() + 450,
-      progress: 32,
+      fishTargetY: 80,
+      nextDartAt: performance.now() + 520,
+      progress: 35,
     };
-    setBarY(110);
+    setBarY(100);
     setFishY(120);
-    setProgress(32);
+    setProgress(35);
+
+    const releaseHold = () => {
+      holdingRef.current = false;
+      setHolding(false);
+    };
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.code === 'Space' || e.key === ' ') {
         e.preventDefault();
+        e.stopPropagation();
         holdingRef.current = true;
         setHolding(true);
       } else if (e.key === 'Escape') {
         finishedRef.current = true;
-        onCancel();
+        onCancelRef.current();
       }
     };
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.code === 'Space' || e.key === ' ') {
-        holdingRef.current = false;
-        setHolding(false);
+        e.preventDefault();
+        releaseHold();
       }
     };
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('keydown', onKeyDown, true);
+    window.addEventListener('keyup', onKeyUp, true);
+    window.addEventListener('pointerup', releaseHold);
+    window.addEventListener('pointercancel', releaseHold);
+    window.addEventListener('blur', releaseHold);
 
     let rafId = 0;
     let lastTs = performance.now();
@@ -80,36 +95,36 @@ export const FishingMiniGame: React.FC<FishingMiniGameProps> = ({ bite, onComple
       lastTs = now;
       const s = stateRef.current;
 
-      // Buoyant catch bar physics (gravity pulls down, holding lifts smoothly upward)
-      const accel = holdingRef.current ? -640 : 540;
-      s.barVel = Math.max(-340, Math.min(340, s.barVel + accel * dt));
+      // Smooth buoyant catch bar physics (gravity pulls down, holding lifts responsively upward)
+      const accel = holdingRef.current ? -720 : 520;
+      s.barVel = Math.max(-340, Math.min(320, s.barVel + accel * dt));
       s.barY += s.barVel * dt;
       if (s.barY < 0) {
         s.barY = 0;
         s.barVel = 0;
       } else if (s.barY > TRACK_HEIGHT - BAR_HEIGHT) {
         s.barY = TRACK_HEIGHT - BAR_HEIGHT;
-        s.barVel = -s.barVel * 0.28;
+        s.barVel = -s.barVel * 0.22;
       }
 
-      // Fish darting AI scaled by rarity difficulty (Common = smooth, Mythic/Ancient = erratic!)
+      // Fish darting AI scaled by rarity difficulty (smooth & readable!)
       if (now >= s.nextDartAt) {
-        const minSpan = Math.max(240, 1050 - diff * 165);
-        const maxSpan = Math.max(460, 1600 - diff * 210);
+        const minSpan = Math.max(320, 1150 - diff * 155);
+        const maxSpan = Math.max(580, 1750 - diff * 195);
         s.nextDartAt = now + minSpan + Math.random() * (maxSpan - minSpan);
-        s.fishTargetY = 8 + Math.random() * (TRACK_HEIGHT - FISH_SIZE - 16);
+        s.fishTargetY = 10 + Math.random() * (TRACK_HEIGHT - FISH_SIZE - 20);
       }
-      const fishSpeed = 75 + diff * 48;
+      const fishSpeed = 68 + diff * 40;
       const fDiff = s.fishTargetY - s.fishY;
       s.fishY += Math.sign(fDiff) * Math.min(Math.abs(fDiff), fishSpeed * dt);
 
       // Overlap check between fish center and golden Catch Bar
       const fishCenter = s.fishY + FISH_SIZE / 2;
-      const inBar = fishCenter >= s.barY - 4 && fishCenter <= s.barY + BAR_HEIGHT + 4;
+      const inBar = fishCenter >= s.barY - 6 && fishCenter <= s.barY + BAR_HEIGHT + 6;
       if (inBar) {
-        s.progress = Math.min(100, s.progress + 34 * dt);
+        s.progress = Math.min(100, s.progress + 44 * dt);
       } else {
-        s.progress = Math.max(0, s.progress - (15 + diff * 2.2) * dt);
+        s.progress = Math.max(0, s.progress - (9.5 + diff * 1.8) * dt);
       }
 
       setBarY(s.barY);
@@ -119,12 +134,12 @@ export const FishingMiniGame: React.FC<FishingMiniGameProps> = ({ bite, onComple
       if (s.progress >= 100) {
         finishedRef.current = true;
         soundManager.playSfx('coin');
-        onComplete(true, bite);
+        onCompleteRef.current(true, bite);
         return;
       }
       if (s.progress <= 0) {
         finishedRef.current = true;
-        onComplete(false, bite);
+        onCompleteRef.current(false, bite);
         return;
       }
       rafId = requestAnimationFrame(tick);
@@ -133,10 +148,13 @@ export const FishingMiniGame: React.FC<FishingMiniGameProps> = ({ bite, onComple
     rafId = requestAnimationFrame(tick);
     return () => {
       cancelAnimationFrame(rafId);
-      window.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('keydown', onKeyDown, true);
+      window.removeEventListener('keyup', onKeyUp, true);
+      window.removeEventListener('pointerup', releaseHold);
+      window.removeEventListener('pointercancel', releaseHold);
+      window.removeEventListener('blur', releaseHold);
     };
-  }, [bite, onCancel, onComplete]);
+  }, [bite]);
 
   if (!bite) return null;
 
@@ -149,16 +167,13 @@ export const FishingMiniGame: React.FC<FishingMiniGameProps> = ({ bite, onComple
       onContextMenu={(e) => e.preventDefault()}
     >
       <div
-        className="pointer-events-auto phum-panel rounded-3xl p-4 w-64 border-[3px] border-amber-400 shadow-[0_0_32px_rgba(250,204,21,0.4)] select-none"
-        onPointerDown={() => {
+        className="pointer-events-auto phum-panel rounded-3xl p-4 w-64 border-[3px] border-amber-400 shadow-[0_0_32px_rgba(250,204,21,0.4)] select-none touch-none"
+        onPointerDown={(e) => {
+          e.preventDefault();
           holdingRef.current = true;
           setHolding(true);
         }}
         onPointerUp={() => {
-          holdingRef.current = false;
-          setHolding(false);
-        }}
-        onPointerLeave={() => {
           holdingRef.current = false;
           setHolding(false);
         }}

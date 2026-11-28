@@ -154,6 +154,8 @@ interface HUDProps {
   onStartDeliveryRun?: () => void;
   onOpenKiteWorkshop?: () => void;
   onOpenPartyHost?: () => void;
+  onOpenFolkGames?: () => void;
+  onOpenDyeStudio?: () => void;
   onOpenPatchNotes?: () => void;
   onOpenFeedback?: () => void;
   onOpenScryingMirror?: () => void;
@@ -238,6 +240,8 @@ export const HUD: React.FC<HUDProps> = ({
   onStartDeliveryRun,
   onOpenKiteWorkshop,
   onOpenPartyHost,
+  onOpenFolkGames,
+  onOpenDyeStudio,
   onOpenPatchNotes,
   onOpenFeedback,
   onOpenScryingMirror,
@@ -1276,6 +1280,36 @@ export const HUD: React.FC<HUDProps> = ({
                       <Gift className="w-4 h-4 text-rose-600" /> Host Party
                     </span>
                     <span className="text-[9px] font-bold text-rose-700">🎆 Show</span>
+                  </button>
+                )}
+                {onOpenFolkGames && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuDropdownOpen(false);
+                      onOpenFolkGames();
+                    }}
+                    className="px-3 py-2 rounded-xl hover:bg-amber-100 text-left flex items-center justify-between gap-2 text-amber-950"
+                  >
+                    <span className="flex items-center gap-2">
+                      <span>🏮</span> Folk Games Courtyard
+                    </span>
+                    <span className="text-[9px] font-bold text-amber-700">3 Games</span>
+                  </button>
+                )}
+                {onOpenDyeStudio && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuDropdownOpen(false);
+                      onOpenDyeStudio();
+                    }}
+                    className="px-3 py-2 rounded-xl hover:bg-fuchsia-100 text-left flex items-center justify-between gap-2 text-amber-950"
+                  >
+                    <span className="flex items-center gap-2">
+                      <span>🎨</span> Outfit Dye Studio
+                    </span>
+                    <span className="text-[9px] font-bold text-fuchsia-700">Dyes</span>
                   </button>
                 )}
                 {onOpenArena && (

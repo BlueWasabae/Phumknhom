@@ -130,6 +130,12 @@ export class PlazaRoom extends Room<PlazaState> {
 
         if (typeof payload.appearanceJson === 'string') {
           player.appearanceJson = sanitizeAppearance(payload.appearanceJson);
+          try {
+            const parsed = JSON.parse(player.appearanceJson) as { equippedDyes?: Record<string, string> };
+            player.equippedDyesJson = parsed?.equippedDyes ? JSON.stringify(parsed.equippedDyes) : '{}';
+          } catch {
+            player.equippedDyesJson = '{}';
+          }
         }
         if (typeof payload.name === 'string') {
           player.name = sanitizeName(payload.name, player.name);

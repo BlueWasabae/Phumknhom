@@ -22,6 +22,7 @@ import { FASHION_SHOP_ITEMS, ITEM_CATALOG } from '../data/items';
 import { STREET_SNACK_LIST, countInventoryAnyQuality } from '../data/recipes';
 import { NativeDialog } from './NativeDialog';
 import { PaperDollPreview } from './PaperDollPreview';
+import { EventBus } from '../game/EventBus';
 
 export type ShopMode = 'snack' | 'fashion';
 
@@ -221,6 +222,18 @@ export const ShopModal: React.FC<ShopModalProps> = ({
               }`}
             >
               <Armchair className="w-3.5 h-3.5" /> Home Furniture ({starterFurniture.length})
+            </button>
+          )}
+          {mode === 'fashion' && (
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                EventBus.emit('ui:openModal', { modal: 'dyeStudio' });
+              }}
+              className="px-3.5 py-1.5 rounded-xl font-display font-bold text-xs border-2 flex items-center gap-1.5 transition bg-gradient-to-r from-fuchsia-600 to-amber-500 text-white border-amber-950 hover:brightness-110 cursor-pointer"
+            >
+              🎨 Dye Studio
             </button>
           )}
         </div>

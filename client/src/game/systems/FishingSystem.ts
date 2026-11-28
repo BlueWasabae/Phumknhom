@@ -269,7 +269,7 @@ export class FishingSystem {
   }
 
   /**
-   * Checks whether the player stands within `MAX_FISHING_DISTANCE = 110px` of the active fishing pier/shoreline.
+   * Checks whether the player stands near ANY fishing pier or shoreline across Mekong, Koh Rong, Phnom Kulen, or Tonle Sap.
    */
   public canCastFrom(
     px: number,
@@ -277,25 +277,42 @@ export class FishingSystem {
     mode: 'mekong' | 'koh_rong' = 'mekong'
   ): { ok: boolean; waterX: number; waterY: number } {
     if (mode === 'koh_rong') {
-      // Koh Rong Deep-Sea Pier (1220, 800) & southern ocean shoreline (y >= 740)
-      const distToPier = Phaser.Math.Distance.Between(px, py, 1220, 815);
-      const nearOcean = py >= 735;
-      if (distToPier > MAX_FISHING_DISTANCE + 45 && !nearOcean) {
+      // Koh Rong Deep-Sea Pier (1235, 805) & southern ocean shoreline (y >= 700)
+      const distToPier = Phaser.Math.Distance.Between(px, py, 1235, 805);
+      const nearOcean = py >= 700;
+      if (distToPier > MAX_FISHING_DISTANCE + 80 && !nearOcean) {
         return { ok: false, waterX: 1295, waterY: 880 };
       }
-      const waterX = Phaser.Math.Clamp(px + (px > 1100 ? 75 : 0) + (Math.random() - 0.5) * 48, 260, 1460);
-      const waterY = Phaser.Math.Clamp(Math.max(875, py + 72) + (Math.random() - 0.5) * 32, 870, 995);
+      const waterX = Phaser.Math.Clamp(px + (px > 1050 ? 70 : 0) + (Math.random() - 0.5) * 44, 240, 1460);
+      const waterY = Phaser.Math.Clamp(Math.max(868, py + 72) + (Math.random() - 0.5) * 28, 860, 995);
       return { ok: true, waterX, waterY };
     }
-    // Pier anchor & shoreline spots around the Green Park pond (center 440, 840; pier at 525, 825)
+    // Green Park Fishing Pier (525, 825), entire Mekong Pond rim (440, 840), & Southern River / Floating Market shoreline!
     const distToPier = Phaser.Math.Distance.Between(px, py, 525, 825);
-    const distToPondEdge = Math.max(0, Phaser.Math.Distance.Between(px, py, 440, 840) - 96);
-    if (distToPier > MAX_FISHING_DISTANCE && distToPondEdge > MAX_FISHING_DISTANCE) {
+    const distToPondEdge = Math.max(0, Phaser.Math.Distance.Between(px, py, 440, 840) - 115);
+    const nearSouthShore = py >= 820 && px >= 200 && px <= 1380;
+    const nearPhnomKulenRiver = px >= 540 && px <= 860 && py >= 220 && py <= 560;
+    if (
+      distToPier > MAX_FISHING_DISTANCE + 65 &&
+      distToPondEdge > MAX_FISHING_DISTANCE + 55 &&
+      !nearSouthShore &&
+      !nearPhnomKulenRiver
+    ) {
       return { ok: false, waterX: 435, waterY: 840 };
     }
+    if (nearSouthShore && distToPondEdge > 150) {
+      const waterX = Phaser.Math.Clamp(px + (Math.random() - 0.5) * 44, 240, 1360);
+      const waterY = Phaser.Math.Clamp(Math.max(py + 62, 920), 910, 1020);
+      return { ok: true, waterX, waterY };
+    }
+    if (nearPhnomKulenRiver && distToPondEdge > 180) {
+      const waterX = Phaser.Math.Clamp(700 + (Math.random() - 0.5) * 60, 620, 780);
+      const waterY = Phaser.Math.Clamp(py - 40, 260, 490);
+      return { ok: true, waterX, waterY };
+    }
     // Aim bobber into the open water of the Mekong Pond
-    const waterX = Phaser.Math.Clamp(430 + (Math.random() - 0.5) * 62, 375, 485);
-    const waterY = Phaser.Math.Clamp(838 + (Math.random() - 0.5) * 40, 804, 872);
+    const waterX = Phaser.Math.Clamp(430 + (Math.random() - 0.5) * 62, 370, 490);
+    const waterY = Phaser.Math.Clamp(838 + (Math.random() - 0.5) * 40, 800, 876);
     return { ok: true, waterX, waterY };
   }
 
@@ -543,11 +560,21 @@ export class FishingSystem {
   }
 
   /**
-   * Cancels fishing cleanly if the player walks away (> 24px) during Stage 1/2.
+   * Cancels fishing cleanly if the player walks well away (> 54px) during Stage 1/2.
+   * Never cancels once a fish has bitten and the Reeling Mini-Game is open!
    */
   public cancelIfMoved(playerX: number, playerY: number): void {
     if (this.stage === 'casting' || this.stage === 'waiting') {
-      if (Phaser.Math.Distance.Between(playerX, playerY, this.anchorPlayerX, this.anchorPlayerY) > 22) {
+      if (Phaser.Math.Distance.Between(playerX, playerY, this.anchorPlayerX, this.anchorPlayerY) > 54) {
+        vfxManager.spawnFloatingText(
+          this.scene,
+          playerX,
+          playerY - 26,
+          '🎣 Line reeled in',
+          '#cbd5e1',
+          '11px',
+          { riseY: 16, durationMs: 650, depth: 3150 }
+        );
         this.resetVisuals();
       }
     }

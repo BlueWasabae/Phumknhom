@@ -16,6 +16,7 @@ import { KromHallScene } from './scenes/KromHallScene';
 import { PetRaceScene } from './scenes/PetRaceScene';
 import { ArenaPvPScene } from './scenes/ArenaPvPScene';
 import { KiteFlyScene } from './scenes/KiteFlyScene';
+import { FolkGamesScene } from './scenes/FolkGamesScene';
 
 export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameConfig {
   return {
@@ -71,6 +72,7 @@ export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameCon
       PetRaceScene,
       ArenaPvPScene,
       KiteFlyScene,
+      FolkGamesScene,
     ],
   };
 }

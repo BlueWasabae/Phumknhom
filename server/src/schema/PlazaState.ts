@@ -11,6 +11,7 @@ export class RemotePlayer extends Schema {
   @type('string') facing: string = 'down';
   @type('boolean') isMoving: boolean = false;
   @type('string') appearanceJson: string = '{}';
+  @type('string') equippedDyesJson: string = '{}';
   @type('string') areaId: string = 'AREA 0';
   @type('string') activeMountId: string = '';
   @type('string') ridingDriverSessionId: string = '';

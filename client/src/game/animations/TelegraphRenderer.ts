@@ -23,7 +23,12 @@ export interface BossHazard {
     | 'crystal_beam'
     | 'magma_vent'
     | 'chakram';
-  sprite: Phaser.GameObjects.Container | Phaser.GameObjects.Arc | Phaser.GameObjects.Rectangle | Phaser.GameObjects.Ellipse;
+  sprite:
+    | Phaser.GameObjects.Container
+    | Phaser.GameObjects.Sprite
+    | Phaser.GameObjects.Arc
+    | Phaser.GameObjects.Rectangle
+    | Phaser.GameObjects.Ellipse;
   x: number;
   y: number;
   vx: number;
@@ -183,7 +188,7 @@ export class TelegraphRenderer {
   }
 
   /**
-   * Stage 3: Impact Juice — 40ms hit-stop freeze on heavy hits, camera shake, dust burst.
+   * Stage 3: Impact Juice — 45ms hit-stop freeze on heavy hits, camera shake, animated pixel-art VFX burst.
    */
   public playImpactJuice(
     x: number,
@@ -192,36 +197,44 @@ export class TelegraphRenderer {
     heavy = false
   ): void {
     const pal = TELEGRAPH_PALETTE[color];
+    const animKey =
+      color === 'green'
+        ? 'vfx_poison_orb'
+        : color === 'purple'
+          ? 'vfx_magic_burst'
+          : color === 'yellow'
+            ? 'vfx_lightning_burst'
+            : heavy
+              ? 'vfx_explosion_pixel'
+              : 'vfx_impact_hit';
+    vfxManager.playSpriteVfx(this.scene, animKey, x, y - (heavy ? 18 : 8), {
+      scale: heavy ? 2.2 : 1.55,
+      additive: true,
+      depth: 70,
+    });
+    if (heavy) {
+      vfxManager.playSpriteVfx(this.scene, 'vfx_shockwave', x, y - 6, {
+        scale: 2.1,
+        tint: pal.fill,
+        additive: true,
+        depth: 69,
+      });
+    }
+
     const ring = this.scene.add
-      .circle(x, y, heavy ? 22 : 14, pal.fill, 0.45)
-      .setStrokeStyle(3, pal.stroke, 0.95)
+      .ellipse(x, y, heavy ? 44 : 26, heavy ? 16 : 10, pal.fill, 0.35)
+      .setStrokeStyle(2.5, pal.stroke, 0.95)
+      .setBlendMode(Phaser.BlendModes.ADD)
       .setDepth(68);
-    vfxManager.applyGlow(this.scene, ring, pal.fill, heavy ? 3.2 : 2.2, 0.35);
     this.scene.tweens.add({
       targets: ring,
-      scale: heavy ? 3.2 : 2.1,
+      scaleX: heavy ? 2.8 : 1.9,
+      scaleY: heavy ? 2.2 : 1.5,
       alpha: 0,
       duration: heavy ? 280 : 190,
       ease: 'Cubic.easeOut',
       onComplete: () => ring.destroy(),
     });
-
-    // Ground dust/spark burst
-    for (let i = 0; i < (heavy ? 8 : 5); i++) {
-      const ang = -Math.PI + (i / (heavy ? 7 : 4)) * Math.PI;
-      const dist = (heavy ? 64 : 36) + Math.random() * 24;
-      const p = this.scene.add.rectangle(x, y, 6, 6, pal.stroke, 0.95).setDepth(69);
-      this.scene.tweens.add({
-        targets: p,
-        x: x + Math.cos(ang) * dist,
-        y: y + Math.sin(ang) * dist - 14,
-        alpha: 0,
-        scale: 0.2,
-        duration: 280,
-        ease: 'Quad.easeOut',
-        onComplete: () => p.destroy(),
-      });
-    }
 
     this.scene.cameras.main.shake(heavy ? 180 : 95, heavy ? 0.0085 : 0.004);
 
@@ -231,7 +244,8 @@ export class TelegraphRenderer {
   }
 
   /**
-   * Spawns a visible jumpable ground shockwave traveling horizontally along floorY.
+   * Spawns an animated 16-bit pixel-art ground shockwave traveling horizontally along floorY
+   * (zero primitive squares/triangles — uses looping pixel-art energy/flame crests + bloom glow!).
    */
   public createGroundShockwave(
     startX: number,
@@ -244,13 +258,55 @@ export class TelegraphRenderer {
     label: string
   ): BossHazard {
     const pal = TELEGRAPH_PALETTE[color];
-    const container = this.scene.add.container(startX, floorY - 20).setDepth(58);
-    const waveCore = this.scene.add
-      .rectangle(0, 0, 38, 36, pal.fill, 0.85)
-      .setStrokeStyle(3, pal.stroke, 1);
-    const crest = this.scene.add.triangle(0, -24, -14, 14, 0, -10, 14, 14, pal.stroke, 0.95);
-    container.add([waveCore, crest]);
-    vfxManager.applyGlow(this.scene, container, pal.fill, 2.8, 0.35);
+    const container = this.scene.add.container(startX, floorY - 22).setDepth(58);
+
+    const glow = this.scene.add
+      .ellipse(0, 6, 46, 20, pal.fill, 0.42)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    container.add(glow);
+
+    // Choose authentic animated pixel-art VFX sheet matching the boss element
+    const vfxTex =
+      color === 'green'
+        ? 'vfx_poison_orb'
+        : color === 'purple'
+          ? 'vfx_magic_burst'
+          : color === 'yellow'
+            ? 'vfx_lightning_burst'
+            : 'vfx_fire_pillar';
+    const vfxAnim = `${vfxTex}_anim`;
+
+    if (this.scene.textures.exists(vfxTex) && this.scene.anims.exists(vfxAnim)) {
+      const fxSprite = this.scene.add
+        .sprite(0, -6, vfxTex, 0)
+        .setScale(color === 'red' ? 1.55 : 1.75)
+        .setFlipX(dir < 0)
+        .setTint(pal.stroke)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .play({ key: vfxAnim, repeat: -1 });
+      container.add(fxSprite);
+    } else {
+      // Crisp curved crescent energy wave fallback (never raw square+triangle)
+      const waveGfx = this.scene.add.graphics();
+      waveGfx.fillStyle(pal.fill, 0.85);
+      waveGfx.fillEllipse(0, 2, 34, 28);
+      waveGfx.fillStyle(pal.stroke, 0.95);
+      waveGfx.fillEllipse(dir * 4, -2, 22, 18);
+      container.add(waveGfx);
+    }
+
+    // Subtle secondary ground spark crest
+    if (this.scene.textures.exists('vfx_shockwave') && this.scene.anims.exists('vfx_shockwave_anim')) {
+      const baseWave = this.scene.add
+        .sprite(0, 10, 'vfx_shockwave', 0)
+        .setScale(1.1, 0.65)
+        .setTint(pal.fill)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .play({ key: 'vfx_shockwave_anim', repeat: -1 });
+      container.add(baseWave);
+    }
+
+    vfxManager.applyGlow(this.scene, container, pal.fill, 2.6, 0.38);
 
     return {
       kind: 'shockwave',
@@ -259,8 +315,8 @@ export class TelegraphRenderer {
       y: floorY - 20,
       vx: dir * speed,
       vy: 0,
-      width: 36,
-      height: 36,
+      width: 38,
+      height: 40,
       damage,
       expiresAt: now + 2600,
       alive: true,
