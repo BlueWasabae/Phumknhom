@@ -6269,7 +6269,9 @@ export class OverworldScene extends Phaser.Scene {
     const res = deliveryJobManager.deliverOrder(order.id);
     if (!res.delivered) return false;
     soundManager.playSfx(res.allDone ? 'victory' : 'coin');
+    vfxManager.playCoinJackpotVfx(this, this.player.x, this.player.y, 2400);
     if (res.allDone && res.reward) {
+      vfxManager.playHeartBurstVfx(this, this.player.x, this.player.y - 26, 2405);
       EventBus.emit('delivery:completed', res.reward);
     } else {
       const next = deliveryJobManager.getNextPendingOrder();

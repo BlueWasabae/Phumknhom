@@ -659,7 +659,93 @@ class GlobalVFXManager {
   }
 
   /**
-   * Golden vertical Level-Up Light Pillar with rising glowing motes.
+   * Plays a preloaded multi-frame pixel-art VFX spritesheet animation at `(x, y)`
+   * and auto-destroys on completion (zero leaks, graceful no-op if anim not yet ready).
+   */
+  public playSpriteVfx(
+    scene: Phaser.Scene,
+    animKey: string,
+    x: number,
+    y: number,
+    opts?: {
+      scale?: number;
+      tint?: number;
+      rotation?: number;
+      flipX?: boolean;
+      flipY?: boolean;
+      alpha?: number;
+      additive?: boolean;
+      depth?: number;
+      glowColor?: number;
+      originY?: number;
+    }
+  ): Phaser.GameObjects.Sprite | null {
+    if (!scene?.add || !scene.anims || !scene.anims.exists(animKey)) return null;
+    const anim = scene.anims.get(animKey);
+    const firstTexKey = anim?.frames?.[0]?.textureKey;
+    if (!firstTexKey || !scene.textures.exists(firstTexKey)) return null;
+
+    const spr = scene.add
+      .sprite(x, y, firstTexKey, 0)
+      .setOrigin(0.5, opts?.originY ?? 0.5)
+      .setScale(opts?.scale ?? 1.5)
+      .setRotation(opts?.rotation ?? 0)
+      .setFlipX(Boolean(opts?.flipX))
+      .setFlipY(Boolean(opts?.flipY))
+      .setAlpha(opts?.alpha ?? 1)
+      .setDepth(opts?.depth ?? 74);
+
+    if (opts?.tint !== undefined) spr.setTint(opts.tint);
+    if (opts?.additive) spr.setBlendMode(Phaser.BlendModes.ADD);
+    if (opts?.glowColor !== undefined) {
+      this.applyGlow(scene, spr, opts.glowColor, 2.6, 0.35);
+    }
+
+    spr.play(animKey);
+    spr.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+      if (spr.active) spr.destroy();
+    });
+    return spr;
+  }
+
+  /** Animated Healing / Blessing Lotus Spell burst */
+  public playHealSpellVfx(scene: Phaser.Scene, x: number, y: number, depth = 78): void {
+    this.playSpriteVfx(scene, 'vfx_spell_heal', x, y - 16, {
+      scale: 1.35,
+      tint: 0x4ade80,
+      additive: true,
+      depth,
+      glowColor: 0x22c55e,
+    });
+  }
+
+  /** Animated Golden Coin Jackpot Fountain (Deliveries, Trade Profits, Chests, Wheel) */
+  public playCoinJackpotVfx(scene: Phaser.Scene, x: number, y: number, depth = 82): void {
+    this.playSpriteVfx(scene, 'vfx_coin_burst', x, y - 18, {
+      scale: 1.45,
+      depth,
+      glowColor: 0xfacc15,
+    });
+  }
+
+  /** Animated Music Notes Burst (Khmer Instrument Jamming & Dance Emotes) */
+  public playMusicBurstVfx(scene: Phaser.Scene, x: number, y: number, depth = 82): void {
+    this.playSpriteVfx(scene, 'vfx_music_burst', x, y - 24, {
+      scale: 1.2,
+      depth,
+    });
+  }
+
+  /** Animated Heart Burst (Pet Evolution, Feeding, Friendly XP & Social Emotes) */
+  public playHeartBurstVfx(scene: Phaser.Scene, x: number, y: number, depth = 82): void {
+    this.playSpriteVfx(scene, 'vfx_heart_burst', x, y - 22, {
+      scale: 1.25,
+      depth,
+    });
+  }
+
+  /**
+   * Golden vertical Level-Up Light Pillar with rising glowing motes & hand-pixeled Magic Burst.
    */
   public playLevelUpLightPillar(scene: Phaser.Scene, x: number, y: number, depth = 2200): void {
     if (!scene?.add || !scene.tweens) return;
@@ -685,6 +771,18 @@ class GlobalVFXManager {
       },
     });
 
+    this.playSpriteVfx(scene, 'vfx_round_light_burst', x, y - 24, {
+      scale: 1.8,
+      additive: true,
+      depth: depth + 2,
+      glowColor: 0xfacc15,
+    });
+    this.playSpriteVfx(scene, 'vfx_spell_attack_up', x, y - 16, {
+      scale: 1.45,
+      tint: 0xfef08a,
+      additive: true,
+      depth: depth + 3,
+    });
     this.radialShockwave(scene, x, y, 0xfacc15, 78, 520, depth + 2);
     this.additiveSparkBurst(scene, x, y - 24, 0xfef08a, 14, 72, depth + 3);
   }

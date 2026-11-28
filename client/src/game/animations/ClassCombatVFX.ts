@@ -110,16 +110,38 @@ export class ClassCombatVFX {
     const sx = x + Math.cos(ang) * 48;
     const sy = y - 6 + Math.sin(ang) * 44;
 
-    // Real Ninja Adventure curved slash tinted by Animal Stance & rotated along aimAngle
-    const slash = this.scene.add
-      .sprite(sx, sy, 'fx_slash', 0)
-      .setScale(scale)
-      .setTint(color)
-      .setRotation(ang)
-      .setFlipY(Math.cos(ang) < 0)
-      .setDepth(62);
-    slash.play('slash_curved');
-    slash.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => slash.destroy());
+    // Real Pixel-Art Slash VFX (FreeMix Big Slash on 3rd Hanuman strike, Circular/Curved Slash on 1st & 2nd)
+    if (stance === 3 && this.scene.anims.exists('vfx_slash_big')) {
+      vfxManager.playSpriteVfx(this.scene, 'vfx_slash_big', sx, sy, {
+        scale: 1.05,
+        tint: 0xfacc15,
+        rotation: ang,
+        flipY: Math.cos(ang) < 0,
+        additive: true,
+        depth: 64,
+        glowColor: 0xfacc15,
+      });
+      vfxManager.playSpriteVfx(this.scene, 'vfx_na_rock_spike', x + Math.cos(ang) * 56, y + 8 + Math.sin(ang) * 36, {
+        scale: 1.45,
+        depth: 63,
+      });
+    } else {
+      const animKey = stance === 2 && this.scene.anims.exists('vfx_circular_slash') ? 'vfx_circular_slash' : 'slash_curved';
+      const slash = this.scene.add
+        .sprite(sx, sy, animKey === 'vfx_circular_slash' ? 'fx_circular_slash' : 'fx_slash', 0)
+        .setScale(scale)
+        .setTint(color)
+        .setRotation(ang)
+        .setFlipY(Math.cos(ang) < 0)
+        .setDepth(62);
+      slash.play(animKey);
+      slash.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => slash.destroy());
+    }
+    vfxManager.playSpriteVfx(this.scene, 'vfx_impact_yellow', sx, sy, {
+      scale: stance === 3 ? 1.35 : 0.95,
+      additive: true,
+      depth: 65,
+    });
 
     // Hanuman 3rd-hit overhead slam dust burst
     if (stance === 3) {
@@ -142,7 +164,18 @@ export class ClassCombatVFX {
    * Lbokator forward shoulder-roll golden dust trail
    */
   public playLbokatorDashDust(x: number, y: number): void {
-    for (let i = 0; i < 6; i++) {
+    vfxManager.playSpriteVfx(this.scene, 'vfx_smoke_burst', x, y + 6, {
+      scale: 1.55,
+      tint: 0xfde047,
+      depth: 56,
+    });
+    vfxManager.playSpriteVfx(this.scene, 'vfx_spell_haste', x, y - 8, {
+      scale: 0.95,
+      tint: 0xfacc15,
+      additive: true,
+      depth: 57,
+    });
+    for (let i = 0; i < 4; i++) {
       const puff = this.scene.add
         .circle(x + (Math.random() - 0.5) * 24, y + 14 + (Math.random() - 0.5) * 10, 5 + Math.random() * 4, 0xfde047, 0.85)
         .setDepth(55);
@@ -185,18 +218,27 @@ export class ClassCombatVFX {
   }
 
   /**
-   * Impact spark burst for Arrows & Mystic Orbs
+   * Impact spark burst for Arrows, Mystic Orbs & Melee Hits (hand-pixeled Super Pixel Impact!)
    */
   public playImpactSparks(x: number, y: number, colorHex: number): void {
-    for (let i = 0; i < 6; i++) {
-      const angle = (i / 6) * Math.PI * 2 + Math.random() * 0.4;
-      const spark = this.scene.add.circle(x, y, 3.5, colorHex, 0.95).setDepth(66);
+    const isViolet = colorHex === 0xa855f7 || colorHex === 0xc084fc || colorHex === 0xe879f9;
+    const isCyan = colorHex === 0x22d3ee || colorHex === 0x38bdf8 || colorHex === 0x67e8f9 || colorHex === 0x10b981;
+    const animKey = isViolet ? 'vfx_impact_violet' : isCyan ? 'vfx_impact_blue' : 'vfx_impact_yellow';
+    vfxManager.playSpriteVfx(this.scene, animKey, x, y, {
+      scale: 1.2,
+      tint: isViolet || isCyan ? colorHex : undefined,
+      additive: true,
+      depth: 67,
+    });
+    for (let i = 0; i < 4; i++) {
+      const angle = (i / 4) * Math.PI * 2 + Math.random() * 0.5;
+      const spark = this.scene.add.circle(x, y, 3.2, colorHex, 0.95).setDepth(66);
       this.scene.tweens.add({
         targets: spark,
-        x: x + Math.cos(angle) * 32,
-        y: y + Math.sin(angle) * 32,
+        x: x + Math.cos(angle) * 28,
+        y: y + Math.sin(angle) * 28,
         alpha: 0,
-        duration: 210,
+        duration: 190,
         onComplete: () => spark.destroy(),
       });
     }
@@ -277,6 +319,24 @@ export class ClassCombatVFX {
       .setStrokeStyle(4, 0xffffff)
       .setDepth(69);
 
+    vfxManager.playSpriteVfx(this.scene, 'vfx_lightning_strike', x, floorY - 70, {
+      scale: 2.2,
+      tint: 0xfacc15,
+      additive: true,
+      depth: 70,
+      glowColor: 0xfacc15,
+    });
+    vfxManager.playSpriteVfx(this.scene, 'vfx_round_light_burst', x, floorY - 52, {
+      scale: 1.75,
+      additive: true,
+      depth: 71,
+    });
+    vfxManager.playSpriteVfx(this.scene, 'vfx_na_circle_orange', x, floorY - 12, {
+      scale: 2.6,
+      additive: true,
+      depth: 69,
+    });
+
     this.scene.cameras.main.shake(180, 0.009);
     this.scene.tweens.add({
       targets: beam,
@@ -298,12 +358,24 @@ export class ClassCombatVFX {
    * Mystic Lotus-Petal Blink Dash burst
    */
   public playMysticLotusBlink(fromX: number, fromY: number, toX: number, toY: number): void {
+    vfxManager.playSpriteVfx(this.scene, 'vfx_na_circle_spark', fromX, fromY - 6, {
+      scale: 1.85,
+      tint: 0xf472b6,
+      additive: true,
+      depth: 65,
+    });
+    vfxManager.playSpriteVfx(this.scene, 'vfx_sparkle_blue', toX, toY - 10, {
+      scale: 1.9,
+      tint: 0xfef08a,
+      additive: true,
+      depth: 65,
+    });
     for (const [px, py] of [
       [fromX, fromY],
       [toX, toY],
     ]) {
-      for (let i = 0; i < 7; i++) {
-        const a = (i / 7) * Math.PI * 2;
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
         const petal = this.scene.add
           .ellipse(px, py, 10, 5, i % 2 === 0 ? 0xf472b6 : 0xfef08a, 0.9)
           .setRotation(a)
@@ -325,6 +397,20 @@ export class ClassCombatVFX {
    */
   public playKramaWhipSnap(x: number, y: number, dir: number, aimAngle?: number): void {
     const ang = aimAngle !== undefined ? aimAngle : dir < 0 ? Math.PI : 0;
+    const tipX = x + Math.cos(ang) * 76;
+    const tipY = y - 6 + Math.sin(ang) * 64;
+    vfxManager.playSpriteVfx(this.scene, 'vfx_claw_double', tipX, tipY, {
+      scale: 2.1,
+      tint: 0xf43f5e,
+      rotation: ang,
+      additive: true,
+      depth: 64,
+    });
+    vfxManager.playSpriteVfx(this.scene, 'vfx_impact_yellow', tipX, tipY, {
+      scale: 1.05,
+      additive: true,
+      depth: 65,
+    });
     const container = this.scene.add
       .container(x + Math.cos(ang) * 18, y - 6 + Math.sin(ang) * 18)
       .setRotation(ang)
@@ -357,36 +443,28 @@ export class ClassCombatVFX {
     const ang = aimAngle !== undefined ? aimAngle : dir < 0 ? Math.PI : 0;
     const cx = x + Math.cos(ang) * 48;
     const cy = y - 6 + Math.sin(ang) * 44;
-    const g = this.scene.add.graphics().setPosition(cx, cy).setRotation(ang).setDepth(64);
-    const col = isShadowStrike ? 0xc084fc : 0xe2e8f0;
-    const lw = isShadowStrike ? 7 : 4;
 
-    g.lineStyle(lw, col, 0.95);
-    g.beginPath();
-    g.moveTo(-28, -26);
-    g.lineTo(28, 26);
-    g.moveTo(28, -26);
-    g.lineTo(-28, 26);
-    g.strokePath();
-
-    this.scene.tweens.add({
-      targets: g,
-      alpha: 0,
-      duration: isShadowStrike ? 260 : 170,
-      onComplete: () => g.destroy(),
+    vfxManager.playSpriteVfx(this.scene, 'vfx_cut_x', cx, cy, {
+      scale: isShadowStrike ? 2.65 : 2.1,
+      tint: isShadowStrike ? 0xc084fc : 0xe2e8f0,
+      rotation: ang,
+      additive: true,
+      depth: 65,
+      glowColor: isShadowStrike ? 0xa855f7 : undefined,
+    });
+    vfxManager.playSpriteVfx(this.scene, 'vfx_impact_violet', cx, cy, {
+      scale: isShadowStrike ? 1.55 : 1.05,
+      rotation: ang,
+      additive: true,
+      depth: 66,
     });
 
     if (isShadowStrike) {
-      const burst = this.scene.add
-        .circle(cx, cy, 18, 0x9333ea, 0.55)
-        .setStrokeStyle(4, 0xf0abfc)
-        .setDepth(66);
-      this.scene.tweens.add({
-        targets: burst,
-        scale: 3.4,
-        alpha: 0,
-        duration: 300,
-        onComplete: () => burst.destroy(),
+      vfxManager.playSpriteVfx(this.scene, 'vfx_violet_explosion', cx, cy, {
+        scale: 1.8,
+        additive: true,
+        depth: 67,
+        glowColor: 0xc084fc,
       });
     }
   }
@@ -395,22 +473,20 @@ export class ClassCombatVFX {
    * Shadow Hunter Smoke-Puff Dash leaving a 0.4s Shadow Afterimage Decoy
    */
   public playShadowDecoyDash(x: number, y: number): void {
+    vfxManager.playSpriteVfx(this.scene, 'vfx_smoke_burst', x, y, {
+      scale: 1.8,
+      tint: 0x7e22ce,
+      depth: 52,
+    });
+    vfxManager.playSpriteVfx(this.scene, 'vfx_spell_absorb_violet', x, y - 8, {
+      scale: 1.05,
+      additive: true,
+      depth: 53,
+    });
     const decoy = this.scene.add
       .ellipse(x, y, 30, 48, 0x7e22ce, 0.55)
       .setStrokeStyle(2, 0xe879f9)
       .setDepth(49);
-    for (let i = 0; i < 6; i++) {
-      const smoke = this.scene.add
-        .circle(x + (Math.random() - 0.5) * 28, y + (Math.random() - 0.5) * 28, 7, 0x3b0764, 0.7)
-        .setDepth(51);
-      this.scene.tweens.add({
-        targets: smoke,
-        scale: 2.1,
-        alpha: 0,
-        duration: 320,
-        onComplete: () => smoke.destroy(),
-      });
-    }
     this.scene.tweens.add({
       targets: decoy,
       alpha: 0,
@@ -575,6 +651,17 @@ export class ClassCombatVFX {
    * 1. Preah Khan 0.35s Golden Parry Guard Dome & Successful Counter Shockwave
    */
   public playPreahKhanParryGuard(x: number, y: number, dir: number): void {
+    vfxManager.playSpriteVfx(this.scene, 'vfx_spell_defense_up', x + dir * 12, y - 10, {
+      scale: 1.2,
+      tint: 0xfacc15,
+      additive: true,
+      depth: 71,
+    });
+    vfxManager.playSpriteVfx(this.scene, 'vfx_na_shield_yellow', x + dir * 20, y - 6, {
+      scale: 2.1,
+      additive: true,
+      depth: 72,
+    });
     const shield = this.scene.add
       .arc(x + dir * 24, y - 4, 34, -75, 75, false, 0xfacc15, 0.42)
       .setStrokeStyle(4, 0xfef9c3, 1)
@@ -591,6 +678,12 @@ export class ClassCombatVFX {
   }
 
   public playPreahKhanParrySuccess(x: number, y: number): void {
+    vfxManager.playSpriteVfx(this.scene, 'vfx_round_light_burst', x, y - 8, {
+      scale: 1.9,
+      additive: true,
+      depth: 76,
+      glowColor: 0xfacc15,
+    });
     const ring = this.scene.add
       .circle(x, y - 6, 20, 0xfacc15, 0.5)
       .setStrokeStyle(5, 0xffffff, 1)
@@ -843,6 +936,18 @@ export class ClassCombatVFX {
             aura.destroy();
             vfxManager.hitStop(this.scene, 45);
             vfxManager.directionalShake(this.scene, 0.4, 1, 0.013, 210);
+            vfxManager.playSpriteVfx(this.scene, 'vfx_epic_explosion', x, floorY - 26, {
+              scale: 2.35,
+              additive: true,
+              depth: 74,
+              glowColor: 0xfacc15,
+            });
+            for (const ox of [-58, 0, 58]) {
+              vfxManager.playSpriteVfx(this.scene, 'vfx_na_rock_spike', x + ox, floorY - 10, {
+                scale: 1.65,
+                depth: 73,
+              });
+            }
             vfxManager.radialShockwave(this.scene, x, floorY - 8, 0xfacc15, 175, 360, 70);
             vfxManager.radialShockwave(this.scene, x, floorY - 8, 0xf97316, 130, 280, 71);
             vfxManager.additiveSparkBurst(this.scene, x, floorY - 14, 0xfef08a, 18, 120, 72);
@@ -929,8 +1034,22 @@ export class ClassCombatVFX {
           ease: 'Cubic.easeIn',
           onComplete: () => {
             vfxManager.additiveSparkBurst(this.scene, dropX, floorY - 14, 0xfde047, 6, 36, 72);
+            vfxManager.playSpriteVfx(this.scene, 'vfx_impact_yellow', dropX, floorY - 18, {
+              scale: 1.15,
+              additive: true,
+              depth: 73,
+            });
             arrow.destroy();
             if (i === 3 || i === 7 || i === 11) {
+              if (i === 11) {
+                vfxManager.playSpriteVfx(this.scene, 'vfx_explosion_fm', targetX, floorY - 34, {
+                  scale: 1.35,
+                  tint: 0xfef08a,
+                  additive: true,
+                  depth: 74,
+                  glowColor: 0xfacc15,
+                });
+              }
               vfxManager.directionalShake(this.scene, 0.2, 0.7, 0.006, 90);
               onVolleyHit(i);
             }
@@ -968,6 +1087,11 @@ export class ClassCombatVFX {
     mandala.add(g);
     mandala.setScale(1, 0.34);
     vfxManager.applyBloom(this.scene, mandala, { color: 0xfacc15, strength: 1.5 });
+    vfxManager.playSpriteVfx(this.scene, 'vfx_na_circle_orange', targetX, floorY - 16, {
+      scale: 3.2,
+      additive: true,
+      depth: 67,
+    });
 
     this.scene.tweens.add({
       targets: mandala,
@@ -979,6 +1103,12 @@ export class ClassCombatVFX {
     // Pulse 1
     this.scene.time.delayedCall(260, () => {
       if (!this.scene?.sys?.isActive()) return;
+      vfxManager.playSpriteVfx(this.scene, 'vfx_na_circle_spark', targetX, floorY - 18, {
+        scale: 2.8,
+        tint: 0x22d3ee,
+        additive: true,
+        depth: 69,
+      });
       vfxManager.radialShockwave(this.scene, targetX, floorY - 16, 0x22d3ee, 115, 240, 68);
       onPulseHit(false);
     });
@@ -988,7 +1118,20 @@ export class ClassCombatVFX {
       if (!this.scene?.sys?.isActive()) return;
       vfxManager.hitStop(this.scene, 45);
       vfxManager.directionalShake(this.scene, 0.5, 1, 0.011, 200);
+      vfxManager.playSpriteVfx(this.scene, 'vfx_round_light_burst', targetX, floorY - 40, {
+        scale: 2.3,
+        tint: 0x67e8f9,
+        additive: true,
+        depth: 74,
+        glowColor: 0x22d3ee,
+      });
       for (const ox of [-58, 0, 58]) {
+        vfxManager.playSpriteVfx(this.scene, 'vfx_lightning_strike', targetX + ox, floorY - 72, {
+          scale: ox === 0 ? 2.4 : 1.75,
+          tint: ox === 0 ? 0x22d3ee : 0xfef08a,
+          additive: true,
+          depth: 73,
+        });
         const pillar = this.scene.add
           .rectangle(targetX + ox, floorY - 220, ox === 0 ? 54 : 30, 440, ox === 0 ? 0x22d3ee : 0xfef08a, 0.8)
           .setBlendMode(Phaser.BlendModes.ADD)
@@ -1067,12 +1210,30 @@ export class ClassCombatVFX {
 
     this.scene.time.delayedCall(260, () => {
       if (!this.scene?.sys?.isActive()) return;
+      vfxManager.playSpriteVfx(this.scene, 'vfx_spell_poison_green', targetX, targetY - 20, {
+        scale: 1.75,
+        additive: true,
+        depth: 72,
+        glowColor: 0x10b981,
+      });
       vfxManager.directionalShake(this.scene, 0.8, 0.4, 0.008, 120);
       onWeaveHit(0);
     });
     this.scene.time.delayedCall(620, () => {
       if (!this.scene?.sys?.isActive()) return;
       vfxManager.hitStop(this.scene, 45);
+      vfxManager.playSpriteVfx(this.scene, 'vfx_na_water_pillar', targetX, targetY - 18, {
+        scale: 2.35,
+        tint: 0x34d399,
+        additive: true,
+        depth: 74,
+        glowColor: 0x10b981,
+      });
+      vfxManager.playSpriteVfx(this.scene, 'vfx_sparkle_green', targetX, targetY - 28, {
+        scale: 2.2,
+        additive: true,
+        depth: 75,
+      });
       vfxManager.radialShockwave(this.scene, targetX, targetY - 24, 0x10b981, 130, 300, 71);
       onWeaveHit(1);
     });
@@ -1114,11 +1275,30 @@ export class ClassCombatVFX {
       });
     }
 
-    // Crisscrossing violet slash webs across the target
+    // Crisscrossing violet slash webs across the target + Super Pixel Shadow Vortex & Explosion
     this.scene.time.delayedCall(210, () => {
       if (!this.scene?.sys?.isActive()) return;
       vfxManager.hitStop(this.scene, 45);
       vfxManager.directionalShake(this.scene, 1, 0.6, 0.011, 180);
+
+      vfxManager.playSpriteVfx(this.scene, 'vfx_spell_absorb_violet', targetX, targetY - 20, {
+        scale: 1.9,
+        additive: true,
+        depth: 73,
+        glowColor: 0xa855f7,
+      });
+      vfxManager.playSpriteVfx(this.scene, 'vfx_violet_explosion', targetX, targetY - 24, {
+        scale: 2.4,
+        additive: true,
+        depth: 74,
+        glowColor: 0xc084fc,
+      });
+      vfxManager.playSpriteVfx(this.scene, 'vfx_cut_x', targetX, targetY - 24, {
+        scale: 3.1,
+        tint: 0xe879f9,
+        additive: true,
+        depth: 75,
+      });
 
       const web = this.scene.add.graphics().setBlendMode(Phaser.BlendModes.ADD).setDepth(72);
       const slashes = [
@@ -1161,6 +1341,20 @@ export class ClassCombatVFX {
     const cy = y - 8 + Math.sin(aimAngle) * 44;
 
     vfxManager.directionalShake(this.scene, Math.cos(aimAngle), Math.sin(aimAngle), 0.009, 130);
+    vfxManager.playSpriteVfx(this.scene, 'vfx_lightning_strike', cx, cy - 18, {
+      scale: 2.0,
+      tint: 0x67e8f9,
+      additive: true,
+      depth: 76,
+      glowColor: 0x22d3ee,
+    });
+    vfxManager.playSpriteVfx(this.scene, 'vfx_lightning_burst', cx, cy, {
+      scale: 2.1,
+      tint: 0xfacc15,
+      additive: true,
+      depth: 77,
+      glowColor: 0xfacc15,
+    });
     vfxManager.radialShockwave(this.scene, cx, cy, 0xfacc15, 118, 280, 72);
     vfxManager.radialShockwave(this.scene, cx, cy, 0x22d3ee, 88, 240, 73);
     vfxManager.additiveSparkBurst(this.scene, cx, cy, 0x67e8f9, 14, 78, 74);

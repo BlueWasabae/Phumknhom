@@ -291,6 +291,56 @@ export class BootScene extends Phaser.Scene {
     ]) {
       this.load.image(`mount_png_${mountKey}`, `/assets/khmer/mounts/${mountKey}.png`);
     }
+
+    // ---- 11. CURATED PIXEL-ART COMBAT & SKILL VFX PACK (Ninja Adventure + Pixel-Boy FreeMix + unTied Games Super Pixel) ----
+    const VFX = '/assets/packs/vfx';
+    const vfxSheets: Array<[string, string, number, number]> = [
+      // Ninja Adventure FX (already bundled CC0)
+      ['fx_circular_slash', `${NA}/FX/Attack/CircularSlash/SpriteSheet.png`, 32, 32],
+      ['fx_cut_x', `${NA}/FX/Attack/CutX/SpriteSheet.png`, 32, 32],
+      ['fx_claw_double', `${NA}/FX/Attack/ClawDouble/SpriteSheet.png`, 32, 32],
+      ['fx_na_thunder', `${NA}/FX/Elemental/Thunder/SpriteSheet.png`, 20, 28],
+      ['fx_na_water_pillar', `${NA}/FX/Elemental/WaterPillar/SpriteSheet.png`, 30, 41],
+      ['fx_na_rock_spike', `${NA}/FX/Elemental/RockSpike/SpriteSheet.png`, 60, 48],
+      ['fx_na_flame', `${NA}/FX/Elemental/Flam/SpriteSheet.png`, 25, 30],
+      ['fx_na_ice', `${NA}/FX/Elemental/Ice/SpriteSheet.png`, 32, 32],
+      ['fx_na_circle_orange', `${NA}/FX/Magic/Circle/SpriteSheetOrange.png`, 32, 32],
+      ['fx_na_circle_spark', `${NA}/FX/Magic/Circle/SpriteSheetSpark.png`, 32, 32],
+      ['fx_na_shield_yellow', `${NA}/FX/Magic/Shield/SpriteSheetYellow.png`, 24, 26],
+      ['fx_na_aura', `${NA}/FX/Magic/Aura/SpriteSheet.png`, 25, 24],
+      // Pixel-Boy FreeMix VFX
+      ['fx_fm_slash_big', `${VFX}/freemix/slash_big.png`, 110, 79],
+      ['fx_fm_explosion', `${VFX}/freemix/explosion.png`, 118, 118],
+      ['fx_fm_spark', `${VFX}/freemix/spark.png`, 131, 127],
+      // unTied Games Super Pixel Effects Gigapack (curated 16-bit spritesheets)
+      ['fx_sp_epic_explosion', `${VFX}/super-pixel/epic_explosion.png`, 64, 64],
+      ['fx_sp_violet_explosion', `${VFX}/super-pixel/stylized_explosion_violet.png`, 48, 48],
+      ['fx_sp_impact_yellow', `${VFX}/super-pixel/impact_yellow.png`, 48, 48],
+      ['fx_sp_impact_blue', `${VFX}/super-pixel/impact_blue.png`, 48, 48],
+      ['fx_sp_impact_violet', `${VFX}/super-pixel/impact_violet.png`, 40, 40],
+      ['fx_sp_lightning_strike', `${VFX}/super-pixel/lightning_strike.png`, 64, 64],
+      ['fx_sp_lightning_burst', `${VFX}/super-pixel/lightning_burst.png`, 48, 48],
+      ['fx_sp_spell_heal', `${VFX}/super-pixel/spell_heal.png`, 64, 64],
+      ['fx_sp_spell_attack_up', `${VFX}/super-pixel/spell_attack_up.png`, 64, 64],
+      ['fx_sp_spell_defense_up', `${VFX}/super-pixel/spell_defense_up.png`, 64, 64],
+      ['fx_sp_spell_haste', `${VFX}/super-pixel/spell_haste.png`, 64, 64],
+      ['fx_sp_spell_absorb_violet', `${VFX}/super-pixel/spell_absorb_violet.png`, 64, 64],
+      ['fx_sp_spell_poison_green', `${VFX}/super-pixel/spell_poison_green.png`, 64, 64],
+      ['fx_sp_round_light_burst', `${VFX}/super-pixel/round_light_burst.png`, 72, 72],
+      ['fx_sp_sparkle_blue', `${VFX}/super-pixel/sparkle_blue.png`, 32, 32],
+      ['fx_sp_sparkle_green', `${VFX}/super-pixel/sparkle_green.png`, 32, 32],
+      ['fx_sp_smoke_burst', `${VFX}/super-pixel/smoke_burst.png`, 32, 32],
+      ['fx_sp_coin_burst', `${VFX}/super-pixel/coin_burst.png`, 64, 64],
+      ['fx_sp_music_burst', `${VFX}/super-pixel/music_burst.png`, 64, 64],
+      ['fx_sp_heart_burst', `${VFX}/super-pixel/heart_burst.png`, 64, 64],
+    ];
+    for (const [key, url, frameWidth, frameHeight] of vfxSheets) {
+      this.load.spritesheet(key, url, { frameWidth, frameHeight });
+    }
+    // Pixel-Boy FreeMix crisp retro SFX WAVs
+    for (const sfxName of ['hit', 'punch', 'powerup', 'bonus', 'coin', 'jump', 'alert']) {
+      this.load.audio(`sfx_fm_${sfxName}`, `${VFX}/freemix/sfx/${sfxName}.wav`);
+    }
   }
 
   create(): void {
@@ -945,5 +995,51 @@ export class BootScene extends Phaser.Scene {
     this.safeCreateAnim('flag_yellow_wave', 'na_flag_yellow', [0, 1, 2, 3], 6, -1);
     this.safeCreateAnim('boar_idle_anim', 'boar_idle', [0, 1, 2, 3], 6, -1);
     this.safeCreateAnim('boar_hit_anim', 'boar_hit', [0, 1, 2, 3], 14, 0);
+
+    // Curated 16-Bit Pixel-Art VFX Animations (Ninja Adventure + Pixel-Boy FreeMix + unTied Games Super Pixel)
+    const vfxAnims: Array<[string, string, number, number]> = [
+      // [animKey, texKey, frameCount, fps]
+      ['vfx_circular_slash', 'fx_circular_slash', 4, 22],
+      ['vfx_cut_x', 'fx_cut_x', 4, 22],
+      ['vfx_claw_double', 'fx_claw_double', 4, 22],
+      ['vfx_na_thunder', 'fx_na_thunder', 8, 20],
+      ['vfx_na_water_pillar', 'fx_na_water_pillar', 9, 18],
+      ['vfx_na_rock_spike', 'fx_na_rock_spike', 9, 20],
+      ['vfx_na_flame', 'fx_na_flame', 8, 18],
+      ['vfx_na_ice', 'fx_na_ice', 10, 20],
+      ['vfx_na_circle_orange', 'fx_na_circle_orange', 4, 12],
+      ['vfx_na_circle_spark', 'fx_na_circle_spark', 6, 16],
+      ['vfx_na_shield_yellow', 'fx_na_shield_yellow', 6, 16],
+      ['vfx_na_aura', 'fx_na_aura', 5, 14],
+      // Pixel-Boy FreeMix
+      ['vfx_slash_big', 'fx_fm_slash_big', 5, 22],
+      ['vfx_explosion_fm', 'fx_fm_explosion', 16, 24],
+      ['vfx_spark_fm', 'fx_fm_spark', 16, 26],
+      // unTied Games Super Pixel Effects
+      ['vfx_epic_explosion', 'fx_sp_epic_explosion', 13, 22],
+      ['vfx_violet_explosion', 'fx_sp_violet_explosion', 10, 22],
+      ['vfx_impact_yellow', 'fx_sp_impact_yellow', 7, 24],
+      ['vfx_impact_blue', 'fx_sp_impact_blue', 10, 24],
+      ['vfx_impact_violet', 'fx_sp_impact_violet', 6, 24],
+      ['vfx_lightning_strike', 'fx_sp_lightning_strike', 7, 20],
+      ['vfx_lightning_burst', 'fx_sp_lightning_burst', 10, 24],
+      ['vfx_spell_heal', 'fx_sp_spell_heal', 16, 22],
+      ['vfx_spell_attack_up', 'fx_sp_spell_attack_up', 18, 22],
+      ['vfx_spell_defense_up', 'fx_sp_spell_defense_up', 18, 22],
+      ['vfx_spell_haste', 'fx_sp_spell_haste', 29, 28],
+      ['vfx_spell_absorb_violet', 'fx_sp_spell_absorb_violet', 31, 28],
+      ['vfx_spell_poison_green', 'fx_sp_spell_poison_green', 17, 22],
+      ['vfx_round_light_burst', 'fx_sp_round_light_burst', 16, 24],
+      ['vfx_sparkle_blue', 'fx_sp_sparkle_blue', 14, 24],
+      ['vfx_sparkle_green', 'fx_sp_sparkle_green', 18, 24],
+      ['vfx_smoke_burst', 'fx_sp_smoke_burst', 10, 22],
+      ['vfx_coin_burst', 'fx_sp_coin_burst', 31, 28],
+      ['vfx_music_burst', 'fx_sp_music_burst', 17, 22],
+      ['vfx_heart_burst', 'fx_sp_heart_burst', 23, 24],
+    ];
+    for (const [animKey, texKey, count, fps] of vfxAnims) {
+      const frames = Array.from({ length: count }, (_, i) => i);
+      this.safeCreateAnim(animKey, texKey, frames, fps, 0);
+    }
   }
 }

@@ -1,0 +1,12 @@
+Phum Khnhom — Curated 16-Bit Pixel-Art VFX & SFX Attribution
+============================================================
+
+1. Pixel-Boy & AAA — "FreeMix (Asset Mix Collection Demo)" & "Ninja Adventure - Asset Pack"
+   - Source: https://pixel-boy.itch.io/free-mix & https://pixel-boy.itch.io/ninja-adventure-asset-pack
+   - License: Free for commercial & non-commercial games (CC0 / FreeMix License).
+   - Used in: freemix/ (slash_big, explosion, spark, sfx/*.wav) and ninja-adventure/FX/.
+
+2. unTied Games — "Super Pixel Effects Gigapack (Free Version v3.3.0)"
+   - Source: https://untiedgames.itch.io/super-pixel-effects-gigapack
+   - License: Free for commercial & non-commercial games with attribution (unTied Games).
+   - Used in: super-pixel/ (20 curated horizontal spritesheets: explosions, impacts, lightning, fantasy spells, magic bursts, smoke bursts).
