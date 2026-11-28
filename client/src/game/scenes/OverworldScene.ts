@@ -10,6 +10,7 @@ import {
 } from '@shared/types';
 import { getPetProgress } from '@shared/petEvolution';
 import { KHMER_BOSS_LIST } from '@shared/khmerBosses';
+import { BOSS_HUNT_MISSIONS, WILDERNESS_CAMPFIRES } from '@shared/artisanCrafts';
 import { INSTRUMENT_SKINS } from '@shared/khmerInstruments';
 import { KHMER_EMOTES } from '@shared/emotes';
 import { computeVillageToDungeonBridge } from '@shared/skillTrees';
@@ -369,6 +370,9 @@ export class OverworldScene extends Phaser.Scene {
 
     // Update 3.6 — Wild Boss Discovery Shrines & Hidden Exploration Chests across Biome Maps!
     this.buildBiomeBossShrinesAndExploration();
+
+    // Update 3.7 — Wilderness Campfire Outposts, Krang Dei Meas Clay Veins & Boss Hunt Mission Clues!
+    this.buildWildernessCampfiresAndClues();
 
     // 5. Walk-Through Glowing Road Portals & Wooden Signposts at Map Edges
     this.buildWalkThroughRoadPortals();
@@ -3335,6 +3339,203 @@ export class OverworldScene extends Phaser.Scene {
         onInteract: awakenBoss,
       });
     });
+  }
+
+  /**
+   * Update 3.7 — Restful Wilderness Campfire Outposts in deep adventure maps,
+   * Krang Dei Meas Clay veins (Tonle Sap Marsh & Mining Quarry), and Boss Hunt Mission Clues!
+   */
+  private buildWildernessCampfiresAndClues(): void {
+    // 1. Wilderness Campfire Outposts (wild_frontier, tonle_sap_marsh, cardamom_jungle, phnom_kulen, preah_vihear_cliffs)
+    const camp = WILDERNESS_CAMPFIRES.find((c) => c.mapId === this.mapId);
+    if (camp) {
+      const cx = camp.x;
+      const cy = camp.y;
+      // Stone ring & cozy timber seating logs
+      const ringGfx = this.add.graphics().setDepth(cy - 6);
+      ringGfx.fillStyle(0x451a03, 0.48);
+      ringGfx.fillEllipse(cx, cy + 4, 86, 48);
+      // Two weathered log benches flanking fire
+      ringGfx.fillStyle(0x78350f, 0.96);
+      ringGfx.fillRoundedRect(cx - 46, cy - 10, 14, 24, 4);
+      ringGfx.fillRoundedRect(cx + 32, cy - 10, 14, 24, 4);
+      ringGfx.lineStyle(1.5, 0x451a03, 1);
+      ringGfx.strokeRoundedRect(cx - 46, cy - 10, 14, 24, 4);
+      ringGfx.strokeRoundedRect(cx + 32, cy - 10, 14, 24, 4);
+      // Stone hearth ring
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        ringGfx.fillStyle(i % 2 === 0 ? 0x78716c : 0x57534e, 1);
+        ringGfx.fillCircle(cx + Math.cos(a) * 16, cy + Math.sin(a) * 10, 4.5);
+      }
+
+      const fireSpr = this.add.sprite(cx, cy - 2, 'sv_campfire_16', 0).setScale(1.75).setDepth(cy);
+      if (this.anims.exists('campfire_burn')) fireSpr.play('campfire_burn');
+
+      const warmGlow = this.add
+        .image(cx, cy - 4, 'torch_glow')
+        .setTint(0xf97316)
+        .setScale(1.45)
+        .setAlpha(0.62)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(cy + 14);
+      this.glowLights.push(warmGlow);
+      this.tweens.add({
+        targets: warmGlow,
+        alpha: 0.38,
+        scale: 1.65,
+        duration: 720,
+        yoyo: true,
+        repeat: -1,
+      });
+
+      const arrow = this.add.image(cx, cy - 34, 'join_arrow').setScale(0.45).setDepth(cy + 18);
+      this.tweens.add({ targets: arrow, y: cy - 40, duration: 540, yoyo: true, repeat: -1 });
+
+      this.add
+        .text(cx, cy + 26, `🔥 ${camp.label.toUpperCase()} · REST / COOK / RESPAWN`, {
+          fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
+          fontSize: '10px',
+          fontStyle: 'bold',
+          color: '#fef08a',
+          backgroundColor: 'rgba(124, 45, 18, 0.94)',
+          padding: { x: 6, y: 2 },
+        })
+        .setResolution(2)
+        .setScale(0.42)
+        .setOrigin(0.5, 0)
+        .setDepth(cy + 20);
+
+      const openCampfire = () => {
+        if (!this.guardInteractRange(cx, cy, 145)) return;
+        soundManager.playSfx('magic');
+        vfxManager.radialShockwave(this, cx, cy, 0xf97316, 68, 280, cy + 22);
+        EventBus.emit('ui:openModal', { modal: 'campfire', campfireId: camp.id });
+      };
+      const hit = this.add
+        .rectangle(cx, cy, 88, 64, 0, 0)
+        .setDepth(cy + 22)
+        .setInteractive({ useHandCursor: true });
+      hit.on('pointerdown', openCampfire);
+
+      this.landmarks.push({
+        x: cx,
+        y: cy,
+        radius: 82,
+        label: `Press [E] or Click → 🔥 ${camp.label} (Rest 100% HP, Field Cooking & Set Respawn!)`,
+        isDungeonPortal: false,
+        onInteract: openCampfire,
+      });
+    }
+
+    // 2. Krang Dei Meas Pottery Clay Deposits (Tonle Sap Marsh & Mining Quarry — for Kampong Chhnang Pottery Stump!)
+    if (this.mapId === 'tonle_sap_marsh' || this.mapId === 'mining_quarry') {
+      const claySpots: Array<[number, number]> =
+        this.mapId === 'tonle_sap_marsh'
+          ? [[530, 580], [1050, 580], [795, 760]]
+          : [[520, 440], [1080, 440], [920, 740]];
+      claySpots.forEach(([kx, ky]) => {
+        const node = this.textures.exists('khmer_laterite_outcrop')
+          ? this.add.image(kx, ky, 'khmer_laterite_outcrop').setDisplaySize(44, 30).setTint(0xf59e0b).setDepth(ky)
+          : this.add.circle(kx, ky, 14, 0xb45309, 1).setDepth(ky);
+        const lbl = this.add
+          .text(kx, ky + 16, '🏺 Krang Dei Meas Clay', {
+            fontFamily: 'Fredoka, sans-serif',
+            fontSize: '10px',
+            fontStyle: 'bold',
+            color: '#fed7aa',
+            backgroundColor: 'rgba(15, 23, 42, 0.85)',
+            padding: { x: 4, y: 1 },
+          })
+          .setResolution(2)
+          .setScale(0.4)
+          .setOrigin(0.5, 0)
+          .setDepth(ky + 4);
+        let ready = true;
+        const gatherClay = () => {
+          if (!ready) return;
+          if (!this.guardInteractRange(kx, ky, 125)) return;
+          ready = false;
+          soundManager.playSfx('hit');
+          node.setAlpha(0.3);
+          lbl.setText('Regenerating...');
+          this.spawnFloatingText(kx, ky - 14, '+1 Krang Dei Meas Clay · +22 Mining XP', '#fbbf24');
+          EventBus.emit('frontier:gather', {
+            skillId: 'mining',
+            xp: 22,
+            itemId: 'mat_krang_clay',
+            label: '🏺 Mined Krang Dei Meas Clay (+22 Mining XP)!',
+          });
+          this.time.delayedCall(18000, () => {
+            if (!node.active) return;
+            ready = true;
+            node.setAlpha(1);
+            lbl.setText('🏺 Krang Dei Meas Clay');
+          });
+        };
+        node.setInteractive({ useHandCursor: true }).on('pointerdown', gatherClay);
+        this.landmarks.push({
+          x: kx,
+          y: ky,
+          radius: 56,
+          label: 'Press [E] or Click → 🏺 Dig Krang Dei Meas Clay (for Kampong Chhnang Pottery Stump)',
+          isDungeonPortal: false,
+          onInteract: gatherClay,
+        });
+      });
+    }
+
+    // 3. Boss Hunt Mission Field Clues (e.g., Ogre Footprints in Cardamom Jungle!)
+    const mapMission = BOSS_HUNT_MISSIONS.find((m) => m.mapId === this.mapId);
+    if (mapMission) {
+      const allSpots: Array<[number, number]> = [
+        [520, 560],
+        [1060, 560],
+        [620, 740],
+        [980, 740],
+        [620, 390],
+      ];
+      const clueSpots = allSpots.slice(0, mapMission.targetCount);
+      clueSpots.forEach(([mx, my], idx) => {
+        const glow = this.add
+          .circle(mx, my, 12, 0xf43f5e, 0.35)
+          .setStrokeStyle(2, 0xfef08a, 0.9)
+          .setDepth(my - 1);
+        this.tweens.add({ targets: glow, scale: 1.25, alpha: 0.16, duration: 760, yoyo: true, repeat: -1 });
+        const icon = this.add
+          .text(mx, my, '🐾', { fontSize: '14px' })
+          .setOrigin(0.5)
+          .setResolution(2)
+          .setScale(0.65)
+          .setDepth(my);
+        let inspected = false;
+        const inspectClue = () => {
+          if (inspected) return;
+          if (!this.guardInteractRange(mx, my, 130)) return;
+          inspected = true;
+          soundManager.playSfx('magic');
+          glow.setVisible(false);
+          icon.setAlpha(0.28);
+          this.spawnFloatingText(mx, my - 14, `🐾 Hunt Clue #${idx + 1} Found!`, '#fda4af');
+          EventBus.emit('bossMission:clueFound', {
+            missionId: mapMission.id,
+            bossId: mapMission.bossId,
+            label: mapMission.stepLabel,
+            targetCount: mapMission.targetCount,
+          });
+        };
+        const hit = this.add.rectangle(mx, my, 36, 36, 0, 0).setDepth(my + 4).setInteractive({ useHandCursor: true });
+        hit.on('pointerdown', inspectClue);
+        this.landmarks.push({
+          x: mx,
+          y: my,
+          radius: 52,
+          label: `Press [E] or Click → 🐾 Inspect Clue: ${mapMission.stepLabel}`,
+          isDungeonPortal: false,
+          onInteract: inspectClue,
+        });
+      });
+    }
   }
 
   private spawnSharedPartyFeastTable(evt: {

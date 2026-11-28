@@ -589,7 +589,12 @@ export interface EventMap {
       | 'kiteWorkshop'
       | 'partyHost'
       | 'folkGames'
-      | 'dyeStudio';
+      | 'dyeStudio'
+      | 'artisanWorkshop'
+      | 'explorerJournal'
+      | 'campfire';
+    artisanStationId?: 'kampong_pottery_stump' | 'khmer_weaving_loom' | 'village_dairy_churn';
+    campfireId?: string;
     leaderboardCategory?: 'farmer' | 'stylish' | 'slayer' | 'tower' | 'boss_rush' | 'pvp';
     farmTab?: 'seeds' | 'livestock' | 'artisan';
     shopTab?: 'primary' | 'secondary';
@@ -614,6 +619,7 @@ export interface EventMap {
     stakeCoins: number;
   };
   'ui:toast': { text: string };
+  'bossMission:clueFound': { missionId: string; bossId: BossId; label: string; targetCount: number };
 }
 
 type Listener<T> = (payload: T) => void;

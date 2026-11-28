@@ -4,3 +4,4 @@ export * from './khmerClasses';
 export * from './emotes';
 export * from './regionalTrade';
 export * from './reamkerQuests';
+export * from './artisanCrafts';

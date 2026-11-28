@@ -20,7 +20,8 @@ import {
   getMachineProgress,
   getTreeProgress,
 } from '../game/systems/FarmingEngine';
-import { Coins, FastForward, Factory, Sprout, Trees } from 'lucide-react';
+import { Coins, FastForward, Factory, Sprout, Trees, Sparkles } from 'lucide-react';
+import { EventBus } from '../game/EventBus';
 import { NativeDialog } from './NativeDialog';
 
 export type FarmModalTab = 'seeds' | 'livestock' | 'artisan';
@@ -485,6 +486,28 @@ export const FarmModal: React.FC<FarmModalProps> = ({
                 </div>
               );
             })}
+          </div>
+
+          {/* Update 3.7 — Direct Gateway to Authentic Khmer Artisan Workshops (Pottery Stump, Weaving Loom, Dairy Churn) */}
+          <div className="p-3 rounded-xl bg-gradient-to-r from-amber-900 via-orange-900 to-amber-900 text-amber-50 border-2 border-amber-400/75 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <div className="font-display font-bold text-xs sm:text-sm text-amber-200 flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-yellow-300" /> Authentic Khmer Artisan Workshops (New!)
+              </div>
+              <div className="text-[10px] text-amber-100/90">
+                Buy &amp; craft on Kampong Chhnang Pottery Stump (1,200 C), Khmer Weaving Loom (1,500 C) &amp; Village Dairy Churn (1,000 C)!
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                EventBus.emit('ui:openModal', { modal: 'artisanWorkshop' });
+              }}
+              className="px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-amber-950 font-display font-bold text-xs border border-amber-200 cursor-pointer shrink-0"
+            >
+              🏺 Open Artisan Workshops →
+            </button>
           </div>
 
           {/* Craft / Buy Additional Artisan Machines */}

@@ -128,6 +128,18 @@ export interface SavedPlayerProfile {
   ownedFences?: number;
   discoveredBosses?: string[];
   mapExplorationPct?: Record<string, number>;
+  ownedArtisanStations?: string[];
+  trackedBossId?: string | null;
+  bossMissionProgress?: Record<string, number>;
+  grandChroniclerClaimed?: boolean;
+  hasAstralCompassAura?: boolean;
+  campfireRespawn?: {
+    campfireId: string;
+    mapId: string;
+    x: number;
+    y: number;
+    label: string;
+  } | null;
   discoveredLandmarks?: string[];
   hasCompletedCreation?: boolean;
   activeClass?: string;
@@ -861,6 +873,18 @@ function rowToSavedProfile(row: {
         ? (meta.mapExplorationPct as Record<string, number>)
         : {},
     discoveredLandmarks: Array.isArray(meta.discoveredLandmarks) ? (meta.discoveredLandmarks as string[]) : [],
+    ownedArtisanStations: Array.isArray(meta.ownedArtisanStations) ? (meta.ownedArtisanStations as string[]) : [],
+    trackedBossId: typeof meta.trackedBossId === 'string' ? meta.trackedBossId : null,
+    bossMissionProgress:
+      meta.bossMissionProgress && typeof meta.bossMissionProgress === 'object'
+        ? (meta.bossMissionProgress as Record<string, number>)
+        : {},
+    grandChroniclerClaimed: Boolean(meta.grandChroniclerClaimed ?? false),
+    hasAstralCompassAura: Boolean(meta.hasAstralCompassAura ?? false),
+    campfireRespawn:
+      meta.campfireRespawn && typeof meta.campfireRespawn === 'object'
+        ? (meta.campfireRespawn as SavedPlayerProfile['campfireRespawn'])
+        : null,
     hasCompletedCreation: Boolean(
       meta.hasCompletedCreation ??
         (loadout as { hasCompletedCreation?: boolean }).hasCompletedCreation ??
@@ -1286,6 +1310,18 @@ export async function savePlayerProfile(
     mapExplorationPct:
       profile.mapExplorationPct && typeof profile.mapExplorationPct === 'object' ? profile.mapExplorationPct : {},
     discoveredLandmarks: Array.isArray(profile.discoveredLandmarks) ? profile.discoveredLandmarks : [],
+    ownedArtisanStations: Array.isArray(profile.ownedArtisanStations) ? profile.ownedArtisanStations : [],
+    trackedBossId: typeof profile.trackedBossId === 'string' ? profile.trackedBossId : null,
+    bossMissionProgress:
+      profile.bossMissionProgress && typeof profile.bossMissionProgress === 'object'
+        ? profile.bossMissionProgress
+        : {},
+    grandChroniclerClaimed: Boolean(profile.grandChroniclerClaimed ?? false),
+    hasAstralCompassAura: Boolean(profile.hasAstralCompassAura ?? false),
+    campfireRespawn:
+      profile.campfireRespawn && typeof profile.campfireRespawn === 'object'
+        ? profile.campfireRespawn
+        : null,
     hasCompletedCreation: Boolean(
       profile.hasCompletedCreation ??
         (profile.loadout as { hasCompletedCreation?: boolean } | undefined)?.hasCompletedCreation ??

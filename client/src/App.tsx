@@ -246,6 +246,19 @@ import { KiteWorkshopModal } from './ui/KiteWorkshopModal';
 import { PartyHostModal } from './ui/PartyHostModal';
 import { FolkGamesModal } from './ui/FolkGamesModal';
 import { DyeStudioModal } from './ui/DyeStudioModal';
+import { ArtisanWorkshopModal } from './ui/ArtisanWorkshopModal';
+import { ExplorerJournalModal } from './ui/ExplorerJournalModal';
+import { CampfireModal } from './ui/CampfireModal';
+import {
+  GRAND_CHRONICLER_DIAMONDS,
+  GRAND_CHRONICLER_TITLE,
+  KHMER_ARTISAN_STATIONS,
+  WILDERNESS_CAMPFIRES,
+  type ArtisanStationId,
+  type ArtisanStationRecipe,
+  type CampfireRecipeDef,
+  type WildernessCampfireDef,
+} from '@shared/artisanCrafts';
 import type { DyeSlot, OutfitDyeDef } from '@shared/dyeCatalog';
 import {
   PARTY_ALLOWED_MAPS,
@@ -366,6 +379,9 @@ type ActiveModalType =
   | 'partyHost'
   | 'folkGames'
   | 'dyeStudio'
+  | 'artisanWorkshop'
+  | 'explorerJournal'
+  | 'campfire'
   | 'characterCreator';
 
 interface FloatingXpBanner extends SkillXpToastPayload {
@@ -395,6 +411,8 @@ export const App: React.FC = () => {
 
   const [activeNpcId, setActiveNpcId] = useState<KhmerNpcId | null>(null);
   const [activeFishingBite, setActiveFishingBite] = useState<FishingBitePayload | null>(null);
+  const [activeArtisanStationId, setActiveArtisanStationId] = useState<ArtisanStationId>('kampong_pottery_stump');
+  const [activeCampfireId, setActiveCampfireId] = useState<string | null>(null);
   const [diveHud, setDiveHud] = useState<DiveHudPayload | null>(null);
   const [blackMarketRotationSeed, setBlackMarketRotationSeed] = useState<number>(() =>
     worldEventManager.getBlackMarketSnapshot().rotationSeed
@@ -1847,6 +1865,11 @@ export const App: React.FC = () => {
         if (zone !== 'dungeon' && zone !== 'tower' && zone !== 'cavern') {
           setActiveModal((cur) => (cur === 'skills' ? null : 'skills'));
         }
+      } else if (k === 'j') {
+        if (zone !== 'dungeon' && zone !== 'tower' && zone !== 'cavern' && zone !== 'world_boss') {
+          soundManager.playSfx('click');
+          setActiveModal((cur) => (cur === 'explorerJournal' ? null : 'explorerJournal'));
+        }
       } else if (k === 'm') {
         setActiveModal((cur) => (cur === 'worldMap' ? null : 'worldMap'));
       } else if (k === '1') {
@@ -2932,6 +2955,8 @@ export const App: React.FC = () => {
           kromTab,
           houseDecorTab,
           petId,
+          artisanStationId,
+          campfireId,
         }) => {
           if (modal === 'farm' && farmTab) setFarmModalTab(farmTab);
           if (modal === 'friends' && reqFriendsTab) setFriendsTab(reqFriendsTab);
@@ -2944,6 +2969,8 @@ export const App: React.FC = () => {
           if (modal === 'krom') setKromModalTab(kromTab ?? 'overview');
           if (modal === 'houseDecor') setHouseDecorScope(houseDecorTab ?? 'interior');
           if (modal === 'petEvolution') setSelectedEvolutionPetId(petId ?? null);
+          if (modal === 'artisanWorkshop' && artisanStationId) setActiveArtisanStationId(artisanStationId);
+          if (modal === 'campfire' && campfireId) setActiveCampfireId(campfireId);
           if (modal === 'instrumentJam') {
             setInstrumentJamOpen(true);
             return;
@@ -2963,6 +2990,32 @@ export const App: React.FC = () => {
           setActiveModal(modal);
         }
       ),
+      EventBus.on('bossMission:clueFound', ({ missionId, bossId, label, targetCount }) => {
+        runStateAction((prev) => {
+          const cur = prev.bossMissionProgress?.[missionId] ?? 0;
+          const nextCount = Math.min(targetCount, cur + 1);
+          const completed = nextCount >= targetCount;
+          const discovered = new Set(prev.discoveredBosses ?? ['sdech_kongkaeb']);
+          if (completed) discovered.add(bossId);
+          const bonusCoins = completed ? 300 : 0;
+          return {
+            state: {
+              ...prev,
+              coins: prev.coins + bonusCoins,
+              currencies: { ...prev.currencies, coins: prev.currencies.coins + bonusCoins },
+              discoveredBosses: Array.from(discovered),
+              bossMissionProgress: {
+                ...(prev.bossMissionProgress ?? {}),
+                [missionId]: nextCount,
+              },
+            },
+            ok: true,
+            message: completed
+              ? `🎯 Mission Complete: ${label} (${nextCount}/${targetCount})! Boss revealed in Explorer's Journal +300 C!`
+              : `🐾 Hunt Clue Found: ${label} (${nextCount}/${targetCount})`,
+          };
+        });
+      }),
       EventBus.on('bounty:progress', ({ category, amount }) => {
         let completedLabels: string[] = [];
         let newlyUnlockedAchs: AchievementDef[] = [];
@@ -3674,6 +3727,8 @@ export const App: React.FC = () => {
             onOpenMailbox={() => setActiveModal('mailbox')}
             unclaimedMailCount={unclaimedMailCount}
             onOpenBestiary={() => setActiveModal('bestiary')}
+            onOpenExplorerJournal={() => setActiveModal('explorerJournal')}
+            onOpenArtisanWorkshop={() => setActiveModal('artisanWorkshop')}
             onOpenDiamondStore={() => setActiveModal('diamondStore')}
             onOpenWorldMap={() => setActiveModal('worldMap')}
             onOpenServerCity={() => setActiveModal('serverCity')}
@@ -6051,6 +6106,250 @@ export const App: React.FC = () => {
           });
         }}
         onClose={() => setActiveModal(null)}
+      />
+
+      {/* Update 3.7 — Authentic Khmer Artisan Workshops (Kampong Chhnang Pottery Stump, Weaving Loom, Dairy Churn) */}
+      <ArtisanWorkshopModal
+        open={activeModal === 'artisanWorkshop'}
+        initialStationId={activeArtisanStationId}
+        player={player}
+        onClose={() => setActiveModal(null)}
+        onBuyStation={(stationId: ArtisanStationId) => {
+          const def = KHMER_ARTISAN_STATIONS[stationId];
+          if (!def) return;
+          runStateAction((prev) => {
+            const owned = prev.ownedArtisanStations ?? [];
+            if (owned.includes(stationId)) {
+              return { state: prev, ok: true, message: `${def.name} is already placed on your Homestead!` };
+            }
+            if (prev.currencies.coins < def.costCoins) {
+              return { state: prev, ok: false, message: `Need ${def.costCoins.toLocaleString()} C to buy ${def.name}.` };
+            }
+            const nextCoins = prev.currencies.coins - def.costCoins;
+            soundManager.playSfx('coin');
+            return {
+              state: {
+                ...prev,
+                coins: nextCoins,
+                currencies: { ...prev.currencies, coins: nextCoins },
+                ownedArtisanStations: [...owned, stationId],
+              },
+              ok: true,
+              message: `${def.icon} Purchased & placed ${def.name} on your Homestead Yard!`,
+            };
+          });
+        }}
+        onCompleteCraft={(recipe: ArtisanStationRecipe) => {
+          runStateAction((prev) => {
+            const nextInv = prev.inventory.map((i) => ({ ...i }));
+            for (const ing of recipe.ingredients) {
+              let needed = ing.qty;
+              for (let idx = nextInv.length - 1; idx >= 0 && needed > 0; idx--) {
+                if (nextInv[idx].itemId !== ing.itemId) continue;
+                const take = Math.min(nextInv[idx].quantity, needed);
+                nextInv[idx].quantity -= take;
+                needed -= take;
+                if (nextInv[idx].quantity <= 0) nextInv.splice(idx, 1);
+              }
+              if (needed > 0) {
+                return { state: prev, ok: false, message: `Missing ${ing.label} to complete ${recipe.outputName}.` };
+              }
+            }
+            const existingOut = nextInv.find((i) => i.itemId === recipe.outputItemId);
+            if (existingOut) existingOut.quantity += 1;
+            else nextInv.push({ itemId: recipe.outputItemId, quantity: 1, itemLevel: 1, quality: 'normal' });
+
+            const nextOwnedFurn = { ...(prev.ownedFurniture ?? {}) };
+            if (recipe.decorItemId) {
+              nextOwnedFurn[recipe.decorItemId] = (nextOwnedFurn[recipe.decorItemId] ?? 0) + 1;
+            }
+            const withXp = awardSkillXp(
+              { ...prev, inventory: nextInv, ownedFurniture: nextOwnedFurn },
+              'crafting',
+              recipe.craftingXp,
+              true
+            ).state;
+            soundManager.playSfx('level_up');
+            return {
+              state: withXp,
+              ok: true,
+              message: `${recipe.icon} Crafted ${recipe.outputName}! (+${recipe.craftingXp} Crafting XP${recipe.decorItemId ? ' · Also unlocked as Home Decor!' : ''})`,
+            };
+          });
+        }}
+        onSellCraftedItem={(itemId: string, sellCoins: number, label: string) => {
+          runStateAction((prev) => {
+            const nextInv = prev.inventory.map((i) => ({ ...i }));
+            const idx = nextInv.findIndex((i) => i.itemId === itemId && i.quantity > 0);
+            if (idx < 0) return { state: prev, ok: false, message: `No ${label} in bag to sell.` };
+            nextInv[idx].quantity -= 1;
+            if (nextInv[idx].quantity <= 0) nextInv.splice(idx, 1);
+            const nextCoins = prev.currencies.coins + sellCoins;
+            soundManager.playSfx('coin');
+            return {
+              state: {
+                ...prev,
+                coins: nextCoins,
+                currencies: { ...prev.currencies, coins: nextCoins },
+                inventory: nextInv,
+              },
+              ok: true,
+              message: `💰 Sold ${label} for +${sellCoins.toLocaleString()} Coins!`,
+            };
+          });
+        }}
+        onConsumeCraftedBuff={(recipe: ArtisanStationRecipe) => {
+          if (!recipe.combatBuff) return;
+          runStateAction((prev) => {
+            const nextInv = prev.inventory.map((i) => ({ ...i }));
+            const idx = nextInv.findIndex((i) => i.itemId === recipe.outputItemId && i.quantity > 0);
+            if (idx < 0) return { state: prev, ok: false, message: `Craft ${recipe.outputName} first!` };
+            nextInv[idx].quantity -= 1;
+            if (nextInv[idx].quantity <= 0) nextInv.splice(idx, 1);
+            const now = Date.now();
+            const buff = recipe.combatBuff!;
+            const nextBuffs = [
+              ...(prev.activeBuffs ?? []).filter((b) => b.snackId !== recipe.outputItemId && b.expiresAt > now),
+              {
+                id: `buff_${recipe.outputItemId}_${now}`,
+                snackId: recipe.outputItemId,
+                name: recipe.outputName,
+                khmerName: recipe.khmerName,
+                icon: recipe.icon,
+                color: '#f59e0b',
+                startedAt: now,
+                expiresAt: now + buff.durationMs,
+                attackPct: buff.attackPct,
+                moveSpeedPct: buff.moveSpeedPct,
+                maxHpPct: buff.maxHpPct,
+              },
+            ];
+            soundManager.playSfx('heal');
+            const bridge = computeVillageToDungeonBridge(prev);
+            return {
+              state: {
+                ...prev,
+                hp: bridge.effectiveMaxHp,
+                inventory: nextInv,
+                activeBuffs: nextBuffs,
+              },
+              ok: true,
+              message: `✨ Enjoyed ${recipe.outputName}! ${buff.label}`,
+            };
+          });
+        }}
+      />
+
+      {/* Update 3.7 — 24-Boss Explorer's Journal & Active Boss Hunt Missions [J] */}
+      <ExplorerJournalModal
+        open={activeModal === 'explorerJournal'}
+        player={player}
+        onClose={() => setActiveModal(null)}
+        onTrackBoss={(bossId, hintText) => {
+          runStateAction((prev) => ({
+            state: { ...prev, trackedBossId: bossId },
+            ok: true,
+            message: hintText,
+          }));
+        }}
+        onClaimGrandReward={() => {
+          runStateAction((prev) => {
+            if (prev.grandChroniclerClaimed) {
+              return { state: prev, ok: true, message: 'Grand Chronicler reward already claimed!' };
+            }
+            const titles = Array.from(new Set([...(prev.unlockedTitles ?? []), GRAND_CHRONICLER_TITLE]));
+            soundManager.playSfx('victory');
+            return {
+              state: {
+                ...prev,
+                currencies: {
+                  ...prev.currencies,
+                  diamonds: prev.currencies.diamonds + GRAND_CHRONICLER_DIAMONDS,
+                },
+                unlockedTitles: titles,
+                activeTitle: GRAND_CHRONICLER_TITLE,
+                grandChroniclerClaimed: true,
+                hasAstralCompassAura: true,
+              },
+              ok: true,
+              message: `👑 GRAND 24/24 REWARD CLAIMED! Unlocked "${GRAND_CHRONICLER_TITLE}", +${GRAND_CHRONICLER_DIAMONDS} 💎 & Astral Compass Aura!`,
+            };
+          });
+        }}
+      />
+
+      {/* Update 3.7 — Wilderness Campfire Outposts (Rest 4s, Field Cooking, Temporary Respawn) */}
+      <CampfireModal
+        open={activeModal === 'campfire'}
+        campfire={WILDERNESS_CAMPFIRES.find((c) => c.id === activeCampfireId) ?? null}
+        player={player}
+        onClose={() => setActiveModal(null)}
+        onRestComplete={(camp: WildernessCampfireDef) => {
+          runStateAction((prev) => {
+            soundManager.playSfx('heal');
+            const bridge = computeVillageToDungeonBridge(prev);
+            return {
+              state: {
+                ...prev,
+                hp: bridge.effectiveMaxHp,
+                lifeStats: { ...prev.lifeStats, healthy: 100, happy: Math.min(100, prev.lifeStats.happy + 10) },
+              },
+              ok: true,
+              message: `🔥 Rested warmly at ${camp.label} — 100% HP & Energy restored!`,
+            };
+          });
+        }}
+        onCookRecipe={(recipe: CampfireRecipeDef, consumedItemId: string) => {
+          runStateAction((prev) => {
+            const nextInv = prev.inventory.map((i) => ({ ...i }));
+            const idx = nextInv.findIndex((i) => i.itemId === consumedItemId && i.quantity > 0);
+            if (idx < 0) return { state: prev, ok: false, message: 'Ingredient missing from bag!' };
+            nextInv[idx].quantity -= 1;
+            if (nextInv[idx].quantity <= 0) nextInv.splice(idx, 1);
+            const now = Date.now();
+            const nextBuffs = [
+              ...(prev.activeBuffs ?? []).filter((b) => b.snackId !== recipe.id && b.expiresAt > now),
+              {
+                id: `camp_${recipe.id}_${now}`,
+                snackId: recipe.id,
+                name: recipe.name,
+                khmerName: recipe.khmerName,
+                icon: recipe.icon,
+                color: '#f97316',
+                startedAt: now,
+                expiresAt: now + recipe.durationMs,
+                moveSpeedPct: recipe.moveSpeedPct,
+                critChanceBonus: recipe.rareDropLuckPct,
+              },
+            ];
+            const bridge = computeVillageToDungeonBridge({ ...prev, activeBuffs: nextBuffs });
+            const withXp = awardSkillXp(
+              { ...prev, hp: bridge.effectiveMaxHp, inventory: nextInv, activeBuffs: nextBuffs },
+              'cooking',
+              recipe.cookingXp,
+              true
+            ).state;
+            soundManager.playSfx('heal');
+            return {
+              state: withXp,
+              ok: true,
+              message: `${recipe.icon} Field Cooked ${recipe.name}! ${recipe.buffLabel} (+${recipe.cookingXp} Cooking XP)`,
+            };
+          });
+        }}
+        onSetRespawn={(camp: WildernessCampfireDef) => {
+          runStateAction((prev) => {
+            soundManager.playSfx('magic');
+            return {
+              state: {
+                ...prev,
+                campfireRespawn: { mapId: camp.mapId, x: camp.x, y: camp.y + 38, label: camp.label },
+              },
+              ok: true,
+              message: `🏕️ Temporary Respawn set to ${camp.label}! Defeats in wild bosses will return you here safely.`,
+            };
+          });
+        }}
       />
 
       {!photoMode && zone === 'overworld' && (

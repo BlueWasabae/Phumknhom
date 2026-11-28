@@ -726,6 +726,13 @@ export interface PlayerState {
   discoveredBosses?: string[];
   mapExplorationPct?: Record<string, number>;
   discoveredLandmarks?: string[];
+  /** Update 3.7 — Khmer Artisan Workshops, 24-Boss Explorer's Journal & Wilderness Campfires */
+  ownedArtisanStations?: string[];
+  trackedBossId?: BossId | null;
+  bossMissionProgress?: Record<string, number>;
+  grandChroniclerClaimed?: boolean;
+  hasAstralCompassAura?: boolean;
+  campfireRespawn?: { mapId: string; x: number; y: number; label: string } | null;
   hasCompletedCreation?: boolean;
   skillDamagePct: number;
   armorDamagePct: number;
@@ -941,6 +948,9 @@ export const INITIAL_PLAYER_STATE: PlayerState = {
     { itemId: 'fruit_coconut', quantity: 2, itemLevel: 1, quality: 'normal' },
     { itemId: 'artisan_palm_sugar', quantity: 2, itemLevel: 1, quality: 'normal' },
     { itemId: 'drop_fresh_milk', quantity: 2, itemLevel: 1, quality: 'normal' },
+    { itemId: 'drop_soft_wool', quantity: 2, itemLevel: 1, quality: 'normal' },
+    { itemId: 'mat_krang_clay', quantity: 3, itemLevel: 1, quality: 'normal' },
+    { itemId: 'crop_pink_lotus', quantity: 2, itemLevel: 1, quality: 'normal' },
     // Phase 4 Starter Street Snacks slotted in Quick-Bar
     { itemId: 'snack_num_pang', quantity: 2, itemLevel: 1, quality: 'normal' },
     { itemId: 'snack_kafe', quantity: 1, itemLevel: 1, quality: 'normal' },
@@ -1068,6 +1078,12 @@ export const INITIAL_PLAYER_STATE: PlayerState = {
   discoveredBosses: ['sdech_kongkaeb'],
   mapExplorationPct: {},
   discoveredLandmarks: [],
+  ownedArtisanStations: [],
+  trackedBossId: null,
+  bossMissionProgress: {},
+  grandChroniclerClaimed: false,
+  hasAstralCompassAura: false,
+  campfireRespawn: null,
   hasCompletedCreation: false,
   skillDamagePct: 0.025,
   armorDamagePct: 0.04,

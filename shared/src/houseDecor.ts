@@ -111,6 +111,42 @@ export const HOUSE_FURNITURE_CATALOG: Record<string, HouseFurnitureDef> = {
     description:
       'Handcrafted glass-and-bamboo lantern housing live glowing fireflies caught during Firefly Night! (Craft from 3× Jarred Fireflies)',
   },
+  furn_terracotta_jar: {
+    id: 'furn_terracotta_jar',
+    name: 'Terracotta Water Jar',
+    khmerName: 'ក្អមដីដាក់ទឹកត្រជាក់',
+    category: 'starter',
+    icon: '🏺',
+    primaryColor: '#b45309',
+    accentColor: '#f59e0b',
+    widthPx: 42,
+    heightPx: 48,
+    description: 'Hand-paddled Kampong Chhnang terracotta water jar crafted on your Pottery Stump.',
+  },
+  furn_incense_burner: {
+    id: 'furn_incense_burner',
+    name: 'Angkor Incense Burner',
+    khmerName: 'ជើងធូបដីដុតអង្គរ',
+    category: 'starter',
+    icon: '🪔',
+    primaryColor: '#9a3412',
+    accentColor: '#fde047',
+    widthPx: 40,
+    heightPx: 44,
+    description: 'Wood-fired Angkor clay incense censer emitting fragrant sandalwood smoke.',
+  },
+  furn_lotus_vase: {
+    id: 'furn_lotus_vase',
+    name: 'Carved Lotus Vase',
+    khmerName: 'ថូផ្កាឈូកឆ្លាក់ដៃ',
+    category: 'starter',
+    icon: '🪷',
+    primaryColor: '#be185d',
+    accentColor: '#fbcfe8',
+    widthPx: 42,
+    heightPx: 52,
+    description: 'Masterwork Kampong Chhnang vase etched with sacred pink lotus petals.',
+  },
 
   // ==================== 4 BOSS TROPHY PEDESTALS (BESTIARY UNLOCKS) ====================
   trophy_king_frog: {

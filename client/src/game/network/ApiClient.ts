@@ -168,6 +168,15 @@ export interface SavedProfilePayload {
   reamkerQuestStep?: number;
   reamkerStepProgress?: number;
   deliveryJobsCompleted?: number;
+  ownedArtisanStations?: string[];
+  trackedBossId?: string | null;
+  bossMissionProgress?: Record<string, number>;
+  grandChroniclerClaimed?: boolean;
+  hasAstralCompassAura?: boolean;
+  campfireRespawn?: PlayerState['campfireRespawn'];
+  discoveredBosses?: string[];
+  mapExplorationPct?: Record<string, number>;
+  discoveredLandmarks?: string[];
   hasCompletedCreation?: boolean;
   activeClass: PlayerState['activeClass'];
   weapon: PlayerState['weapon'];
@@ -587,6 +596,15 @@ export function serializePlayerStateForSave(state: PlayerState): SavedProfilePay
     reamkerQuestStep: state.reamkerQuestStep ?? 0,
     reamkerStepProgress: state.reamkerStepProgress ?? 0,
     deliveryJobsCompleted: state.deliveryJobsCompleted ?? 0,
+    ownedArtisanStations: [...(state.ownedArtisanStations ?? [])],
+    trackedBossId: state.trackedBossId ?? null,
+    bossMissionProgress: { ...(state.bossMissionProgress ?? {}) },
+    grandChroniclerClaimed: Boolean(state.grandChroniclerClaimed ?? false),
+    hasAstralCompassAura: Boolean(state.hasAstralCompassAura ?? false),
+    campfireRespawn: state.campfireRespawn ? { ...state.campfireRespawn } : null,
+    discoveredBosses: Array.isArray(state.discoveredBosses) ? [...state.discoveredBosses] : ['sdech_kongkaeb'],
+    mapExplorationPct: state.mapExplorationPct ? { ...state.mapExplorationPct } : {},
+    discoveredLandmarks: Array.isArray(state.discoveredLandmarks) ? [...state.discoveredLandmarks] : [],
     hasCompletedCreation: Boolean(state.hasCompletedCreation ?? state.loadout.hasCompletedCreation),
     activeClass: state.activeClass,
     weapon: { ...state.weapon },
@@ -1010,6 +1028,22 @@ export function hydratePlayerStateFromSave(
     reamkerQuestStep: typeof saved?.reamkerQuestStep === 'number' ? saved.reamkerQuestStep : 0,
     reamkerStepProgress: typeof saved?.reamkerStepProgress === 'number' ? saved.reamkerStepProgress : 0,
     deliveryJobsCompleted: typeof saved?.deliveryJobsCompleted === 'number' ? saved.deliveryJobsCompleted : 0,
+    ownedArtisanStations: Array.isArray(saved?.ownedArtisanStations) ? [...saved.ownedArtisanStations] : [],
+    trackedBossId: (typeof saved?.trackedBossId === 'string' ? saved.trackedBossId : null) as PlayerState['trackedBossId'],
+    bossMissionProgress:
+      saved?.bossMissionProgress && typeof saved.bossMissionProgress === 'object'
+        ? { ...saved.bossMissionProgress }
+        : {},
+    grandChroniclerClaimed: Boolean(saved?.grandChroniclerClaimed ?? false),
+    hasAstralCompassAura: Boolean(saved?.hasAstralCompassAura ?? false),
+    campfireRespawn:
+      saved?.campfireRespawn && typeof saved.campfireRespawn === 'object'
+        ? { ...saved.campfireRespawn }
+        : null,
+    discoveredBosses: Array.isArray(saved?.discoveredBosses) ? [...saved.discoveredBosses] : ['sdech_kongkaeb'],
+    mapExplorationPct:
+      saved?.mapExplorationPct && typeof saved.mapExplorationPct === 'object' ? { ...saved.mapExplorationPct } : {},
+    discoveredLandmarks: Array.isArray(saved?.discoveredLandmarks) ? [...saved.discoveredLandmarks] : [],
     hasCompletedCreation: Boolean(
       saved?.hasCompletedCreation ?? saved?.loadout?.hasCompletedCreation ?? false
     ),

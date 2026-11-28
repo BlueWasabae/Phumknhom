@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { INITIAL_PLAYER_STATE, type PlacedYardDecor, type PlayerState } from '@shared/types';
 import { DEFAULT_YARD_DECOR, YARD_DECOR_CATALOG } from '@shared/houseDecor';
+import { KHMER_ARTISAN_STATION_LIST } from '@shared/artisanCrafts';
 import { vfxManager } from '../animations/VFXManager';
 import {
   ARTISAN_MACHINES,
@@ -1291,6 +1292,102 @@ export class FarmScene extends Phaser.Scene {
         .setOrigin(0.5, 0);
 
       this.dynamicLayer.add([g, hit, lbl]);
+    });
+
+    // ---- 4. UPDATE 3.7: AUTHENTIC KHMER ARTISAN WORKSHOPS (Kampong Chhnang Pottery Stump, Weaving Loom, Dairy Churn) ----
+    const ownedStations = this.player.state.ownedArtisanStations ?? [];
+    KHMER_ARTISAN_STATION_LIST.forEach((st) => {
+      const sx = st.farmSlotOffset.x;
+      const sy = st.farmSlotOffset.y;
+      const owned = ownedStations.includes(st.id);
+
+      const g = this.add.graphics();
+      if (owned) {
+        // Rich wooden artisan station platform + distinctive heritage visual
+        g.fillStyle(0x451a03, 0.92);
+        g.fillRoundedRect(sx - 24, sy - 16, 48, 34, 6);
+        g.fillStyle(Number(st.primaryColor.replace('#', '0x')), 1);
+        g.lineStyle(2, Number(st.accentColor.replace('#', '0x')), 0.95);
+        g.fillRoundedRect(sx - 20, sy - 14, 40, 26, 5);
+        g.strokeRoundedRect(sx - 20, sy - 14, 40, 26, 5);
+        if (st.id === 'kampong_pottery_stump') {
+          // Andong Russei wooden pottery stump & hand-shaped terracotta vessel!
+          g.fillStyle(0x78350f, 1);
+          g.fillRect(sx - 7, sy - 4, 14, 12);
+          g.fillStyle(0xea580c, 1);
+          g.fillCircle(sx, sy - 6, 7);
+          g.fillStyle(0xfef08a, 0.85);
+          g.fillCircle(sx - 2, sy - 8, 2);
+        } else if (st.id === 'khmer_weaving_loom') {
+          // Wooden Khmer loom frame + checkered Krama warp threads!
+          g.fillStyle(0x78350f, 1);
+          g.fillRect(sx - 14, sy - 10, 4, 20);
+          g.fillRect(sx + 10, sy - 10, 4, 20);
+          g.fillStyle(0xfef2f2, 0.95);
+          g.fillRect(sx - 10, sy - 7, 20, 14);
+          g.fillStyle(0xdc2626, 0.95);
+          g.fillRect(sx - 10, sy - 3, 20, 4);
+          g.fillRect(sx - 2, sy - 7, 4, 14);
+        } else {
+          // Village Dairy & Dessert Churn copper kettle + golden custard glow!
+          g.fillStyle(0xe0f2fe, 0.95);
+          g.fillCircle(sx, sy - 2, 9);
+          g.fillStyle(0xfacc15, 0.95);
+          g.fillCircle(sx, sy - 3, 5);
+        }
+      } else {
+        // Dashed buyable Artisan Workshop pad
+        g.fillStyle(0x1e293b, 0.45);
+        g.lineStyle(1.6, 0xfacc15, 0.72);
+        g.fillRoundedRect(sx - 22, sy - 14, 44, 28, 6);
+        g.strokeRoundedRect(sx - 22, sy - 14, 44, 28, 6);
+      }
+
+      const iconTxt = this.add
+        .text(sx, sy - (owned ? 22 : 6), st.icon, { fontSize: '14px' })
+        .setOrigin(0.5)
+        .setResolution(2)
+        .setScale(0.65);
+
+      const lbl = this.add
+        .text(
+          sx,
+          sy + 18,
+          owned ? st.name.split(' ').slice(0, 2).join(' ') : `Buy ${st.costCoins}c`,
+          {
+            fontFamily: 'Fredoka, sans-serif',
+            fontSize: '10px',
+            fontStyle: 'bold',
+            color: owned ? '#fde047' : '#cbd5e1',
+            backgroundColor: 'rgba(15, 23, 42, 0.84)',
+            padding: { x: 4, y: 1 },
+          }
+        )
+        .setResolution(2)
+        .setScale(0.38)
+        .setOrigin(0.5, 0);
+
+      const hit = this.add
+        .rectangle(sx, sy, 52, 42, 0x000000, 0)
+        .setInteractive({ useHandCursor: true });
+      hit.on('pointerover', () => {
+        this.hoveredTip = {
+          x: sx,
+          y: sy - 24,
+          text: owned
+            ? `${st.icon} ${st.name} · Tap to Craft!`
+            : `${st.icon} ${st.name} (${st.costCoins} C) · Tap to Buy & Place!`,
+        };
+      });
+      hit.on('pointerout', () => {
+        this.hoveredTip = null;
+      });
+      hit.on('pointerdown', () => {
+        soundManager.playSfx('click');
+        EventBus.emit('ui:openModal', { modal: 'artisanWorkshop', artisanStationId: st.id });
+      });
+
+      this.dynamicLayer.add([g, iconTxt, lbl, hit]);
     });
   }
 

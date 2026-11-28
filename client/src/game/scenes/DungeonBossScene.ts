@@ -2497,17 +2497,26 @@ export class DungeonBossScene extends Phaser.Scene {
     // Restore HP cleanly on defeat or safe return
     const bridge = computeVillageToDungeonBridge(this.player.state);
     const restoredHp = this.playerDefeated ? bridge.effectiveMaxHp : Math.max(1, this.player.state.hp);
+    const campRespawn = this.playerDefeated ? this.player.state.campfireRespawn : null;
+    const destMap = (campRespawn?.mapId ?? 'temple_district') as NonNullable<PlayerState['currentMapId']>;
+    const destX = campRespawn?.x ?? 1145;
+    const destY = campRespawn?.y ?? 700;
+    if (campRespawn) {
+      EventBus.emit('ui:toast', {
+        text: `🔥 Respawned safely at ${campRespawn.label} (100% HP restored)!`,
+      });
+    }
 
     this.cameras.main.fadeOut(220, 8, 12, 20);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
       this.scene.start('OverworldScene', {
-        mapId: 'temple_district',
-        spawnX: 1145,
-        spawnY: 700,
+        mapId: destMap,
+        spawnX: destX,
+        spawnY: destY,
         playerState: {
           ...this.player.state,
           zone: 'overworld',
-          currentMapId: 'temple_district',
+          currentMapId: destMap,
           hp: restoredHp,
           weapon: { ...this.player.state.weapon },
           loadout: { ...this.player.state.loadout },

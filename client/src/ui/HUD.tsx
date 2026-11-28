@@ -156,6 +156,8 @@ interface HUDProps {
   onOpenPartyHost?: () => void;
   onOpenFolkGames?: () => void;
   onOpenDyeStudio?: () => void;
+  onOpenExplorerJournal?: () => void;
+  onOpenArtisanWorkshop?: () => void;
   onOpenPatchNotes?: () => void;
   onOpenFeedback?: () => void;
   onOpenScryingMirror?: () => void;
@@ -242,6 +244,8 @@ export const HUD: React.FC<HUDProps> = ({
   onOpenPartyHost,
   onOpenFolkGames,
   onOpenDyeStudio,
+  onOpenExplorerJournal,
+  onOpenArtisanWorkshop,
   onOpenPatchNotes,
   onOpenFeedback,
   onOpenScryingMirror,
@@ -1028,6 +1032,37 @@ export const HUD: React.FC<HUDProps> = ({
                 >
                   <Sprout className="w-4 h-4 text-lime-700" /> Farm & Artisan Manager
                 </button>
+                {onOpenArtisanWorkshop && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundManager.playSfx('click');
+                      setMenuDropdownOpen(false);
+                      onOpenArtisanWorkshop();
+                    }}
+                    className="px-3 py-2 rounded-xl hover:bg-amber-200/80 text-left flex items-center gap-2 text-amber-950"
+                  >
+                    <Sparkles className="w-4 h-4 text-orange-700" /> Khmer Artisan Workshops
+                  </button>
+                )}
+                {onOpenExplorerJournal && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundManager.playSfx('click');
+                      setMenuDropdownOpen(false);
+                      onOpenExplorerJournal();
+                    }}
+                    className="px-3 py-2 rounded-xl hover:bg-amber-200/80 text-left flex items-center justify-between gap-2 text-amber-950"
+                  >
+                    <span className="flex items-center gap-2">
+                      <BookOpen className="w-4 h-4 text-rose-700" /> Explorer&apos;s Journal (J)
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded-full bg-rose-700 text-white text-[9px] font-bold">
+                      {(player.discoveredBosses?.length ?? 1)}/24
+                    </span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => {
