@@ -25,6 +25,10 @@ export interface MountSpec {
   trailColor: number;
   floats: boolean;
   allowsPassenger: boolean;
+  /** Optional custom transparent PNG sprite scale & anchor for high-detail mount art */
+  pngScale?: number;
+  pngOriginY?: number;
+  pngOffsetY?: number;
 }
 
 export const KHMER_MOUNT_SPECS: Record<KhmerMountId, MountSpec> = {
@@ -63,12 +67,15 @@ export const KHMER_MOUNT_SPECS: Record<KhmerMountId, MountSpec> = {
     icon: '🛹',
     archetype: 'Hoverboard / Glider',
     speedBonusPct: 0.54,
-    seatOffsetY: -8,
+    seatOffsetY: -7,
     hasHeadlights: true,
     hasDustTrail: true,
     trailColor: 0x38bdf8,
     floats: true,
     allowsPassenger: false,
+    pngScale: 0.62,
+    pngOriginY: 0.62,
+    pngOffsetY: 3,
   },
   mount_royal_elephant: {
     id: 'mount_royal_elephant',
@@ -77,12 +84,15 @@ export const KHMER_MOUNT_SPECS: Record<KhmerMountId, MountSpec> = {
     icon: '🐘',
     archetype: '2-Seat War Elephant',
     speedBonusPct: 0.56,
-    seatOffsetY: -13,
+    seatOffsetY: -17,
     hasHeadlights: true,
     hasDustTrail: true,
     trailColor: 0xfde047,
     floats: false,
     allowsPassenger: true,
+    pngScale: 0.66,
+    pngOriginY: 0.82,
+    pngOffsetY: 6,
   },
   mount_shadow_singha: {
     id: 'mount_shadow_singha',
@@ -91,12 +101,15 @@ export const KHMER_MOUNT_SPECS: Record<KhmerMountId, MountSpec> = {
     icon: '🦁',
     archetype: 'MMO Armored Dire Lion',
     speedBonusPct: 0.58,
-    seatOffsetY: -10,
+    seatOffsetY: -13,
     hasHeadlights: true,
     hasDustTrail: true,
     trailColor: 0xc084fc,
     floats: false,
     allowsPassenger: false,
+    pngScale: 0.64,
+    pngOriginY: 0.80,
+    pngOffsetY: 5,
   },
   mount_golden_cloud: {
     id: 'mount_golden_cloud',
@@ -111,6 +124,9 @@ export const KHMER_MOUNT_SPECS: Record<KhmerMountId, MountSpec> = {
     trailColor: 0xfacc15,
     floats: true,
     allowsPassenger: true,
+    pngScale: 0.66,
+    pngOriginY: 0.68,
+    pngOffsetY: 2,
   },
   mount_celestial_garuda: {
     id: 'mount_celestial_garuda',
@@ -119,12 +135,15 @@ export const KHMER_MOUNT_SPECS: Record<KhmerMountId, MountSpec> = {
     icon: '🦅',
     archetype: 'RPG Chocobo / Phoenix Bird',
     speedBonusPct: 0.62,
-    seatOffsetY: -11,
+    seatOffsetY: -12,
     hasHeadlights: true,
     hasDustTrail: true,
     trailColor: 0xfb923c,
     floats: false,
     allowsPassenger: false,
+    pngScale: 0.64,
+    pngOriginY: 0.80,
+    pngOffsetY: 5,
   },
   mount_spirit_dragon: {
     id: 'mount_spirit_dragon',
@@ -133,12 +152,15 @@ export const KHMER_MOUNT_SPECS: Record<KhmerMountId, MountSpec> = {
     icon: '🐉',
     archetype: '2-Seat Eastern Dragon',
     speedBonusPct: 0.65,
-    seatOffsetY: -12,
+    seatOffsetY: -13,
     hasHeadlights: true,
     hasDustTrail: true,
     trailColor: 0x34d399,
     floats: true,
     allowsPassenger: true,
+    pngScale: 0.68,
+    pngOriginY: 0.74,
+    pngOffsetY: 3,
   },
 };
 
@@ -172,13 +194,21 @@ export class MountEntity {
   public mountId: KhmerMountId | null = null;
 
   private scene: Phaser.Scene;
+  private shadow: Phaser.GameObjects.Image;
   private sprite: Phaser.GameObjects.Image;
   private auraGlow: Phaser.GameObjects.Image;
+  private baseScale = 1;
+  private baseOffsetY = 0;
   private lastDustAt = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     this.scene = scene;
     this.ensureMountTextures(scene);
+
+    this.shadow = scene.add
+      .image(0, 7, 'soft_shadow')
+      .setScale(0.75, 0.52)
+      .setAlpha(0.5);
 
     this.auraGlow = scene.add
       .image(0, 2, 'torch_glow')
@@ -189,7 +219,7 @@ export class MountEntity {
       .setVisible(false);
 
     this.sprite = scene.add.image(0, 0, 'mount_tex_mount_village_bicycle').setOrigin(0.5, 0.72);
-    this.container = scene.add.container(x, y, [this.auraGlow, this.sprite]);
+    this.container = scene.add.container(x, y, [this.shadow, this.auraGlow, this.sprite]);
     this.container.setVisible(false);
   }
 
@@ -425,11 +455,25 @@ export class MountEntity {
       return;
     }
     this.mountId = spec.id;
-    const key = `mount_tex_${spec.id}`;
-    if (this.scene.textures.exists(key)) {
-      this.sprite.setTexture(key);
+    const pngKey = `mount_png_${spec.id}`;
+    const fallbackKey = `mount_tex_${spec.id}`;
+    if (spec.pngScale && this.scene.textures.exists(pngKey)) {
+      this.sprite.setTexture(pngKey);
+      this.baseScale = spec.pngScale;
+      this.baseOffsetY = spec.pngOffsetY ?? 3;
+      this.sprite.setOrigin(0.5, spec.pngOriginY ?? 0.76);
+      this.sprite.setScale(this.baseScale);
+      this.sprite.setPosition(0, this.baseOffsetY);
+    } else if (this.scene.textures.exists(fallbackKey)) {
+      this.sprite.setTexture(fallbackKey);
+      this.baseScale = 1;
+      this.baseOffsetY = 0;
+      this.sprite.setOrigin(0.5, 0.72);
+      this.sprite.setScale(1);
+      this.sprite.setPosition(0, 0);
     }
     this.auraGlow.setTint(spec.trailColor);
+    this.shadow.setScale(spec.floats ? 0.68 : 0.85, spec.floats ? 0.42 : 0.56);
     this.container.setVisible(true);
   }
 
@@ -439,7 +483,8 @@ export class MountEntity {
     soundManager.playSfx(spec.floats ? 'magic' : 'coin');
     this.scene.tweens.add({
       targets: this.sprite,
-      scaleY: 1.18,
+      scaleY: this.baseScale * 1.15,
+      scaleX: this.baseScale * 0.92,
       duration: 90,
       yoyo: true,
       repeat: 1,
@@ -455,15 +500,31 @@ export class MountEntity {
     this.container.setVisible(true);
 
     const flipLeft = facing === 'left';
-    const floatBob = spec.floats ? Math.sin(time * 0.0065) * 3.0 : isMoving ? Math.sin(time * 0.025) * 1.6 : 0;
-    this.container.setPosition(x, y + 6 + floatBob);
+    const floatBob = spec.floats
+      ? Math.sin(time * 0.0062) * 3.2
+      : isMoving
+        ? Math.abs(Math.sin(time * 0.018)) * -2.6
+        : Math.sin(time * 0.0045) * 0.6;
+    this.container.setPosition(x, y + 6);
     this.container.setDepth(y + 8);
     this.sprite.setFlipX(flipLeft);
+    this.sprite.setPosition(0, this.baseOffsetY + floatBob);
+    // Keep ground shadow planted on terrain while floating/galloping mounts bob above it
+    this.shadow.setPosition(0, 6);
+    this.shadow.setAlpha(spec.floats ? 0.36 - floatBob * 0.018 : 0.48);
+    // Dynamic stride/hover tilt & subtle idle breathing
+    const moveTilt = isMoving
+      ? (spec.floats ? (flipLeft ? -0.065 : 0.065) : Math.sin(time * 0.018) * 0.055)
+      : 0;
+    this.sprite.setRotation(moveTilt);
+    const breath = isMoving ? 1 : 1 + Math.sin(time * 0.0045) * 0.018;
+    this.sprite.setScale(this.baseScale, this.baseScale * breath);
 
     const snap = seasonClock.getSnapshot();
     const glowVisible = spec.floats || (spec.hasHeadlights && (snap.nightIntensity > 0.2 || snap.sunsetIntensity > 0.3));
     this.auraGlow.setVisible(glowVisible);
     if (glowVisible) {
+      this.auraGlow.setPosition(0, floatBob + 1);
       this.auraGlow.setAlpha(0.32 + Math.sin(time / 240) * 0.14);
     }
 
@@ -471,12 +532,12 @@ export class MountEntity {
       this.lastDustAt = time;
       const dir = flipLeft ? 1 : -1;
       const puff = this.scene.add
-        .circle(x + dir * 18, y + (spec.floats ? 5 : 9), Phaser.Math.FloatBetween(2.2, 4.2), spec.trailColor, 0.58)
+        .circle(x + dir * 20, y + (spec.floats ? 4 : 9), Phaser.Math.FloatBetween(2.2, 4.2), spec.trailColor, 0.58)
         .setBlendMode(spec.floats ? Phaser.BlendModes.ADD : Phaser.BlendModes.NORMAL)
         .setDepth(y + 5);
       this.scene.tweens.add({
         targets: puff,
-        x: puff.x + dir * 12,
+        x: puff.x + dir * 13,
         y: puff.y - 6,
         scale: 1.85,
         alpha: 0,

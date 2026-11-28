@@ -867,19 +867,22 @@ export function drawFullPaperDollToCanvas(
   // Draw crisp 36x40 pixel-art human chibi scaled cleanly into the 64x64 preview coordinate frame
   ctx.drawImage(scratch, 0, 0, CANVAS_W, CANVAS_H, 8, 5 + bob, 48, 53);
 
-  // Layer 10: Held Khmer Class Weapon
+  // Layer 10: Held Khmer Class Weapon (crisp proportional RPG hand posture)
   if (weaponImg && facing !== 'up') {
     const dir = facing === 'left' ? -1 : 1;
+    const isBook = weaponInfo?.key === 'wp_book';
+    const isBow = weaponInfo?.key === 'wp_bow' || weaponInfo?.key === 'wp_bow2';
+    const scale = isBook || isBow ? 1.35 : 1.48;
     ctx.save();
-    ctx.translate(facing === 'left' ? 16 : 49, 41 + bob);
+    ctx.translate(facing === 'left' ? 14 : 50, 42 + bob);
     ctx.scale(dir, 1);
-    ctx.rotate(-0.32);
+    ctx.rotate(isBook || isBow ? 0 : 0.22);
     ctx.drawImage(
       weaponImg,
-      -weaponImg.width * 0.9,
-      -weaponImg.height * 1.45,
-      weaponImg.width * 2.1,
-      weaponImg.height * 2.1
+      -weaponImg.width * scale * 0.5,
+      -weaponImg.height * scale * 0.78,
+      weaponImg.width * scale,
+      weaponImg.height * scale
     );
     ctx.restore();
   }
@@ -943,9 +946,9 @@ export class PaperDoll extends Phaser.GameObjects.Container {
       .setScale(1.38);
 
     this.weaponSprite = scene.add
-      .image(15, -14, 'wp_axe')
-      .setOrigin(0.5, 0.8)
-      .setScale(2.05)
+      .image(13, -11, 'wp_axe')
+      .setOrigin(0.5, 0.78)
+      .setScale(1.32)
       .setVisible(false);
 
     this.weaponAuraGlow = scene.add
@@ -1020,7 +1023,15 @@ export class PaperDoll extends Phaser.GameObjects.Container {
   private applyWeaponAndAura(): void {
     const wInfo = resolveWeaponSprite(this.loadout.weapon);
     if (wInfo && this.scene.textures.exists(wInfo.key)) {
-      this.weaponSprite.setTexture(wInfo.key).setVisible(true);
+      const wScale =
+        wInfo.key === 'wp_book'
+          ? 1.18
+          : wInfo.key === 'wp_bow' || wInfo.key === 'wp_bow2'
+            ? 1.16
+            : wInfo.key === 'wp_sai'
+              ? 1.24
+              : 1.34;
+      this.weaponSprite.setTexture(wInfo.key).setScale(wScale).setVisible(true);
       if (wInfo.tint) this.weaponSprite.setTint(wInfo.tint);
       else this.weaponSprite.clearTint();
     } else {
@@ -1279,32 +1290,46 @@ export class PaperDoll extends Phaser.GameObjects.Container {
       }
     }
 
-    // Layer 10: Held Khmer Weapon positioned cleanly at character's hand & rotated along cursor aimAngle when active
+    // Layer 10: Held Khmer Weapon positioned cleanly at character's hand with natural RPG posture
     const dir = facing === 'left' ? -1 : 1;
     const isUp = facing === 'up';
+    const curWeaponKey = this.weaponSprite.texture?.key ?? '';
+    const isBook = curWeaponKey === 'wp_book';
+    const isBow = curWeaponKey === 'wp_bow' || curWeaponKey === 'wp_bow2';
 
     if (this.aimAngle !== null) {
       const aimDir = Math.cos(this.aimAngle) < 0 ? -1 : 1;
-      const handX = Math.cos(this.aimAngle) * 15;
-      const handY = -16 + idleBob + Math.sin(this.aimAngle) * 12;
+      const handX = Math.cos(this.aimAngle) * 14;
+      const handY = -14 + idleBob + Math.sin(this.aimAngle) * 11;
       this.weaponSprite.setPosition(handX, handY);
       this.weaponSprite.setFlipX(aimDir < 0);
-      this.weaponSprite.setDepth(2);
+      this.moveAbove(this.weaponSprite, this.bodySprite);
       const swingOffset = pose === 'attack' ? aimDir * 0.95 : 0;
       this.weaponSprite.setRotation(this.aimAngle + Math.PI / 2 + swingOffset);
     } else {
-      const handX = facing === 'down' ? 15 : facing === 'up' ? -14 : dir * 16;
-      const handY = (pose === 'attack' ? -16 : -12) + idleBob;
+      // Natural side-hand placement that NEVER blocks the character's chest or face!
+      const handX = facing === 'down' ? 13 : facing === 'up' ? -12 : dir * 13;
+      const bookFloat = isBook ? Math.sin(time / 240) * 1.6 - 2 : 0;
+      const handY = (pose === 'attack' ? -15 : -11) + vertBob + bookFloat;
 
       this.weaponSprite.setPosition(handX, handY);
       this.weaponSprite.setFlipX(dir < 0);
-      this.weaponSprite.setDepth(isUp ? -1 : 2);
-      if (pose === 'attack') {
-        this.weaponSprite.setRotation(dir * 1.15);
-      } else if (pose === 'parry') {
-        this.weaponSprite.setRotation(dir * -0.15);
+      if (isUp) {
+        this.moveBelow(this.weaponSprite, this.bodySprite);
       } else {
-        this.weaponSprite.setRotation(dir * -0.28 + (isWalking ? Math.sin(time / 120) * 0.14 : 0));
+        this.moveAbove(this.weaponSprite, this.bodySprite);
+      }
+
+      if (pose === 'attack') {
+        this.weaponSprite.setRotation(dir * 1.12);
+      } else if (pose === 'parry') {
+        this.weaponSprite.setRotation(dir * -0.18);
+      } else if (isBook || isBow) {
+        // Keep tomes & longbows upright in hand instead of tilted sideways across torso
+        this.weaponSprite.setRotation(isWalking ? Math.sin(time / 140) * 0.06 : 0);
+      } else {
+        // Angle blades/axes/staves cleanly outward from the hand
+        this.weaponSprite.setRotation(dir * 0.24 + (isWalking ? Math.sin(time / 120) * 0.12 : 0));
       }
     }
 

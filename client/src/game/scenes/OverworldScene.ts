@@ -299,17 +299,30 @@ export class OverworldScene extends Phaser.Scene {
     this.areaSignText = undefined;
     this.syncDynamicBgm();
 
-    // 1. Lush Textured 16x16 Meadow Grass across full 1600x1200 map (Koh Rong paints its own tropical beach & ocean!)
+    // 1. Map-Specific Rich Ground Theme & Environmental Design (distinct palette & architectural character per place!)
     if (this.mapId !== 'koh_rong_island') {
+      const groundTintMap: Partial<Record<VillageMapId, number>> = {
+        central_plaza: 0xffffff,
+        market_street: 0xe6d4a8, // Warm sandstone-amber bazaar district
+        temple_district: 0xadb89a, // Ancient mossy Angkor temple stone terrace
+        green_park: 0x9cf0a6, // Deep lush tropical riverside emerald
+        wild_frontier: 0xd9c579, // Sun-baked highland ochre savanna
+        mining_quarry: 0xc27c5a, // Red Cambodian laterite canyon earth
+        bamboo_forest: 0x5fb88f, // Cool misty jade bamboo grove
+        sunken_ruins: 0x4ca6ba, // Flooded turquoise-teal ancient temple sanctuary
+      };
+      const baseTile = this.mapId === 'mining_quarry' ? 'sv_path' : 'sv_grass';
       this.add
-        .tileSprite(MAP_W / 2, MAP_H / 2, MAP_W, MAP_H, 'sv_grass')
+        .tileSprite(MAP_W / 2, MAP_H / 2, MAP_W, MAP_H, baseTile)
+        .setTint(groundTintMap[this.mapId] ?? 0xffffff)
         .setDepth(0);
 
       // 2. Cohesive 16-bit Pixel-Art Top Canopy Treeline (opening cleanly for North Road Portals!)
       this.buildCohesiveHorizonTreeline();
 
-      // 3. Clean Spacious Cobblestone & Dirt Road Network for the Active Map
+      // 3. Clean Spacious Cobblestone & Dirt Road Network + Rich Environmental Theme Props!
       this.buildRoadsAndCourtyards();
+      this.buildMapThemeEnvironmentProps();
     }
 
     this.colliders = this.physics.add.staticGroup();
@@ -918,6 +931,127 @@ export class OverworldScene extends Phaser.Scene {
       borderGfx.fillStyle(0x78716c, 0.95);
       borderGfx.fillRoundedRect(350, 340, 900, 560, 14);
       this.add.tileSprite(800, 620, 886, 546, 'sv_plaza_tile').setTint(0xbae6fd).setDepth(3);
+    }
+  }
+
+  private buildMapThemeEnvironmentProps(): void {
+    const g = this.add.graphics().setDepth(5);
+
+    if (this.mapId === 'central_plaza') {
+      // Royal Pink Lotus Flowerbeds flanking the courtyard + festive Khmer bunting garlands
+      for (const [fx, fy] of [[520, 445], [1080, 445], [520, 755], [1080, 755]]) {
+        g.fillStyle(0x78350f, 0.9);
+        g.fillRoundedRect(fx - 26, fy - 14, 52, 28, 8);
+        g.fillStyle(0x16a34a, 0.92);
+        g.fillRoundedRect(fx - 22, fy - 10, 44, 20, 6);
+        for (let i = -14; i <= 14; i += 14) {
+          g.fillStyle(i === 0 ? 0xfacc15 : 0xf472b6, 0.96);
+          g.fillCircle(fx + i, fy, 4.5);
+          g.fillStyle(0xfef9c3, 0.9);
+          g.fillCircle(fx + i, fy, 1.8);
+        }
+      }
+      // Decorative sandstone stepping stones along diagonal plaza corners
+      g.fillStyle(0xd6d3d1, 0.55);
+      for (const [sx, sy] of [[420, 320], [1180, 320], [420, 880], [1180, 880]]) {
+        g.fillCircle(sx, sy, 14);
+        g.fillCircle(sx + 20, sy + 14, 10);
+      }
+    } else if (this.mapId === 'market_street') {
+      // Festive crimson-and-gold Khmer Bazaar lantern garlands overhead across Market Boulevard
+      for (const gx of [360, 580, 800, 1020, 1240]) {
+        g.lineStyle(1.5, 0x78350f, 0.7);
+        g.lineBetween(gx - 55, 515, gx + 55, 515);
+        for (const ox of [-36, 0, 36]) {
+          g.fillStyle(ox === 0 ? 0xfacc15 : 0xdc2626, 0.95);
+          g.fillCircle(gx + ox, 519, 5);
+          const lg = this.add
+            .image(gx + ox, 519, 'torch_glow')
+            .setTint(0xf59e0b)
+            .setScale(0.32)
+            .setAlpha(0.36)
+            .setBlendMode(Phaser.BlendModes.ADD)
+            .setDepth(520);
+          this.glowLights.push(lg);
+        }
+      }
+      // Colorful silk bazaar floor rugs along the promenade
+      for (const rx of [440, 800, 1160]) {
+        g.fillStyle(0xb91c1c, 0.45);
+        g.fillRoundedRect(rx - 44, 578, 88, 44, 6);
+        g.lineStyle(1.5, 0xfacc15, 0.7);
+        g.strokeRoundedRect(rx - 40, 582, 80, 36, 4);
+      }
+    } else if (this.mapId === 'temple_district') {
+      // Sacred carved Angkor sandstone mandala rings & ancient mossy ruins
+      g.lineStyle(2.5, 0xfacc15, 0.45);
+      g.strokeCircle(800, 550, 130);
+      g.lineStyle(1.5, 0xd6d3d1, 0.4);
+      g.strokeCircle(800, 550, 95);
+      for (const [rx, ry] of [[250, 340], [1350, 340], [250, 920], [1350, 920]]) {
+        g.fillStyle(0x57534e, 0.9);
+        g.fillRoundedRect(rx - 22, ry - 12, 44, 24, 4);
+        g.fillStyle(0x4d7c0f, 0.65);
+        g.fillCircle(rx - 10, ry - 4, 8);
+        g.fillCircle(rx + 12, ry + 4, 6);
+      }
+    } else if (this.mapId === 'green_park') {
+      // Blooming tropical hibiscus/lotus gardens & shady park benches
+      for (const [px, py] of [[410, 350], [1190, 350], [420, 740], [1180, 720]]) {
+        g.fillStyle(0x15803d, 0.55);
+        g.fillEllipse(px, py, 74, 42);
+        for (let k = 0; k < 5; k++) {
+          const ang = (k * Math.PI * 2) / 5;
+          g.fillStyle(k % 2 === 0 ? 0xf472b6 : 0xfef08a, 0.92);
+          g.fillCircle(px + Math.cos(ang) * 20, py + Math.sin(ang) * 10, 4);
+        }
+      }
+    } else if (this.mapId === 'wild_frontier') {
+      // Highland laterite boulders & rustic explorer campfires
+      for (const [bx, by] of [[340, 360], [1260, 360], [340, 860], [1260, 860]]) {
+        g.fillStyle(0x9a3412, 0.9);
+        g.fillEllipse(bx, by, 48, 28);
+        g.fillStyle(0xc2410c, 0.85);
+        g.fillEllipse(bx - 6, by - 5, 30, 18);
+      }
+    } else if (this.mapId === 'mining_quarry') {
+      // Iron minecart rails & glowing turquoise crystal outcrops across the red-laterite canyon
+      g.lineStyle(3, 0x334155, 0.85);
+      g.lineBetween(240, 588, 1360, 588);
+      g.lineBetween(240, 612, 1360, 612);
+      g.lineStyle(2, 0x78350f, 0.75);
+      for (let x = 256; x <= 1344; x += 28) {
+        g.lineBetween(x, 584, x, 616);
+      }
+      for (const [cx, cy] of [[380, 380], [1220, 380], [380, 840], [1220, 840]]) {
+        g.fillStyle(0x22d3ee, 0.85);
+        g.fillTriangle(cx, cy - 16, cx - 9, cy + 6, cx + 9, cy + 6);
+        g.fillStyle(0xa5f3fc, 0.9);
+        g.fillTriangle(cx + 8, cy - 10, cx + 2, cy + 6, cx + 14, cy + 6);
+      }
+    } else if (this.mapId === 'bamboo_forest') {
+      // Swaying emerald bamboo clusters & drifting misty spirit wisps
+      for (const [bx, by] of [[280, 320], [520, 290], [1080, 290], [1320, 340], [320, 880], [1280, 860]]) {
+        for (let i = -10; i <= 10; i += 10) {
+          g.fillStyle(0x166534, 0.92);
+          g.fillRect(bx + i - 3, by - 46, 6, 48);
+          g.fillStyle(0x4ade80, 0.85);
+          g.fillRect(bx + i - 3, by - 32, 6, 2);
+          g.fillRect(bx + i - 3, by - 16, 6, 2);
+        }
+        g.fillStyle(0x6ee7b7, 0.16);
+        g.fillEllipse(bx, by + 4, 68, 26);
+      }
+    } else if (this.mapId === 'sunken_ruins') {
+      // Bioluminescent turquoise temple water ripples & submerged carved stone ruins
+      for (const [wx, wy] of [[310, 310], [1290, 310], [310, 910], [1290, 910]]) {
+        g.fillStyle(0x06b6d4, 0.3);
+        g.fillEllipse(wx, wy, 92, 46);
+        g.lineStyle(1.5, 0x67e8f9, 0.7);
+        g.strokeEllipse(wx, wy, 72, 34);
+        g.fillStyle(0x78716c, 0.9);
+        g.fillRoundedRect(wx - 14, wy - 10, 28, 16, 3);
+      }
     }
   }
 
@@ -4470,70 +4604,67 @@ export class OverworldScene extends Phaser.Scene {
     if (!terr || !terr.owner) return;
 
     const tag = terr.owner.kromTag;
-    const spots: Array<{ x: number; y: number; scale?: number }> =
+    // Place ONE sleek, compact Territory Standard in a clean dedicated corner plaza (ZERO blocking of roads/stalls/NPCs!)
+    const spots: Array<{ x: number; y: number }> =
       this.mapId === 'market_street'
-        ? [
-            { x: 800, y: 515, scale: 1.0 },
-            { x: 560, y: 590, scale: 0.8 },
-            { x: 1040, y: 590, scale: 0.8 },
-          ]
+        ? [{ x: 245, y: 455 }]
         : this.mapId === 'wild_frontier'
-          ? [
-              { x: 800, y: 540, scale: 1.0 },
-              { x: 650, y: 660, scale: 0.82 },
-            ]
-          : [
-              { x: 800, y: 615, scale: 1.0 },
-              { x: 1095, y: 690, scale: 0.82 },
-            ];
+          ? [{ x: 615, y: 455 }]
+          : [{ x: 615, y: 315 }];
 
     for (const sp of spots) {
-      const s = sp.scale ?? 1.0;
+      const base = this.add
+        .ellipse(sp.x, sp.y + 2, 24, 10, 0x57534e, 0.95)
+        .setStrokeStyle(1.2, 0xd6d3d1)
+        .setDepth(sp.y - 1);
       const pole = this.add
-        .rectangle(sp.x, sp.y - 22 * s, 5 * s, 46 * s, 0x78350f)
-        .setStrokeStyle(1, 0xfde047)
-        .setDepth(sp.y + 4);
+        .rectangle(sp.x, sp.y - 18, 4, 38, 0x78350f)
+        .setStrokeStyle(1, 0xfacc15)
+        .setDepth(sp.y);
       const pennant = this.add
-        .rectangle(sp.x, sp.y - 38 * s, 52 * s, 22 * s, 0xb45309, 0.96)
-        .setStrokeStyle(2, 0xfef08a)
-        .setDepth(sp.y + 5)
+        .rectangle(sp.x, sp.y - 31, 66, 20, 0x991b1b, 0.96)
+        .setStrokeStyle(1.8, 0xfacc15)
+        .setDepth(sp.y + 1)
         .setInteractive({ useHandCursor: true });
       const glow = this.add
-        .circle(sp.x, sp.y - 38 * s, 20 * s, 0xfacc15, 0.24)
+        .circle(sp.x, sp.y - 31, 16, 0xfacc15, 0.2)
         .setBlendMode(Phaser.BlendModes.ADD)
-        .setDepth(sp.y + 3);
-      vfxManager.applyBloom(this, glow, { color: 0xfde047, strength: 1.45 });
+        .setDepth(sp.y - 1);
 
       const tagLabel = this.add
-        .text(sp.x, sp.y - 38 * s, `👑 [${tag}]`, {
+        .text(sp.x, sp.y - 31, `👑 [${tag}]`, {
           fontFamily: 'Fredoka, sans-serif',
-          fontSize: `${Math.round(11 * s)}px`,
+          fontSize: '13px',
           fontStyle: 'bold',
           color: '#fef08a',
           stroke: '#451a03',
           strokeThickness: 3,
         })
+        .setResolution(2)
+        .setScale(0.44)
         .setOrigin(0.5)
-        .setDepth(sp.y + 7);
+        .setDepth(sp.y + 3);
 
       const subLabel = this.add
-        .text(sp.x, sp.y - 54 * s, `TERRITORY OWNER · ${terr.owner.kromName}`, {
+        .text(sp.x, sp.y + 10, `TERRITORY · ${terr.owner.kromName}`, {
           fontFamily: 'Fredoka, sans-serif',
-          fontSize: '9px',
+          fontSize: '10px',
           fontStyle: 'bold',
           color: '#fef9c3',
           backgroundColor: 'rgba(120, 53, 15, 0.9)',
           padding: { x: 5, y: 1 },
         })
-        .setScale(0.45 * s)
-        .setOrigin(0.5, 1)
-        .setDepth(sp.y + 8);
+        .setResolution(2)
+        .setScale(0.42)
+        .setOrigin(0.5, 0)
+        .setDepth(sp.y + 4);
 
       pennant.on('pointerdown', () => {
+        if (!this.guardInteractRange(sp.x, sp.y, 150)) return;
         EventBus.emit('ui:openModal', { modal: 'kromWar' });
       });
 
-      this.territoryBannerObjects.push(pole, pennant, glow, tagLabel, subLabel);
+      this.territoryBannerObjects.push(base, pole, pennant, glow, tagLabel, subLabel);
     }
   }
 

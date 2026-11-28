@@ -279,6 +279,18 @@ export class BootScene extends Phaser.Scene {
         frameHeight: 32,
       });
     }
+
+    // ---- 10. HIGH-DETAIL CREATIVE PIXEL-ART MOUNT SPRITES (Transparent PNGs) ----
+    for (const mountKey of [
+      'mount_celestial_garuda',
+      'mount_golden_cloud',
+      'mount_royal_elephant',
+      'mount_shadow_singha',
+      'mount_spirit_dragon',
+      'mount_bamboo_hoverboard',
+    ]) {
+      this.load.image(`mount_png_${mountKey}`, `/assets/khmer/mounts/${mountKey}.png`);
+    }
   }
 
   create(): void {
