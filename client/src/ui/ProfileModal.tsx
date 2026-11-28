@@ -2,7 +2,10 @@ import React from 'react';
 import type { PlayerState } from '@shared/types';
 import { getXpForNextLevel } from '@shared/balanceFormulas';
 import { KHMER_CLASSES } from '@shared/khmerClasses';
-import { Coins, Diamond, Gem, Shield, Sparkles, Swords } from 'lucide-react';
+import { Coins, Diamond, Download, Gem, Shield, Sparkles, Swords } from 'lucide-react';
+import { downloadHeroCardPng } from '../utils/HeroCardGenerator';
+import { soundManager } from '../game/systems/SoundManager';
+import { EventBus } from '../game/EventBus';
 import { NativeDialog } from './NativeDialog';
 import { PaperDollPreview } from './PaperDollPreview';
 
@@ -176,16 +179,31 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 <Shield className="w-3.5 h-3.5 text-sky-700" /> DEF {player.defense}
               </span>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                onClose();
-                onOpenInventory();
-              }}
-              className="phum-btn px-3 py-1.5 rounded-xl font-display font-bold text-xs"
-            >
-              Open Wardrobe / Bag →
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  soundManager.playSfx('harvest');
+                  downloadHeroCardPng(player);
+                  EventBus.emit('ui:toast', {
+                    text: `🪪 Downloaded 800×450 Hero Share Card PNG for ${player.name}!`,
+                  });
+                }}
+                className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:brightness-110 text-slate-950 font-display font-black text-xs inline-flex items-center gap-1 shadow cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" /> Download Hero Card
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenInventory();
+                }}
+                className="phum-btn px-3 py-1.5 rounded-xl font-display font-bold text-xs cursor-pointer"
+              >
+                Open Wardrobe / Bag →
+              </button>
+            </div>
           </div>
         </div>
       </div>

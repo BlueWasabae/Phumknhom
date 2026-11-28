@@ -147,6 +147,8 @@ interface HUDProps {
   onOpenInstrumentJam?: () => void;
   onOpenPetRace?: () => void;
   onOpenYardDecor?: () => void;
+  onOpenPatchNotes?: () => void;
+  onOpenFeedback?: () => void;
   onOpenScryingMirror?: () => void;
   onOpenTukTukCart?: () => void;
   onOpenTreasureMap?: () => void;
@@ -222,6 +224,8 @@ export const HUD: React.FC<HUDProps> = ({
   onOpenInstrumentJam,
   onOpenPetRace,
   onOpenYardDecor,
+  onOpenPatchNotes,
+  onOpenFeedback,
   onOpenScryingMirror,
   onOpenTukTukCart,
   onOpenTreasureMap,
@@ -568,26 +572,38 @@ export const HUD: React.FC<HUDProps> = ({
         </div>
       )}
 
-      {/* Tiny Green/Gray Connection Status Dot */}
+      {/* Tiny Green/Amber/Gray Connection Status Dot + Non-Blocking Auto-Reconnect Pill */}
       <button
         type="button"
         onClick={onOpenAreaSwitcher}
         title={
           networkStatus.online
             ? `Connected to ${networkStatus.areaId} (${networkStatus.playerCount} online)`
-            : 'Colyseus server unreachable — playing in Offline Mode'
+            : networkStatus.reconnecting
+              ? `Reconnecting to ភូមិខ្ញុំ... (Attempt ${networkStatus.reconnectAttempt ?? 1}/6)`
+              : 'Colyseus server unreachable — playing in Offline Mode'
         }
-        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-amber-950/10 hover:bg-amber-950/20 text-[10px] font-display font-bold text-amber-950 whitespace-nowrap transition"
+        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg text-[10px] font-display font-bold whitespace-nowrap transition ${
+          networkStatus.reconnecting
+            ? 'bg-amber-500/25 border border-amber-500/60 text-amber-950 animate-pulse'
+            : 'bg-amber-950/10 hover:bg-amber-950/20 text-amber-950'
+        }`}
       >
         <span
           className={`w-2 h-2 rounded-full shrink-0 ${
-            networkStatus.online ? 'bg-emerald-500 animate-pulse' : 'bg-stone-400'
+            networkStatus.online
+              ? 'bg-emerald-500 animate-pulse'
+              : networkStatus.reconnecting
+                ? 'bg-amber-500 animate-ping'
+                : 'bg-stone-400'
           }`}
         />
         <span>
           {networkStatus.online
             ? `Online • ${networkStatus.playerCount} ${networkStatus.playerCount === 1 ? 'player' : 'players'}`
-            : 'Offline Mode'}
+            : networkStatus.reconnecting
+              ? 'Reconnecting to ភូមិខ្ញុំ...'
+              : 'Offline Mode'}
         </span>
       </button>
 
@@ -1168,6 +1184,36 @@ export const HUD: React.FC<HUDProps> = ({
                       <Crown className="w-4 h-4 text-emerald-700" /> Pet Racing Arena
                     </span>
                     <span className="text-[9px] font-bold text-emerald-700">6-Lane</span>
+                  </button>
+                )}
+                {onOpenPatchNotes && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuDropdownOpen(false);
+                      onOpenPatchNotes();
+                    }}
+                    className="px-3 py-2 rounded-xl hover:bg-amber-100 text-left flex items-center justify-between gap-2 text-amber-950"
+                  >
+                    <span className="flex items-center gap-2">
+                      <BookOpen className="w-4 h-4 text-amber-700" /> Patch Notes (v3.0)
+                    </span>
+                    <span className="text-[9px] font-black text-amber-700">NEW</span>
+                  </button>
+                )}
+                {onOpenFeedback && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuDropdownOpen(false);
+                      onOpenFeedback();
+                    }}
+                    className="px-3 py-2 rounded-xl hover:bg-rose-100 text-left flex items-center justify-between gap-2 text-amber-950"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-rose-600" /> Report Bug / Feedback
+                    </span>
+                    <span className="text-[9px] font-bold text-rose-700">GM</span>
                   </button>
                 )}
                 {onOpenFestival && (

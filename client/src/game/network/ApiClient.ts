@@ -2656,3 +2656,101 @@ export async function finalizeKromWarWeekApi(
         : '🏆 Weekly Krom Territory Wars Finalized! New War Week started!',
   };
 }
+
+// ==================== UPDATE 3.0 PLAYER BUG REPORT & FEEDBACK API ====================
+
+export interface FeedbackReportClient {
+  id: string;
+  playerId: string;
+  username: string;
+  category: 'bug' | 'idea' | 'balance' | 'other';
+  title: string;
+  message: string;
+  mapId?: string;
+  appVersion: string;
+  createdAt: string;
+}
+
+const LOCAL_FEEDBACK_KEY = 'phum_khnhom_feedback_log_v1';
+
+function loadLocalFeedback(): FeedbackReportClient[] {
+  try {
+    const raw = window.localStorage.getItem(LOCAL_FEEDBACK_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed as FeedbackReportClient[];
+    }
+  } catch {
+    // ignore
+  }
+  return [];
+}
+
+function saveLocalFeedback(list: FeedbackReportClient[]): void {
+  try {
+    window.localStorage.setItem(LOCAL_FEEDBACK_KEY, JSON.stringify(list.slice(0, 50)));
+  } catch {
+    // ignore
+  }
+}
+
+export async function submitFeedbackApi(
+  session: AuthSession | null,
+  payload: {
+    username: string;
+    category: 'bug' | 'idea' | 'balance' | 'other';
+    title: string;
+    message: string;
+    mapId?: string;
+    appVersion?: string;
+  }
+): Promise<{ ok: true; report: FeedbackReportClient } | { ok: false; error: string }> {
+  const res = await postJson<{ ok: boolean; report: FeedbackReportClient }>(
+    '/feedback',
+    payload,
+    session?.token
+  );
+  if (res.ok) {
+    const cur = loadLocalFeedback();
+    saveLocalFeedback([res.data.report, ...cur]);
+    return { ok: true, report: res.data.report };
+  }
+
+  // Offline fallback so reports still show up locally in Founder GM Panel
+  const report: FeedbackReportClient = {
+    id: `local_${Date.now().toString(36)}`,
+    playerId: session?.playerId ?? 'guest',
+    username: payload.username,
+    category: payload.category,
+    title: payload.title,
+    message: payload.message,
+    mapId: payload.mapId,
+    appVersion: payload.appVersion ?? '3.0.0',
+    createdAt: new Date().toISOString(),
+  };
+  saveLocalFeedback([report, ...loadLocalFeedback()]);
+  return { ok: true, report };
+}
+
+export async function fetchAdminFeedbackApi(
+  gmSecret: string,
+  email?: string | null
+): Promise<FeedbackReportClient[]> {
+  try {
+    const res = await fetch(`${getApiBase()}/admin/feedback`, {
+      headers: {
+        ...(gmSecret ? { 'x-gm-secret': gmSecret } : {}),
+        ...(email ? { 'x-gm-email': email } : {}),
+      },
+    });
+    if (res.ok) {
+      const json = (await res.json()) as { reports?: FeedbackReportClient[] };
+      if (Array.isArray(json.reports)) {
+        return json.reports;
+      }
+    }
+  } catch {
+    // fallback
+  }
+  return loadLocalFeedback();
+}

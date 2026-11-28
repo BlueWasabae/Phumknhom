@@ -84,6 +84,8 @@ import {
 } from './economy/auctionService';
 import { createReforgeAndBankRouter } from './economy/reforgeService';
 import { createBankRouter } from './economy/bankService';
+import { createSlidingWindowRateLimiter } from './middleware/rateLimiter';
+import { listFeedbackReports, submitFeedbackReport } from './economy/feedbackService';
 import {
   createCheckoutRouter,
   createPaymentRouter,
@@ -157,6 +159,42 @@ app.post(
 
 app.use(express.json({ limit: '1mb' }));
 
+// Update 3.0 — Sliding-Window Rate Limiters protecting all sensitive economy & write endpoints
+const saveRateLimiter = createSlidingWindowRateLimiter({
+  windowMs: 60_000,
+  maxRequests: 40,
+  label: 'api_save',
+});
+const economyRateLimiter = createSlidingWindowRateLimiter({
+  windowMs: 30_000,
+  maxRequests: 35,
+  label: 'api_economy',
+});
+const promoRateLimiter = createSlidingWindowRateLimiter({
+  windowMs: 60_000,
+  maxRequests: 15,
+  label: 'api_promo',
+});
+const checkoutRateLimiter = createSlidingWindowRateLimiter({
+  windowMs: 60_000,
+  maxRequests: 20,
+  label: 'api_checkout',
+});
+const feedbackRateLimiter = createSlidingWindowRateLimiter({
+  windowMs: 60_000,
+  maxRequests: 10,
+  label: 'api_feedback',
+});
+
+app.use('/api/save', saveRateLimiter);
+app.use('/api/auction', economyRateLimiter);
+app.use('/api/trade', economyRateLimiter);
+app.use('/api/krom', economyRateLimiter);
+app.use('/api/promo', promoRateLimiter);
+app.use('/api/checkout', checkoutRateLimiter);
+app.use('/api/payments', checkoutRateLimiter);
+app.use('/api/feedback', feedbackRateLimiter);
+
 function extractBearerToken(req: express.Request): string | undefined {
   const authHeader = req.headers.authorization;
   if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
@@ -176,14 +214,100 @@ app.get('/health', (_req, res) => {
   });
 });
 
-app.get('/api/health', (_req, res) => {
-  res.json({
-    ok: true,
-    service: 'phum-khnhom-plaza',
-    storageMode: getStorageMode(),
-    port: PORT,
-    timestamp: Date.now(),
-  });
+app.get('/api/health', async (_req, res) => {
+  try {
+    const [plazaRooms, clubRooms, dungeonRooms, worldBossRooms, petRaceRooms] = await Promise.all([
+      matchMaker.query({ name: 'plaza' }).catch(() => []),
+      matchMaker.query({ name: 'club' }).catch(() => []),
+      matchMaker.query({ name: 'dungeon' }).catch(() => []),
+      matchMaker.query({ name: 'world_boss' }).catch(() => []),
+      matchMaker.query({ name: 'pet_race' }).catch(() => []),
+    ]);
+    const storageMode = getStorageMode();
+    const sumClients = (list: Array<{ clients?: number }>) =>
+      list.reduce((acc, r) => acc + (r.clients ?? 0), 0);
+
+    res.json({
+      ok: true,
+      version: '3.0.0',
+      service: 'phum-khnhom-plaza',
+      uptimeSec: Math.round(process.uptime()),
+      storageMode,
+      dbStatus: storageMode === 'supabase' ? 'supabase_connected' : 'local_json_ready',
+      rooms: {
+        PlazaRoom: { count: plazaRooms.length, players: sumClients(plazaRooms) },
+        ClubRoom: { count: clubRooms.length, players: sumClients(clubRooms) },
+        DungeonRoom: { count: dungeonRooms.length, players: sumClients(dungeonRooms) },
+        WorldBossRoom: { count: worldBossRooms.length, players: sumClients(worldBossRooms) },
+        PetRaceRoom: { count: petRaceRooms.length, players: sumClients(petRaceRooms) },
+      },
+      totalOnlinePlayers:
+        sumClients(plazaRooms) +
+        sumClients(clubRooms) +
+        sumClients(dungeonRooms) +
+        sumClients(worldBossRooms) +
+        sumClients(petRaceRooms),
+      port: PORT,
+      timestamp: Date.now(),
+    });
+  } catch (err) {
+    console.error('[Phum Server] /api/health failed:', err);
+    res.status(500).json({ ok: false, error: 'Health check failed' });
+  }
+});
+
+// ==================== UPDATE 3.0 IN-GAME BUG REPORTER & FEEDBACK API ====================
+app.post('/api/feedback', async (req, res) => {
+  try {
+    const verified = verifyAuthToken(extractBearerToken(req));
+    const body = (req.body ?? {}) as {
+      username?: string;
+      category?: string;
+      title?: string;
+      message?: string;
+      mapId?: string;
+      appVersion?: string;
+    };
+    const result = await submitFeedbackReport({
+      playerId: verified?.playerId ?? 'guest',
+      username: verified?.username ?? body.username ?? 'PhumVillager',
+      category: body.category,
+      title: body.title,
+      message: body.message,
+      mapId: body.mapId,
+      appVersion: body.appVersion ?? '3.0.0',
+    });
+    if (!result.ok) {
+      res.status(400).json({ error: result.error });
+      return;
+    }
+    res.status(201).json(result);
+  } catch (err) {
+    console.error('[Phum Server] POST /api/feedback error:', err);
+    res.status(500).json({ error: 'Failed to submit feedback.' });
+  }
+});
+
+app.get('/api/admin/feedback', async (req, res) => {
+  try {
+    const gmSecret =
+      (typeof req.headers['x-gm-secret'] === 'string' ? req.headers['x-gm-secret'] : undefined) ??
+      (typeof req.headers['x-admin-secret'] === 'string' ? req.headers['x-admin-secret'] : undefined) ??
+      (typeof req.query.secret === 'string' ? req.query.secret : undefined);
+    const email =
+      (typeof req.headers['x-gm-email'] === 'string' ? req.headers['x-gm-email'] : undefined) ??
+      (typeof req.query.email === 'string' ? req.query.email : undefined);
+    const access = verifyGmAccess({ adminSecret: gmSecret, ownerEmail: email });
+    if (!access.ok) {
+      res.status(403).json({ error: access.error });
+      return;
+    }
+    const reports = await listFeedbackReports(50);
+    res.json({ ok: true, reports, actor: access.actor });
+  } catch (err) {
+    console.error('[Phum Server] GET /api/admin/feedback error:', err);
+    res.status(500).json({ error: 'Failed to load feedback reports.' });
+  }
 });
 
 app.get('/api/areas', async (_req, res) => {

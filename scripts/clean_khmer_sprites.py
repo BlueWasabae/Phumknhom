@@ -10,7 +10,9 @@ with ZERO console 404 errors.
 
 from __future__ import annotations
 
+import argparse
 import json
+import sys
 from collections import deque
 from pathlib import Path
 from typing import Literal
@@ -170,5 +172,93 @@ def clean_all() -> None:
     print(f"[MANIFEST] Wrote {len(manifest)} sprite(s) to {MANIFEST_PATH.relative_to(REPO_ROOT)}")
 
 
-if __name__ == "__main__":
+def verify_all() -> int:
+    """Audit all PNGs in client/public/assets/khmer/ for clean alpha, aligned frames & zero stray bg pixels."""
+    if not KHMER_ROOT.exists():
+        print(f"[FAIL] Khmer asset root missing: {KHMER_ROOT}")
+        return 1
+
+    pngs = sorted(KHMER_ROOT.rglob("*.png"))
+    if not pngs:
+        print(f"[WARN] No PNG files found under {KHMER_ROOT}")
+        return 0
+
+    failures = 0
+    warnings = 0
+    for png in pngs:
+        rel = png.relative_to(REPO_ROOT).as_posix()
+        with Image.open(png) as raw:
+            issues: list[str] = []
+            warns: list[str] = []
+            if raw.mode != "RGBA":
+                issues.append(f"mode={raw.mode} (expected RGBA)")
+            rgba = raw.convert("RGBA")
+            w, h = rgba.size
+            pixels = rgba.load()
+            assert pixels is not None
+
+            # 1. Check alpha transparency presence
+            alpha_extrema = rgba.getchannel("A").getextrema()
+            if alpha_extrema[0] > 0:
+                issues.append("no transparent pixels (alpha min > 0)")
+
+            # 2. Check border pixels for stray opaque near-white background boxes
+            stray_white_border = 0
+            border_total = 0
+            for x in range(w):
+                for y in (0, h - 1):
+                    r, g, b, a = pixels[x, y]
+                    border_total += 1
+                    if a >= 245 and is_near_white(r, g, b, 246):
+                        stray_white_border += 1
+            for y in range(1, h - 1):
+                for x in (0, w - 1):
+                    r, g, b, a = pixels[x, y]
+                    border_total += 1
+                    if a >= 245 and is_near_white(r, g, b, 246):
+                        stray_white_border += 1
+            if border_total > 0 and (stray_white_border / border_total) > 0.25:
+                issues.append(f"stray white border pixels ({stray_white_border}/{border_total})")
+
+            # 3. Check aligned frame dimensions for animated 4-frame spritesheets (wings & pets)
+            parent_name = png.parent.name
+            if parent_name == "wings":
+                if h != 48 or w % 48 != 0:
+                    warns.append(f"wings sheet {w}x{h} not 48px-aligned")
+            elif parent_name == "pets":
+                if h != 32 or w % 32 != 0:
+                    warns.append(f"pets sheet {w}x{h} not 32px-aligned")
+            elif w <= 0 or h <= 0:
+                issues.append("empty image dimensions")
+
+            if issues:
+                failures += 1
+                print(f"[FAIL] {rel} ({w}x{h}): {'; '.join(issues)}")
+            elif warns:
+                warnings += 1
+                print(f"[WARN] {rel} ({w}x{h}): {'; '.join(warns)}")
+            else:
+                print(f"[PASS] {rel} ({w}x{h}, RGBA clean)")
+
+    print(
+        f"\n[VERIFY SUMMARY] Checked {len(pngs)} PNG(s): "
+        f"{len(pngs) - failures - warnings} PASS, {warnings} WARN, {failures} FAIL"
+    )
+    return 1 if failures > 0 else 0
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Clean or verify Khmer pixel-art PNG sprites.")
+    parser.add_argument(
+        "--verify",
+        action="store_true",
+        help="Audit all PNGs under client/public/assets/khmer/ for clean alpha & aligned frames.",
+    )
+    args = parser.parse_args()
+    if args.verify:
+        sys.exit(verify_all())
     clean_all()
+
+
+if __name__ == "__main__":
+    main()

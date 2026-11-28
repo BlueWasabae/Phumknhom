@@ -229,6 +229,13 @@ import { KromWarModal } from './ui/KromWarModal';
 import { PetEvolutionModal } from './ui/PetEvolutionModal';
 import { InstrumentJamModal } from './ui/InstrumentJamModal';
 import { PetRaceModal } from './ui/PetRaceModal';
+import {
+  PatchNotesModal,
+  hasSeenCurrentPatchNotes,
+  markCurrentPatchNotesSeen,
+} from './ui/PatchNotesModal';
+import { FeedbackModal } from './ui/FeedbackModal';
+import { downloadHeroCardPng } from './utils/HeroCardGenerator';
 import { ScryingMirrorModal } from './ui/ScryingMirrorModal';
 import { TukTukCartModal } from './ui/TukTukCartModal';
 import { TreasureMapModal } from './ui/TreasureMapModal';
@@ -319,6 +326,8 @@ type ActiveModalType =
   | 'petEvolution'
   | 'instrumentJam'
   | 'petRace'
+  | 'patchNotes'
+  | 'feedback'
   | 'characterCreator';
 
 interface FloatingXpBanner extends SkillXpToastPayload {
@@ -563,14 +572,23 @@ export const App: React.FC = () => {
     if (!(player.hasCompletedCreation ?? player.loadout.hasCompletedCreation)) return;
 
     const status = getDailyLoginStatus(player);
-    if (status.claimedToday) return;
-    if (dailyLoginAutoShownDateRef.current === status.todayKey) return;
+    if (!status.claimedToday) {
+      if (dailyLoginAutoShownDateRef.current === status.todayKey) return;
+      dailyLoginAutoShownDateRef.current = status.todayKey;
+      const t = window.setTimeout(() => {
+        setActiveModal((cur) => (cur === null ? 'dailyLogin' : cur));
+      }, 650);
+      return () => window.clearTimeout(t);
+    }
 
-    dailyLoginAutoShownDateRef.current = status.todayKey;
-    const t = window.setTimeout(() => {
-      setActiveModal((cur) => (cur === null ? 'dailyLogin' : cur));
-    }, 650);
-    return () => window.clearTimeout(t);
+    // Update 3.0: Once daily login is claimed, show "What's New in ភូមិខ្ញុំ v3.0" once per version!
+    if (!hasSeenCurrentPatchNotes()) {
+      markCurrentPatchNotesSeen();
+      const t = window.setTimeout(() => {
+        setActiveModal((cur) => (cur === null ? 'patchNotes' : cur));
+      }, 500);
+      return () => window.clearTimeout(t);
+    }
   }, [zone, activeModal, activeNpcId, photoMode, player.hasCompletedCreation, player.loadout.hasCompletedCreation, player.lastLoginDate]);
 
   const runFarmAction = useCallback(
@@ -3253,7 +3271,7 @@ export const App: React.FC = () => {
     <div className="relative w-screen h-dvh max-w-full max-h-dvh overflow-hidden bg-slate-950">
       <div ref={mountRef} className="w-full h-full overflow-hidden" />
 
-      <PhotoModeOverlay active={photoMode} onExit={() => setPhotoMode(false)} />
+      <PhotoModeOverlay active={photoMode} player={player} onExit={() => setPhotoMode(false)} />
 
       {!photoMode && (
         <>
@@ -3335,6 +3353,8 @@ export const App: React.FC = () => {
               setHouseDecorScope('yard');
               setActiveModal('houseDecor');
             }}
+            onOpenPatchNotes={() => setActiveModal('patchNotes')}
+            onOpenFeedback={() => setActiveModal('feedback')}
             onOpenScryingMirror={() => setActiveModal('scryingMirror')}
             onOpenTukTukCart={() => {
               setFocusedCartId(null);
@@ -5361,6 +5381,27 @@ export const App: React.FC = () => {
         onStartRace={(petId) => {
           EventBus.emit('petRace:enterRequest', { petId });
         }}
+      />
+
+      <PatchNotesModal
+        open={activeModal === 'patchNotes'}
+        onClose={() => setActiveModal(null)}
+        onDownloadHeroCard={() => {
+          soundManager.playSfx('harvest');
+          downloadHeroCardPng(player);
+          EventBus.emit('ui:toast', {
+            text: `🪪 Downloaded 800×450 Hero Share Card PNG for ${player.name}!`,
+          });
+        }}
+        onOpenFeedback={() => setActiveModal('feedback')}
+      />
+
+      <FeedbackModal
+        open={activeModal === 'feedback'}
+        player={player}
+        authSession={authSession}
+        onClose={() => setActiveModal(null)}
+        onToast={(msg) => EventBus.emit('ui:toast', { text: msg })}
       />
 
       <InstrumentJamModal

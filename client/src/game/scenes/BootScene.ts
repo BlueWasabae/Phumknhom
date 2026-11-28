@@ -16,17 +16,46 @@ export class BootScene extends Phaser.Scene {
   preload(): void {
     this.bootFinalized = false;
     const { width, height } = this.scale;
-    const barBg = this.add.rectangle(width / 2, height / 2, 260, 14, 0x1e293b).setStrokeStyle(2, 0xf59e0b);
-    const barFill = this.add.rectangle(width / 2 - 126, height / 2, 0, 8, 0xfacc15).setOrigin(0, 0.5);
+    const cx = width / 2;
+    const cy = height / 2;
+
+    // Update 3.0 — Spinning Golden Lotus Loader & Live % Progress Bar
+    const lotusContainer = this.add.container(cx, cy - 58);
+    const lotusHalo = this.add
+      .circle(0, 0, 26, 0xfacc15, 0.22)
+      .setStrokeStyle(2, 0xfde047, 0.75);
+    lotusContainer.add(lotusHalo);
+    for (let i = 0; i < 8; i++) {
+      const ang = (Math.PI * 2 * i) / 8;
+      const petal = this.add
+        .ellipse(Math.cos(ang) * 14, Math.sin(ang) * 14, 14, 7, i % 2 === 0 ? 0xfacc15 : 0xf59e0b, 0.95)
+        .setRotation(ang)
+        .setStrokeStyle(1, 0xfef9c3, 0.85);
+      lotusContainer.add(petal);
+    }
+    const lotusCore = this.add.circle(0, 0, 6, 0xfef9c3, 1).setStrokeStyle(1.5, 0xb45309);
+    lotusContainer.add(lotusCore);
+    const lotusSpin = this.tweens.add({
+      targets: lotusContainer,
+      angle: 360,
+      duration: 2400,
+      repeat: -1,
+    });
+
+    const barBg = this.add.rectangle(cx, cy + 8, 280, 16, 0x1e293b).setStrokeStyle(2, 0xf59e0b);
+    const barFill = this.add.rectangle(cx - 136, cy + 8, 0, 10, 0xfacc15).setOrigin(0, 0.5);
     const label = this.add
-      .text(width / 2, height / 2 - 24, 'Loading ភូមិខ្ញុំ Real Pixel-Art Sprites...', {
+      .text(cx, cy - 16, 'Loading ភូមិខ្ញុំ... 0%', {
         fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
-        fontSize: '14px',
+        fontSize: '15px',
+        fontStyle: 'bold',
         color: '#fef3c7',
       })
       .setOrigin(0.5);
 
     const cleanupLoaderUi = () => {
+      lotusSpin.stop();
+      if (lotusContainer.active) lotusContainer.destroy();
       if (barBg.active) barBg.destroy();
       if (barFill.active) barFill.destroy();
       if (label.active) label.destroy();
@@ -52,11 +81,31 @@ export class BootScene extends Phaser.Scene {
       }, 5000);
     }
 
+    // Graceful fallback texture guard so a missing or slow PNG never renders a green/black broken box!
     this.load.on('loaderror', (file: Phaser.Loader.File) => {
-      console.error('[BootScene] Failed to load:', file.key, file.url);
+      console.warn('[BootScene] Asset fallback generated for:', file.key, file.url);
+      if (file.type === 'image' || file.type === 'spritesheet') {
+        if (!this.textures.exists(file.key)) {
+          const fb = this.textures.createCanvas(file.key, 32, 32);
+          if (fb) {
+            const ctx = fb.getContext();
+            ctx.clearRect(0, 0, 32, 32);
+            ctx.fillStyle = 'rgba(250, 204, 21, 0.25)';
+            ctx.beginPath();
+            ctx.arc(16, 16, 10, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(254, 240, 138, 0.75)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            fb.refresh();
+          }
+        }
+      }
     });
     this.load.on('progress', (p: number) => {
-      if (barFill.active) barFill.width = 252 * p;
+      const pct = Math.max(0, Math.min(100, Math.round(p * 100)));
+      if (barFill.active) barFill.width = 272 * p;
+      if (label.active) label.setText(`Loading ភូមិខ្ញុំ... ${pct}%`);
     });
     this.load.once('complete', () => {
       cleanupLoaderUi();

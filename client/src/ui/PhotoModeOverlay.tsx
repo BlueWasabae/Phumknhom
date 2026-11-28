@@ -1,19 +1,20 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Camera, Eye, EyeOff, X } from 'lucide-react';
+import type { PlayerState } from '@shared/types';
+import { Camera, Download, Eye, EyeOff, X } from 'lucide-react';
+import { downloadHeroCardPng } from '../utils/HeroCardGenerator';
 import { soundManager } from '../game/systems/SoundManager';
 import { EventBus } from '../game/EventBus';
 
 interface PhotoModeOverlayProps {
   active: boolean;
+  player?: PlayerState;
   onExit: () => void;
 }
 
 /**
- * Update 2.0 — Clean Photo & Trailer Recording Mode Overlay.
- * When active, ALL HUD bars, chat, ticker, starter guide, and mobile controls hide cleanly.
- * The minimal corner toolbar auto-fades after 3s of mouse inactivity for 100% unobstructed footage.
+ * Update 2.0 + 3.0 — Clean Photo & Trailer Recording Mode Overlay with 1-Click Shareable Hero Card.
  */
-export const PhotoModeOverlay: React.FC<PhotoModeOverlayProps> = ({ active, onExit }) => {
+export const PhotoModeOverlay: React.FC<PhotoModeOverlayProps> = ({ active, player, onExit }) => {
   const [controlsVisible, setControlsVisible] = useState(true);
   const [showWatermark, setShowWatermark] = useState(true);
   const fadeTimerRef = useRef<number | null>(null);
@@ -139,6 +140,24 @@ export const PhotoModeOverlay: React.FC<PhotoModeOverlayProps> = ({ active, onEx
           <Camera className="w-3.5 h-3.5" />
           <span>Snap Screenshot</span>
         </button>
+
+        {player && (
+          <button
+            type="button"
+            onClick={() => {
+              soundManager.playSfx('harvest');
+              downloadHeroCardPng(player);
+              EventBus.emit('ui:toast', {
+                text: `🪪 Downloaded 800×450 Hero Card PNG for ${player.name}!`,
+              });
+            }}
+            className="px-2.5 py-1.5 rounded-full bg-amber-500/95 hover:bg-amber-400 text-slate-950 border border-amber-200 font-display font-black text-[11px] flex items-center gap-1 backdrop-blur-sm shadow cursor-pointer"
+            title="Download 800×450 Hero Share Card PNG"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Hero Card</span>
+          </button>
+        )}
 
         <button
           type="button"

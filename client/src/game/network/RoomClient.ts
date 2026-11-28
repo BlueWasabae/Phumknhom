@@ -232,6 +232,24 @@ class PlazaRoomClient {
   private currentAreaId = 'AREA 0';
   private online = false;
   private connecting = false;
+  private reconnecting = false;
+  private reconnectAttempt = 0;
+  private reconnectTimer: number | null = null;
+  private manualLeave = false;
+  private lastJoinParams: {
+    areaId: string;
+    initial: {
+      playerId?: string;
+      name: string;
+      level?: number;
+      stylish?: number;
+      x: number;
+      y: number;
+      facing: string;
+      loadout: EquippedLoadout;
+    };
+    handlers: PlazaRoomHandlers;
+  } | null = null;
   private connectToken = 0;
 
   // Outgoing move throttle (~18 Hz = 55ms)
@@ -259,7 +277,39 @@ class PlazaRoomClient {
       areaId: this.currentAreaId,
       areaChannel: areaIdToChannel(this.currentAreaId),
       playerCount,
+      reconnecting: this.reconnecting,
+      reconnectAttempt: this.reconnectAttempt,
     });
+  }
+
+  private clearReconnectTimer(): void {
+    if (this.reconnectTimer !== null && typeof window !== 'undefined') {
+      window.clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+  }
+
+  private scheduleReconnect(): void {
+    if (this.manualLeave || !this.lastJoinParams || typeof window === 'undefined') return;
+    if (this.reconnectAttempt >= 6) {
+      this.reconnecting = false;
+      this.emitStatus(1);
+      return;
+    }
+    this.reconnectAttempt += 1;
+    this.reconnecting = true;
+    this.emitStatus(1);
+    const delayMs = Math.min(20_000, 1500 * Math.pow(2, this.reconnectAttempt - 1));
+    this.clearReconnectTimer();
+    this.reconnectTimer = window.setTimeout(() => {
+      if (this.manualLeave || !this.lastJoinParams) return;
+      const { areaId, initial, handlers } = this.lastJoinParams;
+      void this.joinPlaza(areaId, initial, handlers).then((ok) => {
+        if (!ok && !this.manualLeave) {
+          this.scheduleReconnect();
+        }
+      });
+    }, delayMs);
   }
 
   public async joinPlaza(
@@ -277,7 +327,10 @@ class PlazaRoomClient {
     handlers: PlazaRoomHandlers
   ): Promise<boolean> {
     this.currentAreaId = areaId;
+    this.lastJoinParams = { areaId, initial, handlers };
+    this.clearReconnectTimer();
     await this.leavePlaza(false);
+    this.manualLeave = false;
     const myToken = ++this.connectToken;
 
     this.connecting = true;
@@ -308,6 +361,8 @@ class PlazaRoomClient {
       this.room = room;
       this.online = true;
       this.connecting = false;
+      this.reconnecting = false;
+      this.reconnectAttempt = 0;
       this.lastSentX = Math.round(initial.x);
       this.lastSentY = Math.round(initial.y);
       this.lastSentFacing = initial.facing;
@@ -513,11 +568,16 @@ class PlazaRoomClient {
         }
       );
 
-      room.onLeave(() => {
+      room.onLeave((code?: number) => {
         if (this.room === room) {
           this.room = null;
           this.online = false;
-          this.emitStatus(1);
+          if (!this.manualLeave && code !== 1000) {
+            this.scheduleReconnect();
+          } else {
+            this.reconnecting = false;
+            this.emitStatus(1);
+          }
         }
       });
 
@@ -535,6 +595,10 @@ class PlazaRoomClient {
   }
 
   public async leavePlaza(emitOffline = true): Promise<void> {
+    this.manualLeave = true;
+    this.clearReconnectTimer();
+    this.reconnecting = false;
+    this.reconnectAttempt = 0;
     this.connectToken += 1;
     const active = this.room;
     this.room = null;

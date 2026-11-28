@@ -175,6 +175,7 @@ export class OverworldScene extends Phaser.Scene {
   private blackMarketLandmark: LandmarkZone | null = null;
   private territoryBannerObjects: Phaser.GameObjects.GameObject[] = [];
   private lastPetRegenAt = 0;
+  private lastFootstepAt = 0;
   private unsubs: Array<() => void> = [];
 
   constructor() {
@@ -5400,6 +5401,47 @@ export class OverworldScene extends Phaser.Scene {
         this.player.facing = ny < 0 ? 'up' : 'down';
       }
       this.player.playStateAnimation('walk');
+
+      // Update 3.0 — Subtle footstep dust puffs on dirt/sand & shoreline water-ripple rings (Green Park & Koh Rong)
+      if (time - this.lastFootstepAt > 240) {
+        this.lastFootstepAt = time;
+        const nearKohRongShore = this.mapId === 'koh_rong_island' && (this.player.y > 760 || this.player.x > 1180 || this.player.x < 320);
+        const nearGreenParkWater =
+          this.mapId === 'green_park' &&
+          (Phaser.Math.Distance.Between(this.player.x, this.player.y, 960, 825) < 175 ||
+            Phaser.Math.Distance.Between(this.player.x, this.player.y, 440, 840) < 165 ||
+            Phaser.Math.Distance.Between(this.player.x, this.player.y, 1320, 875) < 175);
+
+        if (nearKohRongShore || nearGreenParkWater) {
+          const ring = this.add
+            .ellipse(this.player.x, this.player.y + 8, 12, 5, 0x38bdf8, 0.25)
+            .setStrokeStyle(1.3, 0xbae6fd, 0.85)
+            .setDepth(this.player.y - 4);
+          this.tweens.add({
+            targets: ring,
+            scaleX: 2.1,
+            scaleY: 1.9,
+            alpha: 0,
+            duration: 460,
+            ease: 'Quad.easeOut',
+            onComplete: () => ring.destroy(),
+          });
+        } else {
+          const dustColor = this.mapId === 'koh_rong_island' ? 0xfef3c7 : 0xd6d3d1;
+          const puff = this.add
+            .circle(this.player.x + Phaser.Math.Between(-4, 4), this.player.y + 8, 2.8, dustColor, 0.55)
+            .setDepth(this.player.y - 4);
+          this.tweens.add({
+            targets: puff,
+            y: puff.y - 7,
+            scale: 1.7,
+            alpha: 0,
+            duration: 360,
+            ease: 'Quad.easeOut',
+            onComplete: () => puff.destroy(),
+          });
+        }
+      }
 
       // Update 2.6 — Bioluminescent Wave Aura animated cyan water-ripple trail around player's feet!
       if (

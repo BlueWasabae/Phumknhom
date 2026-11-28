@@ -157,6 +157,8 @@ export interface NetworkStatusPayload {
   areaId: string;
   areaChannel: number;
   playerCount: number;
+  reconnecting?: boolean;
+  reconnectAttempt?: number;
 }
 
 export interface RemoteChatPayload {
@@ -495,7 +497,9 @@ export interface EventMap {
       | 'kromWar'
       | 'petEvolution'
       | 'instrumentJam'
-      | 'petRace';
+      | 'petRace'
+      | 'patchNotes'
+      | 'feedback';
     leaderboardCategory?: 'farmer' | 'stylish' | 'slayer' | 'tower' | 'boss_rush';
     farmTab?: 'seeds' | 'livestock' | 'artisan';
     shopTab?: 'primary' | 'secondary';

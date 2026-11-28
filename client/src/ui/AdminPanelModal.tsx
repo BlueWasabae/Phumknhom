@@ -12,12 +12,14 @@ import {
   Zap,
 } from 'lucide-react';
 import {
+  fetchAdminFeedbackApi,
   fetchAdminServerStatsApi,
   finalizeKromWarWeekApi,
   sendAdminBroadcastApi,
   triggerAdminLiveEventApi,
   type AdminServerStats,
   type AuthSession,
+  type FeedbackReportClient,
 } from '../game/network/ApiClient';
 import { soundManager } from '../game/systems/SoundManager';
 import { EventBus } from '../game/EventBus';
@@ -50,6 +52,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   });
   const [verifiedActor, setVerifiedActor] = useState<string | null>(null);
   const [stats, setStats] = useState<AdminServerStats | null>(null);
+  const [feedbackReports, setFeedbackReports] = useState<FeedbackReportClient[]>([]);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [announcement, setAnnouncement] = useState(
@@ -65,6 +68,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     if (res.ok) {
       setVerifiedActor(res.actor);
       setStats(res.stats);
+      void fetchAdminFeedbackApi(key, authSession?.email ?? null).then(setFeedbackReports);
       try {
         if (key) window.sessionStorage.setItem(GM_SECRET_STORAGE, key);
       } catch {
@@ -389,6 +393,49 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* Update 3.0 — Player Bug Reports & Feedback Inbox */}
+            <div className="p-3 rounded-xl bg-amber-50 border border-amber-900/25 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="font-display font-bold text-amber-950">
+                  🐛 Player Bug Reports &amp; Feedback ({feedbackReports.length})
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void fetchAdminFeedbackApi(adminSecret, authSession?.email ?? null).then(setFeedbackReports)}
+                  className="px-2 py-0.5 rounded-lg bg-amber-200 hover:bg-amber-300 text-amber-950 font-bold text-[10px] cursor-pointer"
+                >
+                  Refresh Reports
+                </button>
+              </div>
+              {feedbackReports.length === 0 ? (
+                <div className="text-[11px] text-amber-800/80">
+                  No player reports submitted yet. Test via MENU → Report Bug / Feedback!
+                </div>
+              ) : (
+                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                  {feedbackReports.slice(0, 15).map((r) => (
+                    <div
+                      key={r.id}
+                      className="p-2 rounded-lg bg-white border border-amber-900/20 text-[11px] space-y-0.5"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-display font-bold text-amber-950">
+                          <span className="px-1.5 py-0.5 mr-1 rounded bg-rose-100 text-rose-800 uppercase text-[9px]">
+                            {r.category}
+                          </span>
+                          {r.title}
+                        </span>
+                        <span className="text-[9px] text-amber-800 shrink-0">
+                          {r.username} · {r.mapId ?? 'plaza'}
+                        </span>
+                      </div>
+                      <p className="text-amber-900/90 leading-snug">{r.message}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </>
         )}

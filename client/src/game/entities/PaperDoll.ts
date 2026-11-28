@@ -1086,13 +1086,18 @@ export class PaperDoll extends Phaser.GameObjects.Container {
     }
 
     const isWalking = pose === 'walk1' || pose === 'walk2' || pose === 'walk3' || pose === 'walk4';
-    const idleBob = !isWalking && pose === 'idle' ? (Math.sin(time / 340) > 0.25 ? -1 : 0) : 0;
-    this.bodySprite.setY(idleBob);
+    // Update 3.0 — Subtle 2-frame idle breathing + smooth walk-cycle bobbing
+    const breathPhase = !isWalking && pose === 'idle' ? (Math.floor(time / 480) % 2 === 0 ? 0 : 1) : 0;
+    const idleBob = !isWalking && pose === 'idle' ? (breathPhase === 1 ? -1.1 : 0) : 0;
+    const walkBob = isWalking ? -Math.abs(Math.sin(time / 115)) * 1.9 : 0;
+    const vertBob = idleBob + walkBob;
+    this.bodySprite.setY(vertBob);
+    this.bodySprite.setScale(1, !isWalking && pose === 'idle' ? (breathPhase === 1 ? 1.028 : 1.0) : 1.0);
 
     if (this.wingSprite.visible) {
       const wingHover = Math.sin(time / 220) * 1.4;
       const wingOffsetX = facing === 'left' ? 4 : facing === 'right' ? -4 : 0;
-      this.wingSprite.setPosition(wingOffsetX, -22 + idleBob + wingHover);
+      this.wingSprite.setPosition(wingOffsetX, -22 + vertBob + wingHover);
       this.wingSprite.setFlipX(facing === 'left');
     }
 
