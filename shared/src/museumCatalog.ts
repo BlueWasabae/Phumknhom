@@ -8,7 +8,7 @@ import type { PlayerState } from './types';
  * - Wing 3: Botanical & Boss Curios (Farming & Bosses)
  */
 
-export type MuseumWingId = 'ancient_relics' | 'mekong_fauna' | 'botanical_boss';
+export type MuseumWingId = 'ancient_relics' | 'mekong_fauna' | 'botanical_boss' | 'ocean_wing';
 
 export interface MuseumExhibitDef {
   id: string;
@@ -68,6 +68,13 @@ export const MUSEUM_WINGS: MuseumWingDef[] = [
     khmerTitle: 'សាលរុក្ខជាតិ និងវត្ថុស័ក្តិសិទ្ធិ',
     icon: '🪷',
     subtitle: 'Rare village harvests and crystalline cores dropped by Khmer Bosses',
+  },
+  {
+    id: 'ocean_wing',
+    title: 'Ocean Wing',
+    khmerTitle: 'សាលមហាសមុទ្រកោះរ៉ុង',
+    icon: '🐚',
+    subtitle: 'Mythic deep-sea catches & glowing coral pearls from Koh Rong Island',
   },
 ];
 
@@ -220,6 +227,56 @@ export const MUSEUM_EXHIBITS: MuseumExhibitDef[] = [
     lore: 'The runic granite heart that once animated the Stone Guardian of Angkor.',
     rarity: 'epic',
     displayColor: '#a855f7',
+  },
+
+  // Wing 4: Ocean Wing (Koh Rong Mythic Island & Deep-Sea Pearl Diving)
+  {
+    id: 'exhibit_sapphire_turtle_shell',
+    itemId: 'fish_sapphire_turtle_shell',
+    wing: 'ocean_wing',
+    name: 'Sapphire Sea Turtle Shell',
+    khmerName: 'ស្នូកអណ្តើកសមុទ្រត្បូងកណ្តៀង',
+    icon: '🐢',
+    sourceHint: 'Koh Rong Deep-Sea Fishing Pier (1.5% Legendary)',
+    lore: 'A gleaming sapphire-veined carapace naturally shed by Koh Rong’s ancient guardian reef turtles.',
+    rarity: 'legendary',
+    displayColor: '#0ea5e9',
+  },
+  {
+    id: 'exhibit_starlight_manta',
+    itemId: 'fish_starlight_manta',
+    wing: 'ocean_wing',
+    name: 'Starlight Manta Ray',
+    khmerName: 'ត្រីបបែលពន្លឺផ្កាយ',
+    icon: '🦈',
+    sourceHint: 'Koh Rong Deep-Sea Fishing Pier (0.4% Mythic)',
+    lore: 'A translucent ocean glider speckled with bioluminescent constellations from Koh Rong’s moonlit waters.',
+    rarity: 'legendary',
+    displayColor: '#38bdf8',
+  },
+  {
+    id: 'exhibit_ancient_golden_barb',
+    itemId: 'fish_ancient_golden_barb',
+    wing: 'ocean_wing',
+    name: 'Ancient Golden Giant Barb',
+    khmerName: 'ត្រីគល់រាំងមាសបុរាណមហាសមុទ្រ',
+    icon: '👑',
+    sourceHint: 'Koh Rong Deep-Sea Fishing Pier (0.15% Ancient)',
+    lore: 'The mythic golden leviathan of Cambodia’s seas — grants the Ocean Sovereign title to its catcher.',
+    rarity: 'legendary',
+    displayColor: '#facc15',
+  },
+  {
+    id: 'exhibit_bioluminescent_pearl',
+    itemId: 'pearl_ancient_bioluminescent',
+    wing: 'ocean_wing',
+    name: 'Ancient Bioluminescent Pearl',
+    khmerName: 'គជ់ពន្លឺសមុទ្របុរាណ',
+    icon: '🫧',
+    sourceHint: 'Koh Rong Deep-Sea Pearl Diving (0.2% Ancient)',
+    lore: 'A radiant cyan-gold nacre sphere born in the deepest giant clams beneath Koh Rong’s glowing coral reef.',
+    rarity: 'legendary',
+    displayColor: '#22d3ee',
   },
 ];
 

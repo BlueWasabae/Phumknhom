@@ -329,6 +329,23 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                 >
                   🐉 Spawn World Boss (Ancient Naga Colossus)
                 </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    soundManager.playSfx('magic');
+                    const next = !worldEventManager.isBlackMarketActive();
+                    worldEventManager.triggerBlackMarket(next);
+                    setStatusMsg(
+                      next
+                        ? '🏮 MONSOON BLACK MARKET SPAWNED in NE Misty Bamboo Forest!'
+                        : '🏮 Monsoon Black Market Smuggler vanished into the mist.'
+                    );
+                  }}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-900 via-teal-900 to-amber-700 hover:brightness-110 text-amber-100 border-2 border-amber-400 font-display font-bold text-xs shadow cursor-pointer"
+                >
+                  🏮 Toggle Black Market (Bamboo Forest)
+                </button>
               </div>
 
               <div className="font-display font-bold text-amber-950 flex items-center gap-1.5 pt-1 border-t border-amber-900/15">

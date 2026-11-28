@@ -165,6 +165,10 @@ export class OverworldScene extends Phaser.Scene {
   private busActive = false;
   private busTimer?: Phaser.Time.TimerEvent;
   private fishingSystem?: FishingSystem;
+  private isSittingOnChair = false;
+  private lastWaveRippleAt = 0;
+  private blackMarketObjects: Phaser.GameObjects.GameObject[] = [];
+  private blackMarketLandmark: LandmarkZone | null = null;
   private unsubs: Array<() => void> = [];
 
   constructor() {
@@ -225,6 +229,10 @@ export class OverworldScene extends Phaser.Scene {
     this.nearPortalSent = false;
     this.transitioning = false;
     this.busActive = false;
+    this.isSittingOnChair = false;
+    this.lastWaveRippleAt = 0;
+    this.blackMarketObjects = [];
+    this.blackMarketLandmark = null;
     this.joystick = { x: 0, y: 0 };
   }
 
@@ -259,16 +267,18 @@ export class OverworldScene extends Phaser.Scene {
     this.areaSignText = undefined;
     this.syncDynamicBgm();
 
-    // 1. Lush Textured 16x16 Meadow Grass across full 1600x1200 map
-    this.add
-      .tileSprite(MAP_W / 2, MAP_H / 2, MAP_W, MAP_H, 'sv_grass')
-      .setDepth(0);
+    // 1. Lush Textured 16x16 Meadow Grass across full 1600x1200 map (Koh Rong paints its own tropical beach & ocean!)
+    if (this.mapId !== 'koh_rong_island') {
+      this.add
+        .tileSprite(MAP_W / 2, MAP_H / 2, MAP_W, MAP_H, 'sv_grass')
+        .setDepth(0);
 
-    // 2. Cohesive 16-bit Pixel-Art Top Canopy Treeline (opening cleanly for North Road Portals!)
-    this.buildCohesiveHorizonTreeline();
+      // 2. Cohesive 16-bit Pixel-Art Top Canopy Treeline (opening cleanly for North Road Portals!)
+      this.buildCohesiveHorizonTreeline();
 
-    // 3. Clean Spacious Cobblestone & Dirt Road Network for the Active Map
-    this.buildRoadsAndCourtyards();
+      // 3. Clean Spacious Cobblestone & Dirt Road Network for the Active Map
+      this.buildRoadsAndCourtyards();
+    }
 
     this.colliders = this.physics.add.staticGroup();
 
@@ -289,13 +299,17 @@ export class OverworldScene extends Phaser.Scene {
       this.buildBambooForestMap();
     } else if (this.mapId === 'sunken_ruins') {
       this.buildSunkenRuinsMap();
+    } else if (this.mapId === 'koh_rong_island') {
+      this.buildKohRongIslandMap();
     }
 
     // 5. Walk-Through Glowing Road Portals & Wooden Signposts at Map Edges
     this.buildWalkThroughRoadPortals();
 
     // 6. Perimeter Trees & Natural Framing
-    this.buildPerimeterTrees();
+    if (this.mapId !== 'koh_rong_island') {
+      this.buildPerimeterTrees();
+    }
 
     // 7. 4-Season Weather Particles & Day/Night Atmosphere Overlay
     this.atmosphere = new SeasonAtmosphereOverlay(this, MAP_W, MAP_H);
@@ -516,6 +530,12 @@ export class OverworldScene extends Phaser.Scene {
       EventBus.on('worldBoss:enterRequest', () => {
         this.enterWorldBossRaid();
       }),
+      EventBus.on('dive:enterRequest', () => {
+        this.enterPearlDive();
+      }),
+      EventBus.on('blackMarket:changed', () => {
+        this.syncBlackMarketPortal();
+      }),
       EventBus.on('cavern:enterRequest', ({ returnMapId }) => {
         this.enterCavernExplore(returnMapId);
       }),
@@ -557,6 +577,7 @@ export class OverworldScene extends Phaser.Scene {
     void this.connectToPlazaArea(initialArea, false);
     this.syncWorldEventVisuals(worldEventManager.getActiveEvent());
     this.syncFestivalVisuals(seasonClock.getSnapshot().activeFestival);
+    this.syncBlackMarketPortal();
     // Apply WebGL Bloom to glow lights (Campfires, Portals, Shimmer Spring) when VFX Quality === High
     this.glowLights.slice(0, 3).forEach((gl) => vfxManager.applyBloom(this, gl, { color: 0xfacc15, strength: 1.25 }));
 
@@ -583,6 +604,7 @@ export class OverworldScene extends Phaser.Scene {
       this.time.removeAllEvents();
       this.clearWorldEventVisuals();
       this.clearFestivalVisuals();
+      this.clearBlackMarketPortal();
       this.clearTukTukCarts();
       this.clearTreasureDigVisuals();
       this.scale.off('resize', this.applyResponsiveZoom, this);
@@ -1985,6 +2007,488 @@ export class OverworldScene extends Phaser.Scene {
       label: 'Press [E] or Click River → Cast Bamboo Fishing Rod (4-Stage Animated Fishing!)',
       isDungeonPortal: false,
       onInteract: castFishingLine,
+    });
+
+    // 5. UPDATE 2.6 — CAPTAIN RITHY'S KOH RONG ISLAND BOAT FERRY DOCK (South-East Coast)
+    this.add.image(1320, 875, 'sv_pond').setDisplaySize(290, 180).setTint(0x67e8f9).setDepth(3);
+    const ferryWaterCol = this.add.rectangle(1355, 895, 190, 110, 0x000000, 0);
+    this.colliders.add(ferryWaterCol);
+    const ferryBoat = this.add.image(1345, 865, 'na_boat').setScale(0.95).setTint(0xfef08a).setDepth(14);
+    this.tweens.add({ targets: ferryBoat, y: 873, duration: 1550, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+
+    const ferryPier = this.addBuildingOrProp({
+      texture: 'fishing_pier',
+      x: 1245,
+      y: 830,
+      scale: 1.32,
+      shadowW: 58,
+      shadowH: 15,
+      label: '⛵ FERRY TO KOH RONG ISLAND · CAPT. RITHY',
+      joinArrowY: 758,
+    });
+    const rithyCap = this.add
+      .sprite(1210, 815, 'char_master', 0)
+      .setOrigin(0.5, 0.92)
+      .setScale(1.22)
+      .setTint(0xbae6fd)
+      .setDepth(820)
+      .setInteractive({ useHandCursor: true });
+    this.tweens.add({ targets: rithyCap, y: 812, duration: 640, yoyo: true, repeat: -1 });
+
+    const sailToKohRong = () => {
+      if (!this.guardInteractRange(1245, 825, 135)) return;
+      soundManager.playSfx('splash');
+      EventBus.emit('ui:toast', {
+        text: '⛵ Captain Rithy sets sail! Crossing turquoise waters to Koh Rong Mythic Island...',
+      });
+      this.sailToMap('koh_rong_island', 360, 740);
+    };
+    ferryPier.setInteractive({ useHandCursor: true }).on('pointerdown', sailToKohRong);
+    ferryBoat.setInteractive({ useHandCursor: true }).on('pointerdown', sailToKohRong);
+    rithyCap.on('pointerdown', sailToKohRong);
+    this.landmarks.push({
+      x: 1245,
+      y: 825,
+      radius: 78,
+      label: 'Press [E] or Click → ⛵ Sail to Koh Rong Mythic Island (Captain Rithy Ferry)',
+      isDungeonPortal: false,
+      onInteract: sailToKohRong,
+    });
+  }
+
+  // ==================== MAP 9 (UPDATE 2.6): KOH RONG MYTHIC ISLAND ====================
+  private buildKohRongIslandMap(): void {
+    // Tropical turquoise sea backdrop + gleaming white-gold sand beach + lush palm ridge
+    const bg = this.add.graphics().setDepth(0);
+    bg.fillStyle(0x0891b2, 1);
+    bg.fillRect(0, 0, MAP_W, MAP_H);
+    bg.fillStyle(0x06b6d4, 0.85);
+    bg.fillRect(0, 740, MAP_W, 180);
+    // Tropical northern palm grass ridge
+    bg.fillStyle(0x16a34a, 0.95);
+    bg.fillRoundedRect(60, 64, MAP_W - 120, 290, 48);
+    bg.fillStyle(0x22c55e, 0.5);
+    bg.fillRoundedRect(100, 96, MAP_W - 200, 220, 40);
+    // Warm white-gold Koh Rong sand beach
+    bg.fillStyle(0xfef3c7, 1);
+    bg.fillRoundedRect(88, 280, MAP_W - 176, 515, 76);
+    bg.fillStyle(0xfde68a, 0.72);
+    bg.fillRoundedRect(118, 325, MAP_W - 236, 445, 62);
+    // Wet shoreline sand strip
+    bg.fillStyle(0xfcd34d, 0.75);
+    bg.fillRoundedRect(110, 755, MAP_W - 220, 46, 22);
+
+    // Animated white ocean wave foam along turquoise shoreline
+    for (let i = 0; i < 11; i++) {
+      const wx = 175 + i * 124;
+      const wy = 804 + (i % 2) * 8;
+      const foam = this.add.ellipse(wx, wy, 108, 14, 0xe0f2fe, 0.78).setDepth(4);
+      this.tweens.add({
+        targets: foam,
+        y: wy - 10,
+        alpha: 0.28,
+        scaleX: 1.12,
+        duration: 1850 + (i % 4) * 240,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    }
+    for (let i = 0; i < 8; i++) {
+      const rx = 240 + i * 165;
+      const ry = 920 + (i % 2) * 60;
+      const rip = this.add.sprite(rx, ry, 'na_ripples', 0).setScale(1.35).setDepth(5).setAlpha(0.65);
+      if (this.anims.exists('water_ripples_blue')) rip.play('water_ripples_blue');
+    }
+
+    // Invisible shoreline colliders (keep player on beach/piers, leaving ocean buoy & piers reachable!)
+    this.colliders.add(this.add.rectangle(800, 940, MAP_W, 140, 0x000000, 0));
+    this.colliders.add(this.add.rectangle(42, 600, 84, MAP_H, 0x000000, 0));
+    this.colliders.add(this.add.rectangle(MAP_W - 42, 600, 84, MAP_H, 0x000000, 0));
+
+    // Island welcome sign
+    this.add
+      .text(800, 292, '🏝️ KOH RONG MYTHIC ISLAND · កោះរ៉ុងទេព\nTropical Beach Hangout · Deep-Sea Fishing Pier · Coral Reef Pearl Diving', {
+        fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
+        fontSize: '13px',
+        fontStyle: 'bold',
+        color: '#fef9c3',
+        backgroundColor: 'rgba(8, 51, 68, 0.9)',
+        align: 'center',
+        padding: { x: 12, y: 5 },
+      })
+      .setResolution(2)
+      .setScale(0.55)
+      .setOrigin(0.5)
+      .setDepth(295);
+
+    // Coconut palms framing the northern tropical ridge
+    for (const [tx, ty, tex] of [
+      [210, 250, 'na_palm_tree'],
+      [360, 215, 'sugar_palm_tree'],
+      [560, 235, 'na_palm_tree'],
+      [780, 210, 'sugar_palm_tree'],
+      [1010, 230, 'na_palm_tree'],
+      [1210, 215, 'sugar_palm_tree'],
+      [1380, 255, 'na_palm_tree'],
+      [205, 510, 'na_palm_tree'],
+      [1395, 520, 'na_palm_tree'],
+    ] as Array<[number, number, string]>) {
+      const palm = this.addBuildingOrProp({
+        texture: tex,
+        x: tx,
+        y: ty,
+        scale: 1.12,
+        shadowW: 42,
+        shadowH: 13,
+        bodyW: 16,
+        bodyH: 12,
+      });
+      this.tweens.add({
+        targets: palm,
+        angle: tx % 2 === 0 ? 2.2 : -2.2,
+        duration: 2400,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    }
+
+    // 1. TWO GLOWING EVENING BEACH BONFIRES (WebGL Bloom + crackling glow)
+    for (const [bx, by] of [[505, 495], [755, 495]]) {
+      const glow = this.add
+        .image(bx, by - 4, 'torch_glow')
+        .setTint(0xfb923c)
+        .setScale(1.1)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(2140)
+        .setAlpha(0.6);
+      this.glowLights.push(glow);
+      vfxManager.applyBloom(this, glow, { color: 0xfb923c, strength: 1.45 });
+      const fire = this.add.sprite(bx, by, 'sv_campfire_16', 0).setScale(1.35).setDepth(by);
+      if (this.anims.exists('campfire_burn')) fire.play('campfire_burn');
+    }
+
+    // 2. THREE INTERACTIVE BEACH LOUNGE CHAIRS (Click or [E] to actually sit & relax!)
+    const chairCoords: Array<[number, number, number]> = [
+      [530, 610, 0x38bdf8],
+      [625, 610, 0xf472b6],
+      [720, 610, 0x34d399],
+    ];
+    chairCoords.forEach(([cx, cy, stripeColor], idx) => {
+      const chair = this.add.container(cx, cy).setDepth(cy - 2);
+      const shadow = this.add.ellipse(0, 10, 44, 14, 0x0f172a, 0.25);
+      const frame = this.add.rectangle(0, 2, 34, 20, 0x92400e, 1).setStrokeStyle(1.5, 0x78350f);
+      const cushion = this.add.rectangle(0, 0, 28, 16, 0xffffff, 1);
+      const stripe = this.add.rectangle(0, 0, 28, 6, stripeColor, 0.9);
+      const pillow = this.add.rectangle(0, -6, 22, 5, 0xfef3c7, 1);
+      const umbrella = this.add.circle(18, -14, 15, stripeColor, 0.88).setStrokeStyle(2, 0xffffff, 0.9);
+      chair.add([shadow, frame, cushion, stripe, pillow, umbrella]);
+      chair.setSize(48, 42);
+      chair.setInteractive({ useHandCursor: true });
+
+      const sitOnLoungeChair = () => {
+        if (!this.guardInteractRange(cx, cy, 125)) return;
+        this.isSittingOnChair = true;
+        this.player.sprite.setPosition(cx, cy - 4);
+        this.player.body.setVelocity(0, 0);
+        this.player.facing = 'down';
+        this.player.playStateAnimation('idle');
+        soundManager.playSfx('heal');
+        this.spawnFloatingText(cx, cy - 26, '🌴 Relaxing on Koh Rong Beach! (+15 HP)', '#67e8f9');
+        EventBus.emit('house:restHeal');
+        EventBus.emit('ui:toast', {
+          text: `🏖️ Lounging on Beach Chair #${idx + 1}! Enjoy the Koh Rong ocean breeze (move WASD to stand up).`,
+        });
+      };
+      chair.on('pointerdown', sitOnLoungeChair);
+      this.landmarks.push({
+        x: cx,
+        y: cy,
+        radius: 50,
+        label: 'Press [E] or Click → 🏖️ Sit & Relax on Koh Rong Beach Lounge Chair',
+        isDungeonPortal: false,
+        onInteract: sitOnLoungeChair,
+      });
+    });
+
+    // 3. BEACH COCONUT BAR (Sells tropical Khmer snacks & fresh coconut drinks)
+    const cocoBar = this.addBuildingOrProp({
+      texture: 'stall_snack',
+      x: 1030,
+      y: 495,
+      scale: 1.42,
+      shadowW: 78,
+      shadowH: 18,
+      bodyW: 58,
+      bodyH: 22,
+      label: '🥥 BEACH COCONUT BAR · DRINKS & SNACKS',
+      joinArrowY: 425,
+    });
+    const openCocoBar = () => {
+      if (!this.guardInteractRange(1030, 495, 130)) return;
+      soundManager.playSfx('click');
+      EventBus.emit('ui:openModal', { modal: 'snackShop' });
+    };
+    cocoBar.setInteractive({ useHandCursor: true }).on('pointerdown', openCocoBar);
+    this.landmarks.push({
+      x: 1030,
+      y: 508,
+      radius: 72,
+      label: 'Press [E] or Click → 🥥 Beach Coconut Bar (Tropical Drinks & Khmer Snacks)',
+      isDungeonPortal: false,
+      onInteract: openCocoBar,
+    });
+
+    // 4. RETURN FERRY DOCK TO GREEN PARK (West Beach Pier)
+    const returnBoat = this.add.image(255, 845, 'na_boat').setScale(0.95).setTint(0xfef08a).setDepth(846);
+    this.tweens.add({ targets: returnBoat, y: 853, duration: 1550, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    const returnPier = this.addBuildingOrProp({
+      texture: 'fishing_pier',
+      x: 345,
+      y: 805,
+      scale: 1.32,
+      shadowW: 58,
+      shadowH: 15,
+      label: '⛵ RETURN FERRY → GREEN PARK',
+      joinArrowY: 735,
+    });
+    const sailHome = () => {
+      if (!this.guardInteractRange(345, 805, 135)) return;
+      soundManager.playSfx('splash');
+      EventBus.emit('ui:toast', { text: '⛵ Sailing back across the waves to Green Park Dock...' });
+      this.sailToMap('green_park', 1200, 770);
+    };
+    returnPier.setInteractive({ useHandCursor: true }).on('pointerdown', sailHome);
+    returnBoat.setInteractive({ useHandCursor: true }).on('pointerdown', sailHome);
+    this.landmarks.push({
+      x: 345,
+      y: 800,
+      radius: 78,
+      label: 'Press [E] or Click → ⛵ Sail Back to Green Park Pier',
+      isDungeonPortal: false,
+      onInteract: sailHome,
+    });
+
+    // 5. SHIMMERING CORAL REEF BUOY (South-Center Beach -> Launches PearlDiveScene!)
+    const buoyX = 800;
+    const buoyY = 825;
+    const buoyHalo = this.add
+      .image(buoyX, buoyY, 'portal_vortex')
+      .setTint(0x22d3ee)
+      .setScale(1.05)
+      .setAlpha(0.68)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(820);
+    vfxManager.applyBloom(this, buoyHalo, { color: 0x22d3ee, strength: 1.55 });
+    this.tweens.add({ targets: buoyHalo, scale: 1.24, alpha: 0.35, duration: 1050, yoyo: true, repeat: -1 });
+    const buoyNode = this.add.container(buoyX, buoyY).setDepth(826);
+    const buoyRing = this.add.ellipse(0, 6, 36, 14, 0xf97316, 1).setStrokeStyle(2.5, 0xffffff, 0.95);
+    const buoyMast = this.add.rectangle(0, -6, 6, 20, 0xfef3c7, 1);
+    const buoyLight = this.add.circle(0, -17, 5, 0x67e8f9, 1);
+    buoyNode.add([buoyRing, buoyMast, buoyLight]);
+    buoyNode.setSize(52, 48);
+    buoyNode.setInteractive({ useHandCursor: true });
+    this.tweens.add({ targets: buoyNode, y: buoyY - 5, duration: 1300, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.add
+      .text(buoyX, buoyY + 20, '🫧 CORAL REEF BUOY · PEARL DIVING', {
+        fontFamily: 'Fredoka, sans-serif',
+        fontSize: '11px',
+        fontStyle: 'bold',
+        color: '#cffafe',
+        backgroundColor: 'rgba(8, 51, 68, 0.92)',
+        padding: { x: 7, y: 2 },
+      })
+      .setResolution(2)
+      .setScale(0.46)
+      .setOrigin(0.5, 0)
+      .setDepth(840);
+    const diveIntoReef = () => {
+      if (!this.guardInteractRange(buoyX, buoyY, 135)) return;
+      this.enterPearlDive();
+    };
+    buoyNode.on('pointerdown', diveIntoReef);
+    this.landmarks.push({
+      x: buoyX,
+      y: buoyY - 12,
+      radius: 82,
+      label: 'Press [E] or Click → 🫧 Dive In! Koh Rong Deep-Sea Pearl Diving Mini-Game',
+      isDungeonPortal: false,
+      onInteract: diveIntoReef,
+    });
+
+    // 6. DEEP-SEA FISHING PIER (East Beach — Exclusive 7-Tier Koh Rong Tropical Catch Table!)
+    const deepPier = this.addBuildingOrProp({
+      texture: 'fishing_pier',
+      x: 1235,
+      y: 805,
+      scale: 1.38,
+      shadowW: 62,
+      shadowH: 15,
+      label: '🎣 DEEP-SEA FISHING PIER (MYTHIC / ANCIENT)',
+      joinArrowY: 735,
+    });
+    const castDeepSeaLine = () => {
+      const fishingLv = this.player.state.skills?.skills?.fishing?.level ?? 1;
+      this.fishingSystem?.startCast(
+        this.player.x,
+        this.player.y,
+        fishingLv,
+        (facing) => {
+          this.player.facing = facing;
+        },
+        'koh_rong'
+      );
+    };
+    const oceanHit = this.add
+      .rectangle(1255, 860, 220, 145, 0x000000, 0)
+      .setDepth(14)
+      .setInteractive({ useHandCursor: true });
+    oceanHit.on('pointerdown', () => {
+      if (typeof document !== 'undefined' && document.querySelector('dialog[open]')) return;
+      castDeepSeaLine();
+    });
+    deepPier.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+      if (typeof document !== 'undefined' && document.querySelector('dialog[open]')) return;
+      castDeepSeaLine();
+    });
+    this.landmarks.push({
+      x: 1235,
+      y: 792,
+      radius: MAX_FISHING_DISTANCE,
+      label: 'Press [E] or Click Pier → 🎣 Cast Deep-Sea Line (Koh Rong 7-Tier Tropical Drop Table!)',
+      isDungeonPortal: false,
+      onInteract: castDeepSeaLine,
+    });
+  }
+
+  private clearBlackMarketPortal(): void {
+    this.blackMarketObjects.forEach((o) => {
+      if (o && o.active) o.destroy();
+    });
+    this.blackMarketObjects = [];
+    if (this.blackMarketLandmark) {
+      const idx = this.landmarks.indexOf(this.blackMarketLandmark);
+      if (idx >= 0) this.landmarks.splice(idx, 1);
+      this.blackMarketLandmark = null;
+    }
+  }
+
+  private syncBlackMarketPortal(): void {
+    this.clearBlackMarketPortal();
+    if (this.mapId !== 'bamboo_forest') return;
+    if (!worldEventManager.isBlackMarketActive()) return;
+
+    const sx = 1345;
+    const sy = 320;
+    const vortex = this.add
+      .image(sx, sy - 16, 'portal_vortex')
+      .setTint(0x10b981)
+      .setScale(1.18)
+      .setAlpha(0.76)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(sy - 4);
+    vfxManager.applyBloom(this, vortex, { color: 0x10b981, strength: 1.65 });
+    this.tweens.add({ targets: vortex, angle: 360, duration: 5400, repeat: -1 });
+
+    const lanternGlow = this.add
+      .image(sx, sy - 30, 'torch_glow')
+      .setTint(0xfacc15)
+      .setScale(0.92)
+      .setAlpha(0.75)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(sy + 4);
+
+    const arch = this.add
+      .image(sx, sy, 'angkor_arch_gate')
+      .setOrigin(0.5, 0.92)
+      .setScale(1.24)
+      .setTint(0x065f46)
+      .setDepth(sy)
+      .setInteractive({ useHandCursor: true });
+    const smuggler = this.add
+      .sprite(sx + 28, sy + 4, 'char_master', 0)
+      .setOrigin(0.5, 0.92)
+      .setScale(1.2)
+      .setTint(0x34d399)
+      .setDepth(sy + 2)
+      .setInteractive({ useHandCursor: true });
+    const badge = this.add
+      .text(sx, sy + 12, "🏮 SMUGGLER'S BLACK MARKET\nផ្សារងងឹតរដូវវស្សា", {
+        fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
+        fontSize: '11px',
+        fontStyle: 'bold',
+        color: '#fde047',
+        backgroundColor: 'rgba(6, 78, 59, 0.94)',
+        align: 'center',
+        padding: { x: 8, y: 3 },
+      })
+      .setResolution(2)
+      .setScale(0.46)
+      .setOrigin(0.5, 0)
+      .setDepth(sy + 14)
+      .setInteractive({ useHandCursor: true });
+
+    const openSmuggler = () => {
+      if (!this.guardInteractRange(sx, sy, 135)) return;
+      soundManager.playSfx('magic');
+      EventBus.emit('ui:openModal', { modal: 'blackMarket' });
+    };
+    arch.on('pointerdown', openSmuggler);
+    smuggler.on('pointerdown', openSmuggler);
+    badge.on('pointerdown', openSmuggler);
+
+    this.blackMarketObjects.push(vortex, lanternGlow, arch, smuggler, badge);
+    this.blackMarketLandmark = {
+      x: sx,
+      y: sy + 8,
+      radius: 82,
+      label: "Press [E] or Click → 🏮 Enter Monsoon Night Black Market Smuggler's Shop!",
+      isDungeonPortal: false,
+      onInteract: openSmuggler,
+    };
+    this.landmarks.push(this.blackMarketLandmark);
+  }
+
+  private sailToMap(targetMapId: VillageMapId, spawnX: number, spawnY: number): void {
+    if (this.transitioning) return;
+    this.transitioning = true;
+    this.cameras.main.fadeOut(300, 6, 95, 115);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      this.scene.start('OverworldScene', {
+        mapId: targetMapId,
+        spawnX,
+        spawnY,
+        playerState: {
+          ...this.player.state,
+          zone: 'overworld',
+          currentMapId: targetMapId,
+          weapon: { ...this.player.state.weapon },
+          loadout: { ...this.player.state.loadout },
+          currencies: { ...this.player.state.currencies },
+          lifeStats: { ...this.player.state.lifeStats },
+        },
+      });
+    });
+  }
+
+  private enterPearlDive(): void {
+    if (this.transitioning) return;
+    this.transitioning = true;
+    soundManager.playSfx('splash');
+    this.cameras.main.fadeOut(300, 6, 95, 115);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      this.scene.start('PearlDiveScene', {
+        playerState: {
+          ...this.player.state,
+          zone: 'pearl_dive',
+          activeMount: null,
+          weapon: { ...this.player.state.weapon },
+          loadout: { ...this.player.state.loadout },
+          currencies: { ...this.player.state.currencies },
+          lifeStats: { ...this.player.state.lifeStats },
+        },
+      });
     });
   }
 
@@ -4506,6 +5010,9 @@ export class OverworldScene extends Phaser.Scene {
     vfxManager.tickPerformanceMonitor(this, delta);
     const isMoving = len > 0.1;
     if (isMoving) {
+      if (this.isSittingOnChair) {
+        this.isSittingOnChair = false;
+      }
       const bridge = computeVillageToDungeonBridge(this.player.state);
       const mountSpec = getMountSpec(this.player.state.activeMount);
       const mountMult = 1 + (mountSpec?.speedBonusPct ?? 0);
@@ -4520,6 +5027,29 @@ export class OverworldScene extends Phaser.Scene {
         this.player.facing = ny < 0 ? 'up' : 'down';
       }
       this.player.playStateAnimation('walk');
+
+      // Update 2.6 — Bioluminescent Wave Aura animated cyan water-ripple trail around player's feet!
+      if (
+        (this.player.state.hasBioluminescentWaveAura ||
+          this.player.state.loadout.wings === 'wings_bioluminescent_wave_aura') &&
+        time - this.lastWaveRippleAt > 185
+      ) {
+        this.lastWaveRippleAt = time;
+        const ripple = this.add
+          .ellipse(this.player.x, this.player.y + 8, 18, 8, 0x22d3ee, 0.35)
+          .setStrokeStyle(1.6, 0x67e8f9, 0.92)
+          .setBlendMode(Phaser.BlendModes.ADD)
+          .setDepth(this.player.y - 5);
+        this.tweens.add({
+          targets: ripple,
+          scaleX: 2.3,
+          scaleY: 2.0,
+          alpha: 0,
+          duration: 540,
+          ease: 'Quad.easeOut',
+          onComplete: () => ripple.destroy(),
+        });
+      }
     } else {
       this.player.body.setVelocity(0, 0);
       this.player.playStateAnimation('idle');

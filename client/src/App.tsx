@@ -147,6 +147,7 @@ import {
   EventBus,
   type BossHudPayload,
   type ClassMeterPayload,
+  type DiveHudPayload,
   type DungeonOutcomePayload,
   type FarmToolMode,
   type IncomingDungeonInvitePayload,
@@ -154,6 +155,7 @@ import {
   type NetworkStatusPayload,
   type SkillXpToastPayload,
 } from './game/EventBus';
+import { RELIQUARY_TIERS, rollSingleReliquary } from '@shared/reliquaryPool';
 import { HUD } from './ui/HUD';
 import { ChatOverlay } from './ui/ChatOverlay';
 import { MobileControls } from './ui/MobileControls';
@@ -182,6 +184,12 @@ import { BestiaryModal } from './ui/BestiaryModal';
 import { DiamondStoreModal } from './ui/DiamondStoreModal';
 import { ReliquaryModal } from './ui/ReliquaryModal';
 import { AwakeningModal } from './ui/AwakeningModal';
+import { DiveHudOverlay } from './ui/DiveHudOverlay';
+import {
+  BlackMarketModal,
+  type BlackMarketOfferId,
+  type BlackMarketPurchaseResult,
+} from './ui/BlackMarketModal';
 import { WorldMapModal } from './ui/WorldMapModal';
 import { ServerCityModal } from './ui/ServerCityModal';
 import { ServerTickerBanner } from './ui/ServerTickerBanner';
@@ -279,6 +287,7 @@ type ActiveModalType =
   | 'achievements'
   | 'reliquary'
   | 'awakening'
+  | 'blackMarket'
   | 'characterCreator';
 
 interface FloatingXpBanner extends SkillXpToastPayload {
@@ -308,6 +317,10 @@ export const App: React.FC = () => {
 
   const [activeNpcId, setActiveNpcId] = useState<KhmerNpcId | null>(null);
   const [activeFishingBite, setActiveFishingBite] = useState<FishingBitePayload | null>(null);
+  const [diveHud, setDiveHud] = useState<DiveHudPayload | null>(null);
+  const [blackMarketRotationSeed, setBlackMarketRotationSeed] = useState<number>(() =>
+    worldEventManager.getBlackMarketSnapshot().rotationSeed
+  );
   const [focusedCartId, setFocusedCartId] = useState<string | null>(null);
   const [bondPrefillPartner, setBondPrefillPartner] = useState<string | null>(null);
   const [houseDecorateMode, setHouseDecorateMode] = useState(false);
@@ -2593,6 +2606,68 @@ export const App: React.FC = () => {
           category: 'boss',
         });
       }),
+      EventBus.on('dive:hudUpdate', (payload) => {
+        setDiveHud(payload);
+      }),
+      EventBus.on('blackMarket:changed', ({ rotationSeed }) => {
+        setBlackMarketRotationSeed(rotationSeed);
+      }),
+      EventBus.on('dive:completed', (res) => {
+        setDiveHud(null);
+        runStateAction((prev) => {
+          const nextCoins = prev.currencies.coins + res.coinsEarned;
+          const nextInv = prev.inventory.map((i) => ({ ...i }));
+          const addDiveItem = (itemId: string, qty: number) => {
+            if (qty <= 0) return;
+            const ex = nextInv.find((i) => i.itemId === itemId && (i.quality ?? 'normal') === 'normal');
+            if (ex) ex.quantity += qty;
+            else nextInv.push({ itemId, quantity: qty, itemLevel: 1, quality: 'normal' });
+          };
+          addDiveItem('pearl_sea', res.seaPearls);
+          addDiveItem('mat_coral_shard', res.coralShards);
+          addDiveItem('item_torn_treasure_map', res.treasureMaps);
+          addDiveItem('pearl_ancient_bioluminescent', res.ancientPearls);
+
+          const prevStats = prev.pearlDivingStats ?? {
+            divesCompleted: 0,
+            pearlsHarvested: 0,
+            ancientPearlsFound: 0,
+            bestHaulCoins: 0,
+          };
+          let nextState: PlayerState = {
+            ...prev,
+            coins: nextCoins,
+            currencies: { ...prev.currencies, coins: nextCoins },
+            inventory: nextInv,
+            activeTreasureMap:
+              res.treasureMaps > 0 && !prev.activeTreasureMap
+                ? rollRandomTreasureMap()
+                : prev.activeTreasureMap,
+            pearlDivingStats: {
+              divesCompleted: prevStats.divesCompleted + 1,
+              pearlsHarvested: prevStats.pearlsHarvested + res.seaPearls,
+              ancientPearlsFound: prevStats.ancientPearlsFound + res.ancientPearls,
+              bestHaulCoins: Math.max(prevStats.bestHaulCoins, res.coinsEarned),
+            },
+          };
+          nextState = awardSkillXp(nextState, 'fishing', res.fishingXp).state;
+          return {
+            state: nextState,
+            ok: true,
+            message: res.surfacedSafely
+              ? `🛟 Surfaced at Koh Rong Buoy (100% Haul)! +${res.seaPearls} 🫧 Sea Pearls · +${res.coralShards} 🪸 Coral · +${res.coinsEarned}c${
+                  res.ancientPearls > 0 ? ' · ✨ ANCIENT BIOLUMINESCENT PEARL!' : ''
+                }`
+              : `🫧 Out of Air — Safely floated to Koh Rong Beach (50% Haul kept): +${res.seaPearls} 🫧 Sea Pearls · +${res.coralShards} 🪸 Coral!`,
+          };
+        });
+        if (res.ancientPearls > 0) {
+          EventBus.emit('ticker:push', {
+            text: `🫧✨ ANCIENT PEARL (0.2%)! ${playerRef.current.name} harvested an Ancient Bioluminescent Pearl in Koh Rong Deep-Sea Reef!`,
+            category: 'boss',
+          });
+        }
+      }),
       EventBus.on('gm:liveEventTriggered', ({ worldEventId, festivalId }) => {
         if (
           worldEventId === 'crimson_eclipse' ||
@@ -2765,6 +2840,11 @@ export const App: React.FC = () => {
           />
 
           <ServerTickerBanner />
+
+          <DiveHudOverlay
+            dive={diveHud}
+            onSurface={() => EventBus.emit('dive:surfaceRequest')}
+          />
 
           {/* Update 2.1: Golden Achievement Unlocked! Top Slide-In Banner */}
           {achievementBanner && (
@@ -3478,6 +3558,25 @@ export const App: React.FC = () => {
                         ? 38
                         : 16,
             });
+            if (bite.fishId === 'fish_ancient_golden_barb') {
+              runStateAction((prev) => {
+                const titles = new Set<string>(prev.unlockedTitles ?? []);
+                titles.add('Ocean Sovereign');
+                return {
+                  state: {
+                    ...prev,
+                    unlockedTitles: Array.from(titles),
+                    activeTitle: 'Ocean Sovereign',
+                  },
+                  ok: true,
+                  message: '👑 ANCIENT CATCH (0.15%)! Unlocked & equipped the Ocean Sovereign title!',
+                };
+              });
+              EventBus.emit('ticker:push', {
+                text: `🐟✨ ANCIENT CATCH (0.15%)! ${playerRef.current.name} reeled in an Ancient Golden Giant Barb off Koh Rong Pier & unlocked 👑 Ocean Sovereign!`,
+                category: 'boss',
+              });
+            }
           }
         }}
         onCancel={() => {
@@ -4132,6 +4231,219 @@ export const App: React.FC = () => {
         authSession={authSession}
         localOnlineCount={networkStatus.playerCount}
         onClose={() => setActiveModal(null)}
+      />
+
+      <BlackMarketModal
+        isOpen={activeModal === 'blackMarket'}
+        player={player}
+        rotationSeed={blackMarketRotationSeed}
+        onClose={() => setActiveModal(null)}
+        onPurchase={(offerId: BlackMarketOfferId, rotationSeed: number): BlackMarketPurchaseResult => {
+          let outcome: BlackMarketPurchaseResult = { ok: false, message: 'Trade failed.' };
+          runStateAction((prev) => {
+            const nextInv = prev.inventory.map((i) => ({ ...i }));
+            const countItem = (id: string) =>
+              nextInv.reduce((sum, it) => (it.itemId === id ? sum + it.quantity : sum), 0);
+            const consumeItem = (id: string, qty: number): boolean => {
+              if (countItem(id) < qty) return false;
+              let rem = qty;
+              for (const it of nextInv) {
+                if (it.itemId !== id || rem <= 0) continue;
+                const take = Math.min(it.quantity, rem);
+                it.quantity -= take;
+                rem -= take;
+              }
+              return true;
+            };
+            const addItem = (id: string, qty: number) => {
+              const ex = nextInv.find((it) => it.itemId === id && (it.quality ?? 'normal') === 'normal');
+              if (ex) ex.quantity += qty;
+              else nextInv.push({ itemId: id, quantity: qty, itemLevel: 1, quality: 'normal' });
+            };
+
+            if (offerId === 'bm_reliquary_gold' || offerId === 'bm_reliquary_diamonds') {
+              const useGold = offerId === 'bm_reliquary_gold';
+              if (useGold && prev.currencies.gold < 10) {
+                outcome = { ok: false, message: 'Need 10 Gold for Ancient Reliquary Box.' };
+                return { state: prev, ok: false, message: outcome.message };
+              }
+              if (!useGold && prev.currencies.diamonds < 40) {
+                outcome = { ok: false, message: 'Need 40 Diamonds for Ancient Reliquary Box.' };
+                return { state: prev, ok: false, message: outcome.message };
+              }
+              const roll = rollSingleReliquary(
+                prev.reliquaryPityCount ?? 0,
+                prev.reliquaryMythicPityCount ?? 0
+              );
+              const r = roll.reward;
+              let dupShards = 0;
+              const nextFurn = { ...(prev.ownedFurniture ?? {}) };
+              const nextAuras = new Set<WeaponAuraId>(prev.unlockedWeaponAuras ?? []);
+              const ownsAll =
+                r.isUniqueCosmetic &&
+                (!r.itemIds || r.itemIds.every((it) => countItem(it.itemId) > 0)) &&
+                (!r.weaponAuraId || nextAuras.has(r.weaponAuraId));
+              if (ownsAll) {
+                dupShards = RELIQUARY_TIERS[roll.tier].duplicateShards;
+              } else {
+                if (r.itemIds) r.itemIds.forEach((it) => addItem(it.itemId, it.quantity));
+                if (r.furnitureId) nextFurn[r.furnitureId] = (nextFurn[r.furnitureId] ?? 0) + 1;
+                if (r.weaponAuraId) nextAuras.add(r.weaponAuraId);
+              }
+              soundManager.playSfx(roll.tier === 'mythic' || roll.tier === 'ancient' ? 'victory' : 'coin');
+              const tierLabel = RELIQUARY_TIERS[roll.tier].label;
+              outcome = {
+                ok: true,
+                message: `🗝️ Opened Smuggled Ancient Reliquary (${useGold ? '-10 Gold' : '-40 💎'})!`,
+                rolledRewardLabel: `[${tierLabel}] ${r.icon} ${r.name}${
+                  dupShards > 0 ? ` (Duplicate → +${dupShards} Shards)` : ''
+                }`,
+              };
+              if (roll.tier === 'mythic' || roll.tier === 'ancient') {
+                const pName = prev.name;
+                window.setTimeout(() => {
+                  EventBus.emit('ticker:push', {
+                    text: `🏮✨ BLACK MARKET JACKPOT! ${pName} rolled [${tierLabel.toUpperCase()}] ${r.icon} ${r.name} from a Smuggled Reliquary!`,
+                    category: 'club',
+                  });
+                }, 0);
+              }
+              return {
+                state: {
+                  ...prev,
+                  currencies: {
+                    ...prev.currencies,
+                    gold: useGold ? prev.currencies.gold - 10 : prev.currencies.gold,
+                    diamonds: !useGold ? prev.currencies.diamonds - 40 : prev.currencies.diamonds,
+                  },
+                  inventory: nextInv.filter((i) => i.quantity > 0),
+                  ownedFurniture: nextFurn,
+                  unlockedWeaponAuras: Array.from(nextAuras),
+                  reliquaryPityCount: roll.nextPity30,
+                  reliquaryMythicPityCount: roll.nextPity100,
+                  angkorShards: (prev.angkorShards ?? 0) + dupShards,
+                },
+                ok: true,
+                message: `${outcome.message} ${outcome.rolledRewardLabel}`,
+              };
+            }
+
+            if (offerId === 'bm_shadow_cloak_gold' || offerId === 'bm_shadow_cloak_ores') {
+              if (countItem('wings_smuggler_shadow_cloak') > 0) {
+                outcome = { ok: false, message: "You already own Smuggler's Shadow Cloak!" };
+                return { state: prev, ok: false, message: outcome.message };
+              }
+              let nextCoins = prev.currencies.coins;
+              let nextGold = prev.currencies.gold;
+              if (offerId === 'bm_shadow_cloak_gold') {
+                if (nextGold < 8) {
+                  outcome = { ok: false, message: 'Need 8 Gold.' };
+                  return { state: prev, ok: false, message: outcome.message };
+                }
+                nextGold -= 8;
+              } else {
+                if (nextCoins < 600 || !consumeItem('ore_jade_crystal', 4)) {
+                  outcome = { ok: false, message: 'Need 4× Jade Crystal + 600 Coins.' };
+                  return { state: prev, ok: false, message: outcome.message };
+                }
+                nextCoins -= 600;
+              }
+              addItem('wings_smuggler_shadow_cloak', 1);
+              soundManager.playSfx('level_up');
+              outcome = { ok: true, message: "🧥 Acquired Smuggler's Shadow Cloak (Vanity Cape)!" };
+              return {
+                state: {
+                  ...prev,
+                  coins: nextCoins,
+                  currencies: { ...prev.currencies, coins: nextCoins, gold: nextGold },
+                  inventory: nextInv.filter((i) => i.quantity > 0),
+                },
+                ok: true,
+                message: outcome.message,
+              };
+            }
+
+            if (offerId === 'bm_wave_aura_gold' || offerId === 'bm_wave_aura_pearls') {
+              if (prev.hasBioluminescentWaveAura || countItem('wings_bioluminescent_wave_aura') > 0) {
+                outcome = { ok: false, message: 'Bioluminescent Wave Aura is already unlocked!' };
+                return { state: prev, ok: false, message: outcome.message };
+              }
+              let nextCoins = prev.currencies.coins;
+              let nextGold = prev.currencies.gold;
+              if (offerId === 'bm_wave_aura_gold') {
+                if (nextGold < 12) {
+                  outcome = { ok: false, message: 'Need 12 Gold.' };
+                  return { state: prev, ok: false, message: outcome.message };
+                }
+                nextGold -= 12;
+              } else {
+                if (nextCoins < 800 || !consumeItem('pearl_sea', 2)) {
+                  outcome = { ok: false, message: 'Need 2× Sea Pearl + 800 Coins.' };
+                  return { state: prev, ok: false, message: outcome.message };
+                }
+                nextCoins -= 800;
+              }
+              addItem('wings_bioluminescent_wave_aura', 1);
+              soundManager.playSfx('victory');
+              outcome = {
+                ok: true,
+                message: '🌊 Unlocked Bioluminescent Wave Aura! Animated cyan water ripples now trail your footsteps!',
+              };
+              return {
+                state: {
+                  ...prev,
+                  coins: nextCoins,
+                  currencies: { ...prev.currencies, coins: nextCoins, gold: nextGold },
+                  inventory: nextInv.filter((i) => i.quantity > 0),
+                  hasBioluminescentWaveAura: true,
+                },
+                ok: true,
+                message: outcome.message,
+              };
+            }
+
+            if (offerId === 'bm_essence_awakening_bundle') {
+              const limitKey = `bm_bundle_visit_${rotationSeed}`;
+              if ((prev.blackMarketPurchasedKeys ?? []).includes(limitKey)) {
+                outcome = { ok: false, message: 'Already bought this visit’s Boss Essence & Awakening Bundle!' };
+                return { state: prev, ok: false, message: outcome.message };
+              }
+              if (prev.currencies.coins < 1200 || !consumeItem('ore_angkor_gold', 3)) {
+                outcome = { ok: false, message: 'Need 3× Angkor Gold Ore + 1,200 Coins.' };
+                return { state: prev, ok: false, message: outcome.message };
+              }
+              const coreIds = [
+                'mat_golden_laterite_core',
+                'mat_spirit_bamboo_heart',
+                'mat_sunken_angkor_relic',
+              ] as const;
+              const coreId = coreIds[Math.abs(rotationSeed) % coreIds.length];
+              addItem(coreId, 1);
+              addItem('essence_naga', 1);
+              addItem('essence_stone', 1);
+              const nextCoins = prev.currencies.coins - 1200;
+              soundManager.playSfx('level_up');
+              outcome = {
+                ok: true,
+                message: '🏺 Purchased Boss Essence & Awakening Core Bundle (1× Core, 1× Naga Essence, 1× Stone Essence)!',
+              };
+              return {
+                state: {
+                  ...prev,
+                  coins: nextCoins,
+                  currencies: { ...prev.currencies, coins: nextCoins },
+                  inventory: nextInv.filter((i) => i.quantity > 0),
+                  blackMarketPurchasedKeys: [...(prev.blackMarketPurchasedKeys ?? []), limitKey],
+                },
+                ok: true,
+                message: outcome.message,
+              };
+            }
+
+            return { state: prev, ok: false, message: 'Unknown Black Market offer.' };
+          });
+          return outcome;
+        }}
       />
 
       <ShopModal

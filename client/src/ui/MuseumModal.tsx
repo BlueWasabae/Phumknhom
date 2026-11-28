@@ -81,8 +81,8 @@ export const MuseumModal: React.FC<MuseumModalProps> = ({
           </div>
         </div>
 
-        {/* 3 Museum Wing Tabs */}
-        <div className="grid grid-cols-3 gap-1.5">
+        {/* 4 Museum Wing Tabs */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
           {MUSEUM_WINGS.map((wing) => {
             const wingItems = MUSEUM_EXHIBITS.filter((e) => e.wing === wing.id);
             const wingDone = wingItems.filter((e) => donatedSet.has(e.itemId)).length;

@@ -107,10 +107,108 @@ const MEKONG_FISH_POOL: FishPoolEntry[] = [
   },
 ];
 
-function rollMekongFish(fishingLevel: number): FishPoolEntry {
-  // Higher fishing level gently improves rare/mythic odds
+const KOH_RONG_FISH_POOL: FishPoolEntry[] = [
+  {
+    fishId: 'fish_coral_snapper',
+    label: 'Coral Snapper',
+    khmerName: 'ត្រីក្រហមថ្មប៉ប្រះទឹក',
+    emoji: '🐠',
+    rarity: 'common',
+    color: '#cbd5e1',
+    colorHex: 0xfb7185,
+    fishingXp: 34,
+    weight: 34,
+    difficulty: 1.2,
+  },
+  {
+    fishId: 'fish_blue_crab',
+    label: 'Koh Rong Blue Crab',
+    khmerName: 'ក្តាមសេះសមុទ្រ',
+    emoji: '🦀',
+    rarity: 'uncommon',
+    color: '#4ade80',
+    colorHex: 0x38bdf8,
+    fishingXp: 44,
+    weight: 24,
+    difficulty: 1.6,
+  },
+  {
+    fishId: 'fish_tropical_squid',
+    label: 'Tropical Squid',
+    khmerName: 'មឹកសមុទ្រត្រូពិច',
+    emoji: '🦑',
+    rarity: 'uncommon',
+    color: '#4ade80',
+    colorHex: 0xf472b6,
+    fishingXp: 48,
+    weight: 18,
+    difficulty: 1.9,
+  },
+  {
+    fishId: 'fish_mekong_stingray',
+    label: 'Mekong Stingray',
+    khmerName: 'ត្រីបបែលយក្ស',
+    emoji: '🐟',
+    rarity: 'rare',
+    color: '#38bdf8',
+    colorHex: 0x0ea5e9,
+    fishingXp: 68,
+    weight: 14,
+    difficulty: 2.5,
+  },
+  {
+    fishId: 'fish_bioluminescent_jellyfish',
+    label: 'Bioluminescent Jellyfish',
+    khmerName: 'ខ្ញែរសមុទ្រពន្លឺខៀវ',
+    emoji: '🪼',
+    rarity: 'epic',
+    color: '#c084fc',
+    colorHex: 0x22d3ee,
+    fishingXp: 96,
+    weight: 7.95,
+    difficulty: 3.1,
+  },
+  {
+    fishId: 'fish_sapphire_turtle_shell',
+    label: 'Sapphire Sea Turtle Shell',
+    khmerName: 'ស្នូកអណ្តើកសមុទ្រត្បូងកណ្តៀង',
+    emoji: '🐢',
+    rarity: 'legendary',
+    color: '#facc15',
+    colorHex: 0x0284c7,
+    fishingXp: 150,
+    weight: 1.5,
+    difficulty: 3.8,
+  },
+  {
+    fishId: 'fish_starlight_manta',
+    label: 'Starlight Manta Ray',
+    khmerName: 'ត្រីបបែលពន្លឺផ្កាយ',
+    emoji: '🦈',
+    rarity: 'mythic',
+    color: '#fb7185',
+    colorHex: 0x38bdf8,
+    fishingXp: 215,
+    weight: 0.4,
+    difficulty: 4.5,
+  },
+  {
+    fishId: 'fish_ancient_golden_barb',
+    label: 'Ancient Golden Giant Barb',
+    khmerName: 'ត្រីគល់រាំងមាសបុរាណមហាសមុទ្រ',
+    emoji: '👑',
+    rarity: 'ancient',
+    color: '#fef08a',
+    colorHex: 0xfacc15,
+    fishingXp: 320,
+    weight: 0.15,
+    difficulty: 5.0,
+  },
+];
+
+function rollFishFromPool(pool: FishPoolEntry[], fishingLevel: number): FishPoolEntry {
   const luckBonus = Math.min(2.2, 1 + Math.max(0, fishingLevel - 1) * 0.06);
-  const weighted = MEKONG_FISH_POOL.map((f) => ({
+  const weighted = pool.map((f) => ({
     f,
     w: f.rarity === 'common' ? f.weight : f.weight * luckBonus,
   }));
@@ -120,7 +218,7 @@ function rollMekongFish(fishingLevel: number): FishPoolEntry {
     r -= e.w;
     if (r <= 0) return e.f;
   }
-  return MEKONG_FISH_POOL[0];
+  return pool[0];
 }
 
 /**
@@ -162,9 +260,24 @@ export class FishingSystem {
   }
 
   /**
-   * Checks whether the player stands within `MAX_FISHING_DISTANCE = 110px` of the Green Park river pier/pond edge.
+   * Checks whether the player stands within `MAX_FISHING_DISTANCE = 110px` of the active fishing pier/shoreline.
    */
-  public canCastFrom(px: number, py: number): { ok: boolean; waterX: number; waterY: number } {
+  public canCastFrom(
+    px: number,
+    py: number,
+    mode: 'mekong' | 'koh_rong' = 'mekong'
+  ): { ok: boolean; waterX: number; waterY: number } {
+    if (mode === 'koh_rong') {
+      // Koh Rong Deep-Sea Pier (1220, 800) & southern ocean shoreline (y >= 740)
+      const distToPier = Phaser.Math.Distance.Between(px, py, 1220, 815);
+      const nearOcean = py >= 735;
+      if (distToPier > MAX_FISHING_DISTANCE + 45 && !nearOcean) {
+        return { ok: false, waterX: 1295, waterY: 880 };
+      }
+      const waterX = Phaser.Math.Clamp(px + (px > 1100 ? 75 : 0) + (Math.random() - 0.5) * 48, 260, 1460);
+      const waterY = Phaser.Math.Clamp(Math.max(875, py + 72) + (Math.random() - 0.5) * 32, 870, 995);
+      return { ok: true, waterX, waterY };
+    }
     // Pier anchor & shoreline spots around the Green Park pond (center 440, 840; pier at 525, 825)
     const distToPier = Phaser.Math.Distance.Between(px, py, 525, 825);
     const distToPondEdge = Math.max(0, Phaser.Math.Distance.Between(px, py, 440, 840) - 96);
@@ -184,17 +297,18 @@ export class FishingSystem {
     playerX: number,
     playerY: number,
     fishingLevel: number,
-    onFaceWater?: (facing: 'left' | 'right' | 'down' | 'up') => void
+    onFaceWater?: (facing: 'left' | 'right' | 'down' | 'up') => void,
+    mode: 'mekong' | 'koh_rong' = 'mekong'
   ): boolean {
     if (this.stage !== 'idle') return false;
 
-    const check = this.canCastFrom(playerX, playerY);
+    const check = this.canCastFrom(playerX, playerY, mode);
     if (!check.ok) {
       vfxManager.spawnFloatingText(
         this.scene,
         playerX,
         playerY - 26,
-        '🚶 Move closer to the river',
+        mode === 'koh_rong' ? '🚶 Walk onto the Deep-Sea Pier' : '🚶 Move closer to the river',
         '#fde68a',
         '12px',
         { riseY: 22, durationMs: 800, depth: 3200 }
@@ -208,7 +322,10 @@ export class FishingSystem {
     this.bobberX = check.waterX;
     this.bobberY = check.waterY;
     this.castStartedAt = this.scene.time.now;
-    this.currentFish = rollMekongFish(fishingLevel);
+    this.currentFish = rollFishFromPool(
+      mode === 'koh_rong' ? KOH_RONG_FISH_POOL : MEKONG_FISH_POOL,
+      fishingLevel
+    );
 
     onFaceWater?.(this.bobberX < playerX ? 'left' : 'right');
     soundManager.playSfx('swing');

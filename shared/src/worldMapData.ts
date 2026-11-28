@@ -69,7 +69,8 @@ export type VillageMapId =
   | 'wild_frontier'
   | 'mining_quarry'
   | 'bamboo_forest'
-  | 'sunken_ruins';
+  | 'sunken_ruins'
+  | 'koh_rong_island';
 
 export interface VillageMapPortalDef {
   id: string;
@@ -412,6 +413,20 @@ export const VILLAGE_MAPS: Record<VillageMapId, VillageMapDef> = {
       },
     ],
   },
+  koh_rong_island: {
+    id: 'koh_rong_island',
+    name: 'Koh Rong Mythic Island',
+    khmerName: 'កោះរ៉ុងទេពសមុទ្រ',
+    icon: '🏝️',
+    width: 1600,
+    height: 1200,
+    defaultSpawnX: 800,
+    defaultSpawnY: 360,
+    description:
+      'Turquoise tropical island paradise with white sand beach, lounge chairs, Beach Coconut Bar, Deep-Sea Fishing Pier & Coral Reef Pearl Diving!',
+    accentColor: '#06b6d4',
+    portals: [],
+  },
 };
 
 export const VILLAGE_MAP_LIST: VillageMapDef[] = Object.values(VILLAGE_MAPS);
@@ -434,7 +449,8 @@ export type CityDistrictId =
   | 'wild_frontier'
   | 'mining_quarry'
   | 'bamboo_forest'
-  | 'sunken_ruins';
+  | 'sunken_ruins'
+  | 'koh_rong_island';
 
 export interface CityDistrictNode {
   id: CityDistrictId;
@@ -587,6 +603,19 @@ export const CITY_DISTRICTS: CityDistrictNode[] = [
     mapY: 60,
     targetZone: 'club',
     description: 'Indoor neon lounge with Tien Len & Ouk Chaktrang tables!',
+  },
+  {
+    id: 'koh_rong_island',
+    name: 'Koh Rong Island',
+    khmerName: 'កោះរ៉ុងទេពសមុទ្រ',
+    icon: '🏝️',
+    mapX: 46,
+    mapY: 82,
+    targetZone: 'overworld',
+    mapId: 'koh_rong_island',
+    spawnX: 800,
+    spawnY: 360,
+    description: 'Tropical beach hangout, Beach Coconut Bar, Deep-Sea Fishing Pier & Coral Reef Pearl Diving!',
   },
 ];
 

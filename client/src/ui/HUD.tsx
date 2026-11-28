@@ -241,6 +241,9 @@ export const HUD: React.FC<HUDProps> = ({
   const [worldBossSnap, setWorldBossSnap] = useState<WorldBossStatusSnapshot>(() =>
     worldBossManager.getStatus()
   );
+  const [blackMarketSnap, setBlackMarketSnap] = useState(() =>
+    worldEventManager.getBlackMarketSnapshot()
+  );
   const [emoteOpen, setEmoteOpen] = useState(false);
   const [audioPopoverOpen, setAudioPopoverOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -307,6 +310,7 @@ export const HUD: React.FC<HUDProps> = ({
     const unsubSeason = seasonClock.subscribe(setSeasonSnap);
     const unsubEvent = worldEventManager.subscribe(setActiveWorldEvent);
     const unsubWorldBoss = worldBossManager.subscribe(setWorldBossSnap);
+    const unsubBlackMarket = worldEventManager.subscribeBlackMarket(setBlackMarketSnap);
     const id = window.setInterval(() => {
       setNow(Date.now());
       setSeasonSnap(seasonClock.getSnapshot());
@@ -319,6 +323,7 @@ export const HUD: React.FC<HUDProps> = ({
       unsubSeason();
       unsubEvent();
       unsubWorldBoss();
+      unsubBlackMarket();
       window.clearInterval(id);
     };
   }, []);
@@ -452,6 +457,8 @@ export const HUD: React.FC<HUDProps> = ({
             ? '🗼 Endless Pagoda Tower (50F)'
             : zone === 'festival_race'
             ? '🛶 Bon Om Touk · Longboat Race'
+            : zone === 'pearl_dive'
+            ? '🫧 Koh Rong Coral Reef · Pearl Diving'
             : 'Ancient Cavern • Dungeon'}
         </span>
       )}
@@ -591,6 +598,26 @@ export const HUD: React.FC<HUDProps> = ({
           className="px-2.5 py-0.5 rounded-lg bg-gradient-to-r from-cyan-500 via-amber-400 to-cyan-500 hover:from-cyan-400 hover:to-amber-300 text-slate-950 border-2 border-slate-950 font-display font-bold text-[10px] whitespace-nowrap shadow-md animate-pulse cursor-pointer transition"
         >
           🐉 Join World Boss ({Math.max(0, Math.round((worldBossSnap.hp / Math.max(1, worldBossSnap.maxHp)) * 100))}% HP · {formatCountdown(worldBossSnap.remainingMs)})
+        </button>
+      )}
+
+      {/* Live Monsoon Night Black Market Smuggler Pill (Update 2.6) */}
+      {blackMarketSnap.active && (
+        <button
+          type="button"
+          onClick={() => {
+            soundManager.playSfx('magic');
+            EventBus.emit('travel:execute', {
+              method: 'pylon',
+              destinationLabel: 'Misty Bamboo Forest (Black Market)',
+              targetZone: 'overworld',
+              mapId: 'bamboo_forest',
+            });
+          }}
+          title="Monsoon Night Black Market Smuggler has appeared in the NE corner of Misty Bamboo Forest! Click to travel."
+          className="px-2.5 py-0.5 rounded-lg bg-gradient-to-r from-emerald-950 via-teal-900 to-amber-900 hover:brightness-110 text-amber-200 border border-amber-400/80 font-display font-bold text-[10px] whitespace-nowrap shadow-md animate-pulse cursor-pointer transition"
+        >
+          🏮 Black Market Open (Bamboo Forest)
         </button>
       )}
 
@@ -2445,6 +2472,24 @@ export const HUD: React.FC<HUDProps> = ({
               >
                 🐉 Spawn World Boss Now
               </button>
+              <button
+                type="button"
+                onClick={() => {
+                  soundManager.playSfx('magic');
+                  const next = !blackMarketSnap.active;
+                  worldEventManager.triggerBlackMarket(next);
+                  setSettingsModalOpen(false);
+                }}
+                className={`px-3 py-2 rounded-xl border font-display font-bold text-[11px] shadow cursor-pointer ${
+                  blackMarketSnap.active
+                    ? 'bg-emerald-900 hover:bg-emerald-800 text-amber-200 border-amber-400'
+                    : 'bg-gradient-to-r from-slate-900 via-emerald-900 to-amber-800 hover:brightness-110 text-amber-100 border-amber-500/70'
+                }`}
+              >
+                {blackMarketSnap.active
+                  ? '🏮 Despawn Black Market'
+                  : '🌧️ Spawn Black Market (Bamboo Forest)'}
+              </button>
               {onGrantTestAwakeningKit && (
                 <button
                   type="button"
@@ -2453,7 +2498,7 @@ export const HUD: React.FC<HUDProps> = ({
                     onGrantTestAwakeningKit();
                     setSettingsModalOpen(false);
                   }}
-                  className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-cyan-200 border border-cyan-400 font-display font-bold text-[11px] shadow cursor-pointer"
+                  className="sm:col-span-2 px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-cyan-200 border border-cyan-400 font-display font-bold text-[11px] shadow cursor-pointer"
                 >
                   🌌 Test Awakening Kit (+10 &amp; Catalysts)
                 </button>

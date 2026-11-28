@@ -1081,7 +1081,8 @@ export class FarmScene extends Phaser.Scene {
       | 'wild_frontier'
       | 'mining_quarry'
       | 'bamboo_forest'
-      | 'sunken_ruins' = 'central_plaza'
+      | 'sunken_ruins'
+      | 'koh_rong_island' = 'central_plaza'
   ): void {
     if (this.transitioning) return;
     this.transitioning = true;

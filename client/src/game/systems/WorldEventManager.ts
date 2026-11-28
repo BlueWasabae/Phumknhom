@@ -7,20 +7,84 @@ import { EventBus } from '../EventBus';
 import { seasonClock } from './SeasonClock';
 
 type Listener = (snap: ActiveWorldEventSnapshot | null) => void;
+type BlackMarketListener = (state: { active: boolean; manual: boolean; rotationSeed: number }) => void;
 
 const AUTO_EVENT_COOLDOWN_MS = 240_000; // 4 minutes between automatic events
 
 class WorldEventManager {
   private active: ActiveWorldEventSnapshot | null = null;
   private listeners = new Set<Listener>();
+  private blackMarketListeners = new Set<BlackMarketListener>();
   private tickTimer: number | null = null;
   private nextAutoTriggerAt = Date.now() + 95_000;
   private rotationCounter = 1;
   private lastPeriod: string | null = null;
+  private blackMarketOverride: boolean | null = null;
+  private lastBlackMarketActive = false;
+  private blackMarketRotationSeed = 1;
 
   constructor() {
     if (typeof window !== 'undefined') {
       this.tickTimer = window.setInterval(() => this.tick(), 1000);
+      seasonClock.subscribe(() => this.syncBlackMarketState(false));
+    }
+  }
+
+  public isBlackMarketActive(now = Date.now()): boolean {
+    if (this.blackMarketOverride !== null) return this.blackMarketOverride;
+    const snap = seasonClock.getSnapshot(now);
+    return snap.season.id === 'summer' && snap.period === 'night';
+  }
+
+  public getBlackMarketSnapshot(): { active: boolean; manual: boolean; rotationSeed: number } {
+    return {
+      active: this.isBlackMarketActive(),
+      manual: this.blackMarketOverride === true,
+      rotationSeed: this.blackMarketRotationSeed,
+    };
+  }
+
+  public subscribeBlackMarket(listener: BlackMarketListener): () => void {
+    this.blackMarketListeners.add(listener);
+    listener(this.getBlackMarketSnapshot());
+    return () => {
+      this.blackMarketListeners.delete(listener);
+    };
+  }
+
+  public triggerBlackMarket(active: boolean): { active: boolean; manual: boolean; rotationSeed: number } {
+    this.blackMarketOverride = active ? true : false;
+    if (active) {
+      this.blackMarketRotationSeed += 1;
+      // Set matching Monsoon Rain + Night ambiance for the hidden Bamboo Forest Smuggler
+      seasonClock.setSeasonOverride('summer');
+      seasonClock.setPeriodOverride('night');
+    } else {
+      seasonClock.setSeasonOverride(null);
+      seasonClock.setPeriodOverride(null);
+    }
+    this.syncBlackMarketState(true);
+    return this.getBlackMarketSnapshot();
+  }
+
+  private syncBlackMarketState(manual: boolean): void {
+    const nowActive = this.isBlackMarketActive();
+    const changed = nowActive !== this.lastBlackMarketActive;
+    if (!changed && !manual) return;
+    if (nowActive && !this.lastBlackMarketActive) {
+      if (!manual) {
+        this.blackMarketRotationSeed += 1;
+      }
+      EventBus.emit('ticker:push', {
+        text: "🌧️ Rumors whisper of a hooded Smuggler's Lantern glowing deep inside the Misty Bamboo Forest...",
+        category: 'weather',
+      });
+    }
+    this.lastBlackMarketActive = nowActive;
+    const snap = this.getBlackMarketSnapshot();
+    EventBus.emit('blackMarket:changed', snap);
+    for (const l of this.blackMarketListeners) {
+      l(snap);
     }
   }
 
@@ -137,6 +201,7 @@ class WorldEventManager {
 
   private tick(): void {
     const now = Date.now();
+    this.syncBlackMarketState(false);
     if (this.active) {
       if (now >= this.active.endsAt) {
         this.endActiveEvent(true);

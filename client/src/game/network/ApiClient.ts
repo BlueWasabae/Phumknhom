@@ -128,6 +128,9 @@ export interface SavedProfilePayload {
   lastDailyReliquaryKeyDate?: string | null;
   awakenedWeapons?: string[];
   colossusSlayerUntil?: number | null;
+  pearlDivingStats?: PlayerState['pearlDivingStats'];
+  hasBioluminescentWaveAura?: boolean;
+  blackMarketPurchasedKeys?: string[];
   hasCompletedCreation?: boolean;
   activeClass: PlayerState['activeClass'];
   weapon: PlayerState['weapon'];
@@ -500,6 +503,11 @@ export function serializePlayerStateForSave(state: PlayerState): SavedProfilePay
     lastDailyReliquaryKeyDate: state.lastDailyReliquaryKeyDate ?? null,
     awakenedWeapons: [...(state.awakenedWeapons ?? [])],
     colossusSlayerUntil: state.colossusSlayerUntil ?? null,
+    pearlDivingStats: state.pearlDivingStats
+      ? { ...state.pearlDivingStats }
+      : { divesCompleted: 0, pearlsHarvested: 0, ancientPearlsFound: 0, bestHaulCoins: 0 },
+    hasBioluminescentWaveAura: Boolean(state.hasBioluminescentWaveAura ?? false),
+    blackMarketPurchasedKeys: [...(state.blackMarketPurchasedKeys ?? [])],
     hasCompletedCreation: Boolean(state.hasCompletedCreation ?? state.loadout.hasCompletedCreation),
     activeClass: state.activeClass,
     weapon: { ...state.weapon },
@@ -860,6 +868,19 @@ export function hydratePlayerStateFromSave(
       typeof saved?.colossusSlayerUntil === 'number' && saved.colossusSlayerUntil > Date.now()
         ? saved.colossusSlayerUntil
         : null,
+    pearlDivingStats:
+      saved?.pearlDivingStats && typeof saved.pearlDivingStats === 'object'
+        ? {
+            divesCompleted: Number(saved.pearlDivingStats.divesCompleted ?? 0),
+            pearlsHarvested: Number(saved.pearlDivingStats.pearlsHarvested ?? 0),
+            ancientPearlsFound: Number(saved.pearlDivingStats.ancientPearlsFound ?? 0),
+            bestHaulCoins: Number(saved.pearlDivingStats.bestHaulCoins ?? 0),
+          }
+        : { divesCompleted: 0, pearlsHarvested: 0, ancientPearlsFound: 0, bestHaulCoins: 0 },
+    hasBioluminescentWaveAura: Boolean(saved?.hasBioluminescentWaveAura ?? false),
+    blackMarketPurchasedKeys: Array.isArray(saved?.blackMarketPurchasedKeys)
+      ? [...saved.blackMarketPurchasedKeys]
+      : [],
     hasCompletedCreation: Boolean(
       saved?.hasCompletedCreation ?? saved?.loadout?.hasCompletedCreation ?? false
     ),

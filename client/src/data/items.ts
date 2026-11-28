@@ -931,6 +931,35 @@ export const ITEM_CATALOG: Record<string, CatalogItem> = {
     styleVariant: 'wings_celestial_naga_dragon',
     stats: { defense: 6, maxHp: 45, critChance: 0.06 },
   },
+  // ==================== UPDATE 2.6: KOH RONG & MONSOON NIGHT BLACK MARKET COSMETICS (ZERO P2W) ====================
+  wings_smuggler_shadow_cloak: {
+    id: 'wings_smuggler_shadow_cloak',
+    name: "Smuggler's Shadow Cloak",
+    khmerName: 'អាវឃ្លុំស្រមោលផ្សារងងឹត',
+    slot: 'wings',
+    rarity: 'epic',
+    stylishScore: 145,
+    description:
+      'Exclusive hooded obsidian-jade cloak traded only by the Monsoon Night Black Market Smuggler in Bamboo Forest (Pure Vanity — 0 combat stats).',
+    primaryColor: '#0f172a',
+    accentColor: '#10b981',
+    styleVariant: 'royal_cape',
+    stats: {},
+  },
+  wings_bioluminescent_wave_aura: {
+    id: 'wings_bioluminescent_wave_aura',
+    name: 'Bioluminescent Wave Aura',
+    khmerName: 'រស្មីរលកពន្លឺសមុទ្រកោះរ៉ុង',
+    slot: 'wings',
+    rarity: 'legendary',
+    stylishScore: 175,
+    description:
+      'Radiant Koh Rong cyan water-ripple trail shimmering around your feet with every step (Pure Vanity — 0 combat stats).',
+    primaryColor: '#22d3ee',
+    accentColor: '#67e8f9',
+    styleVariant: 'lotus_aura',
+    stats: {},
+  },
   pet_royal_lotus: {
     id: 'pet_royal_lotus',
     name: 'Royal Lotus Pet',

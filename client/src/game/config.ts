@@ -11,6 +11,7 @@ import { FestivalRaceScene } from './scenes/FestivalRaceScene';
 import { DungeonBossScene } from './scenes/DungeonBossScene';
 import { BossRushScene } from './scenes/BossRushScene';
 import { WorldBossScene } from './scenes/WorldBossScene';
+import { PearlDiveScene } from './scenes/PearlDiveScene';
 
 export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameConfig {
   return {
@@ -61,6 +62,7 @@ export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameCon
       DungeonBossScene,
       BossRushScene,
       WorldBossScene,
+      PearlDiveScene,
     ],
   };
 }

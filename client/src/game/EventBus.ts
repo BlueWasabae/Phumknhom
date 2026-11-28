@@ -62,6 +62,30 @@ export interface FishingBitePayload {
   difficulty: number;
 }
 
+export interface DiveHudPayload {
+  active: boolean;
+  oxygenSec: number;
+  maxOxygenSec: number;
+  nagaScaleBonus: boolean;
+  seaPearls: number;
+  coralShards: number;
+  treasureMaps: number;
+  ancientPearls: number;
+  depthMeters: number;
+  nearSurfaceBuoy: boolean;
+}
+
+export interface DiveCompletedPayload {
+  surfacedSafely: boolean;
+  keptRatio: number;
+  seaPearls: number;
+  coralShards: number;
+  treasureMaps: number;
+  ancientPearls: number;
+  coinsEarned: number;
+  fishingXp: number;
+}
+
 export type FarmToolMode = 'smart' | 'fertilize' | 'infuse';
 
 export interface SkillXpToastPayload {
@@ -286,6 +310,11 @@ export interface EventMap {
     top3: WorldBossLeaderboardRow[];
     colossusSlayerTitle: string | null;
   };
+  'dive:enterRequest': void;
+  'dive:surfaceRequest': void;
+  'dive:hudUpdate': DiveHudPayload | null;
+  'dive:completed': DiveCompletedPayload;
+  'blackMarket:changed': { active: boolean; manual: boolean; rotationSeed: number };
   'worldEvent:reward': {
     skillId?: SkillId;
     xp?: number;
@@ -403,7 +432,8 @@ export interface EventMap {
       | 'seasonPass'
       | 'achievements'
       | 'reliquary'
-      | 'awakening';
+      | 'awakening'
+      | 'blackMarket';
     leaderboardCategory?: 'farmer' | 'stylish' | 'slayer' | 'tower' | 'boss_rush';
     farmTab?: 'seeds' | 'livestock' | 'artisan';
     shopTab?: 'primary' | 'secondary';

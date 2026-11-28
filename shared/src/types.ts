@@ -20,6 +20,7 @@ export type ZoneType =
   | 'overworld'
   | 'dungeon'
   | 'world_boss'
+  | 'pearl_dive'
   | 'cavern'
   | 'tower'
   | 'festival_race'
@@ -71,7 +72,8 @@ export interface ActiveTreasureMap {
     | 'wild_frontier'
     | 'mining_quarry'
     | 'bamboo_forest'
-    | 'sunken_ruins';
+    | 'sunken_ruins'
+    | 'koh_rong_island';
   clueTitle: string;
   clueDescription: string;
   x: number;
@@ -398,7 +400,8 @@ export interface PlayerState {
     | 'wild_frontier'
     | 'mining_quarry'
     | 'bamboo_forest'
-    | 'sunken_ruins';
+    | 'sunken_ruins'
+    | 'koh_rong_island';
   currentWorldId?: string;
   activeBiome?: string;
   discoveredBiomes?: string[];
@@ -462,6 +465,15 @@ export interface PlayerState {
   /** Update 2.5 — Ancient Weapon Awakening Forge & World Boss Colossus Slayer */
   awakenedWeapons?: string[];
   colossusSlayerUntil?: number | null;
+  /** Update 2.6 — Koh Rong Deep-Sea Pearl Diving Stats & Monsoon Night Black Market */
+  pearlDivingStats?: {
+    divesCompleted: number;
+    pearlsHarvested: number;
+    ancientPearlsFound: number;
+    bestHaulCoins: number;
+  };
+  hasBioluminescentWaveAura?: boolean;
+  blackMarketPurchasedKeys?: string[];
   hasCompletedCreation?: boolean;
   skillDamagePct: number;
   armorDamagePct: number;
@@ -762,6 +774,14 @@ export const INITIAL_PLAYER_STATE: PlayerState = {
   lastDailyReliquaryKeyDate: null,
   awakenedWeapons: [],
   colossusSlayerUntil: null,
+  pearlDivingStats: {
+    divesCompleted: 0,
+    pearlsHarvested: 0,
+    ancientPearlsFound: 0,
+    bestHaulCoins: 0,
+  },
+  hasBioluminescentWaveAura: false,
+  blackMarketPurchasedKeys: [],
   hasCompletedCreation: false,
   skillDamagePct: 0.025,
   armorDamagePct: 0.04,

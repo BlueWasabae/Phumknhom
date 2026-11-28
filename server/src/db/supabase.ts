@@ -84,6 +84,14 @@ export interface SavedPlayerProfile {
   lastDailyReliquaryKeyDate?: string | null;
   awakenedWeapons?: string[];
   colossusSlayerUntil?: number | null;
+  pearlDivingStats?: {
+    divesCompleted: number;
+    pearlsHarvested: number;
+    ancientPearlsFound: number;
+    bestHaulCoins: number;
+  };
+  hasBioluminescentWaveAura?: boolean;
+  blackMarketPurchasedKeys?: string[];
   hasCompletedCreation?: boolean;
   activeClass?: string;
   weapon?: Record<string, unknown>;
@@ -569,6 +577,14 @@ function rowToSavedProfile(row: {
     awakenedWeapons: Array.isArray(meta.awakenedWeapons) ? (meta.awakenedWeapons as string[]) : [],
     colossusSlayerUntil:
       typeof meta.colossusSlayerUntil === 'number' ? meta.colossusSlayerUntil : null,
+    pearlDivingStats:
+      meta.pearlDivingStats && typeof meta.pearlDivingStats === 'object'
+        ? (meta.pearlDivingStats as SavedPlayerProfile['pearlDivingStats'])
+        : { divesCompleted: 0, pearlsHarvested: 0, ancientPearlsFound: 0, bestHaulCoins: 0 },
+    hasBioluminescentWaveAura: Boolean(meta.hasBioluminescentWaveAura ?? false),
+    blackMarketPurchasedKeys: Array.isArray(meta.blackMarketPurchasedKeys)
+      ? (meta.blackMarketPurchasedKeys as string[])
+      : [],
     hasCompletedCreation: Boolean(
       meta.hasCompletedCreation ??
         (loadout as { hasCompletedCreation?: boolean }).hasCompletedCreation ??
@@ -928,6 +944,14 @@ export async function savePlayerProfile(
     awakenedWeapons: Array.isArray(profile.awakenedWeapons) ? profile.awakenedWeapons : [],
     colossusSlayerUntil:
       typeof profile.colossusSlayerUntil === 'number' ? profile.colossusSlayerUntil : null,
+    pearlDivingStats:
+      profile.pearlDivingStats && typeof profile.pearlDivingStats === 'object'
+        ? profile.pearlDivingStats
+        : { divesCompleted: 0, pearlsHarvested: 0, ancientPearlsFound: 0, bestHaulCoins: 0 },
+    hasBioluminescentWaveAura: Boolean(profile.hasBioluminescentWaveAura ?? false),
+    blackMarketPurchasedKeys: Array.isArray(profile.blackMarketPurchasedKeys)
+      ? profile.blackMarketPurchasedKeys
+      : [],
     hasCompletedCreation: Boolean(
       profile.hasCompletedCreation ??
         (profile.loadout as { hasCompletedCreation?: boolean } | undefined)?.hasCompletedCreation ??
