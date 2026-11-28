@@ -78,10 +78,18 @@ import {
 import { respecAllSkills, unlockSkillTalent, awardSkillXp } from './game/systems/SkillManager';
 import { donateToPagodaAltar } from './data/pagodaBundles';
 import {
+  applyRealMoneySkuPurchase,
+  claimDailyVipReliquaryKey,
   getTodayDateKey,
+  hasFirstTimeBonusForPack,
   hasFreeDailyCoinSpin,
+  isVillagePassActive,
+  openReliquaryChests,
   purchaseDiamondShopItem,
+  purchaseVipPassWithDiamonds,
+  redeemAngkorShards,
   togglePlazaMount,
+  type ReliquaryOpenBatchResult,
 } from './data/diamondStore';
 import {
   applyShimmerTransmute,
@@ -99,7 +107,9 @@ import {
   buyMarketListingApi,
   cancelMarketListingApi,
   claimFriendReferralApi,
+  createAbaKhqrCheckoutApi,
   createMarketListingApi,
+  createStripeCheckoutApi,
   declineFriendRequestApi,
   fetchFriends,
   hydratePlayerStateFromSave,
@@ -160,6 +170,7 @@ import { PagodaBundleModal } from './ui/PagodaBundleModal';
 import { MarketModal } from './ui/MarketModal';
 import { BestiaryModal } from './ui/BestiaryModal';
 import { DiamondStoreModal } from './ui/DiamondStoreModal';
+import { ReliquaryModal } from './ui/ReliquaryModal';
 import { WorldMapModal } from './ui/WorldMapModal';
 import { ServerCityModal } from './ui/ServerCityModal';
 import { ServerTickerBanner } from './ui/ServerTickerBanner';
@@ -255,6 +266,7 @@ type ActiveModalType =
   | 'dailyLogin'
   | 'seasonPass'
   | 'achievements'
+  | 'reliquary'
   | 'characterCreator';
 
 interface FloatingXpBanner extends SkillXpToastPayload {
@@ -1223,26 +1235,118 @@ export const App: React.FC = () => {
     [runStateAction]
   );
 
-  const handleSandboxTopUp = useCallback(
-    async (sku: string) => {
-      const res = await sandboxTopUpApi(authSessionRef.current, sku);
-      if (!res.ok) {
-        EventBus.emit('ui:toast', { text: res.error });
-        return;
+  const handleCheckoutSku = useCallback(
+    async (sku: string, method: 'stripe' | 'aba_khqr' | 'sandbox') => {
+      const firstTimeBonus = hasFirstTimeBonusForPack(playerRef.current, sku);
+
+      if (method === 'stripe') {
+        const res = await createStripeCheckoutApi(authSessionRef.current, sku, firstTimeBonus);
+        if (res.ok) {
+          if (res.mode === 'stripe' && res.checkoutUrl) {
+            window.open(res.checkoutUrl, '_blank', 'noopener');
+            EventBus.emit('ui:toast', {
+              text: '💳 Opened secure Stripe Checkout in a new tab! Diamonds credit automatically upon payment.',
+            });
+            return;
+          }
+          soundManager.playSfx('level_up');
+          runStateAction((prev) =>
+            applyRealMoneySkuPurchase(prev, sku, {
+              diamondsGranted: res.diamondsGranted,
+              villagePassUntil: res.villagePassUntil,
+              firstTimeDoubled: res.firstTimeDoubled,
+            })
+          );
+          return;
+        }
+        if (!res.error.includes('Cannot reach Phum server')) {
+          EventBus.emit('ui:toast', { text: res.error });
+          return;
+        }
+      } else if (method === 'aba_khqr') {
+        const res = await createAbaKhqrCheckoutApi(authSessionRef.current, sku, firstTimeBonus);
+        if (res.ok) {
+          if (res.mode === 'aba_khqr') {
+            EventBus.emit('ui:toast', {
+              text: `🇰🇭 ABA PayWay KHQR Order Ready (${res.tranId} · $${res.amount}) — Scan with ABA Mobile!`,
+            });
+            return;
+          }
+          soundManager.playSfx('level_up');
+          runStateAction((prev) =>
+            applyRealMoneySkuPurchase(prev, sku, {
+              diamondsGranted: res.diamondsGranted,
+              villagePassUntil: res.villagePassUntil,
+              firstTimeDoubled: res.firstTimeDoubled,
+            })
+          );
+          return;
+        }
+        if (!res.error.includes('Cannot reach Phum server')) {
+          EventBus.emit('ui:toast', { text: res.error });
+          return;
+        }
+      } else {
+        const res = await sandboxTopUpApi(authSessionRef.current, sku, firstTimeBonus);
+        if (res.ok) {
+          soundManager.playSfx('level_up');
+          runStateAction((prev) =>
+            applyRealMoneySkuPurchase(prev, sku, {
+              diamondsGranted: res.diamondsGranted,
+              villagePassUntil: res.villagePassUntil,
+              firstTimeDoubled: res.firstTimeDoubled,
+            })
+          );
+          return;
+        }
+        if (!res.error.includes('Cannot reach Phum server')) {
+          EventBus.emit('ui:toast', { text: res.error });
+          return;
+        }
       }
+
+      // Offline graceful Sandbox fallback when backend server on :2567 is not running
       soundManager.playSfx('level_up');
-      runStateAction((prev) => ({
-        state: {
-          ...prev,
-          currencies: {
-            ...prev.currencies,
-            diamonds: prev.currencies.diamonds + res.diamondsGranted,
-          },
-          villagePassUntil: res.villagePassUntil ?? prev.villagePassUntil ?? null,
-        },
-        ok: true,
-        message: `💎 Sandbox Top-Up Complete: ${res.label} (+${res.diamondsGranted} Diamonds)!`,
-      }));
+      runStateAction((prev) => applyRealMoneySkuPurchase(prev, sku));
+    },
+    [runStateAction]
+  );
+
+  const handleOpenReliquaryChests = useCallback(
+    (count: 1 | 10): ReliquaryOpenBatchResult => {
+      let result: ReliquaryOpenBatchResult = {
+        state: playerRef.current,
+        ok: false,
+        message: 'Failed to open Reliquary.',
+        entries: [],
+        keysUsed: 0,
+        diamondsUsed: 0,
+        totalShardsGained: 0,
+        topTier: 'common',
+        mythicOrAncientPulled: [],
+      };
+      runStateAction((prev) => {
+        result = openReliquaryChests(prev, count);
+        return { state: result.state, ok: result.ok, message: result.message };
+      });
+      if (result.ok) {
+        if (
+          result.topTier === 'ancient' ||
+          result.topTier === 'mythic' ||
+          result.topTier === 'legendary'
+        ) {
+          soundManager.playSfx('victory');
+        } else {
+          soundManager.playSfx('coin');
+        }
+        for (const rarePull of result.mythicOrAncientPulled) {
+          EventBus.emit('ticker:push', {
+            text: `🏺✨ ${playerRef.current.name} unsealed a ${rarePull.tier.toUpperCase()} treasure from the Angkor Reliquary: ${rarePull.reward.icon} ${rarePull.reward.name}!`,
+            category: 'club',
+          });
+        }
+      }
+      return result;
     },
     [runStateAction]
   );
@@ -2549,6 +2653,11 @@ export const App: React.FC = () => {
             canInstallPwa={canInstallPwa}
             onInstallPwa={() => void handleInstallPwa()}
             onToggleMount={handleToggleMount}
+            onOpenPortableBank={() => {
+              setReforgeTab('bank');
+              setActiveModal('reforge');
+            }}
+            onOpenReliquary={() => setActiveModal('reliquary')}
             onOpenHouseDecor={() => setActiveModal('houseDecor')}
             onInviteFriendsHome={() => {
               const hostName = playerRef.current.name;
@@ -2667,6 +2776,7 @@ export const App: React.FC = () => {
             open={chatOpen}
             playerName={player.name}
             kromTag={player.kromTag}
+            isVip={isVillagePassActive(player)}
             messages={messages}
             draftPrefill={chatDraftPrefill}
             onAddMessage={(msg) => setMessages((prev) => [...prev.slice(-39), msg])}
@@ -2734,7 +2844,37 @@ export const App: React.FC = () => {
           })
         }
         onEquipItem={handleEquipItem}
-        onSandboxTopUp={handleSandboxTopUp}
+        onCheckoutSku={handleCheckoutSku}
+        onBuyVipWithDiamonds={() =>
+          runStateAction((s) => {
+            const res = purchaseVipPassWithDiamonds(s);
+            if (res.ok) soundManager.playSfx('level_up');
+            return res;
+          })
+        }
+        onClaimDailyVipKey={() =>
+          runStateAction((s) => {
+            const res = claimDailyVipReliquaryKey(s);
+            if (res.ok) soundManager.playSfx('coin');
+            return res;
+          })
+        }
+        onOpenReliquaryModal={() => setActiveModal('reliquary')}
+      />
+
+      <ReliquaryModal
+        open={activeModal === 'reliquary'}
+        player={player}
+        onClose={() => setActiveModal(null)}
+        onOpenChests={handleOpenReliquaryChests}
+        onRedeemShards={(offerId) =>
+          runStateAction((s) => {
+            const res = redeemAngkorShards(s, offerId);
+            if (res.ok) soundManager.playSfx('level_up');
+            return res;
+          })
+        }
+        onEquipItem={handleEquipItem}
       />
 
       <WorldMapModal
@@ -3614,10 +3754,16 @@ export const App: React.FC = () => {
                   EventBus.emit('guide:step', { stepId: 'claim_bounty' });
                 }, 0);
                 const passRes = awardSeasonPassXp(res.state, 120);
+                const isWeekly = res.bounty?.cadence === 'weekly';
+                const finalState = isWeekly
+                  ? { ...passRes.state, reliquaryKeys: (passRes.state.reliquaryKeys ?? 0) + 1 }
+                  : passRes.state;
                 return {
                   ...res,
-                  state: passRes.state,
-                  message: `${res.message} (+120 Season XP${passRes.tieredUp ? ` · Pass Tier ${passRes.newTier}!` : ''})`,
+                  state: finalState,
+                  message: `${res.message} (+120 Season XP${
+                    isWeekly ? ' · +1 🗝️ Reliquary Key!' : ''
+                  }${passRes.tieredUp ? ` · Pass Tier ${passRes.newTier}!` : ''})`,
                 };
               }
               return res;

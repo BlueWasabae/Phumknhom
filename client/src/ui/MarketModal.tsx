@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import type { PlayerState, QualityTier } from '@shared/types';
 import { Coins, RefreshCw, ShoppingBag, Tag, Trash2 } from 'lucide-react';
 import { FARM_ITEMS } from '../data/cropsAndArtisan';
+import { isVillagePassActive } from '../data/diamondStore';
 import { STREET_SNACKS } from '../data/recipes';
 import {
   fetchMarketListings,
@@ -74,7 +75,8 @@ export const MarketModal: React.FC<MarketModalProps> = ({
   const getItemName = (itemId: string) =>
     FARM_ITEMS[itemId]?.name ?? STREET_SNACKS[itemId]?.name ?? itemId;
 
-  const taxPreview = Math.max(1, Math.floor(Math.max(10, listPrice) * 0.05));
+  const vipActive = isVillagePassActive(player);
+  const taxPreview = vipActive ? 0 : Math.max(1, Math.floor(Math.max(10, listPrice) * 0.05));
   const payoutPreview = Math.max(0, Math.max(10, listPrice) - taxPreview);
 
   const handleListSubmit = async (e: React.FormEvent) => {
@@ -102,7 +104,11 @@ export const MarketModal: React.FC<MarketModalProps> = ({
       open={open}
       onClose={onClose}
       title="Phum Village Market · Player Trading Board"
-      subtitle={`Coins: ${player.currencies.coins.toLocaleString()} · 5% Village Coin Tax Sink (Seller receives 95%)`}
+      subtitle={
+        vipActive
+          ? `Coins: ${player.currencies.coins.toLocaleString()} · 👑 0% VIP Market Tax Active (You keep 100% of every sale!)`
+          : `Coins: ${player.currencies.coins.toLocaleString()} · 5% Village Coin Tax Sink (VIP Pass waives tax to 0%)`
+      }
       maxWidthClass="w-[min(96vw,740px)]"
     >
       <div className="space-y-3 text-xs">
@@ -290,8 +296,20 @@ export const MarketModal: React.FC<MarketModalProps> = ({
 
                 <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-amber-900/15">
                   <div className="text-[11px] font-semibold text-amber-900">
-                    5% Village Tax: <strong className="text-rose-700">-{taxPreview.toLocaleString()}c</strong> · You Receive (95%):{' '}
-                    <strong className="text-emerald-800">+{payoutPreview.toLocaleString()} Coins</strong>
+                    {vipActive ? (
+                      <>
+                        <span className="px-1.5 py-0.5 rounded bg-amber-400 text-amber-950 font-bold text-[10px] mr-1">
+                          👑 0% VIP TAX
+                        </span>
+                        You Receive (100%):{' '}
+                        <strong className="text-emerald-800">+{payoutPreview.toLocaleString()} Coins</strong>
+                      </>
+                    ) : (
+                      <>
+                        5% Village Tax: <strong className="text-rose-700">-{taxPreview.toLocaleString()}c</strong> · You Receive (95%):{' '}
+                        <strong className="text-emerald-800">+{payoutPreview.toLocaleString()} Coins</strong>
+                      </>
+                    )}
                   </div>
                   <button
                     type="submit"

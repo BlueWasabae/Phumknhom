@@ -75,6 +75,13 @@ export interface SavedPlayerProfile {
   claimedPassTiers?: string[];
   unlockedAchievements?: string[];
   equippedBadgeId?: string | null;
+  reliquaryPityCount?: number;
+  reliquaryMythicPityCount?: number;
+  reliquaryKeys?: number;
+  angkorShards?: number;
+  welcomeBundleClaimed?: boolean;
+  purchasedDiamondPacks?: string[];
+  lastDailyReliquaryKeyDate?: string | null;
   hasCompletedCreation?: boolean;
   activeClass?: string;
   weapon?: Record<string, unknown>;
@@ -303,6 +310,26 @@ export async function updatePlayerBankCoins(
   return true;
 }
 
+export async function isPlayerVip(playerId: string): Promise<boolean> {
+  if (!playerId || playerId === 'guest' || playerId.startsWith('npc_')) return false;
+  const now = Date.now();
+  if (supabaseClient) {
+    const { data } = await supabaseClient
+      .from('players')
+      .select('meta_json')
+      .eq('id', playerId)
+      .maybeSingle();
+    if (!data) return false;
+    const meta = (data.meta_json && typeof data.meta_json === 'object' ? data.meta_json : {}) as Record<string, unknown>;
+    return typeof meta.villagePassUntil === 'number' && meta.villagePassUntil > now;
+  }
+  const db = readLocalDb();
+  const row = db.players.find((p) => p.id === playerId);
+  if (!row) return false;
+  const until = row.meta_json?.villagePassUntil;
+  return typeof until === 'number' && until > now;
+}
+
 // ==================== CRYPTO & AUTH TOKENS ====================
 
 function hashPassword(password: string): string {
@@ -512,6 +539,31 @@ function rowToSavedProfile(row: {
       meta.bountyProgress && typeof meta.bountyProgress === 'object'
         ? (meta.bountyProgress as Record<string, unknown>)
         : undefined,
+    starterGuide:
+      meta.starterGuide && typeof meta.starterGuide === 'object'
+        ? (meta.starterGuide as Record<string, unknown>)
+        : undefined,
+    redeemedCodes: Array.isArray(meta.redeemedCodes) ? (meta.redeemedCodes as string[]) : [],
+    referredBy: typeof meta.referredBy === 'string' ? meta.referredBy : null,
+    loginStreak: typeof meta.loginStreak === 'number' ? meta.loginStreak : 0,
+    lastLoginDate: typeof meta.lastLoginDate === 'string' ? meta.lastLoginDate : null,
+    claimedLoginDays: Array.isArray(meta.claimedLoginDays) ? (meta.claimedLoginDays as number[]) : [],
+    seasonPassXp: typeof meta.seasonPassXp === 'number' ? meta.seasonPassXp : 0,
+    hasRoyalPass: Boolean(meta.hasRoyalPass ?? false),
+    claimedPassTiers: Array.isArray(meta.claimedPassTiers) ? (meta.claimedPassTiers as string[]) : [],
+    unlockedAchievements: Array.isArray(meta.unlockedAchievements) ? (meta.unlockedAchievements as string[]) : [],
+    equippedBadgeId: typeof meta.equippedBadgeId === 'string' ? meta.equippedBadgeId : null,
+    reliquaryPityCount: typeof meta.reliquaryPityCount === 'number' ? meta.reliquaryPityCount : 0,
+    reliquaryMythicPityCount:
+      typeof meta.reliquaryMythicPityCount === 'number' ? meta.reliquaryMythicPityCount : 0,
+    reliquaryKeys: typeof meta.reliquaryKeys === 'number' ? meta.reliquaryKeys : 1,
+    angkorShards: typeof meta.angkorShards === 'number' ? meta.angkorShards : 0,
+    welcomeBundleClaimed: Boolean(meta.welcomeBundleClaimed ?? false),
+    purchasedDiamondPacks: Array.isArray(meta.purchasedDiamondPacks)
+      ? (meta.purchasedDiamondPacks as string[])
+      : [],
+    lastDailyReliquaryKeyDate:
+      typeof meta.lastDailyReliquaryKeyDate === 'string' ? meta.lastDailyReliquaryKeyDate : null,
     hasCompletedCreation: Boolean(
       meta.hasCompletedCreation ??
         (loadout as { hasCompletedCreation?: boolean }).hasCompletedCreation ??
@@ -859,6 +911,15 @@ export async function savePlayerProfile(
     claimedPassTiers: Array.isArray(profile.claimedPassTiers) ? profile.claimedPassTiers : [],
     unlockedAchievements: Array.isArray(profile.unlockedAchievements) ? profile.unlockedAchievements : [],
     equippedBadgeId: typeof profile.equippedBadgeId === 'string' ? profile.equippedBadgeId : null,
+    reliquaryPityCount: typeof profile.reliquaryPityCount === 'number' ? profile.reliquaryPityCount : 0,
+    reliquaryMythicPityCount:
+      typeof profile.reliquaryMythicPityCount === 'number' ? profile.reliquaryMythicPityCount : 0,
+    reliquaryKeys: typeof profile.reliquaryKeys === 'number' ? profile.reliquaryKeys : 1,
+    angkorShards: typeof profile.angkorShards === 'number' ? profile.angkorShards : 0,
+    welcomeBundleClaimed: Boolean(profile.welcomeBundleClaimed ?? false),
+    purchasedDiamondPacks: Array.isArray(profile.purchasedDiamondPacks) ? profile.purchasedDiamondPacks : [],
+    lastDailyReliquaryKeyDate:
+      typeof profile.lastDailyReliquaryKeyDate === 'string' ? profile.lastDailyReliquaryKeyDate : null,
     hasCompletedCreation: Boolean(
       profile.hasCompletedCreation ??
         (profile.loadout as { hasCompletedCreation?: boolean } | undefined)?.hasCompletedCreation ??

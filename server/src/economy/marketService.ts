@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import { creditPlayerCoins, getSupabaseClient } from '../db/supabase';
+import { creditPlayerCoins, getSupabaseClient, isPlayerVip } from '../db/supabase';
 import { presenceRegistry } from '../presence';
 
 export const MARKET_TAX_RATE = 0.05; // 5% Village Market Coin Sink (docs/GDD_CONTENT_AND_ECONOMY.md §5)
@@ -78,8 +78,17 @@ function writeLocalMarket(listings: MarketListing[]): void {
   fs.writeFileSync(LOCAL_MARKET_PATH, JSON.stringify(listings, null, 2), 'utf8');
 }
 
-export function computeMarketTax(priceCoins: number): { taxCoins: number; sellerPayout: number } {
+export function computeMarketTax(
+  priceCoins: number,
+  isVip = false
+): { taxCoins: number; sellerPayout: number } {
   const safe = Math.max(1, Math.floor(priceCoins));
+  if (isVip) {
+    return {
+      taxCoins: 0,
+      sellerPayout: safe,
+    };
+  }
   const taxCoins = Math.max(1, Math.floor(safe * MARKET_TAX_RATE));
   return {
     taxCoins,
@@ -218,9 +227,13 @@ export async function buyMarketListing(
     listing = found;
   }
 
-  const { taxCoins, sellerPayout } = computeMarketTax(listing.priceCoins);
+  const sellerIsVip =
+    listing.sellerId && !listing.sellerId.startsWith('npc_') && listing.sellerId !== 'guest'
+      ? await isPlayerVip(listing.sellerId)
+      : false;
+  const { taxCoins, sellerPayout } = computeMarketTax(listing.priceCoins, sellerIsVip);
 
-  // Credit 95% of Coins to seller's account (if registered player, not NPC sample stall)
+  // Credit 100% (VIP 0% Tax) or 95% of Coins to seller's account (if registered player, not NPC sample stall)
   if (listing.sellerId && !listing.sellerId.startsWith('npc_') && listing.sellerId !== 'guest') {
     await creditPlayerCoins(listing.sellerId, sellerPayout);
     presenceRegistry.sendToTarget(

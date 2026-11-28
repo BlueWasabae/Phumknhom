@@ -148,6 +148,8 @@ interface HUDProps {
   onOpenDailyLogin?: () => void;
   onOpenSeasonPass?: () => void;
   onOpenAchievements?: () => void;
+  onOpenPortableBank?: () => void;
+  onOpenReliquary?: () => void;
   onTogglePhotoMode?: () => void;
   canInstallPwa?: boolean;
   onInstallPwa?: () => void;
@@ -211,6 +213,8 @@ export const HUD: React.FC<HUDProps> = ({
   onOpenDailyLogin,
   onOpenSeasonPass,
   onOpenAchievements,
+  onOpenPortableBank,
+  onOpenReliquary,
   onTogglePhotoMode,
   canInstallPwa,
   onInstallPwa,
@@ -666,12 +670,27 @@ export const HUD: React.FC<HUDProps> = ({
         </button>
 
         {Boolean(player.villagePassUntil && player.villagePassUntil > now) && (
-          <span
-            title="Monthly Village Pass VIP Active (+15% Farm XP & Daily Free Spin)"
-            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-yellow-400 text-amber-950 border border-amber-900/60 font-display font-bold text-[9px] shrink-0"
-          >
-            <Crown className="w-2.5 h-2.5" /> VIP
-          </span>
+          <>
+            <span
+              title="VIP Convenience Pass Active (+6 Farm Plots, 0% Market Tax, Portable Bank Vault & Daily Reliquary Key)"
+              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-yellow-400 text-amber-950 border border-amber-900/60 font-display font-bold text-[9px] shrink-0"
+            >
+              <Crown className="w-2.5 h-2.5" /> VIP
+            </span>
+            {onOpenPortableBank && (
+              <button
+                type="button"
+                onClick={() => {
+                  soundManager.playSfx('click');
+                  onOpenPortableBank();
+                }}
+                title="VIP Perk: Portable Bank Vault — Deposit or withdraw Coins anywhere!"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-gradient-to-b from-emerald-500 to-emerald-700 hover:from-emerald-400 hover:to-emerald-600 text-white border border-emerald-950 font-display font-bold text-[10px] whitespace-nowrap shadow-sm transition cursor-pointer shrink-0"
+              >
+                🏦 Vault
+              </button>
+            )}
+          </>
         )}
         {player.activeTitle && (
           <span
@@ -847,8 +866,29 @@ export const HUD: React.FC<HUDProps> = ({
                   }}
                   className="px-3 py-2 rounded-xl hover:bg-amber-200/80 text-left flex items-center gap-2 text-amber-950"
                 >
-                  <Store className="w-4 h-4 text-amber-700" /> Village Market (5% Tax)
+                  <Store className="w-4 h-4 text-amber-700" />{' '}
+                  {Boolean(player.villagePassUntil && player.villagePassUntil > now)
+                    ? 'Village Market (👑 0% VIP Tax)'
+                    : 'Village Market (5% Tax)'}
                 </button>
+                {onOpenReliquary && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundManager.playSfx('click');
+                      setMenuDropdownOpen(false);
+                      onOpenReliquary();
+                    }}
+                    className="px-3 py-2 rounded-xl hover:bg-amber-200/80 text-left flex items-center justify-between gap-2 text-amber-950"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Gem className="w-4 h-4 text-amber-600" /> Mystery Reliquary
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded-full bg-amber-600 text-white text-[9px] font-bold">
+                      🗝️ {player.reliquaryKeys ?? 0}
+                    </span>
+                  </button>
+                )}
                 {onOpenPagodaTower && (
                   <button
                     type="button"

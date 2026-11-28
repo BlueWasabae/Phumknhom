@@ -32,19 +32,21 @@ import { EventBus, type FarmToolMode, type JoystickVector } from '../EventBus';
 import { Player } from '../entities/Player';
 import { PaperDoll } from '../entities/PaperDoll';
 import { DEFAULT_LOADOUT } from '@shared/types';
+import { isVillagePassActive } from '../../data/diamondStore';
 import { fetchSharedBondFarmApi, syncSharedBondFarmApi } from '../network/ApiClient';
 
 const FARM_W = 860;
 const FARM_H = 600;
 const HORIZON_H = 74;
 
-// Starter 6x4 Farm Plot Grid (24 tiles)
+// Starter 6x4 Farm Plot Grid (24 standard tiles) + Row 5 VIP Bonus (+6 Extra Farm Plots = 30 total!)
 const COLS = 6;
-const ROWS = 4;
+const STANDARD_ROWS = 4;
+const TOTAL_ROWS = 5;
 const PLOT_W = 42;
-const PLOT_H = 34;
+const PLOT_H = 30;
 const GRID_X = 165;
-const GRID_Y = 250;
+const GRID_Y = 236;
 
 const EXIT_X = 430;
 const EXIT_Y = 550;
@@ -466,22 +468,39 @@ export class FarmScene extends Phaser.Scene {
   }
 
   private buildPlotGrid(): void {
-    // Cozy timber garden border around the 6x4 grid
+    // Cozy timber garden border around the 6x4 standard grid + Row 5 VIP Bonus (+6 plots)
     const border = this.add.graphics().setDepth(4);
     border.fillStyle(0x6b4226, 0.55);
     border.fillRoundedRect(
       GRID_X - PLOT_W / 2 - 8,
       GRID_Y - PLOT_H / 2 - 8,
       COLS * PLOT_W + 16,
-      ROWS * PLOT_H + 16,
+      STANDARD_ROWS * PLOT_H + 14,
       8
     );
+    // Golden VIP Row 5 tray beneath standard 6x4 plots
+    border.fillStyle(0x78350f, 0.45);
+    border.lineStyle(1.4, 0xfacc15, 0.8);
+    border.fillRoundedRect(
+      GRID_X - PLOT_W / 2 - 8,
+      GRID_Y + STANDARD_ROWS * PLOT_H - PLOT_H / 2 - 2,
+      COLS * PLOT_W + 16,
+      PLOT_H + 10,
+      7
+    );
+    border.strokeRoundedRect(
+      GRID_X - PLOT_W / 2 - 8,
+      GRID_Y + STANDARD_ROWS * PLOT_H - PLOT_H / 2 - 2,
+      COLS * PLOT_W + 16,
+      PLOT_H + 10,
+      7
+    );
 
-    for (let r = 0; r < ROWS; r++) {
+    for (let r = 0; r < TOTAL_ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
         const index = r * COLS + c;
         const cx = GRID_X + c * PLOT_W;
-        const cy = GRID_Y + r * PLOT_H;
+        const cy = GRID_Y + r * PLOT_H + (r >= STANDARD_ROWS ? 4 : 0);
 
         const gfx = this.add.graphics().setDepth(cy - 6);
         const hitZone = this.add
@@ -490,7 +509,7 @@ export class FarmScene extends Phaser.Scene {
           .setInteractive({ useHandCursor: true });
 
         const badgeText = this.add
-          .text(cx, cy + 12, '', {
+          .text(cx, cy + 10, '', {
             fontFamily: 'Fredoka, sans-serif',
             fontSize: '11px',
             fontStyle: 'bold',
@@ -513,6 +532,41 @@ export class FarmScene extends Phaser.Scene {
 
         this.plots.push({ index, cx, cy, hitZone, gfx, badgeText });
       }
+    }
+  }
+
+  private ensureVipBonusPlots(): void {
+    const vip = isVillagePassActive(this.player.state);
+    const plots = this.player.state.farm.plots;
+    let changed = false;
+    const nextPlots = plots.map((p) => ({ ...p }));
+    while (nextPlots.length < COLS * TOTAL_ROWS) {
+      const idx = nextPlots.length;
+      nextPlots.push({
+        index: idx,
+        unlocked: vip,
+        tilled: false,
+        cropId: null,
+        plantedAt: null,
+        effectiveGrowMs: 0,
+        watered: false,
+        fertilized: false,
+      });
+      changed = true;
+    }
+    if (vip) {
+      for (let i = COLS * STANDARD_ROWS; i < nextPlots.length; i++) {
+        if (!nextPlots[i].unlocked) {
+          nextPlots[i].unlocked = true;
+          changed = true;
+        }
+      }
+    }
+    if (changed) {
+      this.player.state = {
+        ...this.player.state,
+        farm: { ...this.player.state.farm, plots: nextPlots },
+      };
     }
   }
 
@@ -566,6 +620,16 @@ export class FarmScene extends Phaser.Scene {
   }
 
   private handlePlotClick(index: number): void {
+    this.ensureVipBonusPlots();
+    const isVipSlot = index >= COLS * STANDARD_ROWS;
+    const vipActive = isVillagePassActive(this.player.state);
+    if (isVipSlot && !vipActive) {
+      EventBus.emit('ui:toast', {
+        text: '👑 VIP Convenience Pass unlocks +6 Extra Farm Plots! Opening Diamond Store...',
+      });
+      EventBus.emit('ui:openModal', { modal: 'diamondStore' });
+      return;
+    }
     const plot = this.player.state.farm.plots[index];
     const visual = this.plots[index];
     if (!plot || !visual) return;
@@ -659,6 +723,7 @@ export class FarmScene extends Phaser.Scene {
   }
 
   private redrawAllPlots(): void {
+    this.ensureVipBonusPlots();
     const now = Date.now();
     for (const pv of this.plots) {
       const plot = this.player.state.farm.plots[pv.index];
@@ -671,11 +736,14 @@ export class FarmScene extends Phaser.Scene {
       const h = PLOT_H - 6;
 
       if (!plot.unlocked) {
-        pv.gfx.fillStyle(0x3f6212, 0.55);
-        pv.gfx.lineStyle(1, 0x854d0e, 0.65);
+        const isVipSlot = pv.index >= COLS * STANDARD_ROWS;
+        pv.gfx.fillStyle(isVipSlot ? 0x78350f : 0x3f6212, 0.55);
+        pv.gfx.lineStyle(1.2, isVipSlot ? 0xfacc15 : 0x854d0e, 0.78);
         pv.gfx.fillRoundedRect(x0, y0, w, h, 4);
         pv.gfx.strokeRoundedRect(x0, y0, w, h, 4);
-        pv.badgeText.setText(`🔒${PLOT_UNLOCK_COST}c`).setColor('#fef08a');
+        pv.badgeText
+          .setText(isVipSlot ? '👑VIP+6' : `🔒${PLOT_UNLOCK_COST}c`)
+          .setColor(isVipSlot ? '#fde047' : '#fef08a');
         continue;
       }
 

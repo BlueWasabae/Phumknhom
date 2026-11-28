@@ -450,6 +450,14 @@ export interface PlayerState {
   /** Update 2.1 — Account Achievement Badges */
   unlockedAchievements?: string[];
   equippedBadgeId?: string | null;
+  /** Update 2.4 — Mystery Reliquary Gacha Pity, Keys, Angkor Shards, Bundles & VIP Daily Key */
+  reliquaryPityCount?: number;
+  reliquaryMythicPityCount?: number;
+  reliquaryKeys?: number;
+  angkorShards?: number;
+  welcomeBundleClaimed?: boolean;
+  purchasedDiamondPacks?: string[];
+  lastDailyReliquaryKeyDate?: string | null;
   hasCompletedCreation?: boolean;
   skillDamagePct: number;
   armorDamagePct: number;
@@ -472,6 +480,7 @@ export interface ChatMessage {
   timestamp: number;
   channel?: 'area' | 'krom' | 'whisper';
   kromTag?: string;
+  isVip?: boolean;
 }
 
 export const DEFAULT_STARTER_WEAPON: WeaponStats = {
@@ -740,6 +749,13 @@ export const INITIAL_PLAYER_STATE: PlayerState = {
     y: 780,
     discoveredAt: 1,
   },
+  reliquaryPityCount: 0,
+  reliquaryMythicPityCount: 0,
+  reliquaryKeys: 1,
+  angkorShards: 0,
+  welcomeBundleClaimed: false,
+  purchasedDiamondPacks: [],
+  lastDailyReliquaryKeyDate: null,
   hasCompletedCreation: false,
   skillDamagePct: 0.025,
   armorDamagePct: 0.04,

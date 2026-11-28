@@ -58,7 +58,11 @@ import {
 } from './economy/marketService';
 import { createReforgeAndBankRouter } from './economy/reforgeService';
 import { createBankRouter } from './economy/bankService';
-import { createPaymentRouter } from './economy/paymentWebhook';
+import {
+  createCheckoutRouter,
+  createPaymentRouter,
+  createStripeRawWebhookHandler,
+} from './economy/paymentWebhook';
 import { presenceRegistry } from './presence';
 import {
   createFriendRequest,
@@ -114,6 +118,13 @@ app.use(
     credentials: true,
   })
 );
+// Raw-body Stripe webhook MUST be mounted BEFORE express.json() so HMAC verification reads exact bytes!
+app.post(
+  '/api/webhook/stripe',
+  express.raw({ type: 'application/json', limit: '1mb' }),
+  createStripeRawWebhookHandler()
+);
+
 app.use(express.json({ limit: '1mb' }));
 
 function extractBearerToken(req: express.Request): string | undefined {
@@ -476,7 +487,8 @@ app.post('/api/market/cancel', async (req, res) => {
   }
 });
 
-// ==================== PHASE 10 PAYMENTS & EXPANSION REFORGE / BANK / TICKER ====================
+// ==================== PHASE 10 + UPDATE 2.4 PAYMENTS, CHECKOUT & REFORGE / BANK / TICKER ====================
+app.use('/api/checkout', createCheckoutRouter());
 app.use('/api/payments', createPaymentRouter());
 app.use('/api/bank', createBankRouter());
 app.use('/api', createReforgeAndBankRouter());

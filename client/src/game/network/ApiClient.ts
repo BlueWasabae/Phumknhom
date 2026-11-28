@@ -119,6 +119,13 @@ export interface SavedProfilePayload {
   claimedPassTiers?: string[];
   unlockedAchievements?: string[];
   equippedBadgeId?: string | null;
+  reliquaryPityCount?: number;
+  reliquaryMythicPityCount?: number;
+  reliquaryKeys?: number;
+  angkorShards?: number;
+  welcomeBundleClaimed?: boolean;
+  purchasedDiamondPacks?: string[];
+  lastDailyReliquaryKeyDate?: string | null;
   hasCompletedCreation?: boolean;
   activeClass: PlayerState['activeClass'];
   weapon: PlayerState['weapon'];
@@ -482,6 +489,13 @@ export function serializePlayerStateForSave(state: PlayerState): SavedProfilePay
     claimedPassTiers: [...(state.claimedPassTiers ?? [])],
     unlockedAchievements: [...(state.unlockedAchievements ?? [])],
     equippedBadgeId: state.equippedBadgeId ?? null,
+    reliquaryPityCount: state.reliquaryPityCount ?? 0,
+    reliquaryMythicPityCount: state.reliquaryMythicPityCount ?? 0,
+    reliquaryKeys: state.reliquaryKeys ?? 1,
+    angkorShards: state.angkorShards ?? 0,
+    welcomeBundleClaimed: Boolean(state.welcomeBundleClaimed ?? false),
+    purchasedDiamondPacks: [...(state.purchasedDiamondPacks ?? [])],
+    lastDailyReliquaryKeyDate: state.lastDailyReliquaryKeyDate ?? null,
     hasCompletedCreation: Boolean(state.hasCompletedCreation ?? state.loadout.hasCompletedCreation),
     activeClass: state.activeClass,
     weapon: { ...state.weapon },
@@ -826,6 +840,17 @@ export function hydratePlayerStateFromSave(
     claimedPassTiers: Array.isArray(saved?.claimedPassTiers) ? [...saved.claimedPassTiers] : [],
     unlockedAchievements: Array.isArray(saved?.unlockedAchievements) ? [...saved.unlockedAchievements] : [],
     equippedBadgeId: typeof saved?.equippedBadgeId === 'string' ? saved.equippedBadgeId : null,
+    reliquaryPityCount: typeof saved?.reliquaryPityCount === 'number' ? saved.reliquaryPityCount : 0,
+    reliquaryMythicPityCount:
+      typeof saved?.reliquaryMythicPityCount === 'number' ? saved.reliquaryMythicPityCount : 0,
+    reliquaryKeys: typeof saved?.reliquaryKeys === 'number' ? saved.reliquaryKeys : 1,
+    angkorShards: typeof saved?.angkorShards === 'number' ? saved.angkorShards : 0,
+    welcomeBundleClaimed: Boolean(saved?.welcomeBundleClaimed ?? false),
+    purchasedDiamondPacks: Array.isArray(saved?.purchasedDiamondPacks)
+      ? [...saved.purchasedDiamondPacks]
+      : [],
+    lastDailyReliquaryKeyDate:
+      typeof saved?.lastDailyReliquaryKeyDate === 'string' ? saved.lastDailyReliquaryKeyDate : null,
     hasCompletedCreation: Boolean(
       saved?.hasCompletedCreation ?? saved?.loadout?.hasCompletedCreation ?? false
     ),
@@ -1097,23 +1122,95 @@ export async function cancelMarketListingApi(
 
 export async function sandboxTopUpApi(
   session: AuthSession | null,
-  sku: string
+  sku: string,
+  firstTimeBonus = false
 ): Promise<
-  | { ok: true; diamondsGranted: number; villagePassUntil: number | null; label: string }
+  | {
+      ok: true;
+      diamondsGranted: number;
+      firstTimeDoubled?: boolean;
+      villagePassUntil: number | null;
+      label: string;
+    }
   | { ok: false; error: string }
 > {
   const res = await postJson<{
     diamondsGranted: number;
+    firstTimeDoubled?: boolean;
     villagePassUntil: number | null;
     label: string;
-  }>('/payments/sandbox-topup', { sku }, session?.token);
+  }>('/payments/sandbox-topup', { sku, firstTimeBonus }, session?.token);
   if (!res.ok) return res;
   return {
     ok: true,
     diamondsGranted: res.data.diamondsGranted,
+    firstTimeDoubled: res.data.firstTimeDoubled,
     villagePassUntil: res.data.villagePassUntil,
     label: res.data.label,
   };
+}
+
+export async function createStripeCheckoutApi(
+  session: AuthSession | null,
+  sku: string,
+  firstTimeBonus = false
+): Promise<
+  | {
+      ok: true;
+      mode: 'stripe' | 'sandbox';
+      checkoutUrl?: string;
+      diamondsGranted?: number;
+      firstTimeDoubled?: boolean;
+      villagePassUntil?: number | null;
+      notice?: string;
+    }
+  | { ok: false; error: string }
+> {
+  const returnOrigin = typeof window !== 'undefined' ? window.location.origin : undefined;
+  const res = await postJson<{
+    mode: 'stripe' | 'sandbox';
+    checkoutUrl?: string;
+    diamondsGranted?: number;
+    firstTimeDoubled?: boolean;
+    villagePassUntil?: number | null;
+    notice?: string;
+  }>('/checkout/stripe', { sku, firstTimeBonus, returnOrigin }, session?.token);
+  if (!res.ok) return res;
+  return { ok: true, ...res.data };
+}
+
+export async function createAbaKhqrCheckoutApi(
+  session: AuthSession | null,
+  sku: string,
+  firstTimeBonus = false
+): Promise<
+  | {
+      ok: true;
+      mode: 'aba_khqr' | 'sandbox';
+      endpoint?: string;
+      tranId?: string;
+      amount?: string;
+      hash?: string;
+      diamondsGranted?: number;
+      firstTimeDoubled?: boolean;
+      villagePassUntil?: number | null;
+      notice?: string;
+    }
+  | { ok: false; error: string }
+> {
+  const res = await postJson<{
+    mode: 'aba_khqr' | 'sandbox';
+    endpoint?: string;
+    tranId?: string;
+    amount?: string;
+    hash?: string;
+    diamondsGranted?: number;
+    firstTimeDoubled?: boolean;
+    villagePassUntil?: number | null;
+    notice?: string;
+  }>('/checkout/aba-khqr', { sku, firstTimeBonus }, session?.token);
+  if (!res.ok) return res;
+  return { ok: true, ...res.data };
 }
 
 export async function reforgeItemApi(

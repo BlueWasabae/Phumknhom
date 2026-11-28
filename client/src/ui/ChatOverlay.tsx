@@ -8,6 +8,7 @@ interface ChatOverlayProps {
   open: boolean;
   playerName: string;
   kromTag?: string | null;
+  isVip?: boolean;
   messages: ChatMessage[];
   draftPrefill?: { text: string; nonce: number } | null;
   onAddMessage: (msg: ChatMessage) => void;
@@ -17,6 +18,7 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
   open,
   playerName,
   kromTag,
+  isVip = false,
   messages,
   draftPrefill,
   onAddMessage,
@@ -71,6 +73,7 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
         timestamp: Date.now(),
         channel: 'krom',
         kromTag,
+        isVip,
       });
       setInput('');
       return;
@@ -101,6 +104,7 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
       text: clean.slice(0, 120),
       timestamp: Date.now(),
       channel: 'area',
+      isVip,
     };
     onAddMessage(msg);
     EventBus.emit('player:chat', { text: clean.slice(0, 120) });
@@ -163,6 +167,11 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
                   key={m.id}
                   className={`leading-snug ${isWhisper ? 'text-purple-900 italic' : ''}`}
                 >
+                  {m.isVip && (
+                    <span className="inline-block mr-1 px-1 py-0.2 rounded bg-gradient-to-r from-amber-500 to-yellow-400 text-amber-950 border border-amber-800/50 font-display font-bold text-[9px] align-middle">
+                      👑 [VIP]
+                    </span>
+                  )}
                   <span
                     className={`font-bold mr-1 ${
                       isKrom ? 'text-amber-700' : isWhisper ? 'text-purple-700' : 'text-amber-900'

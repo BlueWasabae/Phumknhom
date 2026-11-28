@@ -389,7 +389,8 @@ export interface EventMap {
       | 'admin'
       | 'dailyLogin'
       | 'seasonPass'
-      | 'achievements';
+      | 'achievements'
+      | 'reliquary';
     leaderboardCategory?: 'farmer' | 'stylish' | 'slayer' | 'tower' | 'boss_rush';
     farmTab?: 'seeds' | 'livestock' | 'artisan';
     shopTab?: 'primary' | 'secondary';
