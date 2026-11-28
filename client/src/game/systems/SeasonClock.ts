@@ -493,9 +493,13 @@ export class SeasonAtmosphereOverlay {
         this.particleGfx.fillStyle(col, p.alpha);
         this.particleGfx.fillEllipse(p.x, p.y, p.size * 1.7, p.size);
       } else {
-        // Soft cool winter mist clouds
-        this.particleGfx.fillStyle(0xe0f2fe, p.alpha);
-        this.particleGfx.fillEllipse(p.x, p.y, p.size * 2.4, p.size * 0.9);
+        // Crisp tiny sparkling winter mist motes (replaces giant blurry grey ovals)
+        const r = Math.max(1.2, Math.min(2.6, p.size * 0.14));
+        this.particleGfx.fillStyle(0xe0f2fe, Math.min(0.45, p.alpha * 1.4));
+        this.particleGfx.fillRect(p.x - r, p.y - 0.6, r * 2, 1.2);
+        this.particleGfx.fillRect(p.x - 0.6, p.y - r, 1.2, r * 2);
+        this.particleGfx.fillStyle(0xffffff, Math.min(0.6, p.alpha * 1.6));
+        this.particleGfx.fillRect(p.x - 0.6, p.y - 0.6, 1.2, 1.2);
       }
     }
 

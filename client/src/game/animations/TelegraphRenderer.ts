@@ -74,7 +74,7 @@ export class TelegraphRenderer {
   }
 
   /**
-   * Draws a pulsing translucent ground AOE zone that fills to 100% right at strike execution.
+   * Draws a stylized pulsing Khmer rune ground AOE zone that fills smoothly to 100% at strike execution.
    */
   public showGroundZone(
     cx: number,
@@ -85,34 +85,58 @@ export class TelegraphRenderer {
     durationMs: number
   ): void {
     const pal = TELEGRAPH_PALETTE[color];
-    const outer = this.track(
-      this.scene.add
-        .rectangle(cx, floorY - height / 2, width, height, pal.fill, 0.22)
-        .setStrokeStyle(2.5, pal.stroke, 0.92)
-        .setDepth(35)
-    );
-    const innerFill = this.track(
-      this.scene.add
-        .rectangle(cx, floorY - height / 2, 6, height - 4, pal.fill, 0.48)
-        .setDepth(36)
-    );
+    const cont = this.track(this.scene.add.container(cx, floorY - height / 2).setDepth(35));
+    const halfW = width / 2;
+    const halfH = height / 2;
+
+    const bg = this.scene.add.graphics();
+    // Soft tapered rune ground glow (no harsh boxy fill)
+    bg.fillStyle(pal.fill, 0.16);
+    bg.fillRoundedRect(-halfW, -halfH, width, height, 6);
+    // Crisp corner brackets & hazard dashes
+    bg.lineStyle(2.2, pal.stroke, 0.92);
+    const bk = Math.min(14, halfW * 0.35);
+    bg.lineBetween(-halfW, -halfH, -halfW + bk, -halfH);
+    bg.lineBetween(-halfW, -halfH, -halfW, -halfH + Math.min(8, halfH));
+    bg.lineBetween(halfW, -halfH, halfW - bk, -halfH);
+    bg.lineBetween(halfW, -halfH, halfW, -halfH + Math.min(8, halfH));
+    bg.lineBetween(-halfW, halfH, -halfW + bk, halfH);
+    bg.lineBetween(-halfW, halfH, -halfW, halfH - Math.min(8, halfH));
+    bg.lineBetween(halfW, halfH, halfW - bk, halfH);
+    bg.lineBetween(halfW, halfH, halfW, halfH - Math.min(8, halfH));
+    // Dashed center warning chevron strip
+    bg.fillStyle(pal.stroke, 0.55);
+    for (let x = -halfW + 12; x <= halfW - 12; x += 18) {
+      bg.fillTriangle(x, -4, x - 5, 4, x + 5, 4);
+    }
+    cont.add(bg);
+
+    const fillBar = this.scene.add
+      .rectangle(0, 0, 8, Math.max(4, height - 8), pal.fill, 0.42)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    cont.add(fillBar);
+
+    const centerPulse = this.scene.add
+      .ellipse(0, halfH - 2, width * 0.85, 8, pal.stroke, 0.32)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    cont.add(centerPulse);
 
     this.scene.tweens.add({
-      targets: innerFill,
-      width: Math.max(8, width - 4),
+      targets: fillBar,
+      width: Math.max(10, width - 6),
+      alpha: 0.68,
       duration: durationMs,
       ease: 'Quad.easeIn',
       onComplete: () => {
-        outer.destroy();
-        innerFill.destroy();
-        this.activeGraphics.delete(outer);
-        this.activeGraphics.delete(innerFill);
+        cont.destroy();
+        this.activeGraphics.delete(cont);
       },
     });
   }
 
   /**
-   * Draws a crisp directional lane warning telegraph (for Dash Charge or Sticky Tongue Lash).
+   * Draws a stylized Khmer energy lane telegraph with glowing core & directional warning chevrons
+   * (zero flat solid boxes — crisp additive beam preview for Dash Charge, Tongue Lash, or Axe Cleave).
    */
   public showLineTelegraph(
     x1: number,
@@ -124,24 +148,81 @@ export class TelegraphRenderer {
   ): void {
     const pal = TELEGRAPH_PALETTE[color];
     const minX = Math.min(x1, x2);
-    const w = Math.max(24, Math.abs(x2 - x1));
-    const rect = this.track(
-      this.scene.add
-        .rectangle(minX + w / 2, y, w, thickness, pal.fill, 0.24)
-        .setStrokeStyle(2, pal.stroke, 0.95)
-        .setDepth(35)
-    );
+    const dir = x2 >= x1 ? 1 : -1;
+    const w = Math.max(36, Math.abs(x2 - x1));
+    const midX = minX + w / 2;
+    const halfW = w / 2;
+    const halfT = Math.max(6, thickness / 2);
+
+    const cont = this.track(this.scene.add.container(midX, y).setDepth(35));
+
+    // Soft additive outer aura lane + bright slim laser sightline core
+    const lane = this.scene.add.graphics();
+    lane.fillStyle(pal.fill, 0.14);
+    lane.fillRoundedRect(-halfW, -halfT, w, halfT * 2, halfT);
+    lane.fillStyle(pal.stroke, 0.28);
+    lane.fillRoundedRect(-halfW + 6, -halfT * 0.45, Math.max(12, w - 12), halfT * 0.9, halfT * 0.45);
+    // Dashed energy rail top & bottom (no harsh solid box border!)
+    lane.lineStyle(1.6, pal.stroke, 0.78);
+    for (let x = -halfW + 6; x < halfW - 12; x += 22) {
+      const segEnd = Math.min(halfW - 6, x + 12);
+      lane.lineBetween(x, -halfT, segEnd, -halfT);
+      lane.lineBetween(x, halfT, segEnd, halfT);
+    }
+    cont.add(lane);
+
+    // Core charge filament that swells as the strike approaches
+    const coreLine = this.scene.add
+      .rectangle(0, 0, Math.max(16, w - 14), 3, 0xffffff, 0.82)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    cont.add(coreLine);
+
+    // Directional pixel chevrons pointing along the strike direction
+    const chevGfx = this.scene.add.graphics();
+    chevGfx.lineStyle(2.4, pal.stroke, 0.92);
+    const step = 42;
+    const count = Math.max(2, Math.floor((w - 28) / step));
+    for (let i = 0; i < count; i++) {
+      const cx = -halfW + 20 + i * step;
+      const tipX = cx + dir * 8;
+      const backX = cx - dir * 5;
+      chevGfx.lineBetween(backX, -6, tipX, 0);
+      chevGfx.lineBetween(backX, 6, tipX, 0);
+    }
+    cont.add(chevGfx);
+
+    // Origin & target rune diamond caps
+    const capA = this.scene.add
+      .star(-halfW + 4, 0, 4, 3, 7, pal.stroke, 0.9)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    const capB = this.scene.add
+      .star(halfW - 4, 0, 4, 3, 7, pal.stroke, 0.9)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    cont.add([capA, capB]);
 
     this.scene.tweens.add({
-      targets: rect,
-      alpha: 0.65,
-      scaleY: 1.15,
-      duration: Math.max(120, Math.round(durationMs / 4)),
+      targets: chevGfx,
+      x: dir * 18,
+      duration: Math.max(140, Math.round(durationMs * 0.5)),
+      repeat: 1,
+      ease: 'Linear',
+    });
+    this.scene.tweens.add({
+      targets: coreLine,
+      scaleY: 2.8,
+      alpha: 1,
+      duration: durationMs,
+      ease: 'Quad.easeIn',
+    });
+    this.scene.tweens.add({
+      targets: cont,
+      alpha: 0.95,
+      duration: Math.max(120, Math.round(durationMs / 3)),
       yoyo: true,
       repeat: 1,
       onComplete: () => {
-        rect.destroy();
-        this.activeGraphics.delete(rect);
+        cont.destroy();
+        this.activeGraphics.delete(cont);
       },
     });
   }

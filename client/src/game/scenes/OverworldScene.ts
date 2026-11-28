@@ -1032,36 +1032,50 @@ export class OverworldScene extends Phaser.Scene {
         g.strokeRoundedRect(rx - 40, 582, 80, 36, 4);
       }
     } else if (this.mapId === 'temple_district') {
-      // Sacred carved Angkor sandstone mandala rings & ancient mossy ruins
-      g.lineStyle(2.5, 0xfacc15, 0.45);
-      g.strokeCircle(800, 550, 130);
-      g.lineStyle(1.5, 0xd6d3d1, 0.4);
-      g.strokeCircle(800, 550, 95);
-      for (const [rx, ry] of [[250, 340], [1350, 340], [250, 920], [1350, 920]]) {
-        g.fillStyle(0x57534e, 0.9);
-        g.fillRoundedRect(rx - 22, ry - 12, 44, 24, 4);
-        g.fillStyle(0x4d7c0f, 0.65);
-        g.fillCircle(rx - 10, ry - 4, 8);
-        g.fillCircle(rx + 12, ry + 4, 6);
+      // Ornate Angkor Ceremonial Stone Carpet & Carved Lotus Medallion centered between Guardian Singha Statues
+      const cx = 800;
+      const cy = 810;
+      g.fillStyle(0x78350f, 0.72);
+      g.fillRoundedRect(cx - 56, cy - 92, 112, 184, 8);
+      g.fillStyle(0x991b1b, 0.76);
+      g.fillRoundedRect(cx - 48, cy - 86, 96, 172, 6);
+      g.lineStyle(2, 0xfacc15, 0.78);
+      g.strokeRoundedRect(cx - 44, cy - 82, 88, 164, 5);
+      // Carved golden lotus tile medallion in courtyard center
+      g.fillStyle(0xb45309, 0.52);
+      g.fillCircle(cx, cy, 34);
+      g.lineStyle(2, 0xfef08a, 0.72);
+      g.strokeCircle(cx, cy, 34);
+      for (let i = 0; i < 8; i++) {
+        const a = (i * Math.PI) / 4;
+        g.fillStyle(0xfacc15, 0.72);
+        g.fillCircle(cx + Math.cos(a) * 20, cy + Math.sin(a) * 20, 4.5);
+      }
+      g.fillStyle(0xfef08a, 0.85);
+      g.fillCircle(cx, cy, 8);
+      // Flanking carved mossy ruin blocks on outer temple corners
+      for (const [rx, ry] of [[210, 290], [1390, 290], [210, 945], [1390, 945]]) {
+        if (this.textures.exists('khmer_laterite_outcrop')) {
+          this.add.image(rx, ry, 'khmer_laterite_outcrop').setDisplaySize(54, 38).setTint(0xd6d3d1).setDepth(5);
+        }
       }
     } else if (this.mapId === 'green_park') {
-      // Blooming tropical hibiscus/lotus gardens & shady park benches
-      for (const [px, py] of [[410, 350], [1190, 350], [420, 740], [1180, 720]]) {
-        g.fillStyle(0x15803d, 0.55);
-        g.fillEllipse(px, py, 74, 42);
-        for (let k = 0; k < 5; k++) {
-          const ang = (k * Math.PI * 2) / 5;
-          g.fillStyle(k % 2 === 0 ? 0xf472b6 : 0xfef08a, 0.92);
-          g.fillCircle(px + Math.cos(ang) * 20, py + Math.sin(ang) * 10, 4);
+      // Crisp 16-bit Pixel-Art Khmer Lotus & Jasmine Flowerbeds (cleanly clear of roads, shrines & games!)
+      for (const [px, py] of [[345, 345], [635, 435], [340, 700], [1120, 680]]) {
+        if (this.textures.exists('khmer_lotus_garden')) {
+          this.add.image(px, py + 4, 'soft_shadow').setDisplaySize(72, 22).setDepth(4);
+          this.add.image(px, py, 'khmer_lotus_garden').setDisplaySize(76, 50).setDepth(5);
+        } else {
+          this.add.image(px, py, 'sv_blossoms').setScale(1.3).setDepth(5);
         }
       }
     } else if (this.mapId === 'wild_frontier') {
-      // Highland laterite boulders & rustic explorer campfires
-      for (const [bx, by] of [[340, 360], [1260, 360], [340, 860], [1260, 860]]) {
-        g.fillStyle(0x9a3412, 0.9);
-        g.fillEllipse(bx, by, 48, 28);
-        g.fillStyle(0xc2410c, 0.85);
-        g.fillEllipse(bx - 6, by - 5, 30, 18);
+      // Crisp 16-bit Pixel-Art Mossy Red Laterite Boulder Outcrops (well clear of Cavern Entrance!)
+      for (const [bx, by] of [[465, 340], [1180, 380], [340, 860], [1260, 860]]) {
+        if (this.textures.exists('khmer_laterite_outcrop')) {
+          this.add.image(bx, by + 5, 'soft_shadow').setDisplaySize(56, 18).setDepth(4);
+          this.add.image(bx, by, 'khmer_laterite_outcrop').setDisplaySize(58, 40).setDepth(5);
+        }
       }
     } else if (this.mapId === 'mining_quarry') {
       // Iron minecart rails & glowing turquoise crystal outcrops across the red-laterite canyon
@@ -1988,17 +2002,22 @@ export class OverworldScene extends Phaser.Scene {
 
   // ==================== MAP 3: TEMPLE DISTRICT (PAGODA & 3-ARCH PORTAL HALL) ====================
   private buildTempleDistrictMap(): void {
-    // Singha Guardian Statues & Flickering Braziers along the sacred terrace
+    // Singha Guardian Statues (warm carved Angkor sandstone tone) & Flickering Braziers along the sacred carpet
     for (const [sx, sy] of [[700, 880], [900, 880], [700, 740], [900, 740]]) {
-      this.add.image(sx, sy + 2, 'soft_shadow').setDisplaySize(36, 12).setDepth(sy - 2);
-      this.add.image(sx, sy, 'na_singha_statue').setOrigin(0.5, 0.9).setScale(1.08).setDepth(sy);
+      this.add.image(sx, sy + 2, 'soft_shadow').setDisplaySize(38, 12).setDepth(sy - 2);
+      this.add
+        .image(sx, sy, 'na_singha_statue')
+        .setOrigin(0.5, 0.9)
+        .setScale(1.08)
+        .setTint(0xe7d8bc)
+        .setDepth(sy);
     }
-    for (const [fx, fy] of [[410, 440], [1190, 440], [410, 770], [1190, 770]]) {
-      const fire = this.add.sprite(fx, fy, 'sv_campfire_16', 0).setScale(1.2).setDepth(fy);
+    for (const [fx, fy] of [[410, 440], [1190, 440], [410, 770], [1190, 770], [735, 810], [865, 810]]) {
+      const fire = this.add.sprite(fx, fy, 'sv_campfire_16', 0).setScale(1.1).setDepth(fy);
       if (this.anims.exists('campfire_burn')) fire.play('campfire_burn');
       const g = this.add
         .image(fx, fy - 4, 'torch_glow')
-        .setScale(0.75)
+        .setScale(0.72)
         .setBlendMode(Phaser.BlendModes.ADD)
         .setDepth(2140)
         .setAlpha(0.45);
@@ -2069,6 +2088,8 @@ export class OverworldScene extends Phaser.Scene {
       x: number;
       y: number;
       tint: number;
+      texture: string;
+      scale: number;
       title: string;
       prompt: string;
       onEnter: () => void;
@@ -2077,6 +2098,8 @@ export class OverworldScene extends Phaser.Scene {
         x: 470,
         y: 330,
         tint: 0xc084fc,
+        texture: this.textures.exists('khmer_pagoda_tower_gate') ? 'khmer_pagoda_tower_gate' : 'angkor_arch_gate',
+        scale: this.textures.exists('khmer_pagoda_tower_gate') ? 0.56 : 1.3,
         title: 'ENDLESS PAGODA TOWER',
         prompt: 'Press [E] or Click → Endless 50-Floor Pagoda Tower (Checkpoints & Weapon Auras)',
         onEnter: () => {
@@ -2087,6 +2110,8 @@ export class OverworldScene extends Phaser.Scene {
         x: 1130,
         y: 330,
         tint: 0x10b981,
+        texture: this.textures.exists('lf_cave_entrance') ? 'lf_cave_entrance' : 'angkor_arch_gate',
+        scale: this.textures.exists('lf_cave_entrance') ? 0.54 : 1.3,
         title: 'MINING CAVERNS · ORES',
         prompt: 'Press [E] or Click → Enter Side-Scrolling Underground Caverns (Ores, Relic Chests & Grapple)',
         onEnter: () => this.enterCavernExplore('temple_district'),
@@ -2095,23 +2120,23 @@ export class OverworldScene extends Phaser.Scene {
 
     for (const arch of portalHallEntries) {
       const aura = this.add
-        .image(arch.x, arch.y - 22, 'portal_vortex')
+        .image(arch.x, arch.y - 26, 'portal_vortex')
         .setTint(arch.tint)
         .setScale(0.95)
-        .setAlpha(0.6)
+        .setAlpha(0.55)
         .setBlendMode(Phaser.BlendModes.ADD)
         .setDepth(arch.y - 2);
       this.tweens.add({ targets: aura, alpha: 0.25, scale: 1.12, duration: 850, yoyo: true, repeat: -1 });
 
       const gate = this.addBuildingOrProp({
-        texture: 'angkor_arch_gate',
+        texture: arch.texture,
         x: arch.x,
         y: arch.y,
-        scale: 1.3,
-        shadowW: 72,
-        shadowH: 18,
+        scale: arch.scale,
+        shadowW: 84,
+        shadowH: 20,
         label: arch.title,
-        joinArrowY: arch.y - 68,
+        joinArrowY: arch.y - 84,
       });
       gate.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
         if (!this.guardInteractRange(arch.x, arch.y)) return;
@@ -2196,44 +2221,37 @@ export class OverworldScene extends Phaser.Scene {
       onInteract: () => EventBus.emit('ui:openModal', { modal: 'scryingMirror' }),
     });
 
-    // 6. UPDATE 3.1 — KUN KHMER 1v1 SPARRING RING (South-East Sandstone Arena Terrace)
-    const ringX = 1045;
+    // 6. UPDATE 3.1 — KUN KHMER 1v1 SPARRING RING (South-East Sandstone Arena Terrace — 16-bit Pixel Art!)
+    const ringX = 1055;
     const ringY = 825;
-    const ringGfx = this.add.graphics().setDepth(14);
-    ringGfx.fillStyle(0x573b26, 0.95);
-    ringGfx.fillRoundedRect(ringX - 92, ringY - 58, 184, 116, 14);
-    ringGfx.fillStyle(0xc2955b, 0.96);
-    ringGfx.fillRoundedRect(ringX - 78, ringY - 46, 156, 92, 10);
-    ringGfx.lineStyle(2.5, 0xdc2626, 0.92);
-    ringGfx.strokeRoundedRect(ringX - 78, ringY - 46, 156, 92, 10);
-    ringGfx.lineStyle(2, 0xfacc15, 0.9);
-    ringGfx.strokeRoundedRect(ringX - 72, ringY - 40, 144, 80, 8);
-    ringGfx.strokeCircle(ringX, ringY, 22);
-    for (const [cx, cy, col] of [
-      [ringX - 78, ringY - 46, 0xdc2626],
-      [ringX + 78, ringY - 46, 0x2563eb],
-      [ringX - 78, ringY + 46, 0xdc2626],
-      [ringX + 78, ringY + 46, 0x2563eb],
-    ] as Array<[number, number, number]>) {
-      this.add.circle(cx, cy, 7, col, 1).setStrokeStyle(2, 0xfef08a).setDepth(ringY + 20);
+    this.add.image(ringX, ringY + 62, 'soft_shadow').setDisplaySize(192, 34).setDepth(ringY - 30);
+    if (this.textures.exists('khmer_sparring_ring')) {
+      this.add
+        .image(ringX, ringY, 'khmer_sparring_ring')
+        .setDisplaySize(164, 176)
+        .setDepth(ringY - 12);
+    } else {
+      const ringGfx = this.add.graphics().setDepth(14);
+      ringGfx.fillStyle(0xc2955b, 0.96);
+      ringGfx.fillRoundedRect(ringX - 78, ringY - 46, 156, 92, 10);
     }
     const ringZone = this.add
-      .rectangle(ringX, ringY, 176, 108, 0xffffff, 0)
+      .rectangle(ringX, ringY, 176, 156, 0xffffff, 0)
       .setDepth(ringY + 22)
       .setInteractive({ useHandCursor: true });
     ringZone.on('pointerdown', () => {
-      if (!this.guardInteractRange(ringX, ringY, 160)) return;
+      if (!this.guardInteractRange(ringX, ringY, 165)) return;
       EventBus.emit('ui:openModal', { modal: 'arena' });
     });
-    const ringArrow = this.add.image(ringX, ringY - 62, 'join_arrow').setScale(0.55).setDepth(ringY + 40);
-    this.tweens.add({ targets: ringArrow, y: ringY - 68, duration: 540, yoyo: true, repeat: -1 });
+    const ringArrow = this.add.image(ringX, ringY - 94, 'join_arrow').setScale(0.55).setDepth(ringY + 40);
+    this.tweens.add({ targets: ringArrow, y: ringY - 101, duration: 540, yoyo: true, repeat: -1 });
     this.add
-      .text(ringX, ringY + 60, '🥊 KUN KHMER 1v1 SPARRING RING', {
+      .text(ringX, ringY + 92, '🥊 KUN KHMER 1v1 SPARRING RING', {
         fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
         fontSize: '12px',
         fontStyle: 'bold',
         color: '#fef08a',
-        backgroundColor: 'rgba(127, 29, 29, 0.92)',
+        backgroundColor: 'rgba(127, 29, 29, 0.94)',
         padding: { x: 8, y: 2 },
       })
       .setResolution(2)
@@ -2249,42 +2267,38 @@ export class OverworldScene extends Phaser.Scene {
       onInteract: () => EventBus.emit('ui:openModal', { modal: 'arena' }),
     });
 
-    // 7. UPDATE 3.2 — SBEK THOM SHADOW PUPPET THEATER STAGE (South-West Sacred Terrace)
-    const stX = 345;
+    // 7. UPDATE 3.2 — SBEK THOM SHADOW PUPPET THEATER STAGE (South-West Sacred Terrace — 16-bit Pixel Art!)
+    const stX = 350;
     const stY = 815;
-    const stGfx = this.add.graphics().setDepth(stY - 6);
-    // Dark teak theater frame + warm backlit parchment screen
-    stGfx.fillStyle(0x3b1808, 0.98);
-    stGfx.fillRoundedRect(stX - 68, stY - 58, 136, 74, 10);
-    stGfx.lineStyle(2.5, 0xf59e0b, 0.95);
-    stGfx.strokeRoundedRect(stX - 68, stY - 58, 136, 74, 10);
-    // Warm glowing parchment projection screen
-    stGfx.fillStyle(0xfef08a, 0.9);
-    stGfx.fillRoundedRect(stX - 56, stY - 48, 112, 50, 6);
-    // Stylized Hanuman & Preah Ream shadow silhouettes on the screen
-    stGfx.fillStyle(0x1c0a03, 0.92);
-    stGfx.fillRect(stX - 30, stY - 36, 12, 26);
-    stGfx.fillTriangle(stX - 24, stY - 44, stX - 30, stY - 34, stX - 18, stY - 34);
-    stGfx.fillRect(stX + 14, stY - 34, 14, 24);
-    stGfx.fillCircle(stX + 21, stY - 38, 6);
-    // Flickering coconut-husk firelight bloom behind screen
+    this.add.image(stX, stY + 56, 'soft_shadow').setDisplaySize(172, 32).setDepth(stY - 14);
+    if (this.textures.exists('khmer_sbek_thom_stage')) {
+      this.add
+        .image(stX, stY - 8, 'khmer_sbek_thom_stage')
+        .setDisplaySize(158, 162)
+        .setDepth(stY - 6);
+    } else {
+      const stGfx = this.add.graphics().setDepth(stY - 6);
+      stGfx.fillStyle(0x3b1808, 0.98);
+      stGfx.fillRoundedRect(stX - 68, stY - 58, 136, 74, 10);
+    }
+    // Flickering coconut-husk firelight bloom warming the Reamker parchment screen
     const stGlow = this.add
-      .image(stX, stY - 22, 'torch_glow')
+      .image(stX, stY - 4, 'torch_glow')
       .setTint(0xf97316)
-      .setScale(1.15)
-      .setAlpha(0.55)
+      .setScale(1.18)
+      .setAlpha(0.42)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setDepth(stY + 12);
     this.glowLights.push(stGlow);
-    this.tweens.add({ targets: stGlow, alpha: 0.34, scale: 1.32, duration: 760, yoyo: true, repeat: -1 });
+    this.tweens.add({ targets: stGlow, alpha: 0.24, scale: 1.32, duration: 760, yoyo: true, repeat: -1 });
     const stHit = this.add
-      .rectangle(stX, stY - 18, 142, 86, 0xffffff, 0)
+      .rectangle(stX, stY - 8, 162, 152, 0xffffff, 0)
       .setDepth(stY + 18)
       .setInteractive({ useHandCursor: true });
-    const stArrow = this.add.image(stX, stY - 70, 'join_arrow').setScale(0.54).setDepth(stY + 25);
-    this.tweens.add({ targets: stArrow, y: stY - 76, duration: 540, yoyo: true, repeat: -1 });
+    const stArrow = this.add.image(stX, stY - 96, 'join_arrow').setScale(0.54).setDepth(stY + 25);
+    this.tweens.add({ targets: stArrow, y: stY - 103, duration: 540, yoyo: true, repeat: -1 });
     this.add
-      .text(stX, stY + 22, '🎭 SBEK THOM SHADOW THEATER · REAMKER', {
+      .text(stX, stY + 76, '🎭 SBEK THOM SHADOW THEATER · REAMKER', {
         fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
         fontSize: '11px',
         fontStyle: 'bold',
@@ -2297,7 +2311,7 @@ export class OverworldScene extends Phaser.Scene {
       .setOrigin(0.5, 0)
       .setDepth(stY + 30);
     const openTheater = () => {
-      if (!this.guardInteractRange(stX, stY, 145)) return;
+      if (!this.guardInteractRange(stX, stY, 155)) return;
       soundManager.playSfx('magic');
       EventBus.emit('ui:openModal', { modal: 'sbekThom' });
     };
@@ -2305,7 +2319,7 @@ export class OverworldScene extends Phaser.Scene {
     this.landmarks.push({
       x: stX,
       y: stY,
-      radius: 86,
+      radius: 90,
       label: 'Press [E] or Click → 🎭 Sbek Thom Shadow Puppet Theater & 5-Part Reamker Questline',
       isDungeonPortal: false,
       onInteract: openTheater,
@@ -2314,14 +2328,14 @@ export class OverworldScene extends Phaser.Scene {
 
   // ==================== MAP 4: GREEN PARK & RIVERSIDE PIER ====================
   private buildGreenParkMap(): void {
-    // Lush Sugar Palm & Golden Durian Groves + Flower Beds
+    // Lush Sugar Palm & Golden Durian Groves (strictly clear of horizontal/vertical roads!)
     for (const [tx, ty, tex] of [
-      [270, 340, 'sugar_palm_tree'],
-      [350, 260, 'golden_durian_tree'],
-      [1260, 280, 'sugar_palm_tree'],
-      [1330, 380, 'golden_durian_tree'],
-      [280, 620, 'golden_durian_tree'],
-      [1310, 660, 'sugar_palm_tree'],
+      [240, 320, 'sugar_palm_tree'],
+      [350, 245, 'golden_durian_tree'],
+      [1280, 260, 'sugar_palm_tree'],
+      [1360, 360, 'golden_durian_tree'],
+      [235, 495, 'golden_durian_tree'],
+      [1360, 670, 'sugar_palm_tree'],
     ] as Array<[number, number, string]>) {
       this.addBuildingOrProp({
         texture: tex,
@@ -2334,13 +2348,13 @@ export class OverworldScene extends Phaser.Scene {
         bodyH: 12,
       });
     }
-    for (const [fx, fy] of [[490, 480], [1110, 480], [670, 560], [930, 560]]) {
+    for (const [fx, fy] of [[490, 480], [1055, 390], [670, 540], [930, 540]]) {
       this.add.image(fx, fy, 'sv_blossoms').setScale(1.05).setDepth(4);
     }
 
-    // 1. GOLDEN BLESSING SHRINE (Daily +250c & +10% Luck)
+    // 1. GOLDEN BLESSING SHRINE (Daily +250c & +10% Luck — North-West Lawn)
     const shrineGlow = this.add
-      .image(490, 420, 'torch_glow')
+      .image(490, 395, 'torch_glow')
       .setTint(0xfacc15)
       .setScale(0.86)
       .setBlendMode(Phaser.BlendModes.ADD)
@@ -2350,33 +2364,35 @@ export class OverworldScene extends Phaser.Scene {
     const goldenShrineImg = this.addBuildingOrProp({
       texture: 'golden_shrine',
       x: 490,
-      y: 445,
+      y: 420,
       scale: 1.35,
       shadowW: 58,
       shadowH: 16,
       bodyW: 36,
       bodyH: 16,
       label: 'GOLDEN SHRINE · DAILY',
-      joinArrowY: 386,
+      joinArrowY: 362,
     });
     const prayAtShrine = () => {
-      if (!this.guardInteractRange(490, 445)) return;
+      if (!this.guardInteractRange(490, 420)) return;
       this.cameras.main.flash(220, 250, 204, 21);
       EventBus.emit('shrine:pray');
     };
     goldenShrineImg.setInteractive({ useHandCursor: true }).on('pointerdown', prayAtShrine);
     this.landmarks.push({
       x: 490,
-      y: 455,
+      y: 430,
       radius: 58,
       label: 'Press [E] or Click → Pray at Golden Blessing Shrine (+250 Coins & +10% Luck 10m)',
       isDungeonPortal: false,
       onInteract: prayAtShrine,
     });
 
-    // 2. BIOME PYLON SHRINE (World Map & Angkor Pylons)
+    // 2. BIOME PYLON SHRINE (World Map & Angkor Pylons — Spacious North-East Clearing, zero overlap!)
+    const pylonX = 1055;
+    const pylonY = 315;
     const pylonGlow = this.add
-      .image(1110, 420, 'torch_glow')
+      .image(pylonX, pylonY - 24, 'torch_glow')
       .setTint(0x38bdf8)
       .setScale(0.76)
       .setBlendMode(Phaser.BlendModes.ADD)
@@ -2385,23 +2401,23 @@ export class OverworldScene extends Phaser.Scene {
     this.glowLights.push(pylonGlow);
     const pylonImg = this.addBuildingOrProp({
       texture: 'pylon_shrine',
-      x: 1110,
-      y: 445,
+      x: pylonX,
+      y: pylonY,
       scale: 1.35,
       shadowW: 48,
       shadowH: 15,
       bodyW: 30,
       bodyH: 18,
       label: 'BIOME PYLON SHRINE',
-      joinArrowY: 386,
+      joinArrowY: pylonY - 58,
     });
     pylonImg.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
-      if (!this.guardInteractRange(1110, 445)) return;
+      if (!this.guardInteractRange(pylonX, pylonY)) return;
       EventBus.emit('ui:openModal', { modal: 'worldMap' });
     });
     this.landmarks.push({
-      x: 1110,
-      y: 455,
+      x: pylonX,
+      y: pylonY + 10,
       radius: 58,
       label: 'Press [E] or Click → Biome Pylon Network & World Map [M]',
       isDungeonPortal: false,
@@ -2412,11 +2428,11 @@ export class OverworldScene extends Phaser.Scene {
     const activeReturn = travelManager.getReturnPortal();
     if (activeReturn) {
       const rpGlow = this.add
-        .image(1175, 430, 'portal_vortex')
+        .image(pylonX + 64, pylonY - 12, 'portal_vortex')
         .setTint(0x38bdf8)
         .setScale(0.95)
         .setBlendMode(Phaser.BlendModes.ADD)
-        .setDepth(450)
+        .setDepth(pylonY + 5)
         .setInteractive({ useHandCursor: true });
       this.tweens.add({ targets: rpGlow, scale: 1.12, alpha: 0.55, duration: 750, yoyo: true, repeat: -1 });
       rpGlow.on('pointerdown', () => {
@@ -2425,20 +2441,21 @@ export class OverworldScene extends Phaser.Scene {
       });
     }
 
-    // 3. DUCK POND (Center-South — real bordered pond + ripples + swimming ducks/frogs!)
-    this.add.image(960, 825, 'sv_pond').setDisplaySize(290, 175).setDepth(3);
-    const duckPondCol = this.add.rectangle(960, 830, 230, 115, 0x000000, 0);
+    // 3. DUCK POND (East-Central Park Glade — wide clearance above Floating Mekong River Market!)
+    const duckX = 1005;
+    const duckY = 720;
+    this.add.image(duckX, duckY, 'sv_pond').setDisplaySize(250, 148).setDepth(3);
+    const duckPondCol = this.add.rectangle(duckX, duckY + 4, 195, 96, 0x000000, 0);
     this.colliders.add(duckPondCol);
-    for (const [rx, ry] of [[910, 810], [1005, 845], [955, 790]]) {
-      const rip = this.add.sprite(rx, ry, 'na_ripples', 0).setScale(1.2).setDepth(5).setAlpha(0.75);
+    for (const [rx, ry] of [[duckX - 45, duckY - 12], [duckX + 42, duckY + 16], [duckX, duckY - 26]]) {
+      const rip = this.add.sprite(rx, ry, 'na_ripples', 0).setScale(1.15).setDepth(5).setAlpha(0.75);
       if (this.anims.exists('water_ripples_blue')) rip.play('water_ripples_blue');
     }
-    // Cute swimming pond critters gently gliding across the Duck Pond
-    const swimmerA = this.add.sprite(915, 825, 'pet_frog', 0).setScale(1.15).setTint(0xfef08a).setDepth(10);
+    const swimmerA = this.add.sprite(duckX - 42, duckY, 'pet_frog', 0).setScale(1.15).setTint(0xfef08a).setDepth(10);
     if (this.anims.exists('pet_frog_idle')) swimmerA.play('pet_frog_idle');
-    this.tweens.add({ targets: swimmerA, x: 1015, duration: 4200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.tweens.add({ targets: swimmerA, x: duckX + 46, duration: 4200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     this.add
-      .text(960, 916, 'DUCK POND · TRANQUIL SANCTUARY', {
+      .text(duckX, duckY + 78, 'DUCK POND · TRANQUIL SANCTUARY', {
         fontFamily: 'Fredoka, sans-serif',
         fontSize: '11px',
         fontStyle: 'bold',
@@ -2541,38 +2558,41 @@ export class OverworldScene extends Phaser.Scene {
       onInteract: sailToKohRong,
     });
 
-    // 6. UPDATE 2.9 — VILLAGE PET RACING ARENA ENTRANCE (North-Center Lawn — Track Announcer Sophat!)
-    const trackX = 800;
-    const trackY = 485;
-    const gateArch = this.add
-      .rectangle(trackX, trackY, 118, 42, 0x92400e, 0.96)
-      .setStrokeStyle(3, 0xfacc15)
-      .setDepth(482)
-      .setInteractive({ useHandCursor: true });
-    this.add
-      .rectangle(trackX, trackY + 12, 108, 12, 0xffffff, 0.92)
-      .setStrokeStyle(1, 0x0f172a)
-      .setDepth(483);
+    // 6. UPDATE 2.9 — VILLAGE PET RACING ARENA ENTRANCE (North-Center Lawn — 16-bit Starting Arch & Booth!)
+    const trackX = 795;
+    const trackY = 365;
+    this.add.image(trackX, trackY + 34, 'soft_shadow').setDisplaySize(156, 24).setDepth(trackY - 12);
+    const gateArch = this.textures.exists('khmer_pet_race_gate')
+      ? this.add
+          .image(trackX, trackY, 'khmer_pet_race_gate')
+          .setDisplaySize(150, 82)
+          .setDepth(trackY)
+          .setInteractive({ useHandCursor: true })
+      : this.add
+          .rectangle(trackX, trackY, 118, 42, 0x92400e, 0.96)
+          .setStrokeStyle(3, 0xfacc15)
+          .setDepth(trackY)
+          .setInteractive({ useHandCursor: true });
     const trackGlow = this.add
-      .image(trackX, trackY - 14, 'torch_glow')
+      .image(trackX, trackY - 16, 'torch_glow')
       .setTint(0xfacc15)
-      .setScale(0.82)
-      .setAlpha(0.55)
+      .setScale(0.75)
+      .setAlpha(0.42)
       .setBlendMode(Phaser.BlendModes.ADD)
-      .setDepth(481);
+      .setDepth(trackY - 2);
     this.glowLights.push(trackGlow);
     const announcerNpc = this.add
-      .sprite(trackX - 66, trackY + 8, 'char_master', 0)
+      .sprite(trackX - 84, trackY + 18, 'char_master', 0)
       .setOrigin(0.5, 0.92)
       .setScale(1.18)
       .setTint(0xfef08a)
-      .setDepth(492)
+      .setDepth(trackY + 12)
       .setInteractive({ useHandCursor: true });
-    this.tweens.add({ targets: announcerNpc, y: trackY + 5, duration: 580, yoyo: true, repeat: -1 });
-    const trackArrow = this.add.image(trackX, trackY - 46, 'join_arrow').setScale(0.56).setDepth(500);
-    this.tweens.add({ targets: trackArrow, y: trackY - 54, duration: 540, yoyo: true, repeat: -1 });
+    this.tweens.add({ targets: announcerNpc, y: trackY + 15, duration: 580, yoyo: true, repeat: -1 });
+    const trackArrow = this.add.image(trackX, trackY - 56, 'join_arrow').setScale(0.54).setDepth(trackY + 20);
+    this.tweens.add({ targets: trackArrow, y: trackY - 63, duration: 540, yoyo: true, repeat: -1 });
     this.add
-      .text(trackX, trackY - 26, '🏁 VILLAGE PET RACING TRACK · ANNOUNCER SOPHAT', {
+      .text(trackX, trackY + 46, '🏁 VILLAGE PET RACING TRACK · ANNOUNCER SOPHAT', {
         fontFamily: 'Fredoka, sans-serif',
         fontSize: '11px',
         fontStyle: 'bold',
@@ -2582,11 +2602,11 @@ export class OverworldScene extends Phaser.Scene {
       })
       .setResolution(2)
       .setScale(0.45)
-      .setOrigin(0.5, 1)
-      .setDepth(498);
+      .setOrigin(0.5, 0)
+      .setDepth(trackY + 24);
 
     const openPetTrack = () => {
-      if (!this.guardInteractRange(trackX, trackY, 135)) return;
+      if (!this.guardInteractRange(trackX, trackY, 145)) return;
       soundManager.playSfx('click');
       EventBus.emit('ui:openModal', { modal: 'petRace' });
     };
@@ -2594,45 +2614,27 @@ export class OverworldScene extends Phaser.Scene {
     announcerNpc.on('pointerdown', openPetTrack);
     this.landmarks.push({
       x: trackX,
-      y: trackY + 12,
-      radius: 82,
+      y: trackY + 16,
+      radius: 86,
       label: 'Press [E] or Click → 🏁 Enter Village Pet Racing Arena (Win Coins, Pet XP Treats & Champion Ribbon!)',
       isDungeonPortal: false,
       onInteract: openPetTrack,
     });
 
-    // UPDATE 3.4 — FESTIVE KHMER VILLAGE FOLK GAMES COURTYARD (Open North-East Lawn of Green Park!)
-    const fgX = 1195;
-    const fgY = 390;
-    const fgGfx = this.add.graphics().setDepth(fgY - 20);
-    // Woven pandan courtyard mat with krama border
-    fgGfx.fillStyle(0x92400e, 0.94);
-    fgGfx.fillRoundedRect(fgX - 78, fgY - 42, 156, 84, 10);
-    fgGfx.fillStyle(0xd97706, 0.92);
-    fgGfx.fillRoundedRect(fgX - 72, fgY - 36, 144, 72, 8);
-    fgGfx.lineStyle(2, 0xfef08a, 0.9);
-    fgGfx.strokeRoundedRect(fgX - 72, fgY - 36, 144, 72, 8);
-    // Hanging colorful Krama pennant banner above courtyard
-    const fgCols = [0xdc2626, 0xfacc15, 0x2563eb, 0x16a34a, 0xec4899];
-    for (let i = 0; i < 8; i++) {
-      const px = fgX - 64 + i * 18;
-      fgGfx.fillStyle(fgCols[i % fgCols.length], 0.95);
-      fgGfx.fillTriangle(px - 6, fgY - 46, px + 6, fgY - 46, px, fgY - 36);
+    // UPDATE 3.4 — FESTIVE KHMER VILLAGE FOLK GAMES COURTYARD (Spacious East Lawn — 16-bit Woven Pavilion!)
+    const fgX = 1230;
+    const fgY = 475;
+    this.add.image(fgX, fgY + 46, 'soft_shadow').setDisplaySize(174, 28).setDepth(fgY - 26);
+    if (this.textures.exists('khmer_folk_games_courtyard')) {
+      this.add
+        .image(fgX, fgY, 'khmer_folk_games_courtyard')
+        .setDisplaySize(168, 108)
+        .setDepth(fgY - 20);
     }
-    // Decorative Bos Angkunh seeds + Clay Pot + Tug Rope motif on the mat
-    fgGfx.fillStyle(0x451a03, 1);
-    for (let i = -2; i <= 2; i++) fgGfx.fillCircle(fgX - 38 + i * 8, fgY + 12, 3.2);
-    fgGfx.fillStyle(0xc2410c, 1);
-    fgGfx.fillCircle(fgX + 4, fgY - 4, 9);
-    fgGfx.lineStyle(3, 0xfef3c7, 0.9);
-    fgGfx.lineBetween(fgX + 24, fgY + 10, fgX + 62, fgY + 10);
-    fgGfx.fillStyle(0xdc2626, 1);
-    fgGfx.fillRect(fgX + 41, fgY + 4, 4, 12);
-
-    const fgArrow = this.add.image(fgX, fgY - 62, 'join_arrow').setScale(0.55).setDepth(fgY + 22);
-    this.tweens.add({ targets: fgArrow, y: fgY - 70, duration: 540, yoyo: true, repeat: -1 });
+    const fgArrow = this.add.image(fgX, fgY - 66, 'join_arrow').setScale(0.54).setDepth(fgY + 22);
+    this.tweens.add({ targets: fgArrow, y: fgY - 73, duration: 540, yoyo: true, repeat: -1 });
     this.add
-      .text(fgX, fgY + 48, '🏮 KHMER FOLK GAMES COURTYARD · បោះអង្គញ់ · វាយក្អម · ទាញព្រ័ត្រ', {
+      .text(fgX, fgY + 58, '🏮 KHMER FOLK GAMES COURTYARD · បោះអង្គញ់ · វាយក្អម · ទាញព្រ័ត្រ', {
         fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
         fontSize: '10px',
         fontStyle: 'bold',
@@ -2641,16 +2643,16 @@ export class OverworldScene extends Phaser.Scene {
         padding: { x: 8, y: 2 },
       })
       .setResolution(2)
-      .setScale(0.45)
+      .setScale(0.44)
       .setOrigin(0.5, 0)
       .setDepth(fgY + 25);
 
     const fgHit = this.add
-      .rectangle(fgX, fgY, 160, 96, 0x000000, 0)
+      .rectangle(fgX, fgY, 174, 112, 0x000000, 0)
       .setDepth(fgY + 18)
       .setInteractive({ useHandCursor: true });
     const openFolkCourtyard = () => {
-      if (!this.guardInteractRange(fgX, fgY, 145)) return;
+      if (!this.guardInteractRange(fgX, fgY, 150)) return;
       soundManager.playSfx('click');
       EventBus.emit('ui:openModal', { modal: 'folkGames' });
     };
@@ -2658,60 +2660,68 @@ export class OverworldScene extends Phaser.Scene {
     this.landmarks.push({
       x: fgX,
       y: fgY + 12,
-      radius: 86,
+      radius: 90,
       label: "Press [E] or Click → 🏮 Play Khmer Folk Games (Bos Angkunh, Veay K'aom & Teanh Prot!)",
       isDungeonPortal: false,
       onInteract: openFolkCourtyard,
     });
 
-    // UPDATE 3.2 — FLOATING MEKONG RIVER MARKET DOCK & BOBBING SAMPAN BOATS (Spacious South-Center Shoreline — wide clearance from Pier & Ferry!)
+    // UPDATE 3.2 — FLOATING MEKONG RIVER MARKET DOCK & BOBBING SAMPAN BOATS (Real Mekong Water Basin + Pixel Art!)
     const fmX = 830;
     const fmY = 905;
-    const dockGfx = this.add.graphics().setDepth(fmY - 12);
-    // Warm timber riverside jetty planks + lantern posts
-    dockGfx.fillStyle(0x78350f, 0.96);
-    dockGfx.fillRoundedRect(fmX - 74, fmY - 22, 148, 34, 6);
-    dockGfx.lineStyle(2, 0xf59e0b, 0.9);
-    dockGfx.strokeRoundedRect(fmX - 74, fmY - 22, 148, 34, 6);
-    for (let px = fmX - 64; px <= fmX + 64; px += 16) {
-      dockGfx.lineStyle(1, 0x451a03, 0.65);
-      dockGfx.lineBetween(px, fmY - 22, px, fmY + 12);
+    // Sparkling seamless Mekong river inlet directly underneath the floating sampan boats (single wide pond, zero center seam!)
+    this.add.image(fmX, fmY + 52, 'sv_pond').setDisplaySize(336, 148).setTint(0x7dd3fc).setDepth(2);
+    const fmWaterCol = this.add.rectangle(fmX, fmY + 62, 260, 74, 0x000000, 0);
+    this.colliders.add(fmWaterCol);
+    for (const [rx, ry] of [[fmX - 88, fmY + 44], [fmX, fmY + 66], [fmX + 88, fmY + 44], [fmX - 36, fmY + 28], [fmX + 36, fmY + 28]]) {
+      const rip = this.add.sprite(rx, ry, 'na_ripples', 0).setScale(1.1).setDepth(4).setAlpha(0.72);
+      if (this.anims.exists('water_ripples_blue')) rip.play('water_ripples_blue');
     }
-    // 3 Bobbing Wooden Sampan Trade Boats loaded with tropical fruit, Angkor silk & Kampot spices
-    const boatSpecs: Array<{ bx: number; by: number; cargoCol: number; accent: number; phase: number }> = [
-      { bx: fmX - 48, by: fmY + 34, cargoCol: 0xef4444, accent: 0xfacc15, phase: 0 },
-      { bx: fmX, by: fmY + 42, cargoCol: 0xec4899, accent: 0xfef08a, phase: 1.2 },
-      { bx: fmX + 50, by: fmY + 34, cargoCol: 0x22c55e, accent: 0xf97316, phase: 2.4 },
+    // Weathered 16-bit Teak Jetty Pier overhanging the Mekong River edge
+    if (this.textures.exists('khmer_floating_dock')) {
+      this.add.image(fmX, fmY - 2, 'khmer_floating_dock').setDisplaySize(172, 52).setDepth(fmY - 8);
+    }
+    // 3 Bobbing 16-bit Pixel-Art Wooden Sampan Trade Boats floating directly on the Mekong water!
+    const boatSpecs: Array<{ bx: number; by: number; tint: number; flipX: boolean; phase: number }> = [
+      { bx: fmX - 72, by: fmY + 42, tint: 0xffffff, flipX: false, phase: 0 },
+      { bx: fmX, by: fmY + 56, tint: 0xfef3c7, flipX: true, phase: 1.2 },
+      { bx: fmX + 74, by: fmY + 42, tint: 0xffe4e6, flipX: false, phase: 2.4 },
     ];
     for (const b of boatSpecs) {
       const boatCont = this.add.container(b.bx, b.by).setDepth(b.by);
-      const hull = this.add.ellipse(0, 4, 42, 16, 0x78350f, 0.98).setStrokeStyle(1.5, 0x451a03);
-      const crate1 = this.add.rectangle(-8, -2, 12, 9, b.cargoCol).setStrokeStyle(1, 0x2b1b17);
-      const crate2 = this.add.rectangle(6, -1, 12, 8, b.accent).setStrokeStyle(1, 0x2b1b17);
-      const lantern = this.add.circle(16, -8, 3.5, 0xfef08a, 0.95);
-      boatCont.add([hull, crate1, crate2, lantern]);
+      const wake = this.add.ellipse(0, 12, 62, 16, 0x0c4a6e, 0.35);
+      const boatImg = this.textures.exists('khmer_sampan_boat')
+        ? this.add.image(0, 0, 'khmer_sampan_boat').setDisplaySize(78, 30).setFlipX(b.flipX).setTint(b.tint)
+        : this.add.image(0, 0, 'na_boat').setScale(0.75);
+      const lanGlow = this.add
+        .image(b.flipX ? -28 : 28, -6, 'torch_glow')
+        .setTint(0xfef08a)
+        .setScale(0.32)
+        .setAlpha(0.55)
+        .setBlendMode(Phaser.BlendModes.ADD);
+      boatCont.add([wake, boatImg, lanGlow]);
       this.tweens.add({
         targets: boatCont,
         y: b.by - 4,
-        angle: 2.2,
-        duration: 1150 + b.phase * 180,
+        angle: 1.8,
+        duration: 1200 + b.phase * 180,
         yoyo: true,
         repeat: -1,
         ease: 'Sine.easeInOut',
       });
     }
     const fmGlow = this.add
-      .image(fmX, fmY - 12, 'torch_glow')
+      .image(fmX, fmY - 16, 'torch_glow')
       .setTint(0xf59e0b)
       .setScale(0.95)
-      .setAlpha(0.55)
+      .setAlpha(0.45)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setDepth(fmY + 12);
     this.glowLights.push(fmGlow);
-    const fmArrow = this.add.image(fmX, fmY - 44, 'join_arrow').setScale(0.52).setDepth(fmY + 25);
-    this.tweens.add({ targets: fmArrow, y: fmY - 50, duration: 540, yoyo: true, repeat: -1 });
+    const fmArrow = this.add.image(fmX, fmY - 46, 'join_arrow').setScale(0.52).setDepth(fmY + 25);
+    this.tweens.add({ targets: fmArrow, y: fmY - 52, duration: 540, yoyo: true, repeat: -1 });
     this.add
-      .text(fmX, fmY - 26, '🛶 FLOATING MEKONG RIVER MARKET', {
+      .text(fmX, fmY - 28, '🛶 FLOATING MEKONG RIVER MARKET', {
         fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
         fontSize: '11px',
         fontStyle: 'bold',
@@ -2724,11 +2734,11 @@ export class OverworldScene extends Phaser.Scene {
       .setOrigin(0.5, 1)
       .setDepth(fmY + 28);
     const fmHit = this.add
-      .rectangle(fmX, fmY + 10, 158, 96, 0xffffff, 0)
+      .rectangle(fmX, fmY + 16, 210, 108, 0xffffff, 0)
       .setDepth(fmY + 30)
       .setInteractive({ useHandCursor: true });
     const openFloatingMarket = () => {
-      if (!this.guardInteractRange(fmX, fmY, 155)) return;
+      if (!this.guardInteractRange(fmX, fmY, 165)) return;
       soundManager.playSfx('coin');
       EventBus.emit('ui:openModal', { modal: 'floatingMarket' });
     };
@@ -2736,48 +2746,45 @@ export class OverworldScene extends Phaser.Scene {
     this.landmarks.push({
       x: fmX,
       y: fmY,
-      radius: 96,
+      radius: 102,
       label: 'Press [E] or Click → 🛶 Floating Mekong River Market (Buy Low / Sell High Regional Trade!)',
       isDungeonPortal: false,
       onInteract: openFloatingMarket,
     });
 
-    // Update 3.3 — Kite Master Stall in Green Park (Craft & Launch Khleng Ek Singing Kites!)
-    this.buildKiteMasterStall(1140, 445);
+    // Update 3.3 — Kite Master Stall on open West Breezy Hill (completely clear of Folk Games & Pylon Shrine!)
+    this.buildKiteMasterStall(345, 500);
   }
 
   private buildKiteMasterStall(kx: number, ky: number): void {
-    const stallGfx = this.add.graphics().setDepth(ky - 4);
-    stallGfx.fillStyle(0x78350f, 1);
-    stallGfx.fillRoundedRect(kx - 28, ky - 22, 56, 32, 5);
-    stallGfx.fillStyle(0xf59e0b, 1);
-    stallGfx.fillRoundedRect(kx - 32, ky - 32, 64, 14, 4);
-    stallGfx.lineStyle(1.8, 0x451a03, 1);
-    stallGfx.strokeRoundedRect(kx - 32, ky - 32, 64, 14, 4);
-    // Display colorful miniature Khleng Ek kite hanging above stall
-    stallGfx.fillStyle(0xdc2626, 1);
-    stallGfx.fillTriangle(kx, ky - 46, kx - 12, ky - 36, kx + 12, ky - 36);
-    stallGfx.lineStyle(1.4, 0xfef08a, 1);
-    stallGfx.lineBetween(kx - 4, ky - 36, kx - 8, ky - 24);
-    stallGfx.lineBetween(kx + 4, ky - 36, kx + 8, ky - 24);
+    this.add.image(kx, ky + 34, 'soft_shadow').setDisplaySize(86, 20).setDepth(ky - 8);
+    if (this.textures.exists('khmer_kite_stall')) {
+      this.add.image(kx, ky - 4, 'khmer_kite_stall').setDisplaySize(86, 82).setDepth(ky - 4);
+    } else {
+      const stallGfx = this.add.graphics().setDepth(ky - 4);
+      stallGfx.fillStyle(0x78350f, 1);
+      stallGfx.fillRoundedRect(kx - 28, ky - 22, 56, 32, 5);
+    }
 
+    const kArrow = this.add.image(kx, ky - 52, 'join_arrow').setScale(0.48).setDepth(ky + 14);
+    this.tweens.add({ targets: kArrow, y: ky - 58, duration: 540, yoyo: true, repeat: -1 });
     this.add
-      .text(kx, ky + 14, '🪁 KHLENG EK KITE MASTER', {
+      .text(kx, ky + 40, '🪁 KHLENG EK KITE MASTER', {
         fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
         fontSize: '10px',
         fontStyle: 'bold',
         color: '#fef08a',
-        backgroundColor: 'rgba(120, 53, 15, 0.92)',
+        backgroundColor: 'rgba(120, 53, 15, 0.94)',
         padding: { x: 6, y: 2 },
       })
       .setResolution(2)
-      .setScale(0.42)
+      .setScale(0.43)
       .setOrigin(0.5, 0)
       .setDepth(ky + 16);
 
-    const kHit = this.add.rectangle(kx, ky - 8, 74, 56, 0x000000, 0).setDepth(ky + 20).setInteractive({ useHandCursor: true });
+    const kHit = this.add.rectangle(kx, ky - 4, 92, 86, 0x000000, 0).setDepth(ky + 20).setInteractive({ useHandCursor: true });
     const openKiteWorkshop = () => {
-      if (!this.guardInteractRange(kx, ky, 140)) return;
+      if (!this.guardInteractRange(kx, ky, 145)) return;
       soundManager.playSfx('click');
       EventBus.emit('ui:openModal', { modal: 'kiteWorkshop' });
     };
@@ -3218,38 +3225,82 @@ export class OverworldScene extends Phaser.Scene {
   private buildBiomeBossShrinesAndExploration(): void {
     const mapBosses = KHMER_BOSS_LIST.filter((b) => b.homeMapId === this.mapId);
     if (mapBosses.length === 0) return;
-    // Skip central hub plaza; temple_district already houses Angkor Dungeon Portal + inner sanctum bosses
+    // Skip central hub plaza; market_street is commercial hub
     if (this.mapId === 'central_plaza' || this.mapId === 'market_street') return;
 
+    // Dedicated spacious per-map coordinates (strictly >= 180px from each other, portals, roads & buildings!)
     const spotCoords: Array<[number, number]> =
-      this.mapId === 'phnom_kulen'
-        ? [[340, 320], [1060, 320], [1060, 740]]
-        : this.mapId === 'temple_district'
-          ? [[280, 340], [1320, 340], [800, 235], [1340, 760]]
-          : [[340, 320], [1260, 320], [800, 780], [340, 860]];
+      this.mapId === 'temple_district'
+        ? [
+            [245, 455],
+            [1355, 455],
+            [640, 225],
+            [960, 225],
+            [1345, 720],
+            [245, 710],
+          ]
+        : this.mapId === 'wild_frontier'
+          ? [
+              [565, 285],
+              [1155, 785],
+              [345, 720],
+              [1180, 480],
+            ]
+          : this.mapId === 'green_park'
+            ? [
+                [645, 695],
+                [355, 415],
+                [1080, 560],
+              ]
+            : this.mapId === 'phnom_kulen'
+              ? [
+                  [340, 340],
+                  [1080, 740],
+                  [340, 740],
+                ]
+              : [
+                  [340, 340],
+                  [1260, 340],
+                  [800, 845],
+                  [340, 845],
+                  [1260, 845],
+                ];
 
     mapBosses.forEach((boss, idx) => {
       const [sx, sy] = spotCoords[idx % spotCoords.length];
       const accentHex = Number(boss.accentColor.replace('#', '0x')) || 0xf59e0b;
+      this.add.image(sx, sy + 24, 'soft_shadow').setDisplaySize(64, 18).setDepth(sy - 6);
       const mist = this.add
-        .image(sx, sy - 10, 'portal_vortex')
+        .image(sx, sy - 6, 'portal_vortex')
         .setTint(accentHex)
-        .setScale(0.88)
-        .setAlpha(0.55)
+        .setScale(0.95)
+        .setAlpha(0.52)
         .setBlendMode(Phaser.BlendModes.ADD)
-        .setDepth(sy - 2);
-      this.tweens.add({ targets: mist, alpha: 0.25, scale: 1.08, duration: 950, yoyo: true, repeat: -1 });
+        .setDepth(sy - 3);
+      this.tweens.add({ targets: mist, alpha: 0.24, scale: 1.15, duration: 950, yoyo: true, repeat: -1 });
 
-      const shrine = this.add.graphics().setDepth(sy);
-      shrine.fillStyle(0x292524, 0.96);
-      shrine.fillRoundedRect(sx - 24, sy - 24, 48, 34, 8);
-      shrine.lineStyle(2.5, accentHex, 0.95);
-      shrine.strokeRoundedRect(sx - 24, sy - 24, 48, 34, 8);
-      shrine.fillStyle(accentHex, 0.85);
-      shrine.fillCircle(sx, sy - 10, 7);
+      if (this.textures.exists('khmer_wild_shrine')) {
+        this.add.image(sx, sy - 4, 'khmer_wild_shrine').setDisplaySize(66, 66).setDepth(sy);
+      } else {
+        const shrine = this.add.graphics().setDepth(sy);
+        shrine.fillStyle(0x292524, 0.96);
+        shrine.fillRoundedRect(sx - 24, sy - 24, 48, 34, 8);
+      }
+      // Pulsing boss-colored spirit crystal aura seated right inside the Angkor altar niche
+      const crystalGlow = this.add
+        .image(sx, sy - 2, 'torch_glow')
+        .setTint(accentHex)
+        .setScale(0.55)
+        .setAlpha(0.68)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(sy + 2);
+      this.tweens.add({ targets: crystalGlow, alpha: 0.35, scale: 0.72, duration: 780, yoyo: true, repeat: -1 });
+
+      const shrineArrow = this.add.image(sx, sy - 44, 'join_arrow').setScale(0.42).setDepth(sy + 8);
+      this.tweens.add({ targets: shrineArrow, y: sy - 49, duration: 580, yoyo: true, repeat: -1 });
 
       this.add
-        .text(sx, sy + 16, `${boss.trophyIcon} WILD SHRINE · ${boss.khmerName} (#${boss.rosterNumber})`, {
+        .text(sx, sy + 32, `${boss.trophyIcon} WILD SHRINE · ${boss.khmerName} (#${boss.rosterNumber})`, {
           fontFamily: 'Fredoka, Kantumruy Pro, sans-serif',
           fontSize: '10px',
           fontStyle: 'bold',
@@ -3262,9 +3313,9 @@ export class OverworldScene extends Phaser.Scene {
         .setOrigin(0.5, 0)
         .setDepth(sy + 10);
 
-      const hit = this.add.rectangle(sx, sy - 4, 62, 56, 0, 0).setDepth(sy + 12).setInteractive({ useHandCursor: true });
+      const hit = this.add.rectangle(sx, sy - 2, 70, 72, 0, 0).setDepth(sy + 12).setInteractive({ useHandCursor: true });
       const awakenBoss = () => {
-        if (!this.guardInteractRange(sx, sy, 135)) return;
+        if (!this.guardInteractRange(sx, sy, 140)) return;
         soundManager.playSfx('magic');
         vfxManager.playSpriteVfx(this, 'vfx_magic_burst', sx, sy - 12, { scale: 1.8, tint: accentHex, additive: true, depth: sy + 30 });
         EventBus.emit('boss:discovered', {
@@ -3278,7 +3329,7 @@ export class OverworldScene extends Phaser.Scene {
       this.landmarks.push({
         x: sx,
         y: sy,
-        radius: 74,
+        radius: 76,
         label: `Press [E] or Click → ${boss.trophyIcon} Discover & Challenge ${boss.khmerName} (${boss.englishName})!`,
         isDungeonPortal: true,
         onInteract: awakenBoss,

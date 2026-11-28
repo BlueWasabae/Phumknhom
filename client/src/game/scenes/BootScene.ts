@@ -250,6 +250,22 @@ export class BootScene extends Phaser.Scene {
     this.load.image('khmer_stilt_house', '/assets/khmer/buildings/khmer_stilt_house.png');
     this.load.image('num_pang_cart', '/assets/khmer/buildings/num_pang_cart.png');
     this.load.image('angkor_portal', '/assets/khmer/buildings/angkor_portal.png');
+    // Bespoke 16-bit Pixel-Art Khmer Landmarks & Environmental Props
+    for (const lmKey of [
+      'khmer_sampan_boat',
+      'khmer_sparring_ring',
+      'khmer_sbek_thom_stage',
+      'khmer_wild_shrine',
+      'khmer_folk_games_courtyard',
+      'khmer_pet_race_gate',
+      'khmer_pagoda_tower_gate',
+      'khmer_kite_stall',
+      'khmer_lotus_garden',
+      'khmer_laterite_outcrop',
+      'khmer_floating_dock',
+    ]) {
+      this.load.image(lmKey, `/assets/khmer/landmarks/${lmKey}.png`);
+    }
     this.load.image('boss_yeak_thmor', '/assets/khmer/bosses/boss_yeak_thmor.png');
     this.load.image('boss_sdech_kongkaeb_hq', '/assets/khmer/bosses/boss_sdech_kongkaeb.png');
     this.load.image('boss_arp_prey_chrov_hq', '/assets/khmer/bosses/boss_arp_prey_chrov.png');
@@ -647,29 +663,53 @@ export class BootScene extends Phaser.Scene {
       }
     }
 
-    // Crisp Yellow Downward "JOIN" Arrow UI indicator
+    // Crisp 16-bit Pixel-Art Golden Khmer Lotus Beacon Pointer (replaces stretched "JOIN" text arrow)
     if (!this.textures.exists('join_arrow')) {
-      const tex = this.textures.createCanvas('join_arrow', 34, 36);
+      const tex = this.textures.createCanvas('join_arrow', 28, 30);
       if (tex) {
         const ctx = tex.getContext();
-        ctx.fillStyle = '#facc15';
-        ctx.strokeStyle = '#713f12';
-        ctx.lineWidth = 2.5;
-        ctx.beginPath();
-        ctx.moveTo(10, 3);
-        ctx.lineTo(24, 3);
-        ctx.lineTo(24, 17);
-        ctx.lineTo(31, 17);
-        ctx.lineTo(17, 33);
-        ctx.lineTo(3, 17);
-        ctx.lineTo(10, 17);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-        ctx.fillStyle = '#451a03';
-        ctx.font = 'bold 8px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('JOIN', 17, 15);
+        ctx.imageSmoothingEnabled = false;
+        const px = (x: number, y: number, w: number, h: number, c: string) => {
+          ctx.fillStyle = c;
+          ctx.fillRect(x, y, w, h);
+        };
+        const OUT = '#3b1906';
+        const GOLD_D = '#b45309';
+        const GOLD_M = '#f59e0b';
+        const GOLD_L = '#fde047';
+        const GOLD_HI = '#fef9c3';
+        const GEM = '#ec4899';
+        const GEM_HI = '#fbcfe8';
+
+        // Outer dark pixel silhouette (ornate diamond-topped downward pointer)
+        px(10, 0, 8, 2, OUT);
+        px(8, 2, 12, 2, OUT);
+        px(6, 4, 16, 10, OUT);
+        px(2, 12, 24, 4, OUT);
+        px(4, 16, 20, 4, OUT);
+        px(6, 20, 16, 3, OUT);
+        px(8, 23, 12, 3, OUT);
+        px(10, 26, 8, 2, OUT);
+        px(12, 28, 4, 2, OUT);
+
+        // Rich shaded gold body
+        px(10, 2, 8, 2, GOLD_L);
+        px(8, 4, 12, 10, GOLD_M);
+        px(8, 4, 4, 10, GOLD_L);
+        px(9, 5, 2, 6, GOLD_HI);
+        px(4, 14, 20, 2, GOLD_L);
+        px(6, 16, 16, 3, GOLD_M);
+        px(8, 19, 12, 3, GOLD_M);
+        px(10, 22, 8, 3, GOLD_D);
+        px(12, 25, 4, 3, GOLD_D);
+        // Right bevel highlight
+        px(16, 4, 2, 10, GOLD_D);
+        px(18, 16, 4, 2, GOLD_D);
+
+        // Center Khmer lotus ruby gem (crisp focal point, zero text clutter!)
+        px(11, 7, 6, 6, OUT);
+        px(12, 8, 4, 4, GEM);
+        px(12, 8, 2, 2, GEM_HI);
         tex.refresh();
       }
     }
